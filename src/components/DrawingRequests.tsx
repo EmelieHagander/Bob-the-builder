@@ -4,15 +4,16 @@ import { DrawingLink } from './DrawingLink'
 import * as db from '../data/database'
 import {Loading,useAsync} from './ui'
 import {openBobForCurrentSurface} from '../lib/bobSurface'
+import { drawingRequestStatusLabel } from '../lib/labels'
+import { userErrorMessage } from '../lib/userErrors'
 
-const labels:Record<string,string>={collecting:'Reading current sources',needs_data:'Waiting for information',retrieval_failed:'Source or service unavailable',ready_to_design:'Ready for design',draft:'Draft — not approved',reviewed:'Reviewed — not saved',saved:'Saved drawing',paused:'Private context needs restoration',cancelled:'Cancelled'}
 export function DrawingRequests({projectId,taskId}:{projectId:string;taskId?:string}){
  const navigate=useNavigate()
  const [version,setVersion]=useState(0),[after,setAfter]=useState<string|null>(null)
  const [busy,setBusy]=useState(false),[error,setError]=useState('')
  const {data,loading,error:loadError}=useAsync(()=>db.getDrawingRequests(projectId,after,taskId??null),[projectId,taskId,after,version])
  useEffect(()=>{const timer=setInterval(()=>{if(document.visibilityState!=='hidden')setVersion(v=>v+1)},15000);return()=>clearInterval(timer)},[projectId])
- const act=async(work:()=>Promise<void>)=>{if(busy)return;setBusy(true);setError('');try{await work();setVersion(v=>v+1)}catch(e){setError(e instanceof Error?e.message:'The request could not be updated.')}finally{setBusy(false)}}
+ const act=async(work:()=>Promise<void>)=>{if(busy)return;setBusy(true);setError('');try{await work();setVersion(v=>v+1)}catch(e){setError(userErrorMessage(e,'The request could not be updated.'))}finally{setBusy(false)}}
  if(loading&&!data)return <section aria-label="Drawing requests"><Loading label="Loading drawing requests…" /></section>
  if(loadError)return <section className="card" aria-label="Drawing requests" style={{padding:'var(--panel-padding)',marginTop:'var(--section-gap)'}}><p role="status">Drawing requests are unavailable.</p><button className="btn" onClick={()=>setVersion(v=>v+1)}>Retry requests</button></section>
  if(!data?.items.length&&!after)return null
@@ -26,8 +27,7 @@ export function DrawingRequests({projectId,taskId}:{projectId:string;taskId?:str
     const scopeStep=work.gaps.find(g=>g.step_id===r.scope.step_id&&g.step_title)?.step_title
     const stateText=b?.outcome_unknown?'Waiting for a model charge to be reconciled. No new paid attempt will start.':r.status==='paused'?'Ask Bob to restore the requirements from the current Plan.':work.resume_state==='running'?'Bob is checking the changed information.':work.resume_state==='authorization_needed'?'Waiting to reconnect the initiating member’s signed-in session.':r.status==='retrieval_failed'?'A source or service could not be read. This does not mean measurements are missing. Ask Bob to check the source before collecting new data.':r.status==='draft'?'A candidate exists. It has not passed review or been saved as a drawing.':r.status==='reviewed'?'The candidate has passed review but has not yet been saved. Current sources must still be checked at save.':r.status==='ready_to_design'?'The last assessment found enough information for design. No drawing has been saved yet.':'Complete the saved information below. Bob resumes the same request when relevant information changes. Marking a task done does not supply its missing measurements.'
     return <article className="card drawing-request-card" key={r.id} style={{padding:'var(--panel-padding)'}}>
-     <h3>{labels[r.status]??'Status unavailable'}</h3>
-     <p className="foundation-hint">Request {r.id.slice(0,8)}</p>
+     <h3>{drawingRequestStatusLabel(r.status)}</h3>
      {r.scope.step_id&&<p><Link to={'/project?step='+encodeURIComponent(r.scope.step_id)}>{scopeStep??'Open destination Step'}</Link></p>}
      {!terminal&&<p>{stateText}</p>}
      {b&&<p className="foundation-hint">{`${b.calls} calls · ${b.unpriced ? 'known cost ' : ''}$${Number(b.spent_usd).toFixed(2)}`}</p>}

@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import { Field, FormError, inputStyle } from './form'
 import { Icon, Loading } from './ui'
+import { userErrorMessage } from '../lib/userErrors'
 
-const message = (error: unknown) => error instanceof Error ? error.message : String(error)
+const message = (error: unknown) => userErrorMessage(error, 'Sharing could not be updated. Try again.')
 
 /** Clear unverified reads and ignore replies for a previous resource. */
 function useSharingResource<T>(read: () => Promise<T>, version = 0) {
@@ -26,7 +27,7 @@ function useSharingResource<T>(read: () => Promise<T>, version = 0) {
     } catch (reason) {
       if (mounted.current && current === request.current) {
         setData(null)
-        setError(message(reason))
+        setError(userErrorMessage(reason, 'Sharing could not be loaded. Try again.'))
       }
       return false
     } finally {

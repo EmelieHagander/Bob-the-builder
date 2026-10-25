@@ -240,7 +240,8 @@ try {
     await page.getByLabel('Household for account settings').selectOption('H1')
     state.failAccountBind = true
     await page.getByRole('button', { name: 'Set up household account', exact: true }).click()
-    await page.getByText('Household account setup denied.', { exact: true }).waitFor()
+    await page.getByText('You do not have permission to do that.', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Household account setup denied.', { exact: true }).count(), 0, 'Server text is not shown to people')
     assert.equal(await page.getByLabel('Account name *', { exact: true }).count(), 0)
     state.failAccountBind = false
     await page.getByRole('button', { name: 'Set up household account', exact: true }).click()
@@ -298,7 +299,7 @@ try {
     await sharing.getByLabel('Project household').selectOption('H1')
     state.conflict = true
     await sharing.getByRole('button', { name: 'Save project sharing', exact: true }).click()
-    await sharing.getByRole('alert').getByText('Sharing changed. Refresh sharing and try again.', { exact: true }).waitFor()
+    await sharing.getByRole('alert').getByText('This changed somewhere else. Reload to see the latest version, then try again.', { exact: true }).waitFor()
     assert.equal(state.sources.A.householdId, null)
     assert.equal(await sharing.getByText('Project sharing saved.', { exact: true }).count(), 0)
     state.conflict = false

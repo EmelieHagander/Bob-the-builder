@@ -148,7 +148,7 @@ export async function verifySheetLayersBrowser(page, base, fixture, width) {
   await modal.getByLabel('Reason for change').fill('One layer selected after review')
   fixture.sheetProof.conflictOnce = true
   await modal.getByRole('button', { name: 'Recalculate and save new version' }).click()
-  await modal.getByText(/Material requirement changed/).waitFor()
+  await modal.getByText('This changed somewhere else. Reload to see the latest version, then try again.', { exact: true }).waitFor()
   assert.equal(fixture.requirements.get(row.id).revision, 1, 'Conflict must not pretend to save')
   await modal.getByRole('button', { name: 'Recalculate and save new version' }).click(); await modal.waitFor({ state: 'hidden' })
   await card.getByText('3 sheets to buy', { exact: true }).waitFor()

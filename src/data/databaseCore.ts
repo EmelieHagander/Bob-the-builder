@@ -63,6 +63,7 @@ import type {
   ThemeName,
   TodayTask,
 } from './types'
+import { DataError, UserError, toDataError } from '../lib/userErrors'
 
 /* ─────────────────────────── CONNECTION ───────────────────────────
  * The database is shared, so the client is pinned to bob's own schema —
@@ -86,8 +87,8 @@ function read<T>(value: T): Promise<T> {
 
 /** Live-mode helper: throw on query error, never hand `null` to the UI. */
 function unwrap<T>(res: { data: T | null; error: { message: string } | null }): NonNullable<T> {
-  if (res.error) throw new Error(`database: ${res.error.message}`)
-  if (res.data === null || res.data === undefined) throw new Error('database: query returned no data')
+  if (res.error) throw toDataError(res.error)
+  if (res.data === null || res.data === undefined) throw new DataError('no_data', 'query returned no data')
   return res.data
 }
 
@@ -161,7 +162,7 @@ function captureFileContext(projectId: string) {
   const capturedVersion = contextVersion
   return () => {
     if (!projectId || capturedVersion !== contextVersion || getActiveProjectId() !== projectId) {
-      throw new Error('Project or sign-in changed. Reopen the project before continuing.')
+      throw new UserError('Project or sign-in changed. Reopen the project before continuing.')
     }
   }
 }
@@ -175,7 +176,7 @@ const workPlan = createWorkPlan(db, captureFileContext)
 function captureAccountContext() {
   const capturedVersion = contextVersion
   return () => {
-    if (capturedVersion !== contextVersion) throw new Error('Project or sign-in changed. Reopen this view before continuing.')
+    if (capturedVersion !== contextVersion) throw new UserError('Project or sign-in changed. Reopen this view before continuing.')
   }
 }
 export const buildingContext = createBuildingContext(db, projectId =>
@@ -240,7 +241,7 @@ export const editTaskSteps = projectFiles.editTaskSteps
 export async function getTaskDetail(projectId: string, taskId: string): Promise<import('./types').TaskDetail> {
   if (db) return projectFiles.getTaskDetail(projectId, taskId)
   const task = (await getTasks()).find(t => t.id === taskId)
-  if (!task) throw new Error('Task not found.')
+  if (!task) throw new DataError('not_found', 'Task not found.')
   return { task, instructions: '', updatedAt: '', steps: [] }
 }
 
@@ -332,19 +333,19 @@ export async function getProjects(): Promise<Project[]> {
   if (!db) return read(mock.projects)
   const version = contextVersion
   const { data, error: sessionError } = await db.auth.getSession()
-  if (sessionError) throw new Error('Could not check your session. Check your connection and try again.')
+  if (sessionError) throw new UserError('Could not check your session. Check your connection and try again.')
   if (!data.session) return []
   const uid = data.session.user.id
-  if (version !== contextVersion) throw new Error('Sign-in or project changed.')
+  if (version !== contextVersion) throw new UserError('Sign-in or project changed.')
   return sharedReads.run(`projects:${uid}:${version}`, async () => {
     if (claimedUser !== uid) {
       const { error } = await db!.rpc('claim_project_invites')
-      if (error) throw new Error('Could not check your project invitations. Please try again.')
-      if (version !== contextVersion) throw new Error('Sign-in or project changed.')
+      if (error) throw new UserError('Could not check your project invitations. Please try again.')
+      if (version !== contextVersion) throw new UserError('Sign-in or project changed.')
       claimedUser = uid
     }
     const rows = unwrap<ProjectRow[]>(await db!.from('projects').select(PROJECT_COLS).order('created_at'))
-    if (version !== contextVersion) throw new Error('Sign-in or project changed.')
+    if (version !== contextVersion) throw new UserError('Sign-in or project changed.')
     return rows.map(mapProject)
   })
 }
@@ -368,7 +369,7 @@ export async function getAccountBuildingOverview(projectIds: string[]): Promise<
   guard()
   const buildings = unwrap<{ id: string; name: string }[]>(buildingResult)
   const rows = unwrap<{ project_id: string; id: string; name: string }[]>(linkResult)
-  if (rows.some(row => !ids.includes(row.project_id))) throw new Error('Building overview project context changed. Reload before continuing.')
+  if (rows.some(row => !ids.includes(row.project_id))) throw new UserError('Building overview project context changed. Reload before continuing.')
   const byId = new Map(buildings.map(building => [building.id, building]))
   for (const row of rows) byId.set(row.id, { id: row.id, name: row.name })
   return { buildings: [...byId.values()].sort((a,b) => a.name.localeCompare(b.name)), links: rows.map(row => ({ projectId: row.project_id, buildingId: row.id })) }
@@ -409,7 +410,7 @@ export async function createProject(input: NewProject): Promise<Project> {
   const slug = slugify(input.name, 'project')
   if (!db) {
     if (mock.projects.some((p) => p.id === `p_${slug}`)) {
-      throw new Error(`database: a project called "${input.name}" already exists`)
+      throw new UserError(`A project called “${input.name}” already exists.`, 'duplicate')
     }
     const project: Project = {
       id: `p_${slug}`,
@@ -454,7 +455,7 @@ export interface ProjectDetailsUpdate {
 export async function updateProjectDetails(id: string, input: ProjectDetailsUpdate): Promise<void> {
   if (!db) {
     const project = mock.projects.find((p) => p.id === id)
-    if (!project) throw new Error('database: no such project')
+    if (!project) throw new DataError('not_found', 'no such project')
     Object.assign(project, input)
   } else {
     const res = await db
@@ -467,7 +468,7 @@ export async function updateProjectDetails(id: string, input: ProjectDetailsUpda
         theme: input.theme,
       })
       .eq('id', id)
-    if (res.error) throw new Error(`database: ${res.error.message}`)
+    if (res.error) throw toDataError(res.error)
   }
   // Theme and name show in the shell — nudge mounted screens to refetch.
   window.dispatchEvent(new Event(PROJECT_CHANGED_EVENT))
@@ -482,7 +483,7 @@ export async function updateProjectSchedule(
 ): Promise<Project> {
   if (!db) {
     const project = mock.projects.find((p) => p.id === id)
-    if (!project) throw new Error('database: no such project')
+    if (!project) throw new DataError('not_found', 'no such project')
     project.startDate = startDate
     project.endDate = endDate
     return read(project)
@@ -509,7 +510,7 @@ function mapAccount(row: AccountRow): Account {
 export async function getAccount(): Promise<Account | null> {
   if (!db) return read(mock.account)
   const { data, error } = await db.from('account').select('id, name, owner_name, email').maybeSingle()
-  if (error) throw new Error(`database: ${error.message}`)
+  if (error) throw toDataError(error)
   // No visible account is a successful result before household setup or when
   // this login only has project access. Keep actual query failures distinct.
   return data ? mapAccount(data as AccountRow) : null
@@ -520,7 +521,7 @@ export async function bindAccountHousehold(householdId: string): Promise<Account
   await sharing.bindAccount(householdId)
   const account = await getAccount()
   guard()
-  if (!account) throw new Error('The household account could not be read back. Reload before trying again.')
+  if (!account) throw new UserError('The household account could not be read back. Reload before trying again.')
   return account
 }
 
@@ -595,7 +596,7 @@ export async function setNotePinned(id: string, pinned: boolean): Promise<void> 
     return
   }
   const res = await db.from('account_notes').update({ pinned }).eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 export async function deleteNote(id: string): Promise<void> {
@@ -606,7 +607,7 @@ export async function deleteNote(id: string): Promise<void> {
     return
   }
   const res = await db.from('account_notes').delete().eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 /* ─────────────────────────── PEOPLE ─────────────────────────── */
@@ -646,7 +647,7 @@ export interface PersonUpdate {
 export async function updatePerson(id: string, input: PersonUpdate): Promise<void> {
   if (!db) {
     const person = mock.people.find((p) => p.id === id)
-    if (!person) throw new Error('database: no such person')
+    if (!person) throw new DataError('not_found', 'no such person')
     person.role = input.role
     person.diet = input.diet
     person.skills = input.skills.map((s) => ({ ...s }))
@@ -654,14 +655,14 @@ export async function updatePerson(id: string, input: PersonUpdate): Promise<voi
     return
   }
   const res = await db.from('people').update({ role: input.role, diet: input.diet }).eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
   const cleared = await db.from('person_skills').delete().eq('person_id', id)
-  if (cleared.error) throw new Error(`database: ${cleared.error.message}`)
+  if (cleared.error) throw toDataError(cleared.error)
   if (input.skills.length > 0) {
     const added = await db
       .from('person_skills')
       .insert(input.skills.map((s) => ({ person_id: id, name: s.name, level: s.level })))
-    if (added.error) throw new Error(`database: ${added.error.message}`)
+    if (added.error) throw toDataError(added.error)
   }
 }
 
@@ -686,7 +687,7 @@ export async function deletePerson(id: string): Promise<void> {
     return
   }
   const res = await db.from('people').delete().eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 /* ─────────────────────────── AUTH / CURRENT USER ───────────────────────────
@@ -726,11 +727,11 @@ export async function getCurrentUser(): Promise<Person | null> {
     // creates that projection only while the caller already has effective access.
     const membership = await client.rpc('join_project', { p_project_id: projectId })
     if (version !== contextVersion) return null
-    if (membership.error) throw new Error('Could not confirm your current project access.')
+    if (membership.error) throw new UserError('Could not confirm your current project access.')
     result = await readMember()
   }
   const { data: row, error } = result
-  if (error) throw new Error('Could not load your project membership.')
+  if (error) throw new UserError('Could not load your project membership.')
   if (!row || version !== contextVersion) return null
   return { id: row.id, name: row.name, initials: row.initials, color: row.color,
     role: row.role, diet: row.diet, skills: row.person_skills as Skill[] }
@@ -738,25 +739,25 @@ export async function getCurrentUser(): Promise<Person | null> {
 
 /** Sends the sign-in link. The link returns to the app, which finishes the session. */
 export async function signInWithMagicLink(email: string): Promise<void> {
-  if (!db) throw new Error('Running on demo data — sign-in needs the live database.')
+  if (!db) throw new UserError('Running on demo data — sign-in needs the live database.')
   const { error } = await db.auth.signInWithOtp({
     email,
     options: { emailRedirectTo: window.location.origin + window.location.pathname },
   })
-  if (error) throw new Error(error.message)
+  if (error) throw toDataError(error)
 }
 
 export async function signInWithPassword(email: string, password: string): Promise<void> {
-  if (!db) throw new Error('Running on demo data — sign-in needs the live database.')
+  if (!db) throw new UserError('Running on demo data — sign-in needs the live database.')
   const { error } = await db.auth.signInWithPassword({ email, password })
-  if (error) throw new Error(error.message)
+  if (error) throw toDataError(error)
 }
 
 /** Is anyone signed in? Mock mode has no auth, so always "yes". */
 export async function hasSession(): Promise<boolean> {
   if (!db) return true
   const { data, error } = await db.auth.getSession()
-  if (error) throw new Error('Could not check your session. Check your connection and try again.')
+  if (error) throw new UserError('Could not check your session. Check your connection and try again.')
   return data.session !== null
 }
 
@@ -770,9 +771,9 @@ const GUEST_EMAIL = 'guest@bob.local'
 const GUEST_PASSWORD = 'bob-guest-2026'
 
 export async function signInAsGuest(): Promise<void> {
-  if (!db) throw new Error('Running on demo data — sign-in needs the live database.')
+  if (!db) throw new UserError('Running on demo data — sign-in needs the live database.')
   const { error } = await db.auth.signInWithPassword({ email: GUEST_EMAIL, password: GUEST_PASSWORD })
-  if (error) throw new Error(error.message)
+  if (error) throw toDataError(error)
 }
 
 /**
@@ -806,18 +807,18 @@ export async function invitePerson(projectId: string, name: string, email: strin
     p_name: name.trim(),
     p_email: email.trim(),
   })
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 /** Returns true when the account is ready, false when email confirmation is pending. */
 export async function signUpWithPassword(email: string, password: string): Promise<boolean> {
-  if (!db) throw new Error('Running on demo data — sign-up needs the live database.')
+  if (!db) throw new UserError('Running on demo data — sign-up needs the live database.')
   const { data, error } = await db.auth.signUp({
     email,
     password,
     options: { emailRedirectTo: window.location.origin + window.location.pathname },
   })
-  if (error) throw new Error(error.message)
+  if (error) throw toDataError(error)
   return data.session !== null
 }
 
@@ -948,21 +949,21 @@ export async function getArea(slug: string): Promise<Area | undefined> {
 
 export async function setAreaArchived(area: Area, archived: boolean): Promise<void> {
   const projectId = await activeProjectId()
-  if (!projectId) throw new Error('Open a project before changing an Area.')
+  if (!projectId) throw new UserError('Open a project before changing an Area.')
   const guard = captureFileContext(projectId)
   if (!db) {
     const stored = mock.areas.find(item => item.id === area.id)
-    if (!stored) throw new Error('Area unavailable')
-    if (archived && mock.tasks.some(task => task.areaId === area.id && task.status !== 'done')) throw new Error('Move or finish this Area’s unfinished Tasks before archiving.')
+    if (!stored) throw new DataError('not_found', 'Area unavailable')
+    if (archived && mock.tasks.some(task => task.areaId === area.id && task.status !== 'done')) throw new UserError('Move or finish this Area’s unfinished Tasks before archiving.')
     stored.archivedAt = archived ? new Date().toISOString() : null
     stored.updatedAt = new Date().toISOString()
     await read(null)
   } else {
-    if (!area.updatedAt) throw new Error('Refresh the Area before trying again.')
+    if (!area.updatedAt) throw new UserError('Refresh the Area before trying again.')
     const result = await db.rpc('area_lifecycle_command', { p_project: projectId, p_area: area.id, p_action: archived ? 'archive' : 'restore', p_expected: area.updatedAt })
     guard()
-    if (result.error) throw new Error(result.error.message)
-    if (result.data?.id !== area.id || result.data?.project_id !== projectId || !!result.data.archived_at !== archived) throw new Error('The Area change could not be confirmed. Refresh and try again.')
+    if (result.error) throw toDataError(result.error)
+    if (result.data?.id !== area.id || result.data?.project_id !== projectId || !!result.data.archived_at !== archived) throw new UserError('The Area change could not be confirmed. Refresh and try again.')
   }
   window.dispatchEvent(new Event(PROJECT_CHANGED_EVENT))
 }
@@ -980,7 +981,7 @@ const sameAreaName = (a: string, b: string): boolean => a.trim().toLocaleLowerCa
 
 function assertAreaNameFree(areas: Area[], name: string, exceptId?: string): void {
   const taken = areas.find((a) => a.id !== exceptId && sameAreaName(a.name, name))
-  if (taken) throw new Error(taken.archivedAt
+  if (taken) throw new UserError(taken.archivedAt
     ? `An archived Area is already called “${taken.name}”. Restore it or pick a different name.`
     : `An Area called “${taken.name}” already exists. Pick a different name.`)
 }
@@ -1016,7 +1017,7 @@ export async function createArea(input: NewArea): Promise<Area> {
     return read(area)
   }
   const pid = await activeProjectId()
-  if (!pid) throw new Error('database: create a project before adding areas')
+  if (!pid) throw new UserError('Open or create a project before adding Areas.')
   const res = await db.from('areas').insert({
     id: area.id,
     project_id: pid,
@@ -1028,10 +1029,10 @@ export async function createArea(input: NewArea): Promise<Area> {
     task_summary: area.taskSummary,
     sort_order: existing.length + 1,
   })
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
   if (area.leadId) {
     const crew = await db.from('area_crew').insert({ area_id: area.id, person_id: area.leadId })
-    if (crew.error) throw new Error(`database: ${crew.error.message}`)
+    if (crew.error) throw toDataError(crew.error)
   }
   return area
 }
@@ -1047,7 +1048,7 @@ export interface AreaUpdate {
 export async function updateArea(id: string, input: AreaUpdate): Promise<void> {
   if (!db) {
     const area = mock.areas.find((a) => a.id === id)
-    if (!area) throw new Error('database: no such area')
+    if (!area) throw new DataError('not_found', 'no such area')
     assertAreaNameFree(mock.areas, input.name, id)
     const oldName = area.name
     const shared = mock.areas.some((a) => a.id !== id && a.name === oldName)
@@ -1066,7 +1067,7 @@ export async function updateArea(id: string, input: AreaUpdate): Promise<void> {
   }
   const areas = await fetchAreas()
   const before = areas.find((a) => a.id === id)
-  if (!before) throw new Error('database: no such area')
+  if (!before) throw new DataError('not_found', 'no such area')
   assertAreaNameFree(areas, input.name, id)
   // Older projects may already hold two Areas with one name; their materials
   // cannot be told apart, so leave them rather than move both Areas' rows.
@@ -1075,15 +1076,15 @@ export async function updateArea(id: string, input: AreaUpdate): Promise<void> {
     .from('areas')
     .update({ name: input.name, description: input.description, icon: input.icon, lead_id: input.leadId })
     .eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
   if (input.leadId && !before.crewIds.includes(input.leadId)) {
     const crew = await db.from('area_crew').insert({ area_id: id, person_id: input.leadId })
-    if (crew.error) throw new Error(`database: ${crew.error.message}`)
+    if (crew.error) throw toDataError(crew.error)
   }
   if (before.name !== input.name && !shared) {
     const pid = await activeProjectId()
     const mats = await db.from('materials').update({ area_label: input.name }).eq('project_id', pid).eq('area_label', before.name)
-    if (mats.error) throw new Error(`database: ${mats.error.message}`)
+    if (mats.error) throw toDataError(mats.error)
   }
 }
 
@@ -1105,12 +1106,12 @@ export async function deleteArea(id: string): Promise<void> {
   // Another Area with the same name owns materials under that label too.
   const shared = Boolean(area && areas.some((a) => a.id !== id && a.name === area.name))
   const res = await db.from('areas').delete().eq('id', id)
-  if (res.error?.code === '23503') throw new Error('This Area is still referenced by saved project records or plan history and cannot be deleted. Moving current steps does not remove historical references.')
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error?.code === '23503') throw new UserError('This Area is still referenced by saved project records or plan history and cannot be deleted. Moving current steps does not remove historical references.')
+  if (res.error) throw toDataError(res.error)
   if (area && !shared) {
     const pid = await activeProjectId()
     const mats = await db.from('materials').delete().eq('project_id', pid).eq('area_label', area.name)
-    if (mats.error) throw new Error(`database: ${mats.error.message}`)
+    if (mats.error) throw toDataError(mats.error)
   }
 }
 
@@ -1118,14 +1119,14 @@ export async function deleteArea(id: string): Promise<void> {
 export async function addReferenceImage(areaId: string, label: string): Promise<void> {
   if (!db) {
     const area = mock.areas.find((a) => a.id === areaId)
-    if (!area) throw new Error('database: no such area')
+    if (!area) throw new DataError('not_found', 'no such area')
     area.referenceImages.push({ label })
     await read(null)
     return
   }
   const count = (await getAreas()).find((a) => a.id === areaId)?.referenceImages.length ?? 0
   const res = await db.from('area_reference_images').insert({ area_id: areaId, label, sort_order: count + 1 })
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 export async function getTasks(): Promise<Task[]> {
@@ -1187,9 +1188,9 @@ export async function createTask(input: NewTask): Promise<Task> {
       return read(task)
     }
     const pid = await activeProjectId()
-    if (!pid) throw new Error('No active project.')
+    if (!pid) throw new UserError('Open a project first.')
     const res = await db.rpc('create_work_task',{p_project:pid,p_step:task.primaryStepId,p_area:task.areaId,p_name:task.name,p_skill:task.skill,p_hours:task.hours})
-    if (res.error) throw new Error(`database: ${res.error.message}`)
+    if (res.error) throw toDataError(res.error)
     return {...task, id:res.data.id, areaId:res.data.area_id, primaryStepId:res.data.primary_step_id}
   } finally { sharedReads.clear() }
 }
@@ -1203,7 +1204,7 @@ export async function setTaskStatus(id: string, status: TaskStatus): Promise<voi
       return
     }
     const res = await db.from('tasks').update({ status }).eq('id', id)
-    if (res.error) throw new Error(`database: ${res.error.message}`)
+    if (res.error) throw toDataError(res.error)
   } finally { sharedReads.clear() }
 }
 
@@ -1217,10 +1218,10 @@ export async function setTaskAssignees(id: string, personIds: string[]): Promise
       return
     }
     const cleared = await db.from('task_assignees').delete().eq('task_id', id)
-    if (cleared.error) throw new Error(`database: ${cleared.error.message}`)
+    if (cleared.error) throw toDataError(cleared.error)
     if (personIds.length > 0) {
       const res = await db.from('task_assignees').insert(personIds.map((pid) => ({ task_id: id, person_id: pid })))
-      if (res.error) throw new Error(`database: ${res.error.message}`)
+      if (res.error) throw toDataError(res.error)
     }
   } finally { sharedReads.clear() }
 }
@@ -1235,13 +1236,13 @@ export async function updateTask(id: string, input: TaskUpdate): Promise<void> {
   try {
     if (!db) {
       const task = mock.tasks.find((t) => t.id === id)
-      if (!task) throw new Error('database: no such task')
+      if (!task) throw new DataError('not_found', 'no such task')
       Object.assign(task, input)
       await read(null)
       return
     }
     const res = await db.from('tasks').update({ name: input.name, skill: input.skill, hours: input.hours }).eq('id', id)
-    if (res.error) throw new Error(`database: ${res.error.message}`)
+    if (res.error) throw toDataError(res.error)
   } finally { sharedReads.clear() }
 }
 
@@ -1254,7 +1255,7 @@ export async function deleteTask(id: string): Promise<void> {
       return
     }
     const res = await db.from('tasks').delete().eq('id', id)
-    if (res.error) throw new Error(`database: ${res.error.message}`)
+    if (res.error) throw toDataError(res.error)
   } finally { sharedReads.clear() }
 }
 
@@ -1345,7 +1346,7 @@ export async function createMaterial(input: NewMaterial): Promise<Material> {
     return read(material)
   }
   const pid = await activeProjectId()
-  if (!pid) throw new Error('database: create a project before adding materials')
+  if (!pid) throw new UserError('Open or create a project before adding materials.')
   const res = await db.from('materials').insert({
     id: material.id,
     project_id: pid,
@@ -1359,7 +1360,7 @@ export async function createMaterial(input: NewMaterial): Promise<Material> {
     category_icon: material.categoryIcon,
     sort_order: existing.length + 1,
   })
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
   return material
 }
 
@@ -1380,7 +1381,7 @@ export async function updateMaterial(id: string, input: MaterialUpdate): Promise
     'package'
   if (!db) {
     const material = mock.materials.find((m) => m.id === id)
-    if (!material) throw new Error('database: no such material')
+    if (!material) throw new DataError('not_found', 'no such material')
     Object.assign(material, { ...input, category, categoryIcon: icon })
     await read(null)
     return
@@ -1397,7 +1398,7 @@ export async function updateMaterial(id: string, input: MaterialUpdate): Promise
       category_icon: icon,
     })
     .eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 export async function deleteMaterial(id: string): Promise<void> {
@@ -1408,7 +1409,7 @@ export async function deleteMaterial(id: string): Promise<void> {
     return
   }
   const res = await db.from('materials').delete().eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 export async function setMaterialStatus(id: string, status: MaterialStatus): Promise<void> {
@@ -1419,7 +1420,7 @@ export async function setMaterialStatus(id: string, status: MaterialStatus): Pro
     return
   }
   const res = await db.from('materials').update({ status }).eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 /* ─────────────────────────── EVENTS ─────────────────────────── */
@@ -1508,7 +1509,7 @@ export async function createEvent(input: NewEvent): Promise<BuildEvent> {
     return read(event)
   }
   const pid = await activeProjectId()
-  if (!pid) throw new Error('database: create a project before adding events')
+  if (!pid) throw new UserError('Open or create a project before adding build days.')
   const res = await db.from('events').insert({
     id: event.id,
     project_id: pid,
@@ -1522,7 +1523,7 @@ export async function createEvent(input: NewEvent): Promise<BuildEvent> {
     food: event.food,
     sort_order: existing.length + 1,
   })
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
   return event
 }
 
@@ -1545,16 +1546,16 @@ export function isFull(event: BuildEvent): boolean {
 /** Sign the current user up for a build day (idempotent). */
 export async function joinEvent(id: string): Promise<void> {
   const me = await getCurrentUser()
-  if (!me) throw new Error('Sign in first so the organiser knows who is coming.')
+  if (!me) throw new UserError('Sign in first so the organiser knows who is coming.')
   const bump = (spots: string, delta: number): string => {
     const { taken, cap } = spotsParts(spots)
     return `${Math.max(0, taken + delta)} / ${cap}`
   }
   if (!db) {
     const event = mock.events.find((e) => e.id === id)
-    if (!event) throw new Error('database: no such event')
+    if (!event) throw new DataError('not_found', 'no such event')
     if (!event.attendeeIds.includes(me.id)) {
-      if (isFull({ ...event, spots: spotsWithTaken(event.spots, event.attendeeIds.length) })) throw new Error('This build day is full — ask the organiser to add spots.')
+      if (isFull({ ...event, spots: spotsWithTaken(event.spots, event.attendeeIds.length) })) throw new UserError('This build day is full — ask the organiser to add spots.')
       event.attendeeIds.push(me.id)
       event.spots = spotsWithTaken(event.spots, event.attendeeIds.length)
     }
@@ -1563,18 +1564,18 @@ export async function joinEvent(id: string): Promise<void> {
     return
   }
   const already = await db.from('event_attendees').select('person_id').eq('event_id', id).eq('person_id', me.id)
-  if (already.error) throw new Error(`database: ${already.error.message}`)
+  if (already.error) throw toDataError(already.error)
   const event = (await getEvents()).find((e) => e.id === id)
-  if (!event) throw new Error('database: no such event')
+  if (!event) throw new DataError('not_found', 'no such event')
   const patch: { status: EventStatus; spots?: string } = { status: 'going' }
   if ((already.data ?? []).length === 0) {
-    if (isFull(event)) throw new Error('This build day is full — ask the organiser to add spots.')
+    if (isFull(event)) throw new UserError('This build day is full — ask the organiser to add spots.')
     const joined = await db.from('event_attendees').insert({ event_id: id, person_id: me.id })
-    if (joined.error) throw new Error(`database: ${joined.error.message}`)
+    if (joined.error) throw toDataError(joined.error)
     patch.spots = bump(event.spots, +1)
   }
   const res = await db.from('events').update(patch).eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 /** Take the current user off a build day's attendee list. */
@@ -1600,9 +1601,9 @@ export async function leaveEvent(id: string): Promise<void> {
   const event = (await getEvents()).find((e) => e.id === id)
   if (!event || !event.attendeeIds.includes(me.id)) return
   const gone = await db.from('event_attendees').delete().eq('event_id', id).eq('person_id', me.id)
-  if (gone.error) throw new Error(`database: ${gone.error.message}`)
+  if (gone.error) throw toDataError(gone.error)
   const res = await db.from('events').update({ status: 'open' as EventStatus, spots: bump(event.spots) }).eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 export interface EventUpdate {
@@ -1625,15 +1626,15 @@ export async function updateEvent(id: string, input: EventUpdate): Promise<void>
   })
   if (!db) {
     const event = mock.events.find((e) => e.id === id)
-    if (!event) throw new Error('database: no such event')
+    if (!event) throw new DataError('not_found', 'no such event')
     Object.assign(event, patch(event.spots))
     await read(null)
     return
   }
   const event = (await getEvents()).find((e) => e.id === id)
-  if (!event) throw new Error('database: no such event')
+  if (!event) throw new DataError('not_found', 'no such event')
   const res = await db.from('events').update(patch(event.spots)).eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 export async function deleteEvent(id: string): Promise<void> {
@@ -1644,7 +1645,7 @@ export async function deleteEvent(id: string): Promise<void> {
     return
   }
   const res = await db.from('events').delete().eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 /* ─────────────────────────── FOOD ─────────────────────────── */
@@ -1681,7 +1682,7 @@ export async function createMeal(input: MealInput): Promise<Meal> {
     return read(meal)
   }
   const pid = await activeProjectId()
-  if (!pid) throw new Error('database: create a project before planning meals')
+  if (!pid) throw new UserError('Open or create a project before planning meals.')
   const res = await db.from('meals').insert({
     id: meal.id,
     project_id: pid,
@@ -1692,14 +1693,14 @@ export async function createMeal(input: MealInput): Promise<Meal> {
     notes: input.notes,
     sort_order: (await getMeals()).length + 1,
   })
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
   return meal
 }
 
 export async function updateMeal(id: string, input: MealInput): Promise<void> {
   if (!db) {
     const meal = mock.meals.find((m) => m.id === id)
-    if (!meal) throw new Error('database: no such meal')
+    if (!meal) throw new DataError('not_found', 'no such meal')
     Object.assign(meal, input)
     await read(null)
     return
@@ -1708,7 +1709,7 @@ export async function updateMeal(id: string, input: MealInput): Promise<void> {
     .from('meals')
     .update({ meal: input.meal, time: input.time, icon: input.icon, dish: input.dish, notes: input.notes })
     .eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 export async function deleteMeal(id: string): Promise<void> {
@@ -1719,7 +1720,7 @@ export async function deleteMeal(id: string): Promise<void> {
     return
   }
   const res = await db.from('meals').delete().eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 /** Default matrix columns, created on first use for projects without any. */
@@ -1753,10 +1754,10 @@ export async function setDietFlag(personId: string, columnId: string, on: boolea
   }
   if (on) {
     const res = await db.from('diet_flags').insert({ person_id: personId, column_id: columnId })
-    if (res.error && !/duplicate/i.test(res.error.message)) throw new Error(`database: ${res.error.message}`)
+    if (res.error && toDataError(res.error).kind !== 'duplicate') throw toDataError(res.error)
   } else {
     const res = await db.from('diet_flags').delete().eq('person_id', personId).eq('column_id', columnId)
-    if (res.error) throw new Error(`database: ${res.error.message}`)
+    if (res.error) throw toDataError(res.error)
   }
 }
 
@@ -1773,7 +1774,7 @@ export async function ensureDietColumns(): Promise<DietColumn[]> {
     sort_order: i + 1,
   }))
   const res = await db.from('diet_columns').insert(rows)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
   return rows.map((r) => ({ id: r.id, name: r.name }))
 }
 
@@ -1827,7 +1828,7 @@ export async function setFoodItemChecked(id: string, checked: boolean): Promise<
     return
   }
   const res = await db.from('food_items').update({ checked }).eq('id', Number(id))
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 const FOOD_GROUP_ICONS: Record<string, string> = {
@@ -1858,7 +1859,7 @@ export async function createFoodItem(input: NewFoodItem): Promise<void> {
     return
   }
   const pid = await activeProjectId()
-  if (!pid) throw new Error('database: create a project before planning food')
+  if (!pid) throw new UserError('Open or create a project before planning food.')
   const groups = unwrap<{ id: string; category: string }[]>(
     await db.from('food_groups').select('id, category').eq('project_id', pid),
   )
@@ -1872,10 +1873,10 @@ export async function createFoodItem(input: NewFoodItem): Promise<void> {
       icon: FOOD_GROUP_ICONS[category.toLowerCase()] ?? 'basket',
       sort_order: groups.length + 1,
     })
-    if (made.error) throw new Error(`database: ${made.error.message}`)
+    if (made.error) throw toDataError(made.error)
   }
   const res = await db.from('food_items').insert({ group_id: groupId, name: input.name, qty: input.qty, note: input.note })
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 /* ─────────────────────────── COMMUNICATION ─────────────────────────── */
@@ -1912,7 +1913,7 @@ export async function getAnnouncements(): Promise<Announcement[]> {
 /** Post an announcement as the current user. */
 export async function postAnnouncement(text: string): Promise<Announcement> {
   const me = await getCurrentUser()
-  if (!me) throw new Error('Sign in first to post to the crew.')
+  if (!me) throw new UserError('Sign in first to post to the crew.')
   const announcement: Announcement = {
     id: newId('an'),
     authorId: me.id,
@@ -1928,7 +1929,7 @@ export async function postAnnouncement(text: string): Promise<Announcement> {
     return read(announcement)
   }
   const pid = await activeProjectId()
-  if (!pid) throw new Error('database: create a project before posting')
+  if (!pid) throw new UserError('Open or create a project before posting.')
   const res = await db.from('announcements').insert({
     id: announcement.id,
     project_id: pid,
@@ -1937,7 +1938,7 @@ export async function postAnnouncement(text: string): Promise<Announcement> {
     pinned: false,
     text,
   })
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
   return announcement
 }
 
@@ -1951,7 +1952,7 @@ export async function reactToAnnouncement(id: string): Promise<void> {
   }
   const current = unwrap<{ reacts: number }>(await db.from('announcements').select('reacts').eq('id', id).single())
   const res = await db.from('announcements').update({ reacts: current.reacts + 1 }).eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 export async function setAnnouncementPinned(id: string, pinned: boolean): Promise<void> {
@@ -1962,7 +1963,7 @@ export async function setAnnouncementPinned(id: string, pinned: boolean): Promis
     return
   }
   const res = await db.from('announcements').update({ pinned }).eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 export async function deleteAnnouncement(id: string): Promise<void> {
@@ -1973,7 +1974,7 @@ export async function deleteAnnouncement(id: string): Promise<void> {
     return
   }
   const res = await db.from('announcements').delete().eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (res.error) throw toDataError(res.error)
 }
 
 /* ─────────────────────────── DAY-OF / TODAY ─────────────────────────── */
@@ -2171,7 +2172,7 @@ export async function getProjectWork(projectId:string):Promise<import('./project
  const guard=captureFileContext(projectId);guard()
  if(!db)return null
  const result=await db.rpc('project_work_read',{p_project:projectId})
- guard();if(result.error)throw new Error('Project plan could not be loaded.')
+ guard();if(result.error)throw new UserError('Project plan could not be loaded.')
  return result.data as import('./projectWork').ProjectWork
 }
 
@@ -2180,7 +2181,7 @@ export async function getProjectStepWorkspace(projectId:string):Promise<import('
  const work=await getProjectWork(projectId)
  if(!work||!db)return null
  const drawings=await db.from('current_drawing_steps').select('artifact_id,artifact_revision,step_id,title,status,area_id,source_state,source_reasons').eq('project_id',projectId)
- guard();if(drawings.error)throw new Error('Project step drawings could not be loaded.')
+ guard();if(drawings.error)throw new UserError('Project step drawings could not be loaded.')
  return {...work,drawings:drawings.data??[]}
 }
 
@@ -2196,7 +2197,7 @@ export async function getProjectDrawingCards(projectId:string):Promise<ProjectDr
  const result=await db.from('current_drawing_overview')
   .select('id,project_id,revision,title,status,area_id,steps,source_state,source_reasons,preview_svg,parametric_recipe,source_media_id').eq('project_id',projectId)
   .order('recorded_at',{ascending:false}).order('id').limit(4)
- guard();if(result.error)throw new Error('Project drawings could not be loaded.')
+ guard();if(result.error)throw new UserError('Project drawings could not be loaded.')
  return result.data??[]
 }
 export interface DrawingRequestWork {
@@ -2210,12 +2211,12 @@ export async function getDrawingRequests(projectId:string,after:string|null=null
  const guard=captureFileContext(projectId);guard()
  if(!db)return {items:[],next_cursor:null}
  const {data,error}=await db.rpc('drawing_work_list',{p_project:projectId,p_after:after,p_task:task})
- guard();if(error)throw new Error('Drawing requests could not be loaded.')
+ guard();if(error)throw new UserError('Drawing requests could not be loaded.')
  return data
 }
 export async function cancelDrawingRequest(projectId:string,id:string,revision:number){
  const guard=captureFileContext(projectId);guard()
- if(!db)throw new Error('Open a connected project.')
+ if(!db)throw new UserError('Open a connected project.')
  const {error}=await db.rpc('cancel_drawing_request',{p_project:projectId,p_id:id,p_expected:revision})
- guard();if(error)throw new Error('The request changed or cannot be cancelled. Refresh its status.')
+ guard();if(error)throw new UserError('The request changed or cannot be cancelled. Refresh its status.')
 }

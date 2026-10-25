@@ -17,6 +17,7 @@ import {
 import { AreaModal, AssignModal, MaterialModal, TaskModal } from '../components/editors'
 import { ProjectImages } from '../components/ProjectImages'
 import { AreaArchiveNotice } from '../components/AreaArchiveNotice'
+import { userErrorMessage } from '../lib/userErrors'
 
 type Tab = 'tasks' | 'materials' | 'images'
 
@@ -53,7 +54,7 @@ export function AreaDetail() {
   }
   const act = (action: () => Promise<unknown>) => {
     setError(null)
-    action().then(reload).catch((err) => setError(err instanceof Error ? err.message : String(err)))
+    action().then(reload).catch((err) => setError(userErrorMessage(err, 'Could not save the change. Try again.')))
   }
 
   if (loading) return <div className="page"><Loading /></div>

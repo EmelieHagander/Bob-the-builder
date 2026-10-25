@@ -6,6 +6,7 @@ import { accountClient as phaseDb } from './supabaseClient'
 import * as core from './databaseCore'
 import * as mock from './mockData'
 import type { Area, Project, ProjectPhase } from './types'
+import { DataError, UserError, toDataError } from '../lib/userErrors'
 
 export * from './databaseCore'
 // Explicit exports win over the legacy star export above. Ask Bob now resolves
@@ -14,8 +15,8 @@ export { renewDrawingRequests, cancelAskBobTurn, subscribeBobInbox, getBobInbox,
 export type { BobProgress, BobInbox } from './bobConversation'
 
 function checked<T>(result: { data: T | null; error: { message: string } | null }): T {
-  if (result.error) throw new Error(`database: ${result.error.message}`)
-  if (result.data === null || result.data === undefined) throw new Error('database: query returned no data')
+  if (result.error) throw toDataError(result.error)
+  if (result.data === null || result.data === undefined) throw new DataError('no_data', 'query returned no data')
   return result.data
 }
 
@@ -52,20 +53,20 @@ export async function createArea(input: core.NewArea): Promise<Area> {
 
 async function setPhase(scope: 'project' | 'area', areaId: string | null, phase: ProjectPhase, reason: string): Promise<void> {
   const projectId = core.getActiveProjectId()
-  if (!projectId) throw new Error('database: open a project before changing phase')
+  if (!projectId) throw new UserError('Open a project before changing its phase.')
   const trimmed = reason.trim()
-  if (!trimmed) throw new Error('Add a short reason for the phase change.')
+  if (!trimmed) throw new UserError('Add a short reason for the phase change.')
   if (!phaseDb) {
     if (scope === 'project') {
       const project = mock.projects.find(item => item.id === projectId)
-      if (!project) throw new Error('database: no such project')
+      if (!project) throw new DataError('not_found', 'no such project')
       if (phase === 'complete' && mock.areas.some(area => !area.archivedAt && area.phase !== 'complete')) {
-        throw new Error('Complete or explicitly defer every Area before completing the Project.')
+        throw new UserError('Complete or explicitly defer every Area before completing the Project.')
       }
       project.phase = phase
     } else {
       const area = mock.areas.find(item => item.id === areaId)
-      if (!area) throw new Error('database: no such area')
+      if (!area) throw new DataError('not_found', 'no such area')
       area.phase = phase
     }
   } else {

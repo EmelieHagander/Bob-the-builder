@@ -39,7 +39,7 @@ test('scope errors and unlink results use plain, honest copy', () => {
   assert.match(scopeErrorMessage(new Error('space_not_in_building'), 'room'), /no longer part of that building/)
   assert.equal(scopeErrorMessage(new Error('building_not_linked'), 'room'), 'Link the whole building to this project first.')
   assert.equal(scopeErrorMessage(new Error('project_denied'), 'room'), 'You no longer have access to this project.')
-  assert.equal(scopeErrorMessage(new Error('Network down'), 'room'), 'Network down')
+  assert.equal(scopeErrorMessage(new Error('Network down at 10.0.0.1'), 'room'), 'Something went wrong. Try again.', 'Unknown failures never show raw text')
   assert.deepEqual(unlinkResult({ id: 'x', removed: true, removed_rooms: 2, removed_area_targets: 1 }), { removedRooms: 2, removedAreaTargets: 1 })
   assert.deepEqual(unlinkResult({ id: 'x', removed: true }), { removedRooms: 0, removedAreaTargets: 0 })
   assert.equal(unlinkSummary('Main house', { removedRooms: 2, removedAreaTargets: 1 }), 'Main house is no longer used by this project. Removed 2 room marks and 1 Area room.')

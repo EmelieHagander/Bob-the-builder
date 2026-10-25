@@ -63,8 +63,10 @@ export function readCadSourceMap(recipe: Record<string, unknown>, manifest: Reco
   }
 }
 
+/** Human identity for a recorded source: kind and saved revisions, never raw IDs.
+ * The record's own description follows it on screen. */
 export function cadSourceIdentity(source: ParameterSource): string {
   return source.kind === 'project_measurement'
-    ? `Project measurement ${source.id} · revision ${source.revision}`
-    : `Space measurement ${source.id} · Space ${source.space_id} revision ${source.space_revision} · Building ${source.building_id} · original measurement ${source.measurement_id} revision ${source.measurement_revision}`
+    ? `Saved project measurement · revision ${source.revision}`
+    : `Saved space measurement · space revision ${source.space_revision} · measurement revision ${source.measurement_revision}`
 }

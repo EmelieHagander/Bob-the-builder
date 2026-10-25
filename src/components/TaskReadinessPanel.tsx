@@ -7,8 +7,9 @@ import { Field, FormError, inputStyle } from './form'
 import { Modal } from './Modal'
 import { Icon, Loading, useAsync } from './ui'
 import { formatDateTime } from '../lib/format'
+import { userErrorMessage } from '../lib/userErrors'
 
-const errorText = (error: unknown) => error instanceof Error ? error.message : String(error)
+const errorText = (error: unknown) => userErrorMessage(error, 'Could not update readiness. Try again.')
 
 const STATE_COPY: Record<TaskReadinessState, { title: string; text: string; icon: string }> = {
   unreviewed: { title: 'Readiness not reviewed', text: 'No named blocker remains, but someone still needs to confirm that this work plan is ready.', icon: 'magnifying-glass' },
@@ -101,7 +102,7 @@ export function TaskReadinessPanel({ projectId, taskId, areaId, refreshKey = 0 }
   }
 
   if (loading && !data) return <section className="card foundation-section" aria-label="Task readiness"><Loading label="Checking readiness…" /></section>
-  if (!data || error) return <section className="card foundation-section" aria-label="Task readiness"><h2>Readiness</h2><p role="alert">{error?.message ?? 'Readiness is unavailable.'}</p><button className="btn" onClick={reload}>Reload readiness</button></section>
+  if (!data || error) return <section className="card foundation-section" aria-label="Task readiness"><h2>Readiness</h2><p role="alert">{error ? userErrorMessage(error, 'Readiness is unavailable.') : 'Readiness is unavailable.'}</p><button className="btn" onClick={reload}>Reload readiness</button></section>
 
   const copy = STATE_COPY[data.readiness.state]
   if (!copy) return <section className="card foundation-section" aria-label="Task readiness"><h2>Readiness</h2><p role="alert">Readiness data is unavailable or out of date.</p><button className="btn" onClick={reload}>Reload readiness</button></section>

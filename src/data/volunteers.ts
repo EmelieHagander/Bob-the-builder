@@ -5,6 +5,7 @@ import type { StorageBoxRecipe } from '../lib/storageBox'
 import type { RoomLayoutDetails } from '../lib/roomLayout'
 import type { BuildingPlanDetails } from '../lib/buildingPlan'
 import type { StairDetails } from '../lib/stairStudy'
+import { UserError, toDataError } from '../lib/userErrors'
 
 export interface VolunteerPreview { linkId: string; projectId: string; projectName: string; hasFood: boolean; expiresAt: string }
 export interface VolunteerState {
@@ -66,19 +67,19 @@ export function createVolunteers(manager: SupabaseClient<any, any, any> | null, 
   async function request<T>(name: string, args: Record<string, unknown>, projectId?: string, management = false): Promise<T> {
     const client = management ? manager : guest
     const guard = management ? capture() : () => {}
-    if (!client) throw new Error('Volunteer links need the connected app. Demo data cannot create real access.')
+    if (!client) throw new UserError('Volunteer links need the connected app. Demo data cannot create real access.')
     if (management) {
       const auth = await client.auth.getSession()
       guard()
-      if (auth.error || !auth.data.session) throw new Error('Sign in to manage volunteer links.')
+      if (auth.error || !auth.data.session) throw new UserError('Sign in to manage volunteer links.')
     }
     const result = await client.rpc(name, args)
     guard()
-    if (result.error?.code === 'PGRST202') throw new Error(name === 'volunteer_drawings' || name === 'volunteer_drawing'
+    if (result.error?.code === 'PGRST202') throw new UserError(name === 'volunteer_drawings' || name === 'volunteer_drawing'
       ? 'Volunteer drawings are not available on this server yet. Ask the organiser to update Bob.'
       : 'Volunteer links are not available on this server yet. No change was confirmed.')
-    if (result.error) throw new Error(result.error.message)
-    if (!result.data || (projectId && result.data.projectId !== projectId)) throw new Error('The project could not be confirmed. Reopen your invitation.')
+    if (result.error) throw toDataError(result.error)
+    if (!result.data || (projectId && result.data.projectId !== projectId)) throw new UserError('The project could not be confirmed. Reopen your invitation.')
     return result.data as T
   }
   return {
@@ -94,22 +95,22 @@ export function createVolunteers(manager: SupabaseClient<any, any, any> | null, 
     task: (secret: string, projectId: string, taskId: string) => request<VolunteerTask>('volunteer_task', { p_secret: secret, p_task: taskId }, projectId),
     async drawings(secret: string, projectId: string, taskId: string, after: string | null = null) {
       const result = await request<VolunteerDrawings>('volunteer_drawings', { p_secret: secret, p_task: taskId, p_after: after }, projectId)
-      if (result.taskId !== taskId) throw new Error('Task could not be confirmed. Refresh before continuing.')
+      if (result.taskId !== taskId) throw new UserError('Task could not be confirmed. Refresh before continuing.')
       return result
     },
     async drawing(secret: string, projectId: string, taskId: string, id: string, revision: number) {
       const result = await request<VolunteerDrawing>('volunteer_drawing', { p_secret: secret, p_task: taskId, p_drawing: id, p_revision: revision }, projectId)
-      if (result.taskId !== taskId || result.id !== id || result.revision !== revision) throw new Error('Drawing could not be confirmed. Refresh the task.')
+      if (result.taskId !== taskId || result.id !== id || result.revision !== revision) throw new UserError('Drawing could not be confirmed. Refresh the task.')
       return result
     },
     taskAction: (secret: string, projectId: string, taskId: string, action: 'claim' | 'release' | 'status' | 'check', data: Record<string, unknown> = {}) => request<VolunteerTask>('volunteer_task_action', { p_secret: secret, p_task: taskId, p_action: action, p_data: data }, projectId),
     async image(secret: string, taskId: string, mediaId: string, drawing?: { id: string; revision: number }): Promise<Blob> {
-      if (!guest || !media) throw new Error('Images need the connected app.')
+      if (!guest || !media) throw new UserError('Images need the connected app.')
       const response = await media({ session: secret, taskId, mediaId, ...(drawing ? { drawingId: drawing.id, revision: drawing.revision } : {}) })
       const type = response.headers.get('Content-Type')?.split(';')[0].trim()
-      if (!response.ok || !type || !['image/png', 'image/jpeg', 'image/webp'].includes(type)) throw new Error('The image could not be loaded. Your access may have changed; refresh the project and try again.')
+      if (!response.ok || !type || !['image/png', 'image/jpeg', 'image/webp'].includes(type)) throw new UserError('The image could not be loaded. Your access may have changed; refresh the project and try again.')
       const blob = await response.blob()
-      if (!blob.size || blob.size > 6291456) throw new Error('The image response was incomplete or too large. Refresh the task and try again.')
+      if (!blob.size || blob.size > 6291456) throw new UserError('The image response was incomplete or too large. Refresh the task and try again.')
       return blob
     },
   }

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { savedTaskEstimate } from '../lib/workEstimate'
+import { UserError, toDataError } from '../lib/userErrors'
 export interface ProjectOverview {
   projectId: string
   thumbnailId: string | null
@@ -19,9 +20,9 @@ export async function readProjectOverview(client: SupabaseClient<any, any, any> 
   ])
   guard()
   const checked = <T extends { project_id: string }>(result: { data: T[] | null; error: { message: string } | null }): T[] => {
-    if (result.error) throw new Error(result.error.message)
+    if (result.error) throw toDataError(result.error)
     const rows = result.data ?? []
-    if (rows.some(row => !ids.includes(row.project_id))) throw new Error('Project overview context changed. Reload before continuing.')
+    if (rows.some(row => !ids.includes(row.project_id))) throw new UserError('Project overview context changed. Reload before continuing.')
     return rows
   }
   const people = checked(results[0]), events = checked(results[1]), tasks = checked(results[2]), thumbnails = checked(results[3])

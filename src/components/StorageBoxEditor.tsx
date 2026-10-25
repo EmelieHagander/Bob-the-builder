@@ -5,6 +5,7 @@ import { storageBoxGeometry, BOX_LIMITS, type StorageBoxRecipe } from '../lib/st
 import { Field, FormError, inputStyle } from './form'
 import { Modal } from './Modal'
 import { StorageBoxDrawing } from './StorageBoxDrawing'
+import { userErrorMessage, validatorMessage } from '../lib/userErrors'
 
 export function StorageBoxEditor({ projectId, areaId, target, value, onClose, onSaved }: {
   projectId: string; areaId: string; target: SelectedTarget; value?: ArtifactVersion; onClose: () => void; onSaved: (saved: ArtifactVersion) => void
@@ -24,7 +25,7 @@ export function StorageBoxEditor({ projectId, areaId, target, value, onClose, on
     const recipe: StorageBoxRecipe = { generator: 'storage_box_v1', version: 1,
       width_mm: Number(width), height_mm: Number(height), depth_mm: Number(depth), thickness_mm: Number(thickness) }
     try { return { recipe: storageBoxGeometry(recipe).recipe, error: '' } }
-    catch (err) { return { recipe: null, error: err instanceof Error ? err.message : 'Invalid dimensions.' } }
+    catch (err) { return { recipe: null, error: validatorMessage(err, 'Check the dimensions.') } }
   }, [width, height, depth, thickness])
   return <Modal title={value ? 'Edit storage box dimensions' : 'Draw a storage box'} wide onClose={() => { if (!busy) onClose() }}>
     <form onSubmit={async event => {
@@ -39,7 +40,7 @@ export function StorageBoxEditor({ projectId, areaId, target, value, onClose, on
           ...(value ? { change_note: reason } : { area_id: areaId || null }),
         })
         onSaved(saved)
-      } catch (err) { setError(err instanceof Error ? err.message : 'Could not save the drawing.') }
+      } catch (err) { setError(userErrorMessage(err, 'Could not save the drawing.')) }
       finally { setBusy(false) }
     }}>
       <fieldset className="foundation-form fact-fieldset" disabled={busy}>

@@ -14,6 +14,7 @@ import {
   useAsync,
 } from '../components/ui'
 import { EventModal } from '../components/editors'
+import { userErrorMessage } from '../lib/userErrors'
 
 export function EventDetail() {
   const { slug = '' } = useParams()
@@ -32,7 +33,7 @@ export function EventDetail() {
     setError(null)
     action()
       .then(() => setVersion((v) => v + 1))
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .catch((err) => setError(userErrorMessage(err, 'Could not update the build day. Try again.')))
       .finally(() => setBusy(false))
   }
 

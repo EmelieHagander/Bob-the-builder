@@ -29,13 +29,13 @@ import { RoomLayoutDrawing } from '../components/RoomLayoutDrawing'
 import { StorageBoxDrawing } from '../components/StorageBoxDrawing'
 import { StorageBoxEditor } from '../components/StorageBoxEditor'
 import { formatDateTime } from '../lib/format'
+import { userErrorMessage } from '../lib/userErrors'
+import { DRAWING_KIND_LABELS as KIND_LABELS, DRAWING_STATUS_LABELS as STATUS_LABELS, drawingGeneratorLabel } from '../lib/labels'
 
-const KIND_LABELS = { plan: 'Plan', elevation: 'Elevation', section: 'Section', detail: 'Detail' } as const
-const STATUS_LABELS = { concept: 'Concept', measured: 'Measured', build_ready: 'Build ready' } as const
-const message = (error: unknown) => error instanceof Error ? error.message : String(error)
+const message = (error: unknown) => userErrorMessage(error, 'Could not save the drawing. Try again.')
 
 function Retry({ error, retry }: { error: Error; retry: () => void }) {
-  return <div role="alert"><FormError>{error.message}</FormError><button className="btn" onClick={retry}>Reload drawings</button></div>
+  return <div role="alert"><FormError>{userErrorMessage(error, 'Could not load drawings.')}</FormError><button className="btn" onClick={retry}>Reload drawings</button></div>
 }
 
 function Pager({ offset, size = 12, more, move }: { offset: number; size?: number; more: boolean; move: (next: number) => void }) {
@@ -81,7 +81,7 @@ function GeneratedDetails({ value, preview = false }: { value: ArtifactVersion; 
   return <div className="fact-details">
     <div className="fact-source">
       <strong>Generated deterministically · {generation.buildingName} · {generation.spaceName}</strong>
-      <span>Generator {generation.generator} v{generation.generatorVersion} · accepted Space version {generation.spaceRevision} · stud spacing {generation.studSpacingMm} mm</span>
+      <span>{drawingGeneratorLabel(generation.generator)} · generator version {generation.generatorVersion} · accepted Space version {generation.spaceRevision} · stud spacing {generation.studSpacingMm} mm</span>
       {physicalStale && <p className="solution-attention">
         Physical context changed after this drawing version. The saved version keeps Space revision {generation.spaceRevision}; regenerate deliberately to use newer accepted inputs.
       </p>}

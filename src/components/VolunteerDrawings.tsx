@@ -9,10 +9,11 @@ import { generationGeometry, StudWallPreview } from './StudWallPreview'
 import { RoomLayoutDrawing } from './RoomLayoutDrawing'
 import { BuildingPlanDrawing } from './BuildingPlanDrawing'
 import { StairStudyDrawing } from './StairStudyDrawing'
+import { userErrorMessage } from '../lib/userErrors'
 
 const statusName = { concept: 'Concept', measured: 'Measured', build_ready: 'Build ready' }
 const sourceName = { current: 'Sources current', changed: 'Sources changed', unavailable: 'Sources unavailable' }
-const message = (reason: unknown) => reason instanceof Error ? reason.message : String(reason)
+const message = (reason: unknown) => userErrorMessage(reason, 'Could not load the drawings. Refresh the task and try again.')
 
 /** Reuses the ordinary drawing renderers, with only a task-scoped capability.
  * Remount on task refresh/progress; never retain a previous readable response on failure. */

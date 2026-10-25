@@ -8,6 +8,7 @@ import type { StorageBoxRecipe } from '../lib/storageBox'
 import type { CadShell } from '../lib/cadShell'
 import { parseDrawingSourceChanges, type DrawingSourceStatus } from './drawingSources'
 import { parseCadViewerPin, parseCadWireframe, type CadViewerResult } from '../../supabase/functions/_shared/cad-wireframe.ts'
+import { UserError, toDataError } from '../lib/userErrors'
 
 export type ArtifactKind = 'plan' | 'elevation' | 'section' | 'detail'
 export type ArtifactStatus = 'concept' | 'measured' | 'build_ready'
@@ -93,7 +94,7 @@ export interface ArtifactVersion extends ProjectArtifact {
 type Row = Record<string, any>
 
 function checked<T>(result: { data: T; error: { message: string } | null }): T {
-  if (result.error) throw new Error(result.error.message)
+  if (result.error) throw toDataError(result.error)
   return result.data
 }
 
@@ -148,7 +149,7 @@ export function createArtifacts(
   function connection(projectId: string) {
     const guard = capture(projectId)
     guard()
-    if (!client) throw new Error('This demo does not save plans and drawings. Open a connected project.')
+    if (!client) throw new UserError('This demo does not save plans and drawings. Open a connected project.')
     return { db: client, guard }
   }
 
@@ -161,7 +162,7 @@ export function createArtifacts(
     const { db, guard } = connection(projectId)
     const result = await db.from('artifact_generation_details').select('*')
       .eq('project_id', projectId).eq('artifact_id', id).eq('artifact_revision', revision).maybeSingle()
-    if (result.error) throw new Error(result.error.message)
+    if (result.error) throw toDataError(result.error)
     guard()
     if (!result.data) return null
     const row = result.data as Row
@@ -220,7 +221,7 @@ export function createArtifacts(
     ])
     guard()
     const r = checked(details) as Row
-    if (!r) throw new Error('Drawing version unavailable. Reload to check access.')
+    if (!r) throw new UserError('Drawing version unavailable. Reload to check access.')
     scoped([r], projectId)
     const head = checked(headRead) as { current_revision: number } | null
     let sourceStatus = checked(statusRead) as DrawingSourceStatus | null
@@ -279,13 +280,13 @@ export function createArtifacts(
       if (!pin) throw new Error('Invalid drawing revision reference.')
       const { data, error } = await db.functions.invoke('cad-viewer', { body: { ...pin, retry }, signal })
       guard()
-      if (signal.aborted) throw new Error('The 3D view was closed or timed out.')
-      if (error) throw new Error('Could not load this saved 3D view. Check your connection and project access.')
+      if (signal.aborted) throw new UserError('The 3D view was closed or timed out.')
+      if (error) throw new UserError('Could not load this saved 3D view. Check your connection and project access.')
       if (data?.status === 'pending') return { status: 'pending' }
       if (data?.status === 'failed' && typeof data.retry_allowed === 'boolean') return data
       const source = parseCadViewerPin(data?.source), geometry = parseCadWireframe(data?.geometry)
       if (data?.status !== 'ready' || !source || !geometry || source.project_id !== pin.project_id || source.artifact_id !== pin.artifact_id || source.revision !== pin.revision)
-        throw new Error('The 3D view did not match this saved drawing version.')
+        throw new UserError('The 3D view did not match this saved drawing version.')
       return { status: 'ready', source, geometry }
     },
     async list(projectId: string, areaId = '', archived = false, offset = 0) {

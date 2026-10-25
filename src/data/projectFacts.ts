@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { TruthState } from './provenance'
+import { UserError, toDataError } from '../lib/userErrors'
 
 export type FactKind = 'measurement' | 'component'
 export type LengthUnit = 'mm' | 'cm' | 'm'
@@ -34,7 +35,7 @@ export const INTENT_LABELS: Record<ComponentIntent, string> = {
 export function parseLength(input: string): string {
   const text = input.trim().replace(',', '.')
   if (!/^\d+(?:\.\d{1,3})?$/.test(text) || Number(text) > 1000000) {
-    throw new Error('Enter a length from 0 to 1,000,000 with up to three decimal places. A decimal comma is accepted.')
+    throw new UserError('Enter a length from 0 to 1,000,000 with up to three decimal places. A decimal comma is accepted.')
   }
   return text
 }
@@ -42,8 +43,8 @@ export function describeMeasurement(record: Measurement): string {
   return record.value === null ? 'Not measured yet' : record.value + ' ' + record.unit
 }
 function value<T>(result: { data: T | null; error: { message: string } | null }): T {
-  if (result.error) throw new Error(result.error.message)
-  if (result.data === null) throw new Error('Record unavailable. Reload the project to check access.')
+  if (result.error) throw toDataError(result.error)
+  if (result.data === null) throw new UserError('Record unavailable. Reload the project to check access.')
   return result.data
 }
 function map(row: Row, kind: FactKind): ProjectFact {
@@ -70,7 +71,7 @@ export function createProjectFacts(client: SupabaseClient<any, any, any> | null,
   function connection(projectId: string) {
     const assertCurrent = capture(projectId)
     assertCurrent()
-    if (!client) throw new Error('This demo does not save project facts. Open a connected project.')
+    if (!client) throw new UserError('This demo does not save project facts. Open a connected project.')
     return { db: client, assertCurrent }
   }
   function page(rows: Row[], kind: FactKind, projectId: string, size: number): FactPage {

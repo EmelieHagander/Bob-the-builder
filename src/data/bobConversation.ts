@@ -8,6 +8,7 @@ import { parseBobScreen, type BobScreenPointer } from '../domain/bobScreen'
 import { BOB_HISTORY_PAGE_SIZE, readHistoryWindow } from './bobHistory'
 import { createSharedRead } from '../lib/sharedRead'
 import { createSharedPoller, type PollReason } from '../lib/sharedPoller'
+import { UserError, toDataError } from '../lib/userErrors'
 
 const GUEST_EMAIL = 'guest@bob.local'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -104,7 +105,7 @@ interface HistoryOptions {
 export async function getAskBobConversation(projectId: string, options: HistoryOptions = {}): Promise<BobConversationHistory> {
   if (!bobDb) return { mode: 'local', messages: [] }
   const { data: auth, error: authError } = await bobDb.auth.getSession()
-  if (authError) throw new Error('Could not check the signed-in account.')
+  if (authError) throw new UserError('Could not check the signed-in account.')
   const user = auth.session?.user
   if (!user || user.email?.toLowerCase() === GUEST_EMAIL) return { mode: 'local', messages: [] }
   const epoch = historyEpoch, cacheKey = `${user.id}/${projectId}`
@@ -126,17 +127,17 @@ export async function getAskBobConversation(projectId: string, options: HistoryO
   }
   const rows = await request.abortSignal(AbortSignal.timeout(12000))
   current()
-  if (rows.error) throw new Error(`database: ${rows.error.message}`)
+  if (rows.error) throw toDataError(rows.error)
   let threadId: string | undefined = rows.data?.[0]?.thread_id
   if (!threadId) {
     const threadResult = await bobDb.from('bob_threads').select('id')
       .eq('project_id', projectId).eq('owner_user_id', user.id).eq('status', 'active').abortSignal(AbortSignal.timeout(12000)).maybeSingle()
     current()
-    if (threadResult.error) throw new Error(`database: ${threadResult.error.message}`)
+    if (threadResult.error) throw toDataError(threadResult.error)
     threadId = threadResult.data?.id
   }
   if (!threadId) { recentHistory.delete(cacheKey); return { mode: 'server', messages: [], ownerId: user.id } }
-  if (options.threadId && options.threadId !== threadId) throw new Error('The conversation changed. Reopen Bob.')
+  if (options.threadId && options.threadId !== threadId) throw new UserError('The conversation changed. Reopen Bob.')
   const threadResult = { data: { id: threadId } }
   const page = readHistoryWindow(rows.data ?? [])
 
@@ -156,7 +157,7 @@ export async function getAskBobConversation(projectId: string, options: HistoryO
         .abortSignal(AbortSignal.timeout(12000)) : Promise.resolve({ data: [], error: null }),
   ])
   current()
-  if (notices.error || latestUser.error) throw new Error('Could not read the conversation state.')
+  if (notices.error || latestUser.error) throw new UserError('Could not read the conversation state.')
   const byTurn = new Map<string, string>((notices.data ?? []).map(row => [row.turn_id, row.text]))
   let transcript = readBobTranscript(page.rows, projectId, byTurn)
   if (options.beforeSeq !== undefined) return { mode: 'server', messages: transcript.messages,
@@ -171,7 +172,7 @@ export async function getAskBobConversation(projectId: string, options: HistoryO
   if (unfinished) {
     const job = await bobDb.rpc('bob_job_status', { p_project: projectId, p_turn: unfinished.turnId })
       .abortSignal(AbortSignal.timeout(12000))
-    if (job.error) throw new Error('Could not check Bob’s background job. Reconnecting…')
+    if (job.error) throw new UserError('Could not check Bob’s background job. Reconnecting…')
     const jobId = typeof job.data?.jobId === 'string' && UUID.test(job.data.jobId) ? job.data.jobId : undefined
     const drawingRecovery = readDrawingTurnRecovery(job.data?.drawingRecovery)
     const recoveredBudgetStop = drawingRecovery?.status === 'completed' && job.data?.status === 'failed' && job.data?.error === 'turn_budget_exhausted'
@@ -217,7 +218,7 @@ export async function getAskBobTurnProgress(projectId: string, turnId: string) {
   if (!bobDb || projectId !== getActiveProjectId()) return null
   const { data, error } = await bobDb.rpc('bob_job_status', { p_project: projectId, p_turn: turnId })
     .abortSignal(AbortSignal.timeout(12000))
-  if (error) throw new Error('Could not check Bob’s background job.')
+  if (error) throw new UserError('Could not check Bob’s background job.')
   if (projectId !== getActiveProjectId() || !data || !['queued', 'running', 'paused'].includes(data.status)) return null
   const expiresAt = Date.parse(data.expiresAt)
   if (!Number.isFinite(expiresAt)) throw new Error('Invalid background job status')
@@ -228,7 +229,7 @@ export async function getAskBobTurnProgress(projectId: string, turnId: string) {
 export async function getAskBobDrawingRecovery(projectId: string, turnId: string) {
   if (!bobDb || projectId !== getActiveProjectId()) return undefined
   const result = await bobDb.rpc('bob_job_status', { p_project: projectId, p_turn: turnId })
-  if (result.error) throw new Error('Could not check drawing recovery')
+  if (result.error) throw new UserError('Could not check drawing recovery')
   if (projectId !== getActiveProjectId()) return undefined
   return readDrawingTurnRecovery(result.data?.drawingRecovery)
 }
@@ -254,13 +255,13 @@ export async function getBobInbox(projectId: string): Promise<BobInbox | null> {
   // Local identity only selects the scope/guest policy; the RPC still verifies
   // the current JWT and project access. No redundant /auth/user network request.
   const { data: auth, error: authError } = await bobDb.auth.getSession()
-  if (authError) throw new Error('Could not check the signed-in account.')
+  if (authError) throw new UserError('Could not check the signed-in account.')
   const user = auth.session?.user
   if (!user || user.email?.toLowerCase() === GUEST_EMAIL) return null
   return inboxReads.run(`${epoch}/${user.id}/${projectId}`, async () => {
     const { data, error } = await bobDb!.rpc('bob_chat_inbox', { p_project: projectId })
       .abortSignal(AbortSignal.timeout(12000))
-    if (error) throw new Error('Could not check new messages')
+    if (error) throw new UserError('Could not check new messages')
     if (epoch !== historyEpoch || projectId !== getActiveProjectId()) throw new Error('Conversation scope changed.')
     return data && typeof data.threadId === 'string' && Number.isSafeInteger(data.latestSeq) && typeof data.unread === 'boolean' ? data : null
   })
@@ -268,7 +269,7 @@ export async function getBobInbox(projectId: string): Promise<BobInbox | null> {
 export async function markBobChatRead(projectId: string, threadId: string, seq: number): Promise<void> {
   if (!bobDb) return
   const { error } = await bobDb.rpc('bob_mark_chat_read', { p_project: projectId, p_thread: threadId, p_seq: seq })
-  if (error) throw new Error('Could not mark the answer as read')
+  if (error) throw new UserError('Could not mark the answer as read')
   window.dispatchEvent(new Event(BOB_INBOX_EVENT))
 }
 
@@ -329,32 +330,32 @@ export async function askBob(
 
 /** Stop the exact owned background job; a lost response is not proof of a stop. */
 export async function cancelAskBobTurn(projectId: string, jobId: string): Promise<'cancelled' | 'not_in_flight'> {
-  if (projectId !== getActiveProjectId()) throw new Error('The active project changed. Reopen Bob before stopping this request.')
+  if (projectId !== getActiveProjectId()) throw new UserError('The active project changed. Reopen Bob before stopping this request.')
   const result = await callAskBob({ action: 'cancel', projectId, jobId })
-  if (projectId !== getActiveProjectId()) throw new Error('The active project changed. Check the request in its project.')
+  if (projectId !== getActiveProjectId()) throw new UserError('The active project changed. Check the request in its project.')
   if (result.ok && result.status === 'cancelled' && result.projectId === projectId && result.jobId === jobId) return 'cancelled'
   if (result.error === 'turn_not_in_flight') return 'not_in_flight'
-  if (result.error === 'unauthorized') throw new Error('Sign in again to stop this request. Its stop has not been confirmed.')
-  if (result.error === 'project_denied') throw new Error('Your access to this request could not be confirmed. Check your project access.')
-  throw new Error('Could not confirm the stop. Bob may still be working; reconnect and try Stop again.')
+  if (result.error === 'unauthorized') throw new UserError('Sign in again to stop this request. Its stop has not been confirmed.')
+  if (result.error === 'project_denied') throw new UserError('Your access to this request could not be confirmed. Check your project access.')
+  throw new UserError('Could not confirm the stop. Bob may still be working; reconnect and try Stop again.')
 }
 
 /** Clear only the caller's active conversation; never fall back to a fake local
  * success when a signed-in member's server reset fails. */
 export async function resetAskBobConversation(projectId: string): Promise<'server' | 'local'> {
   const checkProject = () => {
-    if (projectId !== getActiveProjectId()) throw new Error('The active project changed. Reopen Bob in the project you want to clear.')
+    if (projectId !== getActiveProjectId()) throw new UserError('The active project changed. Reopen Bob in the project you want to clear.')
   }
   checkProject()
   if (!bobDb) return 'local'
   const { data: auth, error: authError } = await bobDb.auth.getUser()
   checkProject()
-  if (authError || !auth.user) throw new Error('Please sign in again before clearing your conversation.')
+  if (authError || !auth.user) throw new UserError('Please sign in again before clearing your conversation.')
   if (auth.user.email?.toLowerCase() === GUEST_EMAIL) return 'local'
   const thread = await bobDb.from('bob_threads').select('id,next_seq')
     .eq('project_id', projectId).eq('owner_user_id', auth.user.id).eq('status', 'active').maybeSingle()
   checkProject()
-  if (thread.error) throw new Error('Could not check your conversation. Nothing has been cleared. Try again.')
+  if (thread.error) throw new UserError('Could not check your conversation. Nothing has been cleared. Try again.')
   const { data, error } = await bobDb.rpc('bob_reset_conversation', {
     p_project: projectId,
     p_expected_thread: thread.data?.id ?? null,
@@ -362,13 +363,13 @@ export async function resetAskBobConversation(projectId: string): Promise<'serve
   })
   checkProject()
   if (error) {
-    if (error.message.includes('turn_in_flight')) throw new Error('Bob is still answering in this conversation. Try again when the answer finishes.')
-    if (error.message.includes('conversation_changed')) throw new Error('The conversation changed on another tab or device. Reopen Bob and try again.')
-    if (error.code === '42501') throw new Error('Your access to this project could not be confirmed. Nothing has been cleared.')
-    throw new Error('Could not confirm the reset. Your chat is still shown; check your connection and try again.')
+    if (error.message.includes('turn_in_flight')) throw new UserError('Bob is still answering in this conversation. Try again when the answer finishes.')
+    if (error.message.includes('conversation_changed')) throw new UserError('The conversation changed on another tab or device. Reopen Bob and try again.')
+    if (error.code === '42501') throw new UserError('Your access to this project could not be confirmed. Nothing has been cleared.')
+    throw new UserError('Could not confirm the reset. Your chat is still shown; check your connection and try again.')
   }
   if (data?.status !== 'cleared' || data.projectId !== projectId || data.mode !== 'server') {
-    throw new Error('Could not confirm that the conversation was cleared. Reopen Bob before trying again.')
+    throw new UserError('Could not confirm that the conversation was cleared. Reopen Bob before trying again.')
   }
   clearAskBobHistoryCache()
   return 'server'
@@ -388,5 +389,5 @@ export async function renewDrawingRequests(projectId:string):Promise<void>{
  if(!data.session||data.session.user.email?.toLowerCase()===GUEST_EMAIL)return
  const result=await callAskBob({action:'renew_requests',projectId})
  if(getActiveProjectId()!==projectId)return
- if(!result.ok)throw new Error('Bob could not reconnect. Sign in again if your session expired; saved work is retained.')
+ if(!result.ok)throw new UserError('Bob could not reconnect. Sign in again if your session expired; saved work is retained.')
 }

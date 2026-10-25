@@ -13,8 +13,9 @@ import { TaskModal } from '../components/editors'
 import { TaskReadinessPanel } from '../components/TaskReadinessPanel'
 import { Icon, Loading, SkillPill, useAsync } from '../components/ui'
 import { formatDateTime } from '../lib/format'
+import { userErrorMessage } from '../lib/userErrors'
 
-const errorText = (err: unknown) => err instanceof Error ? err.message : String(err)
+const errorText = (err: unknown) => userErrorMessage(err, 'Could not update the task. Try again.')
 
 function StepEditor({ projectId, taskId, step, onClose, onSaved }: {
   projectId: string; taskId: string; step?: TaskStep; onClose: () => void; onSaved: () => void
@@ -97,7 +98,7 @@ export function TaskDetail() {
   useBobSurface(projectId, detail && !loading && !loadError ? { surface: 'task', taskId: detail.task.id, ...(detail.task.areaId ? { areaId: detail.task.areaId } : {}), ...(focusedPlanStep ? { planStepId: focusedPlanStep.id } : {}), ...(focusedInstruction ? { instructionId: focusedInstruction.id } : {}) } : null, focusedInstruction ? `Instruction · ${focusedInstruction.title}` : detail ? `Task · ${detail.task.name}` : 'Task loading')
   if (loading && !detail) return <div className="page"><Loading /></div>
   if (!detail || loadError) return <div className="page"><h1 className="page-title">Task unavailable</h1>
-    <p role="alert">{loadError?.message ?? 'This task may have been removed, or your project access changed.'}</p>
+    <p role="alert">{loadError ? userErrorMessage(loadError, 'This task may have been removed, or your project access changed.') : 'This task may have been removed, or your project access changed.'}</p>
     <div className="foundation-actions"><Link to="/areas" className="btn">Back to areas</Link><button className="btn" onClick={reload}>Reload task</button></div>
   </div>
   const { task, steps } = detail

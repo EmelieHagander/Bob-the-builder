@@ -10,8 +10,9 @@ import { Modal } from '../components/Modal'
 import { VolunteerDrawings } from '../components/VolunteerDrawings'
 import { IMAGE_PURPOSES } from '../components/ProjectImages'
 import { formatDate } from '../lib/format'
+import { UserError, hasErrorCode, userErrorMessage } from '../lib/userErrors'
 
-const message = (reason: unknown) => reason instanceof Error ? reason.message : String(reason)
+const message = (reason: unknown) => userErrorMessage(reason, 'Something went wrong. Refresh the page and try again.')
 const statusName = { todo: 'To do', doing: 'In progress', blocked: 'Blocked', done: 'Done' }
 type Section = 'tasks' | 'events' | 'updates' | 'meals'
 type Item = VolunteerTaskSummary | VolunteerEvent | VolunteerUpdate | VolunteerMeal
@@ -58,7 +59,7 @@ function VolunteerVisit({ invite }: { invite: string }) {
         if (credential.current) {
           try {
             const confirmed = await db.volunteers.state(credential.current.secret, next.projectId)
-            if (confirmed.linkId !== next.linkId) throw new Error('This browser has access to a different invitation.')
+            if (confirmed.linkId !== next.linkId) throw new UserError('This browser has access to a different invitation.')
             if (current !== generation.current) return
             credential.current.joined = true
             saveVolunteerSession(invite, credential.current)
@@ -88,7 +89,7 @@ function VolunteerVisit({ invite }: { invite: string }) {
         ? await db.volunteers.profile(credential.current.secret, state, name.trim(), state.hasFood ? allergies.trim() || null : null)
         : await db.volunteers.join(invite, credential.current.secret, preview.projectId, name.trim(), preview.hasFood ? allergies.trim() || null : null)
       if (current !== generation.current) return
-      if (result.linkId !== preview.linkId) throw new Error('The invitation could not be confirmed. Reopen your project link.')
+      if (result.linkId !== preview.linkId) throw new UserError('The invitation could not be confirmed. Reopen your project link.')
       credential.current.joined = true
       saveVolunteerSession(invite, credential.current)
       setState(result); setName(result.person.name); setAllergies(result.person.allergies ?? ''); setEditing(false)
@@ -97,8 +98,7 @@ function VolunteerVisit({ invite }: { invite: string }) {
     finally { if (current === generation.current) setBusy(false) }
   }
   function accessError(reason: unknown) {
-    const text = message(reason)
-    if (text.includes('Volunteer access is unavailable')) { setState(null); setTaskId(''); setBlocked(true); setError(text) }
+    if (hasErrorCode(reason, 'volunteer_access_unavailable')) { setState(null); setTaskId(''); setBlocked(true); setError(message(reason)) }
   }
   function forget() {
     generation.current++
@@ -163,7 +163,7 @@ function VolunteerFeedView({ secret, projectId, section, openTask, onDenied }: {
     finally { if (mounted.current) setBusy('') }
   }
   return <section className="volunteer-feed" aria-label={{ tasks: 'Project tasks', events: 'Build days', updates: 'Project updates', meals: 'Meal plan' }[section]}>
-    {loading ? <Loading /> : loadError ? <div role="alert"><FormError>{loadError.message}</FormError><button className="btn" onClick={() => setVersion(value => value + 1)}>Try again</button></div> : !items.length ? <p className="card volunteer-empty">{{ tasks: 'No tasks planned yet.', events: 'No build days planned yet.', updates: 'No updates yet.', meals: 'The food crew has not added a menu yet.' }[section]}</p> : <div className="volunteer-grid">{items.map(item => {
+    {loading ? <Loading /> : loadError ? <div role="alert"><FormError>{message(loadError)}</FormError><button className="btn" onClick={() => setVersion(value => value + 1)}>Try again</button></div> : !items.length ? <p className="card volunteer-empty">{{ tasks: 'No tasks planned yet.', events: 'No build days planned yet.', updates: 'No updates yet.', meals: 'The food crew has not added a menu yet.' }[section]}</p> : <div className="volunteer-grid">{items.map(item => {
       if (section === 'tasks') {
         const task = item as VolunteerTaskSummary
         return <article className="card volunteer-item" key={task.id}><div className="foundation-heading"><span className="badge">{task.area}</span><span className="foundation-hint">{statusName[task.status]}</span></div><h2>{task.name}</h2><p className="foundation-hint">{task.mine ? 'You’re on this task' : task.skill + (task.hours ? ' · ' + task.hours : '')}</p><button className="btn" onClick={() => openTask(task.id)}>View task</button></article>
@@ -223,7 +223,7 @@ function VolunteerTaskPanel({ secret, projectId, taskId, onClose, onChanged, onD
   const imageFigures = (items: VolunteerImage[]) => items.map(image => <figure key={image.id} className="volunteer-image"><figcaption>{image.title}{image.purpose && <span className="foundation-hint"> · {IMAGE_PURPOSES[image.purpose]}</span>}</figcaption>{images[image.id] ? <img src={images[image.id]} alt={image.title} /> : <button className="btn" disabled={busy} onClick={() => void showImage(image.id)}>View image</button>}</figure>)
   const contextImages = task?.contextImages ?? task?.images ?? []
   return <Modal title={task?.name ?? 'Task'} onClose={() => { if (!busy) onClose() }} wide>
-    {loading ? <Loading /> : loadError ? <FormError>{loadError.message}</FormError> : task && <div className="foundation-form">
+    {loading ? <Loading /> : loadError ? <FormError>{message(loadError)}</FormError> : task && <div className="foundation-form">
       <p className="foundation-hint">{task.area} · {statusName[task.status]}</p>
       <p className="volunteer-text">{task.instructions || 'No written instructions yet. Check with the crew before you start.'}</p>
       {task.mine ? <><Field label="Task progress"><select style={inputStyle} value={task.status} disabled={busy} onChange={event => void action('status', { status: event.target.value, expectedUpdatedAt: task.updatedAt })}>{Object.entries(statusName).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field><button className="btn" disabled={busy} onClick={() => void action('release')}>Leave this task</button></> : <button className="btn btn-primary" disabled={busy || task.status === 'done'} onClick={() => void action('claim')}>{task.status === 'done' ? 'Task completed' : 'Join this task'}</button>}

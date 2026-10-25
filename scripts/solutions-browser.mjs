@@ -188,7 +188,7 @@ export async function verifySolutionsBrowser(page, base, fixture, facts, width) 
   await old.getByRole('button', { name: 'Close', exact: true }).click()
   fixture.rejectNext = true
   const conflict = await choose(b, 'Keep this decision input')
-  await conflict.getByText('Target changed. Reload before deciding again.', { exact: true }).waitFor()
+  await conflict.getByText('The selected target changed. Reload before deciding again.', { exact: true }).waitFor()
   assert.equal(await conflict.getByLabel('Reason for decision', { exact: true }).inputValue(), 'Keep this decision input')
   await conflict.getByRole('button', { name: 'Cancel', exact: true }).click()
   await (await choose(b, 'More room required')).waitFor({ state: 'hidden' })

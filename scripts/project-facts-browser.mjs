@@ -155,7 +155,7 @@ export async function verifyFactsBrowser(page, base, fixture, width) {
   const old = [...fixture.records.measurement.values()].find(r => r.subject === 'Opening width')
   fixture.remember('measurement', { ...old, revision: old.revision + 1, change_note: 'Another editor updated this record' })
   await editor.getByRole('button', { name: 'Save new version', exact: true }).click()
-  await editor.getByRole('alert').getByText(/Record changed/).waitFor()
+  await editor.getByRole('alert').getByText('This changed somewhere else. Reload to see the latest version, then try again.', { exact: true }).waitFor()
   assert.equal(await editor.getByLabel('Notes', { exact: true }).inputValue(), 'My unsaved note')
   await editor.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.reload()

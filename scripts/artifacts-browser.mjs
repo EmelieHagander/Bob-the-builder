@@ -406,7 +406,7 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   await editor.getByLabel('Reason for change', { exact: true }).fill('Align drawing after target decision')
   fixture.rejectNext = true
   await editor.getByRole('button', { name: 'Save new version', exact: true }).click()
-  await editor.getByText('Project target changed. Reload before saving the drawing.', { exact: true }).waitFor()
+  await editor.getByText('The selected target changed. Reload before saving the drawing.', { exact: true }).waitFor()
   assert.equal(await editor.getByLabel('What this drawing shows', { exact: true }).inputValue(), 'Keep this unsaved drawing edit visible after the conflict.')
   await editor.getByRole('button', { name: 'Cancel', exact: true }).click()
 
@@ -483,7 +483,7 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   let generatedDetails = page.getByRole('dialog', { name: 'Stud wall elevation · Version 1', exact: true })
   await generatedDetails.getByRole('img', { name: 'Deterministic elevation of wall and opening', exact: true }).waitFor()
   await generatedDetails.getByRole('button', { name: 'Details', exact: true }).click()
-  await generatedDetails.getByText(/Generator stud_wall_opening_v1 v1/).waitFor()
+  await generatedDetails.getByText(/Stud wall with an opening · generator version 1/).waitFor()
   await generatedDetails.getByText(/Opening width: Generated opening width · 1200 mm/).waitFor()
   await generatedDetails.getByRole('button', { name: 'Close', exact: true }).click()
   await page.reload(); await generatedCard.waitFor()

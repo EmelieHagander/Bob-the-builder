@@ -21,6 +21,7 @@ import {
 import { areaNextAction } from '../lib/projectPhase'
 import { AreaArchiveNotice } from '../components/AreaArchiveNotice'
 import { AreaRooms } from '../components/AreaRooms'
+import { userErrorMessage } from '../lib/userErrors'
 
 type Tab = 'tasks' | 'materials' | 'images'
 const NEXT_TASK_STATUS: Record<TaskStatus, TaskStatus> = { todo: 'doing', doing: 'done', done: 'todo', blocked: 'doing' }
@@ -58,13 +59,13 @@ export function AreaWorkstream() {
   const reload = () => { setModal(null); setVersion(value => value + 1) }
   const act = (action: () => Promise<unknown>) => {
     setError(null)
-    void action().then(reload).catch(err => setError(err instanceof Error ? err.message : String(err)))
+    void action().then(reload).catch(err => setError(userErrorMessage(err, 'Could not save the change. Try again.')))
   }
 
   useBobSurface(projectId, area && !loading && !areaError ? { surface: 'area', areaId: area.id } : null, area ? `Area · ${area.name}` : 'Area loading')
 
   if (loading) return <div className="page"><Loading label="Loading Area…" /></div>
-  if (!area || areaError) return <div className="page"><EmptyState icon="magnifying-glass" title="Area unavailable" hint={areaError?.message ?? 'It may have been renamed, removed or your access changed.'} /></div>
+  if (!area || areaError) return <div className="page"><EmptyState icon="magnifying-glass" title="Area unavailable" hint={areaError ? userErrorMessage(areaError, 'It may have been renamed, removed or your access changed.') : 'It may have been renamed, removed or your access changed.'} /></div>
 
   const tasks = (allTasks ?? []).filter(task => task.areaId === area.id)
   const materials = (allMaterials ?? []).filter(material => material.area === area.name)

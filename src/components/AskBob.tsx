@@ -21,6 +21,8 @@ import { formatDateTime } from '../lib/format'
 import { BOB_IMAGE_LIMIT, BOB_IMAGE_BYTES_LIMIT, parseBobImageIds } from '../domain/bobImages'
 import { BobChatImages } from './BobChatImages'
 import { StoredImage } from './ProjectImages'
+import { UserError, userErrorMessage } from '../lib/userErrors'
+import { drawingStatusLabel, recordTypeLabel } from '../lib/labels'
 
 type RetryTurn = { text: string; turnId: string; screen?: BobScreenPointer | null; imageIds?: string[] }
 type DraftImage = { id: string; file: File; status: 'uploading' | 'ready' | 'failed'; error?: string }
@@ -37,7 +39,7 @@ function ViewEvidence({ view }: { view: CurrentView }) {
   return <details className="bob-context-evidence">
     <summary>Page records used{labels.length ? ` · ${labels.join(' / ')}` : ''}</summary>
     <p className="foundation-hint">Read from the project at {formatDateTime(view.retrievedAt)}. Page focus does not approve measurements or drawings.</p>
-    {f.drawing && <p>Viewed drawing v{f.drawing.revision} · {f.drawing.status.replace(/_/g, ' ')} · {f.drawing.sourceState === 'current' ? 'linked sources current' : f.drawing.sourceState === 'changed' ? 'sources changed — review before use' : 'sources could not be checked'}</p>}
+    {f.drawing && <p>Viewed drawing v{f.drawing.revision} · {drawingStatusLabel(f.drawing.status)} · {f.drawing.sourceState === 'current' ? 'linked sources current' : f.drawing.sourceState === 'changed' ? 'sources changed — review before use' : 'sources could not be checked'}</p>}
     {view.warnings.length > 0 && <ul>{view.warnings.map((warning, i) => <li key={i}>{warnings[warning] ?? 'Some page context was limited. Open the saved source for its complete details.'}</li>)}</ul>}
   </details>
 }
@@ -236,7 +238,7 @@ function Bubble({ msg, projectId, onAction, onOpenDrawing }: { msg: ChatMessage;
           <summary>Project records consulted ({msg.evidence.sources.length})</summary>
           <p>Stored project information; measurements and specifications are not verified.</p>
           {msg.evidence.partial && <p>Some results were limited or unavailable.</p>}
-          <ul style={{ paddingLeft: 18 }}>{msg.evidence.sources.map((source, i) => <li key={i} title={`Record ${source.recordId}`}><strong>{source.label}</strong> · {source.dataset}<br />Retrieved {formatDateTime(source.retrievedAt)}{source.updatedAt ? ` · updated ${formatDateTime(source.updatedAt)}` : ' · update time unknown'}</li>)}</ul>
+          <ul style={{ paddingLeft: 18 }}>{msg.evidence.sources.map((source, i) => <li key={i}><strong>{source.label}</strong> · {recordTypeLabel(source.dataset)}<br />Retrieved {formatDateTime(source.retrievedAt)}{source.updatedAt ? ` · updated ${formatDateTime(source.updatedAt)}` : ' · update time unknown'}</li>)}</ul>
         </details>}
         {!!msg.evidence?.references?.length && <details className="bob-evidence">
           <summary>Building references ({msg.evidence.references.length})</summary>
@@ -630,7 +632,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           if (!history.pending) { setNeedsRefresh(true); return }
         }
       } catch { /* Keep the same job and an honest unconfirmed stop. */ }
-      if (isCurrent()) setWorkError(error instanceof Error ? error.message : 'Could not confirm the stop. Bob may still be working.')
+      if (isCurrent()) setWorkError(userErrorMessage(error, 'Could not confirm the stop. Bob may still be working.'))
     } finally {
       if (isCurrent()) { stopPending.current = false; setStopping(false) }
     }
@@ -646,7 +648,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       const history = await db.getAskBobConversation(project.id)
       if (isCurrent() && version === sendVersion.current && history.mode === 'server') applyServerHistory(history)
     } catch (error) {
-      if (isCurrent()) setWorkError(error instanceof Error ? error.message : 'Could not reconnect. Saved work is retained.')
+      if (isCurrent()) setWorkError(userErrorMessage(error, 'Could not reconnect. Saved work is retained.'))
     } finally { if (isCurrent()) setReconnecting(false) }
   }
 
@@ -700,7 +702,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           }
         } catch { cacheCleared = false }
       }
-      if (!cacheCleared && mode === 'local') throw new Error('Could not clear this device’s saved chat. Check browser storage access and try again.')
+      if (!cacheCleared && mode === 'local') throw new UserError('Could not clear this device’s saved chat. Check browser storage access and try again.')
       try { localStorage.setItem(`${historyKey}:reset`, crypto.randomUUID()) } catch { /* cross-tab notification is best effort */ }
       scope.current.invalidate()
       historyPage.current = { messages: [] }
@@ -715,7 +717,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         ? 'New conversation started. Saved project data is unchanged.'
         : 'Server conversation cleared. This browser’s old local copy could not be removed; check browser storage access.')
     } catch (error) {
-      if (isCurrent()) setResetError(error instanceof Error ? error.message : 'Could not confirm the reset. Please try again.')
+      if (isCurrent()) setResetError(userErrorMessage(error, 'Could not confirm the reset. Please try again.'))
     } finally {
       resetPending.current = false
       setResetting(false)
@@ -828,7 +830,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       await db.uploadProjectImage(project.id, { kind: 'project', id: project.id }, image.file, 'reference', image.file.name.replace(/\.[^.]+$/, '').slice(0, 200) || 'Chat image', image.id)
       if (isCurrent()) setImages(current => current.map(item => item.id === image.id ? { ...item, status: 'ready' } : item))
     } catch (error) {
-      if (isCurrent()) setImages(current => current.map(item => item.id === image.id ? { ...item, status: 'failed', error: error instanceof Error ? error.message : 'Image could not be uploaded.' } : item))
+      if (isCurrent()) setImages(current => current.map(item => item.id === image.id ? { ...item, status: 'failed', error: userErrorMessage(error, 'Image could not be uploaded.') } : item))
     }
   }
 

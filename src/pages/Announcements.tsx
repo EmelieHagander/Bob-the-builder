@@ -4,6 +4,7 @@ import * as db from '../data/database'
 import { Avatar, Icon, List, ListItem, Loading, useAsync } from '../components/ui'
 import { useAuthTick } from '../components/Layout'
 import { FormError } from '../components/form'
+import { userErrorMessage } from '../lib/userErrors'
 
 export function Announcements() {
   useBobSurface(db.getActiveProjectId() ?? '', { surface: 'announcements' }, 'Announcements')
@@ -29,7 +30,7 @@ export function Announcements() {
         setDraft('')
         setVersion((v) => v + 1)
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .catch((err) => setError(userErrorMessage(err, 'Could not update announcements. Try again.')))
       .finally(() => setBusy(false))
   }
 
@@ -37,7 +38,7 @@ export function Announcements() {
     setError(null)
     action()
       .then(() => setVersion((v) => v + 1))
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .catch((err) => setError(userErrorMessage(err, 'Could not update announcements. Try again.')))
   }
   // One heart per post per session — enough to stop accidental double-taps.
   const [hearted, setHearted] = useState<Record<string, boolean>>({})

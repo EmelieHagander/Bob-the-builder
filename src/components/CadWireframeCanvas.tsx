@@ -7,6 +7,7 @@ import type { ShellComponent } from '../lib/cadShell'
 import { fitDistance, shellMatrix } from '../lib/shell3d'
 import { createWireframeObjects, createWireframeOverview } from '../lib/wireframeObjects'
 import './CadShell3D.css'
+import { userErrorMessage } from '../lib/userErrors'
 
 export function webglAvailable() {
   try {
@@ -27,7 +28,7 @@ export default function CadWireframeCanvas({ title, geometry, components, select
     const ink = css.getPropertyValue('--ink').trim() || '#1a291e', warning = css.getPropertyValue('--clay').trim() || '#934418'
     let objects: ReturnType<typeof createWireframeObjects> | ReturnType<typeof createWireframeOverview>
     try { objects = geometry ? createWireframeObjects(geometry, ink, selected ? shellMatrix(selected) : undefined, instanceId) : createWireframeOverview(components ?? [], ink, warning) }
-    catch (error) { onFailure(error instanceof Error ? error.message : 'Could not draw this saved version.'); return }
+    catch (error) { onFailure(userErrorMessage(error, 'Could not draw this saved version.')); return }
     if (!objects) { onFailure('No saved piece bounds are available for the 3D overview.'); return }
     let renderer: WebGLRenderer
     try { renderer = new WebGLRenderer({ antialias: true, powerPreference: 'low-power' }) }

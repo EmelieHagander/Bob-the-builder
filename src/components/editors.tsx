@@ -13,6 +13,8 @@ import type { Area, BuildEvent, Material, Meal, Person, Skill, SkillLevel, Task 
 import { Avatar, Icon } from './ui'
 import { Modal } from './Modal'
 import { Field, FormError, inputStyle } from './form'
+import { userErrorMessage } from '../lib/userErrors'
+import { categoryLabel } from '../lib/labels'
 
 /** Shared submit wrapper: busy flag + error banner + close on success. */
 function useSubmit(action: () => Promise<unknown>, onDone: () => void) {
@@ -25,7 +27,7 @@ function useSubmit(action: () => Promise<unknown>, onDone: () => void) {
     task()
       .then(onDone)
       .catch((err) => {
-        setError(err instanceof Error ? err.message : String(err))
+        setError(userErrorMessage(err, 'Could not save. Try again.'))
         setBusy(false)
       })
   }
@@ -269,7 +271,9 @@ export function MaterialModal({
   const [area, setArea] = useState(material?.area ?? defaultArea ?? 'Several')
   const [supplier, setSupplier] = useState(material?.supplier ?? '')
   const [cost, setCost] = useState(material?.cost ?? '')
-  const [category, setCategory] = useState(material?.category ?? categories[0] ?? '')
+  // Suggest people's words for saved category codes so new rows read well.
+  const suggestions = [...new Set(categories.map(categoryLabel))]
+  const [category, setCategory] = useState(material?.category ?? suggestions[0] ?? '')
   const fields = () => ({
     name: name.trim(),
     qty: qty.trim(),
@@ -319,7 +323,7 @@ export function MaterialModal({
         <Field label="Category">
           <input style={inputStyle} value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Timber" list="material-categories" />
           <datalist id="material-categories">
-            {categories.map((c) => (
+            {suggestions.map((c) => (
               <option key={c} value={c} />
             ))}
           </datalist>

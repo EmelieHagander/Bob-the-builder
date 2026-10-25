@@ -5,12 +5,13 @@ import { Field, FormError, inputStyle } from './form'
 import { Modal } from './Modal'
 import { Icon } from './ui'
 import { formatDate } from '../lib/format'
+import { userErrorMessage } from '../lib/userErrors'
 
 export const IMAGE_PURPOSES: Record<MediaPurpose, string> = {
   current_state: 'Current state', reference: 'Reference', instruction: 'Instruction',
   proposal: 'Proposal', progress: 'Progress', as_built: 'As built',
 }
-const message = (err: unknown) => err instanceof Error ? err.message : String(err)
+const message = (err: unknown) => userErrorMessage(err, 'Could not update project images. Try again.')
 
 /** Fetch only visible previews; an open original performs a new authorized read. */
 export function StoredImage({ projectId, image, original = false, allowRetry = true }: { projectId: string; image: Pick<MediaAsset, 'id' | 'title'>; original?: boolean; allowRetry?: boolean }) {

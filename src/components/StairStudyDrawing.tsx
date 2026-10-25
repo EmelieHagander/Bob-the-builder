@@ -4,6 +4,8 @@ import { checkedStairStudy, stairGeometry, STAIR_LIMITS, type StairDetails } fro
 import { stairStudySvg } from '../lib/stairStudySvg'
 import { formatDrawingMm as f } from '../lib/storageBox'
 import './StorageBoxDrawing.css'
+import { userErrorMessage } from '../lib/userErrors'
+import { truthLabel } from '../lib/labels'
 const labels={lower:'Lower plan',upper:'Upper plan',section:'Walking section'} as const
 const code=(s:string)=>s.replace(/_/g,' ')
 export function StairStudyDrawing({value,title,areaId=null,participant=false}:{value:StairDetails|null;title:string;areaId?:string|null;participant?:boolean}){
@@ -12,10 +14,10 @@ export function StairStudyDrawing({value,title,areaId=null,participant=false}:{v
   try{if(!value)throw new Error('Source plan is not available in this project.')
    const d=checkedStairStudy(value,value.project_id,value.artifact_id,value.artifact_revision)
    return {d,g:stairGeometry(d.plan.recipe,d.recipe),error:''}
-  }catch(e){return {d:null,g:null,error:e instanceof Error?e.message:'Unsupported stair study.'}}
+  }catch(e){return {d:null,g:null,error:userErrorMessage(e,'This saved stair study cannot be shown. Ask Bob to check it.')}}
  },[value])
  if(!result.d||!result.g)return <p role="alert" className="solution-attention">Cannot display stair study: {result.error} Saved history has not been replaced.</p>
- const {d,g}=result,svg=stairStudySvg(d,view,title),name=(id:string)=>d.plan.names[id]??id
+ const {d,g}=result,svg=stairStudySvg(d,view,title),name=(id:string)=>d.plan.names[id]??'Unnamed'
  return <section className="box-drawing" aria-label="Stair study">
   <p className="foundation-hint">{participant ? 'Saved stair study. Plans and walking section use the same recorded dimensions. Ask the organiser about changes.' : 'Ask Bob to compare or change the stair. Plans and the walking section use the same saved recipe; no drawing form is required.'}</p>
   {d.sources_changed&&<p role="status" className="solution-attention">Source plan changed. This drawing retains its old source version. Review and explicitly refresh before further stair edits.</p>}
@@ -46,7 +48,7 @@ export function StairStudyDrawing({value,title,areaId=null,participant=false}:{v
    {' '}{f(g.opening_suggestion.width_mm)} × {f(g.opening_suggestion.depth_mm)} mm. Not a minimal hole, structural design or instruction to cut.</p>}
   <details><summary>Walking-surface clearances and exact sources</summary>
    <div className="box-parts" tabIndex={0}><table><caption>Whole walking strips · flat slab / ceiling model only</caption><thead><tr><th>Part</th><th>Lowest known clearance</th><th>Complete inputs?</th></tr></thead><tbody>{g.clearance.map(c=><tr key={c.key}><th scope="row">{code(c.key)}</th><td>{c.minimum_mm===null?'Unknown':`${f(c.minimum_mm)} mm`}</td><td>{c.unknown?'No':'For this model only'}</td></tr>)}</tbody></table></div>
-   <p>{g.spec.basis}: {g.spec.source}</p><p>Source plan v{d.plan_revision}. {d.plan.recipe.origin}</p>
+   <p>{truthLabel(g.spec.basis)}: {g.spec.source}</p><p>Source plan v{d.plan_revision}. {d.plan.recipe.origin}</p>
    {!participant && <Link className="btn" to={`/artifacts?drawing=${d.plan_id}&revision=${d.plan_revision}${areaId?`&area=${encodeURIComponent(areaId)}`:''}`}>Open source coordinate plan</Link>}
   </details>
   <p className="solution-attention">{STAIR_LIMITS}</p>

@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import * as db from './data/database'
 import { Loading, useAsync, useProjectVersion } from './components/ui'
 import { Layout, useAuthTick } from './components/Layout'
+import { userErrorMessage } from './lib/userErrors'
 const StartProject = lazy(() => import('./pages/StartProject').then(module => ({ default: module.StartProject })))
 const AccountDashboard = lazy(() => import('./pages/account/AccountDashboard').then(module => ({ default: module.AccountDashboard })))
 const Account = lazy(() => import('./pages/account/Account').then(module => ({ default: module.Account })))
@@ -82,7 +83,7 @@ function ProjectApp() {
   }
   if (error && !currentBoot) return <div className="page"><section className="card ui-panel" role="alert">
     <h1 className="page-title">Could not load your account</h1>
-    <p>{error.message}</p>
+    <p>{userErrorMessage(error, 'Check your connection and try again.')}</p>
     <div className="cluster"><button className="btn btn-primary" onClick={() => setBootVersion(v => v + 1)}>Try again</button>
       <button className="btn" onClick={() => window.location.reload()}>Reload app</button></div>
   </section></div>
