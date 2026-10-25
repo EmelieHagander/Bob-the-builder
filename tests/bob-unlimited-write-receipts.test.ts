@@ -68,8 +68,16 @@ test('all retained receipt quota guards change only their pinned-mode predicate 
   // receipt guard must still be identical apart from the unlimited-work predicate.
   const v16 = 'bob_private.bob_project_write_v16(text,uuid,uuid,bigint,jsonb)'
   const predecessor = 'bob_private.bob_project_write_before_construction_edits(text,uuid,uuid,bigint,jsonb)'
-  const byOriginalSignature = new Map(current.map(x => [x.signature === predecessor ? v16 : x.signature, x]))
+  const retained = new Set(beforeWriters.map(x => x.signature))
+  const byOriginalSignature = new Map(current.filter(x => x.signature === predecessor || retained.has(x.signature))
+    .map(x => [x.signature === predecessor ? v16 : x.signature, x]))
   assert.deepEqual([...byOriginalSignature.keys()].sort(), beforeWriters.map(x => x.signature))
+  // Writers added later (e.g. v21, 2026-10-25) start with the pinned-mode predicate.
+  for (const added of current.filter(x => x.signature !== predecessor && !retained.has(x.signature))) {
+    assert.match(added.prosrc, /if not bob_private\.bob_turn_unlimited_work\(p_project,p_thread,p_turn,p_generation\) and \(select count\(\*\) from bob_private\.bob_write_receipts where project_id=p_project and actor_id=auth\.uid\(\) and turn_id=p_turn\)>=32 then/, added.signature)
+    assert.equal(added.prosecdef, true, added.signature)
+    assert.deepEqual(added.proconfig, ['search_path=""'], added.signature)
+  }
   const pattern = /if\s*(\(select count\(\*\) from bob_private\.bob_write_receipts where project_id=p_project and actor_id=auth\.uid\(\) and turn_id=p_turn\)>=(?:8|32)) then/g
   for (const old of beforeWriters) {
     const next = byOriginalSignature.get(old.signature)!
