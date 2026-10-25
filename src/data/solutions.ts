@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MeasurementTruth } from './projectFacts'
 import { parseDesignIntent, type DesignIntent } from '../../supabase/functions/_shared/project-design-intent.ts'
+import { DataError, UserError, toDataError } from '../lib/userErrors'
 
 export interface Solution {
   id: string; projectId: string; areaId: string | null; revision: number
@@ -29,7 +30,7 @@ export interface SelectedTarget {
 }
 type Row = Record<string, any>
 function checked<T>(result: { data: T; error: { message: string } | null }): T {
-  if (result.error) throw new Error(result.error.message)
+  if (result.error) throw toDataError(result.error)
   return result.data
 }
 function solution(r: Row): Solution {
@@ -51,11 +52,11 @@ function emptyDecision(projectId: string, areaId: string | null): TargetDecision
 export function createSolutions(client: SupabaseClient<any, any, any> | null, capture: (id: string) => () => void) {
   function connection(projectId: string) {
     const guard = capture(projectId); guard()
-    if (!client) throw new Error('This demo does not save solutions. Open a connected project.')
+    if (!client) throw new UserError('This demo does not save solutions. Open a connected project.')
     return { db: client, guard }
   }
   function scoped<T extends Row>(rows: T[], projectId: string): T[] {
-    if (rows.some(r => r.project_id !== projectId)) throw new Error('Solution project mismatch.')
+    if (rows.some(r => r.project_id !== projectId)) throw new DataError('project_mismatch', 'Solution project mismatch.')
     return rows
   }
   async function version(projectId: string, id: string, revision: number): Promise<SolutionVersion> {
@@ -63,9 +64,9 @@ export function createSolutions(client: SupabaseClient<any, any, any> | null, ca
     const r = checked(await db.from('solution_revisions').select('*').eq('project_id', projectId)
       .eq('solution_id', id).eq('revision', revision).single()) as Row
     guard()
-    if (!r) throw new Error('Solution version unavailable. Reload to check access.')
+    if (!r) throw new UserError('Solution version unavailable. Reload to check access.')
     scoped([r], projectId)
-    if (r.solution_id !== id || r.revision !== revision) throw new Error('Solution version mismatch. Reload this exact version.')
+    if (r.solution_id !== id || r.revision !== revision) throw new UserError('Solution version mismatch. Reload this exact version.')
     const refs = checked(await db.from('solution_measurement_details').select('*').eq('project_id', projectId)
       .eq('solution_id', id).eq('solution_revision', revision).order('measurement_id').limit(20)) as Row[]
     guard()

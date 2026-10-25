@@ -4,6 +4,7 @@ import { PHASE_META, PROJECT_PHASES, phaseLabel } from '../lib/projectPhase'
 import { Field, FormError, inputStyle } from './form'
 import { Modal } from './Modal'
 import { Icon } from './ui'
+import { userErrorMessage } from '../lib/userErrors'
 
 export function PhasePill({ phase, prefix }: { phase?: ProjectPhase | null; prefix?: string }) {
   const meta = phase ? PHASE_META[phase] : null
@@ -71,7 +72,7 @@ export function PhaseTransitionDialog({ title, current, onClose, onSave }: {
       event.preventDefault(); if (busy || !reason.trim() || next === current) return
       setBusy(true); setError('')
       try { await onSave(next, reason.trim()) } catch (err) {
-        setError(err instanceof Error ? err.message : String(err)); setBusy(false)
+        setError(userErrorMessage(err, 'Could not change the phase. Try again.')); setBusy(false)
       }
     }} className="foundation-form">
       <Field label="Move to phase">

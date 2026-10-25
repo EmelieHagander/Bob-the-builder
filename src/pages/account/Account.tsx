@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import * as db from '../../data/database'
 import { Icon, List, ListItem, Loading, Panel, SectionTitle, useAsync } from '../../components/ui'
 import { InstallSettingsCard } from '../../components/InstallSettingsCard'
+import { userErrorMessage } from '../../lib/userErrors'
 
 /** Account administration stays separate from the Home project overview. */
 export function Account() {
@@ -16,7 +17,7 @@ export function Account() {
     if (signingOut) return
     setSigningOut(true); setSignOutError('')
     try { await db.signOut() }
-    catch (reason) { setSignOutError(reason instanceof Error ? reason.message : String(reason)) }
+    catch (reason) { setSignOutError(userErrorMessage(reason, 'Try again.')) }
     finally { setSigningOut(false) }
   }
 

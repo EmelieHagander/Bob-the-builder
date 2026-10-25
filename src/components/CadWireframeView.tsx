@@ -4,6 +4,7 @@ import type { CadWireframe } from '../../supabase/functions/_shared/cad-wirefram
 import type { ShellComponent } from '../lib/cadShell'
 import { inputStyle } from './form'
 import CadWireframeCanvas, { webglAvailable } from './CadWireframeCanvas'
+import { userErrorMessage } from '../lib/userErrors'
 
 type Load = { key: string; state: 'idle' | 'loading' } | { key: string; state: 'failed'; message: string; retry: boolean } | { key: string; state: 'ready'; geometry: CadWireframe }
 const wait = (signal: AbortSignal) => new Promise<void>((resolve, reject) => {
@@ -41,7 +42,7 @@ export default function CadWireframeView({ projectId, title, artifactId, revisio
         await wait(controller.signal)
       }
       throw new Error('This 3D view is still being prepared. Close and reopen it to check the saved result.')
-    })().catch(error => { if (live) setLoad({ key, state: 'failed', message: error instanceof Error ? error.message : 'Could not load the 3D view.', retry: true }) })
+    })().catch(error => { if (live) setLoad({ key, state: 'failed', message: userErrorMessage(error, 'Could not load the 3D view.'), retry: true }) })
       .finally(() => clearTimeout(timeout))
     return () => { live = false; clearTimeout(timeout); controller.abort() }
   }, [projectId, id, version, key, attempt, onFallback])

@@ -4,6 +4,7 @@ import * as db from '../data/database'
 import type { Meal } from '../data/types'
 import { Avatar, EmptyState, Icon, List, ListItem, LoadFailed, Loading, SectionTitle, SummaryRow, useAsync } from '../components/ui'
 import { MealModal } from '../components/editors'
+import { userErrorMessage } from '../lib/userErrors'
 
 export function Food() {
   const [version, setVersion] = useState(0)
@@ -32,7 +33,7 @@ export function Food() {
       await db.setDietFlag(personId, columnId, !on)
       setVersion((v) => v + 1)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(userErrorMessage(err, 'Could not update food needs. Try again.'))
     } finally {
       setFlagBusy(null)
     }
@@ -44,7 +45,7 @@ export function Food() {
       await db.ensureDietColumns()
       setVersion((v) => v + 1)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(userErrorMessage(err, 'Could not update food needs. Try again.'))
     }
   }
 

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import * as mock from './mockData'
 import type { AreaPhase, TaskStatus } from './types'
+import { DataError, UserError, toDataError } from '../lib/userErrors'
 
 export type TaskReadinessState = 'unreviewed' | 'ready' | 'blocked' | 'complete'
 export type TaskBlockerKind = 'phase' | 'status' | 'dependency' | 'material' | 'tool' | 'information'
@@ -96,8 +97,8 @@ const mockNeeds: TaskNeed[] = []
 const mockReviews = new Map<string, { at: string; by: string; note: string }>()
 
 function checked<T>(result: { data: T | null; error: { message: string } | null }): T {
-  if (result.error) throw new Error(`database: ${result.error.message}`)
-  if (result.data === null || result.data === undefined) throw new Error('database: query returned no data')
+  if (result.error) throw toDataError(result.error)
+  if (result.data === null || result.data === undefined) throw new DataError('no_data', 'query returned no data')
   return result.data
 }
 
@@ -252,7 +253,7 @@ export function createWorkPlan(
     const { db, guard } = connection(projectId)
     if (!db) {
       const current = mockReadiness(projectId).find(item => item.taskId === taskId)
-      if (!current) throw new Error('Task not found.')
+      if (!current) throw new DataError('not_found', 'Task not found.')
       return structuredClone({
         readiness: current,
         dependencies: mockDependencyRows(projectId, taskId),
@@ -288,11 +289,11 @@ export function createWorkPlan(
     const id = itemId ?? (add ? crypto.randomUUID() : null)
     if (!db) {
       const task = mockProjectTasks(projectId).find(item => item.id === taskId)
-      if (!task) throw new Error('Task not found.')
+      if (!task) throw new DataError('not_found', 'Task not found.')
       if (action === 'confirm_readiness') {
         const current = mockReadiness(projectId).find(item => item.taskId === taskId)
-        if (!current || current.state === 'complete') throw new Error('Only active tasks can be confirmed ready.')
-        if (current.blockerCount) throw new Error('Resolve named blockers before confirming readiness.')
+        if (!current || current.state === 'complete') throw new UserError('Only active tasks can be confirmed ready.')
+        if (current.blockerCount) throw new UserError('Resolve named blockers before confirming readiness.')
         const now = new Date().toISOString()
         mockReviews.set(taskId, { at: now, by: 'Demo builder', note: String(data.note ?? '').trim() })
         return { id: taskId }
@@ -301,8 +302,8 @@ export function createWorkPlan(
         if (!id) throw new Error('Dependency identity missing.')
         const prerequisiteTaskId = String(data.prerequisite_task_id ?? '')
         const prerequisite = mockProjectTasks(projectId).find(item => item.id === prerequisiteTaskId)
-        if (!prerequisite || prerequisiteTaskId === taskId) throw new Error('Choose another task in this Project.')
-        if (mockDependencies.some(item => item.taskId === taskId && item.prerequisiteTaskId === prerequisiteTaskId)) throw new Error('Dependency already exists.')
+        if (!prerequisite || prerequisiteTaskId === taskId) throw new UserError('Choose another task in this Project.')
+        if (mockDependencies.some(item => item.taskId === taskId && item.prerequisiteTaskId === prerequisiteTaskId)) throw new UserError('Dependency already exists.')
         const reaches = (from: string, target: string, seen = new Set<string>()): boolean => {
           if (from === target) return true
           if (seen.has(from)) return false
@@ -310,20 +311,20 @@ export function createWorkPlan(
           return mockDependencies.filter(item => item.projectId === projectId && item.taskId === from)
             .some(item => reaches(item.prerequisiteTaskId, target, seen))
         }
-        if (reaches(prerequisiteTaskId, taskId)) throw new Error('Task dependencies cannot form a cycle.')
+        if (reaches(prerequisiteTaskId, taskId)) throw new UserError('Task dependencies cannot form a cycle.')
         mockDependencies.push({ id, projectId, taskId, prerequisiteTaskId, prerequisiteStepId: null, note: String(data.note ?? '') })
         invalidateMockReview(taskId)
       } else if (action === 'remove_dependency') {
         if (!id) throw new Error('Dependency identity missing.')
         const index = mockDependencies.findIndex(item => item.id === id && item.projectId === projectId && item.taskId === taskId)
-        if (index < 0) throw new Error('Dependency changed. Reload first.')
+        if (index < 0) throw new UserError('Dependency changed. Reload first.')
         mockDependencies.splice(index, 1)
         invalidateMockReview(taskId)
         return { id, removed: true }
       } else if (action === 'add_need') {
         if (!id) throw new Error('Task need identity missing.')
         const kind = data.kind as TaskNeedKind
-        if (kind !== 'tool' && kind !== 'information') throw new Error('Choose a need type.')
+        if (kind !== 'tool' && kind !== 'information') throw new UserError('Choose a need type.')
         const now = new Date().toISOString()
         mockNeeds.push({ id, projectId, taskId, kind, label: String(data.label ?? '').trim(), notes: String(data.notes ?? '').trim(), ready: false, revision: 1, actor: 'Demo builder', createdAt: now, updatedAt: now })
         invalidateMockReview(taskId)
@@ -331,7 +332,7 @@ export function createWorkPlan(
       } else {
         if (!id) throw new Error('Task need identity missing.')
         const need = mockNeeds.find(item => item.id === id && item.projectId === projectId && item.taskId === taskId)
-        if (!need || need.revision !== expected) throw new Error('Task need changed. Reload first.')
+        if (!need || need.revision !== expected) throw new UserError('Task need changed. Reload first.')
         if (action === 'remove_need') {
           mockNeeds.splice(mockNeeds.indexOf(need), 1)
           invalidateMockReview(taskId)

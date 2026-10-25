@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import { Icon } from '../components/ui'
 import { Field, FormError, inputStyle } from '../components/form'
+import { userErrorMessage } from '../lib/userErrors'
 
 /**
  * The sign-in screen. Stands alone — the app renders it INSTEAD of the shell
@@ -30,7 +31,7 @@ export function SignIn() {
     try {
       await action()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(userErrorMessage(err, 'Could not sign in. Try again.'))
     } finally {
       setBusy(false)
     }

@@ -9,6 +9,7 @@ import * as db from '../../data/database'
 import { Icon, Loading, useAsync } from '../../components/ui'
 import { Field, FormError, inputStyle } from '../../components/form'
 import { InstallSettingsCard } from '../../components/InstallSettingsCard'
+import { userErrorMessage } from '../../lib/userErrors'
 
 export function AccountSettings() {
   const [version, setVersion] = useState(0)
@@ -36,7 +37,7 @@ export function AccountSettings() {
       await db.updateAccount({ name: form.name.trim(), ownerName: form.ownerName.trim(), email: form.email.trim() })
       setSaved(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(userErrorMessage(err, 'Could not save household settings. Try again.'))
     } finally {
       setBusy(false)
     }
@@ -115,11 +116,11 @@ function HouseholdAccountSetup({ onBound }: { onBound: () => void }) {
       await db.bindAccountHousehold(householdId)
       onBound()
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
+      setError(userErrorMessage(reason, 'Could not join the household. Try again.'))
     } finally { setBusy(false) }
   }
   if (loading) return <Loading label="Loading your households…" />
-  if (directoryError) return <div role="alert"><p>{directoryError.message}</p><button className="btn" onClick={() => setRetry(value => value + 1)}>Try again</button></div>
+  if (directoryError) return <div role="alert"><p>{userErrorMessage(directoryError, 'Could not load households.')}</p><button className="btn" onClick={() => setRetry(value => value + 1)}>Try again</button></div>
   return <form onSubmit={bind} className="grid">
     <h2>Household account</h2>
     <p className="foundation-hint">You do not currently have access to shared account settings. If this account has not been set up, choose which of your households should own its settings and notes. This choice does not share any buildings or projects.</p>

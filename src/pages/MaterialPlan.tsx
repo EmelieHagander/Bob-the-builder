@@ -17,15 +17,17 @@ import { Icon, Loading, useAsync } from '../components/ui'
 import { SheetLayerFields, SheetLayerPurchaseSummary, SheetLayerSummary } from '../components/SheetLayerFields'
 import { SHEET_LAYER_METHOD, sheetLayerForm, sheetLayerInput } from '../data/sheetLayers'
 import { formatDateTime } from '../lib/format'
+import { materialMethodLabel, readableMaterialBasis } from '../lib/labels'
+import { userErrorMessage } from '../lib/userErrors'
 
 const UNIT_LABELS: Record<QuantityUnit, string> = { pcs: 'pcs', m: 'm', m2: 'm²', m3: 'm³', kg: 'kg', l: 'l' }
 const STOCK_LABELS: Record<StockStatus, string> = { available: 'Available', inspect: 'Inspect first', unavailable: 'Unavailable' }
-const message = (error: unknown) => error instanceof Error ? error.message : String(error)
+const message = (error: unknown) => userErrorMessage(error, 'Could not save the material plan. Try again.')
 const numberText = (value: string) => value.replace('.', ',')
 const constructionBlank = (value: MaterialRequirement) => value.methodKey.startsWith('construction_blank_')
 
 function Retry({ error, retry, label = 'Reload' }: { error: Error; retry: () => void; label?: string }) {
-  return <div role="alert"><FormError>{error.message}</FormError><button className="btn" onClick={retry}>{label}</button></div>
+  return <div role="alert"><FormError>{userErrorMessage(error, 'Could not load the material plan.')}</FormError><button className="btn" onClick={retry}>{label}</button></div>
 }
 
 function Pager({ offset, more, move, size = 24 }: { offset: number; more: boolean; move: (next: number) => void; size?: number }) {
@@ -52,8 +54,11 @@ function StaleNotice({ value }: { value: MaterialRequirement }) {
 
 function Calculation({ value, showSheetPurchase = true }: { value: MaterialRequirement; showSheetPurchase?: boolean }) {
   const available = Number(value.stockQuantity) + Number(value.componentQuantity)
+  const readable = value.sourceKind === 'deterministic' ? readableMaterialBasis(value.basis, value.methodKey) : null
   return <div className="fact-details">
-    <div className="fact-source"><strong>{value.sourceKind === 'deterministic' ? 'Calculated base requirement' : 'Manual base requirement'}</strong><span>{formatQuantity(value.requiredQuantity, value.unit)}</span><p>{value.basis}</p>{value.sourceKind === 'deterministic' && <small>Method {value.methodKey} · {value.methodVersion}</small>}</div>
+    <div className="fact-source"><strong>{value.sourceKind === 'deterministic' ? 'Calculated base requirement' : 'Manual base requirement'}</strong><span>{formatQuantity(value.requiredQuantity, value.unit)}</span>{value.sourceKind === 'deterministic'
+      ? <><p>{materialMethodLabel(value.methodKey)}{value.artifactTitle ? ` · from ${value.artifactTitle}, version ${value.artifactRevision}` : ''}.</p>{readable ? <p>{readable}</p> : <small>The full calculation is saved with this version. Ask Bob to explain it.</small>}</>
+      : <p>{value.basis}</p>}</div>
     <div className="fact-source"><strong>Allowance</strong><span>{numberText(value.wastePercent)}%</span><p>Requirement with allowance: {formatQuantity(value.requiredWithWaste, value.unit)}</p></div>
     <div className="fact-source"><strong>Confirmed available</strong><span>{formatQuantity(String(available), value.unit)}</span><p>Material stock {formatQuantity(value.stockQuantity, value.unit)} · reusable components {formatQuantity(value.componentQuantity, value.unit)}</p></div>
     <div className="fact-source"><strong>{constructionBlank(value) ? 'Unallocated blank need' : 'Purchase need'}</strong><span>{formatQuantity(value.purchaseQuantity, value.unit)}</span><p>Rounded up in increments of {formatQuantity(value.purchaseIncrement, value.unit)}.</p></div>

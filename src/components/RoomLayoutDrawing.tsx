@@ -4,6 +4,7 @@ import { checkedRoomLayout, ROOM_LAYOUT_LIMITS, roomLayoutGeometry, roomLayoutSt
 import { formatDrawingMm } from '../lib/storageBox'
 import { StorageBoxDrawing } from './StorageBoxDrawing'
 import './StorageBoxDrawing.css'
+import { userErrorMessage } from '../lib/userErrors'
 
 export function RoomLayoutDrawing({ value, title, source, lineageChanged = false, participant = false }: { value: RoomLayoutDetails | null; title: string; source: string; lineageChanged?: boolean; participant?: boolean }) {
   const [view, setView] = useState<RoomLayoutView | 'furniture'>('overview')
@@ -14,7 +15,7 @@ export function RoomLayoutDrawing({ value, title, source, lineageChanged = false
       const d = checkedRoomLayout(value, value.project_id, value.artifact_id, value.artifact_revision)
       if (!d.context_available) throw new Error('The project no longer has the physical context used by this drawing. Its version has not been changed.')
       return { d, g: roomLayoutGeometry(d.parameters, d.furniture_recipe), error: '' }
-    } catch (e) { return { d: null, g: null, error: e instanceof Error ? e.message : 'Room layout unavailable.' } }
+    } catch (e) { return { d: null, g: null, error: userErrorMessage(e, 'This saved room layout cannot be shown. Ask Bob to check it.') } }
   }, [value])
   if (!result.d || !result.g) return <p role="alert" className="solution-attention">Cannot display linked room layout: {result.error}</p>
   const { d, g } = result

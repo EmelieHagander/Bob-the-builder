@@ -8,6 +8,7 @@ import {
 } from '../lib/cadShell'
 import { formatDrawingMm } from '../lib/storageBox'
 import { inputStyle } from './form'
+import { hasErrorCode } from '../lib/userErrors'
 import './StorageBoxDrawing.css'
 import './CadShellView.css'
 
@@ -157,8 +158,7 @@ export function CadShellView({ value, projectId, canEdit, onChanged, onReload }:
       if (action === 'place') { setDraft(null); setReason(''); setNotice(`Saved ${name(c)} at ${where(next.shell?.components.find(p => p.component_key === c.component_key) ?? draft!)}. This drawing is now version ${next.revision}.`) }
       onChanged?.(next)
     } catch (e) {
-      const message = e instanceof Error ? e.message : ''
-      if (message.includes('cad_shell_changed')) {
+      if (hasErrorCode(e, 'cad_shell_changed')) {
         setConflict(true)
         setError(action === 'place'
           ? 'This drawing changed since you opened it, so your move was not saved. Your move is kept below. Reload the drawing, check it, then save again.'

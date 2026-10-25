@@ -7,6 +7,7 @@ import { formatEventDay } from '../lib/eventDay'
 import { AvatarStack, EmptyState, Icon, List, ListItem, LoadFailed, Loading, SummaryRow, useAsync } from '../components/ui'
 import { useAuthTick } from '../components/Layout'
 import { EventModal } from '../components/editors'
+import { userErrorMessage } from '../lib/userErrors'
 
 export function Events() {
   useBobSurface(db.getActiveProjectId() ?? '', { surface: 'events' }, 'Build days')
@@ -24,7 +25,7 @@ export function Events() {
     setError(null)
     db.joinEvent(id)
       .then(() => setVersion((v) => v + 1))
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .catch((err) => setError(userErrorMessage(err, 'Could not join the build day. Try again.')))
   }
 
   return (

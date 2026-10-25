@@ -10,8 +10,9 @@ import { Modal } from '../components/Modal'
 import { Icon, Loading, useAsync } from '../components/ui'
 import { ProjectImages, StoredImage } from '../components/ProjectImages'
 import { formatDateTime } from '../lib/format'
+import { userErrorMessage } from '../lib/userErrors'
 
-const message = (error: unknown) => error instanceof Error ? error.message : String(error)
+const message = (error: unknown) => userErrorMessage(error, 'Could not save the record. Try again.')
 const name = (record: ProjectFact) => record.kind === 'measurement' ? record.subject : record.name
 const compactPrimary = { minHeight: 44, padding: '8px 13px', fontSize: 13.5 }
 const compactSecondary = { minHeight: 44, padding: '8px 7px', fontSize: 13, border: 0, background: 'transparent', boxShadow: 'none' }
@@ -174,7 +175,7 @@ function FactHistory({ record, onClose }: { record: ProjectFact; onClose: () => 
   const [attempt, setAttempt] = useState(0)
   const { data, loading, error } = useAsync(() => db.getProjectFactHistory(record.projectId, record.kind, record.id, offset), [record.id, offset, attempt])
   return <Modal title={'History: ' + name(record)} onClose={onClose}>
-    {loading ? <Loading /> : error ? <div role="alert"><FormError>{error.message}</FormError>
+    {loading ? <Loading /> : error ? <div role="alert"><FormError>{userErrorMessage(error, 'Could not load project records.')}</FormError>
       <button className="btn" onClick={() => setAttempt(n => n + 1)}>Reload history</button></div> : <>
       {!data?.items.length && <p>No history is available. Your access may have changed.</p>}
       <ol className="fact-history">{data?.items.map(item => <li key={item.revision} className="card fact-card">
@@ -265,7 +266,7 @@ export function ProjectFacts() {
       <button className="btn" style={compactPrimary} onClick={() => navigateFilter('measurement', areaId, '', status)}>Show all measurements</button>
     </div>}
     {areasError && <p role="alert">Areas could not be loaded. Reload the project before adding records.</p>}
-    {loading ? <Loading /> : error ? <div role="alert"><FormError>{error.message}</FormError>
+    {loading ? <Loading /> : error ? <div role="alert"><FormError>{userErrorMessage(error, 'Could not load project records.')}</FormError>
       <button className="btn" style={compactPrimary} onClick={() => setVersion(n => n + 1)}>Reload records</button></div> : <>
       {!data?.items.length && <p className="card fact-card">
         {status === 'archived' ? 'No archived records in this selection.' : status === 'missing' ? 'Nothing is waiting to be measured in this selection.' : kind === 'measurement' ? 'No measurements in this selection. Add a known length or an unknown one to collect later.' : 'No existing parts in this selection. Record what you already have.'}

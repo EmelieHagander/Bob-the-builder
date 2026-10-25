@@ -47,6 +47,7 @@ test('source map preserves original units, source IDs/revisions, formula inputs 
   const width = map.rows.find(row => row.id === 'width')!
   assert.equal(width.sources[0].value, '1'); assert.equal(width.sources[0].unit, 'm')
   assert.equal(width.value, 1000); assert.match(cadSourceIdentity(width.sources[0]), /revision 2/)
+  assert(!cadSourceIdentity(width.sources[0]).includes(measurement), 'Source identity names the record kind and revision, never its UUID')
   assert.deepEqual(map.rows.find(row => row.id === 'inside')!.operands, ['width', 'allowance'])
   assert.equal(map.rows.find(row => row.id === 'inside')!.category, 'Calculation', 'An estimate-dependent calculation must never be shown as measured')
 })
@@ -97,16 +98,19 @@ test('rendered source map explains partial coverage, uncertainty and escaped evi
   assert(!html.includes('<script>')); assert(html.includes('&lt;script&gt;'))
 })
 
-test('authorised source delta shows exact affected IDs while retaining the saved values', () => {
+test('authorised source delta names affected parameters and revisions without raw IDs while retaining the saved values', () => {
   const { recipe, plan, sources } = fixture()
   const manifest = { bob_parameters: compileCadParameters(projectId, recipe, plan, sources, new Map()) }
   const html = renderToStaticMarkup(createElement(CadSourceMap, { recipe, manifest, projectId, sourceStatus: {
     source_state: 'changed', source_reasons: ['measurements_changed'], changes: [{ kind: 'project_measurement', id: measurement,
       saved_revision: 2, current_revision: 5, parameter_ids: ['width', 'inside'], state: 'changed' }], changesTruncated: true,
   } }))
-  assert(html.includes(`>${measurement}</p>`))
+  assert(!html.includes(measurement), 'Screens never show a source UUID')
+  assert(html.includes('Project measurement</strong> · Changed'))
   assert(html.includes('Saved revision: 2 · current revision: 5'))
-  assert(html.includes('Affected parameter IDs: width, inside'))
+  assert(html.includes('Affects: Width, Inside'))
+  assert(html.includes('Calculation: Difference of Width and Allowance · exact'))
+  assert(html.includes('Original value: 1 m · Measured'))
   assert(html.includes('Saved value: 980 mm')); assert(html.includes('Original value: 1 m'))
   assert(html.includes('Only part of the source change list'))
   assert(!html.includes('Exact changed source identities are unavailable'))

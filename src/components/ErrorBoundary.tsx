@@ -1,6 +1,7 @@
 /*
  * Last-resort error boundary: one broken render should show a friendly
- * "something snapped" card instead of blanking the whole app.
+ * "something snapped" card instead of blanking the whole app. The raw error
+ * goes to the console only; people see plain copy.
  */
 
 import { Component, type ErrorInfo, type ReactNode } from 'react'
@@ -28,11 +29,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
           <div style={{ fontSize: 44 }}>🪵</div>
           <h1 style={{ fontSize: 22, margin: '10px 0 6px' }}>Something snapped</h1>
           <p style={{ fontSize: 14, color: '#6b6353', lineHeight: 1.5 }}>
-            A part of bob hit an unexpected error. Your data is fine — reloading usually fixes it.
+            A part of bob hit an unexpected error. Saved project data is not affected — reloading usually fixes it.
           </p>
-          <pre style={{ textAlign: 'left', fontSize: 11.5, background: '#f4f0e6', borderRadius: 10, padding: '10px 12px', overflowX: 'auto', marginTop: 12 }}>
-            {this.state.error.message}
-          </pre>
           <button
             onClick={() => window.location.reload()}
             style={{ marginTop: 14, padding: '10px 22px', borderRadius: 11, border: 'none', background: '#41513F', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}

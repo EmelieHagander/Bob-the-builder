@@ -15,6 +15,7 @@ import { ProjectStart } from '../components/ProjectStart'
 import { FormError } from '../components/form'
 import { AvatarStack, Icon, Loading, SectionTitle, useAsync, useProjectVersion } from '../components/ui'
 import { areaNextAction, areaPhaseSummary, projectFocus } from '../lib/projectPhase'
+import { userErrorMessage } from '../lib/userErrors'
 
 export function ProjectHome() {
   const projectVersion = useProjectVersion()
@@ -52,7 +53,7 @@ export function ProjectHome() {
   )
 
   if (projectLoading && !project) return <div className="page"><Loading label="Loading project…" /></div>
-  if (!project || projectError) return <div className="page"><h1 className="page-title">Project unavailable</h1><p role="alert">{projectError?.message ?? 'This project may no longer be available.'}</p></div>
+  if (!project || projectError) return <div className="page"><h1 className="page-title">Project unavailable</h1><p role="alert">{projectError ? userErrorMessage(projectError, 'This project may no longer be available.') : 'This project may no longer be available.'}</p></div>
 
   const areaItems = areas ?? []
   const building = project.phase === 'build'
@@ -67,7 +68,7 @@ export function ProjectHome() {
       setVersion(value => value + 1)
       if (next) navigate('/today')
     } catch (err) {
-      setStartError(err instanceof Error ? err.message : String(err))
+      setStartError(userErrorMessage(err, 'Could not start the build. Try again.'))
     } finally { setStarting(false) }
   }
   const focus = projectFocus(project.phase, areaItems)

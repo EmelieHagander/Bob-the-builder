@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { UserError, toDataError } from '../lib/userErrors'
 
 export interface SharingChoice { id: string; name: string }
 export interface SharingDirectory {
@@ -53,31 +54,31 @@ export function createSharing(
 ) {
   async function request<T>(name: string, args: Record<string, unknown> = {}): Promise<T> {
     const guard = capture()
-    if (!client) throw new Error('Sharing needs a connected account. Demo data is not shared.')
+    if (!client) throw new UserError('Sharing needs a connected account. Demo data is not shared.')
     const session = await client.auth.getSession()
     guard()
-    if (session.error || !session.data.session) throw new Error('Sign in to manage sharing.')
+    if (session.error || !session.data.session) throw new UserError('Sign in to manage sharing.')
     const result = await client.rpc(name, args)
     guard()
     if (result.error) {
       if (result.error.code === 'PGRST202') {
-        throw new Error('Sharing is not available on this server yet. No sharing change was confirmed.')
+        throw new UserError('Sharing is not available on this server yet. No sharing change was confirmed.')
       }
-      throw new Error(result.error.message)
+      throw toDataError(result.error)
     }
-    if (result.data === null) throw new Error('The server did not confirm the sharing result. Reload before trying again.')
+    if (result.data === null) throw new UserError('The server did not confirm the sharing result. Reload before trying again.')
     return result.data as T
   }
 
   async function project(projectId: string) {
     const state = await request<ProjectSharingState>('project_sharing_state', { p_project: projectId })
-    if (state.projectId !== projectId) throw new Error('Project sharing context changed. Reopen the project.')
+    if (state.projectId !== projectId) throw new UserError('Project sharing context changed. Reopen the project.')
     return state
   }
 
   async function building(buildingId: string) {
     const state = await request<BuildingSharingState>('building_sharing_state', { p_building: buildingId })
-    if (state.buildingId !== buildingId) throw new Error('Building sharing context changed. Reopen the building.')
+    if (state.buildingId !== buildingId) throw new UserError('Building sharing context changed. Reopen the building.')
     return state
   }
 
@@ -91,7 +92,7 @@ export function createSharing(
         p_project: input.projectId, p_household: input.householdId,
         p_building: input.buildingId, p_expected: input.expected,
       })
-      if (state.projectId !== input.projectId) throw new Error('The project sharing result could not be confirmed. Reload before trying again.')
+      if (state.projectId !== input.projectId) throw new UserError('The project sharing result could not be confirmed. Reload before trying again.')
       if (!state.canManage) changed()
       return state
     },
@@ -100,7 +101,7 @@ export function createSharing(
         p_building: input.buildingId, p_household: input.householdId,
         p_expected: input.expected, p_projects: input.projectIds,
       })
-      if (state.buildingId !== input.buildingId) throw new Error('The building sharing result could not be confirmed. Reload before trying again.')
+      if (state.buildingId !== input.buildingId) throw new UserError('The building sharing result could not be confirmed. Reload before trying again.')
       return state
     },
     async inviteFriend(projectId: string, friendId: string) {

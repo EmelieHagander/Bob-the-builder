@@ -14,6 +14,7 @@ import { Field, FormError, inputStyle } from '../../components/form'
 import { scheduleStatus, type ScheduleStatus } from '../../lib/calendarGrid'
 import { formatDateRange } from '../../lib/format'
 import { PhasePill } from '../../components/PhaseUI'
+import { userErrorMessage } from '../../lib/userErrors'
 
 const THEMES: { name: ThemeName; label: string }[] = [
   { name: 'birch', label: 'Birch' },
@@ -85,7 +86,7 @@ export function ProjectModal({
       onChanged()
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(userErrorMessage(err, 'Could not save the project. Try again.'))
       setBusy(false)
     }
   }
@@ -118,7 +119,7 @@ export function ProjectModal({
       onChanged()
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(userErrorMessage(err, 'Could not save the project. Try again.'))
       setBusy(false)
     }
   }

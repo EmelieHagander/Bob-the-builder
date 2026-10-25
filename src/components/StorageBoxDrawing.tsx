@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { BOX_LIMITS, BOX_VIEW_LABELS, formatDrawingMm, storageBoxCutCsv, storageBoxGeometry, storageBoxSvg,
   type BoxGeometry, type BoxView, type DrawingStamp } from '../lib/storageBox'
 import './StorageBoxDrawing.css'
+import { userErrorMessage } from '../lib/userErrors'
 
 function download(name: string, text: string, type: string) {
   const url = URL.createObjectURL(new Blob([text], { type }))
@@ -44,7 +45,7 @@ export function StorageBoxDrawing({ recipe, stamp, preview = false }: { recipe: 
   }, [printing])
   const result = useMemo(() => {
     try { return { geometry: storageBoxGeometry(recipe), error: '' } }
-    catch (error) { return { geometry: null, error: error instanceof Error ? error.message : 'Unsupported drawing recipe.' } }
+    catch (error) { return { geometry: null, error: userErrorMessage(error, 'This saved drawing cannot be shown. Ask Bob to check it.') } }
   }, [recipe])
   const geometry = result.geometry
   if (!geometry) return <p role="alert" className="solution-attention">This version cannot be drawn: {result.error} Its saved evidence has not been changed.</p>

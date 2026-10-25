@@ -1,4 +1,5 @@
 import { createSharedRead } from './sharedRead'
+import { UserError } from './userErrors'
 
 /** Bounded, memory-only decoded previews. Callers reauthorize before every hit. */
 export function createImagePreviewCache(maxBytes = 8 * 1024 * 1024, maxEntries = 24, ttlMs = 15 * 60_000) {
@@ -21,7 +22,7 @@ export function createImagePreviewCache(maxBytes = 8 * 1024 * 1024, maxEntries =
       const captured = epoch
       return reads.run(key, async () => {
         const blob = await load()
-        if (captured !== epoch) throw new Error('Image context changed. Try loading it again.')
+        if (captured !== epoch) throw new UserError('Image context changed. Try loading it again.')
         if (blob.size <= maxBytes) {
           while (entries.size && (bytes + blob.size > maxBytes || entries.size >= maxEntries)) remove(entries.keys().next().value!)
           entries.set(key, { blob, expires: Date.now() + ttlMs }); bytes += blob.size
@@ -43,9 +44,9 @@ export async function imagePreview(blob: Blob): Promise<Blob> {
     canvas.width = Math.max(1, Math.round(bitmap.width * scale))
     canvas.height = Math.max(1, Math.round(bitmap.height * scale))
     const context = canvas.getContext('2d')
-    if (!context) throw new Error('Could not display the image preview.')
+    if (!context) throw new UserError('Could not display the image preview.')
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
     return await new Promise<Blob>((resolve, reject) => canvas.toBlob(
-      result => result ? resolve(result) : reject(new Error('Could not display the image preview.')), 'image/webp', 0.8))
+      result => result ? resolve(result) : reject(new UserError('Could not display the image preview.')), 'image/webp', 0.8))
   } finally { bitmap.close() }
 }

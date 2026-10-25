@@ -3,6 +3,7 @@ import type { CadWireframe } from '../../supabase/functions/_shared/cad-wirefram
 import { CAD_WIREFRAME_DRAW_SEGMENTS } from '../../supabase/functions/_shared/cad-wireframe.ts'
 import { multiply, placementMatrix, shellMatrix, transformPoint, type Mat4 } from './shell3d'
 import type { ShellComponent } from './cadShell'
+import { UserError } from './userErrors'
 
 export type WireBounds = { min: number[]; max: number[] }
 const IDENTITY: Mat4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
@@ -17,10 +18,10 @@ export function pointBounds(points: number[][]): WireBounds {
 /** One selected piece at a time. Geometry is shared by all instances of a definition. */
 export function createWireframeObjects(value: CadWireframe, colour: string, outer: Mat4 = IDENTITY, instanceId = '') {
   const instances = instanceId ? value.instances.filter(i => i.id === instanceId) : value.instances
-  if (!instances.length) throw new Error('This part is not in the saved drawing.')
+  if (!instances.length) throw new UserError('This part is not in the saved drawing.')
   const defs = new Map(value.definitions.map(d => [d.id, d.positions]))
   const segments = instances.reduce((n, i) => n + defs.get(i.definition_id)!.length / 6, 0)
-  if (segments > CAD_WIREFRAME_DRAW_SEGMENTS) throw new Error('This piece has too many edges for the mobile view. Choose one part in Parts to show.')
+  if (segments > CAD_WIREFRAME_DRAW_SEGMENTS) throw new UserError('This piece has too many edges for the mobile view. Choose one part in Parts to show.')
   let bounds: WireBounds
   if (!instanceId) bounds = pointBounds(corners(value.bounds).map(p => transformPoint(outer, p)))
   else {

@@ -3,6 +3,8 @@ import { BUILDING_PLAN_LIMITS, buildingPlanGeometry, checkedBuildingPlan, type B
 import { buildingPlanSvg } from '../lib/buildingPlanSvg'
 import { formatDrawingMm as f } from '../lib/storageBox'
 import './StorageBoxDrawing.css'
+import { userErrorMessage } from '../lib/userErrors'
+import { truthLabel } from '../lib/labels'
 const number=(n:number|null)=>n===null?'Unknown':`${f(n)} mm`
 export function BuildingPlanDrawing({value,title,source,lineageChanged=false,participant=false}:{value:BuildingPlanDetails|null;title:string;source:string;lineageChanged?:boolean;participant?:boolean}){
  const [chosen,setChosen]=useState<string|null>(null),[zoom,setZoom]=useState(1)
@@ -11,12 +13,12 @@ export function BuildingPlanDrawing({value,title,source,lineageChanged=false,par
    if(!value)throw new Error('Sources are not available in this project. The historical plan has not been replaced.')
    const d=checkedBuildingPlan(value,value.project_id,value.artifact_id,value.artifact_revision)
    return {d,g:buildingPlanGeometry(d.recipe),error:''}
-  }catch(e){return {d:null,g:null,error:e instanceof Error?e.message:'Unsupported coordinate plan.'}}
+  }catch(e){return {d:null,g:null,error:userErrorMessage(e,'This saved floor plan cannot be shown. Ask Bob to check it.')}}
  },[value])
  if(!result.d||!result.g)return <p role="alert" className="solution-attention">Cannot display coordinate plan: {result.error}</p>
  const {d,g}=result,view=chosen&&g.levels.some(l=>l.level_id===chosen)?chosen:chosen==='heights'?'heights':g.levels[0].level_id
  const svg=buildingPlanSvg(d,view,title,source,lineageChanged),level=g.levels.find(l=>l.level_id===view)
- const name=(id:string)=>d.names[id]??id
+ const name=(id:string)=>d.names[id]??'Unnamed'
  const spaces=g.recipe.spaces.filter(s=>!level||s.level_id===level.level_id)
  return <section className="box-drawing" aria-label="Multi-floor coordinate plan">
   <p className="foundation-hint">{participant ? 'Saved coordinate study. Ask the organiser about changes or unclear dimensions.' : 'Ask Bob to update this study or compare a location between floors. You do not need to draw the views.'}</p>
@@ -59,8 +61,8 @@ export function BuildingPlanDrawing({value,title,source,lineageChanged=false,par
   </div>)}
   {g.conflicts.length>0&&<div role="status" className="solution-attention"><strong>Coordinate conflicts to review</strong>{g.conflicts.slice(0,24).map((c,i)=><p key={i}>{c.kind.replace(/_/g,' ')}: {c.ids.map(name).join(', ')}</p>)}{g.conflicts.length>24&&<p>{g.conflicts.length} conflicts in total. Showing the first 24; review the coordinates before proceeding.</p>}</div>}
   <details><summary>Shared datum and source versions</summary><p>{g.recipe.origin}</p><p>Building: {name(d.building_id)} · v{g.recipe.building_revision}. {source}</p>
-   {g.recipe.levels.map(l=><p key={l.level_id}>{name(l.level_id)} · v{l.level_revision} · {l.basis}: {l.source}</p>)}
-   {g.recipe.spaces.map(s=><p key={s.space_id}>{name(s.space_id)} · v{s.space_revision} · {s.basis}: {s.source}</p>)}
+   {g.recipe.levels.map(l=><p key={l.level_id}>{name(l.level_id)} · v{l.level_revision} · {truthLabel(l.basis)}: {l.source}</p>)}
+   {g.recipe.spaces.map(s=><p key={s.space_id}>{name(s.space_id)} · v{s.space_revision} · {truthLabel(s.basis)}: {s.source}</p>)}
   </details>
   <p className="solution-attention">{BUILDING_PLAN_LIMITS}</p>
  </section>

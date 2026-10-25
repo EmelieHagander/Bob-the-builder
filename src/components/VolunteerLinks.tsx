@@ -4,6 +4,7 @@ import { volunteerSecret } from '../data/volunteers'
 import { Field, FormError, inputStyle } from './form'
 import { Loading, useAsync } from './ui'
 import { formatDate } from '../lib/format'
+import { userErrorMessage } from '../lib/userErrors'
 
 export function VolunteerLinks({ projectId, onBusyChange }: { projectId: string; onBusyChange: (busy: boolean) => void }) {
   const [version, setVersion] = useState(0)
@@ -28,7 +29,7 @@ export function VolunteerLinks({ projectId, onBusyChange }: { projectId: string;
       pendingSecret.current = null
       setVersion(value => value + 1)
       setNotice('Volunteer link created. Copy it and share it with your volunteers.')
-    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)) }
+    } catch (reason) { setError(userErrorMessage(reason, 'Could not create the volunteer link. Try again.')) }
     finally { pending(false) }
   }
   async function revoke() {
@@ -38,13 +39,13 @@ export function VolunteerLinks({ projectId, onBusyChange }: { projectId: string;
       await db.volunteers.revoke(projectId, removing.linkId, removing.sessionId)
       setRemoving(null); setCreated(null); setVersion(value => value + 1)
       setNotice('Volunteer access revoked.')
-    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)) }
+    } catch (reason) { setError(userErrorMessage(reason, 'Could not revoke volunteer access. Try again.')) }
     finally { pending(false) }
   }
   return <section className="volunteer-link-manager" aria-label="Volunteer links">
     <p className="foundation-hint">Volunteers open your link and enter their name. No email, password or account. They can read project tasks, instructions and build days, join tasks and update their own work.</p>
     <p className="foundation-hint">When food is planned, volunteers may share allergies with the project crew. Volunteer links never show other participants’ allergy notes.</p>
-    {loading ? <Loading label="Loading volunteer links…" /> : loadError ? <div role="alert"><FormError>{loadError.message}</FormError><button className="btn" onClick={() => setVersion(value => value + 1)}>Refresh volunteer links</button></div> : data && <>
+    {loading ? <Loading label="Loading volunteer links…" /> : loadError ? <div role="alert"><FormError>{userErrorMessage(loadError, 'Could not load volunteer links.')}</FormError><button className="btn" onClick={() => setVersion(value => value + 1)}>Refresh volunteer links</button></div> : data && <>
       <form onSubmit={create} className="foundation-form">
         <Field label="Volunteer link name"><input style={inputStyle} maxLength={120} value={label} disabled={busy} onChange={event => setLabel(event.target.value)} required /></Field>
         <Field label="Link expires after"><select style={inputStyle} value={days} disabled={busy} onChange={event => setDays(Number(event.target.value))}><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option></select></Field>

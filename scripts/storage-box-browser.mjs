@@ -67,7 +67,7 @@ export async function verifyStorageBoxBrowser(page, base, fixture, width) {
   await editor.getByLabel('Reason for change', { exact: true }).fill('Lower box, same footprint')
   fixture.rejectNext = true
   await editor.getByRole('button', { name: 'Save new drawing version', exact: true }).click()
-  await editor.getByText('Project target changed. Reload before saving the drawing.', { exact: true }).waitFor()
+  await editor.getByText('The selected target changed. Reload before saving the drawing.', { exact: true }).waitFor()
   assert.equal(await editor.getByLabel('Outside height (mm)', { exact: true }).inputValue(), '300')
   assert.deepEqual(fixture.parametric.get(`${current.id}:1`), original)
   await editor.getByRole('button', { name: 'Cancel', exact: true }).click()

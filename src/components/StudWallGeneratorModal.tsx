@@ -8,8 +8,9 @@ import { Field, FormError, inputStyle } from './form'
 import { Modal } from './Modal'
 import { Loading, useAsync } from './ui'
 import { STUD_WALL_ROLE_LABELS, StudWallPreview } from './StudWallPreview'
+import { userErrorMessage } from '../lib/userErrors'
 
-const message = (error: unknown) => error instanceof Error ? error.message : String(error)
+const message = (error: unknown) => userErrorMessage(error, 'Could not prepare the wall drawing. Check the inputs and try again.')
 
 function MeasurementPicker({ projectId, role, onPick, onClose }: {
   projectId: string
@@ -21,7 +22,7 @@ function MeasurementPicker({ projectId, role, onPick, onClose }: {
   const [attempt, setAttempt] = useState(0)
   const { data, loading, error } = useAsync(() => db.getProjectFacts(projectId, 'measurement', {}, offset), [projectId, offset, attempt])
   return <Modal title={`Choose ${STUD_WALL_ROLE_LABELS[role].toLowerCase()}`} onClose={onClose}>
-    {loading ? <Loading /> : error ? <div role="alert"><FormError>{error.message}</FormError>
+    {loading ? <Loading /> : error ? <div role="alert"><FormError>{userErrorMessage(error, 'Could not load the wall inputs.')}</FormError>
       <button className="btn" onClick={() => setAttempt(value => value + 1)}>Reload measurements</button></div> : <>
       {!data?.items.length && <p>No active measurements here. Record them in Measurements & existing parts first.</p>}
       <div className="fact-list">{data?.items.map(item => item.kind === 'measurement' && <article className="card fact-card" key={item.id}>
@@ -148,7 +149,7 @@ export function StudWallGeneratorModal({ projectId, target, areas, initialArea, 
 
         <div className="fact-source">
           <strong>Physical target</strong>
-          {physical.loading ? <Loading /> : physical.error ? <div role="alert"><FormError>{physical.error.message}</FormError>
+          {physical.loading ? <Loading /> : physical.error ? <div role="alert"><FormError>{userErrorMessage(physical.error, 'Could not load the building measurements.')}</FormError>
             <button className="btn" type="button" onClick={() => setAttempt(value => value + 1)}>Reload building context</button></div> : <>
             <Field label="Space"><select style={inputStyle} required value={spaceId} onChange={event => setSpaceId(event.target.value)}>
               <option value="">Choose a project space</option>

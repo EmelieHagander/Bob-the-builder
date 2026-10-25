@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { readSheetLayer, sheetPurchaseCount } from './sheetLayers'
 import type { SheetLayerSnapshot } from './sheetLayers'
+import { DataError, UserError, toDataError } from '../lib/userErrors'
 
 export type QuantityUnit = 'pcs' | 'm' | 'm2' | 'm3' | 'kg' | 'l'
 export type StockStatus = 'available' | 'inspect' | 'unavailable'
@@ -186,7 +187,7 @@ export interface RequirementShoppingState {
 type Row = Record<string, any>
 
 function checked<T>(result: { data: T; error: { message: string } | null }): T {
-  if (result.error) throw new Error(result.error.message)
+  if (result.error) throw toDataError(result.error)
   return result.data
 }
 
@@ -217,7 +218,7 @@ function requirement(row: Row): MaterialRequirement {
   const sheetLayer = readSheetLayer(row.sheet_layer, row.method_key)
   if (sheetLayer) {
     if (row.unit !== 'm2' || sheetPurchaseCount(textNumber(row.purchase_increment), sheetLayer.unit_coverage_m2) !== '1') {
-      throw new Error('Sheet-layer coverage does not match the saved purchase unit. Reload the material plan.')
+      throw new UserError('Sheet-layer coverage does not match the saved purchase unit. Reload the material plan.')
     }
     sheetPurchaseCount(textNumber(row.purchase_quantity), textNumber(row.purchase_increment))
   }
@@ -270,12 +271,12 @@ export function createMaterialPlanning(
   function connection(projectId: string) {
     const guard = capture(projectId)
     guard()
-    if (!client) throw new Error('This demo does not save material planning. Open a connected project.')
+    if (!client) throw new UserError('This demo does not save material planning. Open a connected project.')
     return { db: client, guard }
   }
 
   function scoped<T extends Row>(rows: T[], projectId: string): T[] {
-    if (rows.some(row => row.project_id !== projectId)) throw new Error('Material planning project mismatch.')
+    if (rows.some(row => row.project_id !== projectId)) throw new DataError('project_mismatch', 'Material planning project mismatch.')
     return rows
   }
 
@@ -284,7 +285,7 @@ export function createMaterialPlanning(
     const row = checked(await db.from('stock_revisions').select('*')
       .eq('project_id', projectId).eq('stock_id', id).eq('revision', revision).single()) as Row
     guard()
-    if (!row) throw new Error('Stock version unavailable. Reload to check access.')
+    if (!row) throw new UserError('Stock version unavailable. Reload to check access.')
     scoped([row], projectId)
     return stockItem(row)
   }
@@ -294,7 +295,7 @@ export function createMaterialPlanning(
     const row = checked(await db.from('material_requirement_revisions').select('*')
       .eq('project_id', projectId).eq('requirement_id', id).eq('revision', revision).single()) as Row
     guard()
-    if (!row) throw new Error('Material requirement version unavailable. Reload to check access.')
+    if (!row) throw new UserError('Material requirement version unavailable. Reload to check access.')
     scoped([row], projectId)
     const [stockRows, componentRows] = await Promise.all([
       db.from('material_requirement_stock_details').select('*')
@@ -346,14 +347,14 @@ export function createMaterialPlanning(
       const { db, guard } = connection(projectId)
       const row = checked(await db.rpc('read_material_cut_plan', { p_project: projectId, p_plan: id, p_revision: revision })) as MaterialCutPlan | null
       guard()
-      if (!row || row.id !== id || row.project_id !== projectId || (revision !== null && row.revision !== revision)) throw new Error('Cut plan unavailable. Reload to check access and source changes.')
+      if (!row || row.id !== id || row.project_id !== projectId || (revision !== null && row.revision !== revision)) throw new UserError('Cut plan unavailable. Reload to check access and source changes.')
       return row
     },
     async cutPlans(projectId: string, afterId: string | null = null) {
       const { db, guard } = connection(projectId)
       const result = checked(await db.rpc('read_project_work', { p_project: projectId, p_input: { resource: 'cut_plan', record_id: null, after_id: afterId } })) as Row
       guard()
-      if (result.projectId !== projectId || !Array.isArray(result.records)) throw new Error('Cut plan project mismatch.')
+      if (result.projectId !== projectId || !Array.isArray(result.records)) throw new DataError('project_mismatch', 'Cut plan project mismatch.')
       return { items: scoped(result.records, projectId) as MaterialCutPlan[], nextCursor: result.next_cursor as string | null, hasMore: Boolean(result.truncated) }
     },
     async stock(projectId: string, archived = false, offset = 0) {
@@ -461,10 +462,10 @@ export function createMaterialPlanning(
       do {
         const result = checked(await db.rpc('read_project_work', { p_project: projectId, p_input: { resource: 'shopping', record_id: null, after_id: cursor } })) as Row
         guard()
-        if (result.projectId !== projectId || !Array.isArray(result.records)) throw new Error('Shopping source project mismatch.')
+        if (result.projectId !== projectId || !Array.isArray(result.records)) throw new DataError('project_mismatch', 'Shopping source project mismatch.')
         for (const row of result.records) if (row.cut_plan_source || row.pack_source) rows.push({ materialId: row.id, ...(row.cut_plan_source ? { source: row.cut_plan_source } : {}), ...(row.pack_source ? { pack: row.pack_source } : {}) })
         cursor = result.next_cursor ?? null
-        if (result.truncated && !cursor || cursor && seen.has(cursor)) throw new Error('Shopping source list incomplete. Retry.')
+        if (result.truncated && !cursor || cursor && seen.has(cursor)) throw new UserError('Shopping source list incomplete. Retry.')
         if (cursor) seen.add(cursor)
       } while (cursor)
       return rows

@@ -22,6 +22,7 @@ import { ProjectThumbnail } from '../../components/ProjectThumbnail'
 import { ProjectMetadata } from '../../components/ProjectMetadata'
 import { PhasePill } from '../../components/PhaseUI'
 import { areaPhaseSummary } from '../../lib/projectPhase'
+import { userErrorMessage } from '../../lib/userErrors'
 
 export function AccountDashboard() {
   const navigate = useNavigate()
@@ -121,7 +122,7 @@ export function AccountDashboard() {
             Projects <span style={{ color: 'var(--ink-faint)', fontWeight: 600 }}>· {projects?.length ?? 0}</span>
           </SectionTitle>
           {overviewError && <p className="foundation-hint" role="status">Extra project details could not be loaded. <button className="btn" onClick={reload}>Retry details</button></p>}
-          {loading ? <Loading /> : projectError ? <div role="alert"><FormError>{projectError.message}</FormError><button className="btn" onClick={reload}>Try again</button></div>
+          {loading ? <Loading /> : projectError ? <div role="alert"><FormError>{userErrorMessage(projectError, 'Could not load your projects.')}</FormError><button className="btn" onClick={reload}>Try again</button></div>
             : <>
               {!projects?.length && <EmptyState icon="squares-four" title="No projects yet" hint="Start one with the button above." />}
               {buildingsLoading && <Loading label="Loading building groups…" />}
@@ -215,7 +216,7 @@ function NotesCard({ notes, onChanged }: { notes: AccountNote[] | null; onChange
       await action()
       onChanged()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(userErrorMessage(err, 'Could not update the project. Try again.'))
     } finally {
       setBusy(false)
     }

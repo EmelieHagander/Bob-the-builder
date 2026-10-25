@@ -79,3 +79,11 @@ toggles, and falls back to the read-back state on failure. Re-read only the
 changed scope, not the whole page, so the list does not flash empty. Browser
 fixtures that serve Home must honour PostgREST `in.(…)` filters, or grouping
 checks pass vacuously.
+
+## 2026-10-25 — Failures and codes reach people only as written copy
+
+**Rule:** screens render `userErrorMessage(error, fallback)` and labels from
+`src/lib/labels.ts`; never `error.message`, `String(error)`, a code, UUID or
+recipe path. Depend on `hasErrorCode`, not message text. Browser checks share
+port 4173: an orphaned preview from another run silently serves the wrong
+build, so check `ss -ltnp` or isolate the run before trusting a pass.

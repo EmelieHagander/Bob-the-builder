@@ -2,13 +2,14 @@
  * Which rooms an Area covers. Only rooms of Buildings the Project targets as a
  * whole can be mapped; the guarded scope command enforces the same rule.
  */
-import { useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import type { PhysicalSpace } from '../data/buildingContext'
 import type { Area } from '../data/types'
 import { areaRoomTargets, scopeErrorMessage } from '../lib/physicalScope'
 import { Field, FormError, inputStyle } from './form'
+import { RoomMeasurements, RoomMeasurementsFailed, useRoomMeasurements } from './RoomMeasurements'
 import { Icon, List, ListItem, LoadFailed, Loading, Panel, useAsync } from './ui'
 
 export function AreaRooms({ projectId, area }: { projectId: string; area: Area }) {
@@ -23,6 +24,13 @@ export function AreaRooms({ projectId, area }: { projectId: string; area: Area }
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState('')
   const reload = () => setVersion(value => value + 1)
+  // Mapped rooms' measurements: one read for the panel, at each room's current revision.
+  const mappedRooms = useMemo(() => {
+    if (!data) return []
+    const ids = new Set(areaRoomTargets(data.areaTargets, area.id).map(target => target.spaceId))
+    return data.rooms.filter(room => ids.has(room.id))
+  }, [data, area.id])
+  const measurements = useRoomMeasurements(projectId, mappedRooms, connected ? db.buildingContext.measurements : null)
 
   async function run(action: () => Promise<unknown>, roomName: string) {
     setBusy(true); setActionError('')
@@ -70,18 +78,24 @@ export function AreaRooms({ projectId, area }: { projectId: string; area: Area }
   return frame(<>
     {mapped.length === 0
       ? <p className="foundation-hint">No rooms chosen for this Area yet.</p>
-      : <List>{mapped.map(target => {
-        const room = roomsById.get(target.spaceId ?? '')
-        const name = room ? `${label(room)}${room.archived ? ' (archived)' : ''}` : 'Room no longer available'
-        return <ListItem key={target.id} className="area-room-row">
-          <span>{name}</span>
-          {!archived && <button type="button" className="btn btn-remove" disabled={!idle}
-            aria-label={`Remove ${room?.name ?? 'room'} from this Area`}
-            onClick={() => void run(() => db.buildingContext.editScope(projectId, 'area', 'unlink', target.id, {}), room?.name ?? 'Room')}>
-            Remove
-          </button>}
-        </ListItem>
-      })}</List>}
+      : <>
+        {measurements.load.status === 'failed' && mappedRooms.length > 0 && <RoomMeasurementsFailed onRetry={measurements.retry} />}
+        <List>{mapped.map(target => {
+          const room = roomsById.get(target.spaceId ?? '')
+          const name = room ? `${label(room)}${room.archived ? ' (archived)' : ''}` : 'Room no longer available'
+          return <ListItem key={target.id}>
+            <div className="area-room-row">
+              <span>{name}</span>
+              {!archived && <button type="button" className="btn btn-remove" disabled={!idle}
+                aria-label={`Remove ${room?.name ?? 'room'} from this Area`}
+                onClick={() => void run(() => db.buildingContext.editScope(projectId, 'area', 'unlink', target.id, {}), room?.name ?? 'Room')}>
+                Remove
+              </button>}
+            </div>
+            {room && <RoomMeasurements room={room} roomName={room.name} load={measurements.load} />}
+          </ListItem>
+        })}</List>
+      </>}
     {archived
       ? <p className="foundation-hint">Restore the Area to change its rooms.</p>
       : current.length === 0

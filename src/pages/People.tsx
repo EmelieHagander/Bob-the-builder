@@ -7,6 +7,7 @@ import { PersonModal } from '../components/editors'
 import { ProjectSharingCard } from '../components/SharingCards'
 import { FormError } from '../components/form'
 import type { Person, SkillLevel } from '../data/types'
+import { userErrorMessage } from '../lib/userErrors'
 
 const dietWarn = /allerg|gluten|vegan|dairy/i
 
@@ -56,7 +57,7 @@ export function People() {
         />
       </div>
 
-      {error ? <div role="alert" style={{ marginTop: 'var(--section-gap)' }}><FormError>{error.message}</FormError><button className="btn" onClick={() => setVersion(value => value + 1)}>Try again</button></div> : loading || !people ? (
+      {error ? <div role="alert" style={{ marginTop: 'var(--section-gap)' }}><FormError>{userErrorMessage(error, 'Could not load the crew.')}</FormError><button className="btn" onClick={() => setVersion(value => value + 1)}>Try again</button></div> : loading || !people ? (
         <Loading />
       ) : (
         <List aria-label="Project crew">

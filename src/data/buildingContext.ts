@@ -1,5 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { wholeBuildingLinks } from '../lib/physicalScope'
+import {
+  chunks, currentRoomMeasurements, measuredRooms, roomRevisionFilter,
+  type MeasuredRoom, type RoomMeasurementMap,
+} from '../lib/roomMeasurements'
+
+/** Rooms per measurement read keeps the exact-revision filter a short URL. */
+const MEASUREMENT_ROOMS_PER_READ = 40
+/** Below PostgREST's default row cap, so a full page always means "read on". */
+const MEASUREMENT_PAGE = 500
 
 export type PhysicalTruth = 'measured' | 'provided_spec' | 'estimated' | 'ai_assessment' | 'unknown'
 export type PhysicalTargetKind = 'site' | 'building' | 'space' | 'element'
@@ -98,7 +107,7 @@ export interface SpaceMeasurementSnapshot {
   spaceId: string
   buildingId: string
   spaceRevision: number
-  sourceProjectId: string
+  sourceProjectId: string | null
   measurementId: string
   measurementRevision: number
   subject: string
@@ -277,17 +286,30 @@ export function createBuildingContext(
         relationships: scoped(checked(relations) as Row[], projectId).map(relationshipProposal),
       }
     },
-    async measurements(projectId: string, spaceId: string, revision: number): Promise<SpaceMeasurementSnapshot[]> {
+    /**
+     * Measurement snapshots of exactly the room revisions given (the accepted
+     * revisions a screen shows), keyed by `measurementKey`. One read covers a
+     * page of rooms; every page of rows is followed so none is silently dropped.
+     */
+    async measurements(projectId: string, rooms: MeasuredRoom[]): Promise<RoomMeasurementMap> {
       const { db, guard } = connection(projectId)
-      const rows = checked(await db.from('space_measurement_details').select('*')
-        .eq('space_id', spaceId).eq('space_revision', revision).order('subject')) as Row[]
-      guard()
-      return rows.map(row => ({
+      const rows: Row[] = []
+      for (const batch of chunks(measuredRooms(rooms), MEASUREMENT_ROOMS_PER_READ)) {
+        for (let from = 0; ; from += MEASUREMENT_PAGE) {
+          const page = checked(await db.from('space_measurement_details').select('*').or(roomRevisionFilter(batch))
+            .order('space_id').order('subject').order('id').range(from, from + MEASUREMENT_PAGE - 1)) as Row[]
+          guard()
+          rows.push(...page)
+          if (page.length < MEASUREMENT_PAGE) break
+        }
+      }
+      return currentRoomMeasurements(rooms, rows.map(row => ({
         id: row.id, spaceId: row.space_id, buildingId: row.building_id, spaceRevision: row.space_revision,
-        sourceProjectId: row.source_project_id, measurementId: row.measurement_id,
+        sourceProjectId: row.source_project_id ?? null, measurementId: row.measurement_id,
         measurementRevision: row.measurement_revision, subject: row.subject,
-        value: row.value === null ? null : String(row.value), unit: row.unit, truth: row.truth, source: row.source,
-      }))
+        value: row.value === null || row.value === undefined ? null : String(row.value), unit: row.unit ?? '',
+        truth: row.truth, source: row.source ?? '',
+      })))
     },
     async history(projectId: string, kind: Exclude<PhysicalNodeKind, 'level'>, id: string): Promise<PhysicalHistoryVersion[]> {
       const { db, guard } = connection(projectId)

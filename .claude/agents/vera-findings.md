@@ -4,6 +4,17 @@
 
 Historical findings: [V01 — superseded placeholder-only media finding](archive/vera-findings-2026-10-18.md). Current media behavior is owned by `Docs/media-and-steps.md`.
 
+## FINDING-V13 — Backend sentences still stand in for error codes
+
+**Status:** open (2026-10-25). Screens no longer show raw text, codes or IDs
+(`src/lib/userErrors.ts`, `src/lib/labels.ts`). Remaining drift for later steps:
+many SQL guards raise English sentences; the frontend matches the important
+ones exactly as codes, otherwise shows the kind's copy. Replace them with
+stable codes. Deterministic material bases and CAD part names are stored free
+text/identifiers: blank bases with UUIDs show only a summary, and CAD part ids
+still label the parts table and drawings. `BuildingContextEditor`/`Surface`
+are excluded from the scan until their parallel change lands.
+
 ## FINDING-V02 — Current visual contract is implicit rather than fully documented
 
 **Status:** sufficiently addressed for Slice 1; broader blueprint deferred

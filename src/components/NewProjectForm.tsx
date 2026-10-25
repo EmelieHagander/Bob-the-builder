@@ -4,6 +4,7 @@ import type { Project } from '../data/types'
 import { scopeErrorMessage } from '../lib/physicalScope'
 import { Field, FormError, inputStyle } from './form'
 import { useAsync } from './ui'
+import { userErrorMessage } from '../lib/userErrors'
 
 const NEW_BUILDING = '__new__'
 type Step = 'project' | 'building' | 'link'
@@ -66,9 +67,9 @@ export function NewProjectForm({ onCreated, onCancel, onProjectSaved }: {
       }
       onCreated(project)
     } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err)
+      const reason = userErrorMessage(err, step === 'project' ? 'Could not create the project. Try again.' : 'Try again.')
       setError(step === 'project' ? reason
-        : step === 'building' ? `The building could not be saved: ${reason}`
+        : step === 'building' ? `The building could not be saved. ${reason}`
           : `${chosenName} could not be linked: ${scopeErrorMessage(err, 'building')}`)
       setBusy(null)
     }

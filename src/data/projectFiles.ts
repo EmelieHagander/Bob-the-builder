@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MediaAsset, MediaPage, MediaPurpose, MediaTarget, TaskDetail, TaskStep, TaskStatus, SkillLevel } from './types'
 import { createImagePreviewCache, imagePreview } from '../lib/imagePreview'
 import { createSharedRead } from '../lib/sharedRead'
+import { DataError, UserError, toDataError } from '../lib/userErrors'
 
 export const IMAGE_LIMIT = 6 * 1024 * 1024
 export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -13,8 +14,8 @@ type AssertCurrent = () => void
 type Row = Record<string, any> // PostgREST's ungenerated schema boundary; mapped before reaching UI.
 
 function value<T>(result: { data: T | null; error: { message: string } | null }): T {
-  if (result.error) throw new Error(result.error.message)
-  if (result.data === null) throw new Error('The record is unavailable. Your access may have changed.')
+  if (result.error) throw toDataError(result.error)
+  if (result.data === null) throw new UserError('The record is unavailable. Your access may have changed.')
   return result.data
 }
 function mapImage(row: Row): MediaAsset {
@@ -42,7 +43,7 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
   function connection(projectId: string) {
     const assertCurrent = capture(projectId)
     assertCurrent()
-    if (!client) throw new Error(DEMO_MESSAGE)
+    if (!client) throw new UserError(DEMO_MESSAGE)
     return { db: client, assertCurrent }
   }
   async function command(projectId: string, action: string, mediaId: string, data: Row = {}) {
@@ -58,13 +59,13 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
   async function getMedia(projectId: string, target: MediaTarget, offset = 0): Promise<MediaPage> {
     if (!client) return { items: [], hasMore: false }
     const { db, assertCurrent } = connection(projectId)
-    if (target.kind === 'project' && target.id !== projectId) throw new Error('Project changed.')
+    if (target.kind === 'project' && target.id !== projectId) throw new UserError('Project changed.')
     const relation = target.kind === 'project' ? '' : ',target:media_links!inner(area_id,task_id,step_id,plan_step_id)'
     let query = db.from('media_assets').select('*,media_links(id,area_id,task_id,step_id,plan_step_id)' + relation).eq('project_id', projectId)
     if (target.kind !== 'project') query = query.eq('target.' + target.kind + '_id', target.id)
     const rows = value(await query.order('created_at', { ascending: false }).order('id').range(offset, offset + 12)) as unknown as Row[]
     assertCurrent()
-    if (rows.some(row => row.project_id !== projectId)) throw new Error('Image project mismatch.')
+    if (rows.some(row => row.project_id !== projectId)) throw new DataError('project_mismatch', 'Image project mismatch.')
     return { items: rows.slice(0, 12).map(mapImage), hasMore: rows.length > 12 }
   }
   async function getImage(projectId: string, mediaId: string) {
@@ -72,7 +73,7 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
     const row = await imageReads.run(`${projectId}/${mediaId}`, async () => value(await db.from('media_assets').select('*,media_links(id,area_id,task_id,step_id,plan_step_id)')
       .eq('project_id', projectId).eq('id', mediaId).single()) as Row)
     assertCurrent()
-    if (row.project_id !== projectId) throw new Error('Image project mismatch.')
+    if (row.project_id !== projectId) throw new DataError('project_mismatch', 'Image project mismatch.')
     return mapImage(row)
   }
   return {
@@ -87,26 +88,26 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
     async pinThumbnail(projectId: string, mediaId: string | null): Promise<void> {
       const { db, assertCurrent } = connection(projectId)
       const result = await db.rpc('pin_project_thumbnail', { p_project: projectId, p_media: mediaId })
-      if (result.error) throw new Error(result.error.message)
+      if (result.error) throw toDataError(result.error)
       assertCurrent()
       changed()
     },
     async uploadImage(projectId: string, target: MediaTarget, file: File, purpose: MediaPurpose, title: string, uploadId?: string): Promise<string> {
       const { db, assertCurrent } = connection(projectId)
-      if (!IMAGE_TYPES.includes(file.type)) throw new Error('Choose a JPEG, PNG or WebP image. Export HEIC images as JPEG first.')
-      if (!file.size || file.size > IMAGE_LIMIT) throw new Error('Choose an image smaller than 6 MiB.')
-      if (!title.trim() || title.trim().length > 200) throw new Error('Give the image a title of up to 200 characters.')
+      if (!IMAGE_TYPES.includes(file.type)) throw new UserError('Choose a JPEG, PNG or WebP image. Export HEIC images as JPEG first.')
+      if (!file.size || file.size > IMAGE_LIMIT) throw new UserError('Choose an image smaller than 6 MiB.')
+      if (!title.trim() || title.trim().length > 200) throw new UserError('Give the image a title of up to 200 characters.')
       let bitmap: ImageBitmap
-      try { bitmap = await createImageBitmap(file) } catch { throw new Error('This file could not be opened as an image. Choose another file.') }
+      try { bitmap = await createImageBitmap(file) } catch { throw new UserError('This file could not be opened as an image. Choose another file.') }
       const { width, height } = bitmap
       bitmap.close()
-      if (!width || !height || width > 20000 || height > 20000 || width * height > 48000000) throw new Error('Choose an image up to 48 megapixels.')
+      if (!width || !height || width > 20000 || height > 20000 || width * height > 48000000) throw new UserError('Choose an image up to 48 megapixels.')
       assertCurrent()
       const id = uploadId ?? crypto.randomUUID()
       // Chat keeps one identity per chosen file, including an interrupted upload.
       const existing = uploadId ? value(await db.from('media_assets').select('*').eq('project_id', projectId).eq('id', id).limit(1)) as Row[] : []
       assertCurrent()
-      if (existing[0] && (existing[0].state === 'deleting' || existing[0].content_type !== file.type || existing[0].byte_size !== file.size || existing[0].width !== width || existing[0].height !== height)) throw new Error('This upload changed. Remove the attachment and choose the file again.')
+      if (existing[0] && (existing[0].state === 'deleting' || existing[0].content_type !== file.type || existing[0].byte_size !== file.size || existing[0].width !== width || existing[0].height !== height)) throw new UserError('This upload changed. Remove the attachment and choose the file again.')
       if (existing[0]?.state === 'ready') return id
       const row = existing[0] ?? await command(projectId, 'reserve', id, {
         original_name: file.name.slice(0, 255), title: title.trim(), purpose, content_type: file.type,
@@ -119,7 +120,7 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
         // A lost success response or an immutable-path conflict can still mean
         // the original bytes arrived. Finalisation verifies stored MIME/size.
         try { await command(projectId, 'finalize', id); return id }
-        catch { throw new Error(uploadId
+        catch { throw new UserError(uploadId
           ? 'Upload interrupted. Retry this attachment to continue the same upload. It is also saved in project Images.'
           : 'Upload interrupted. The pending image is saved below; check it or remove it and choose the file again.') }
       }
@@ -129,7 +130,7 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
     async downloadImage(projectId: string, mediaId: string, options: { preview?: boolean } = {}): Promise<Blob> {
       const { db, assertCurrent } = connection(projectId)
       const image = await getImage(projectId, mediaId)
-      if (image.state !== 'ready') throw new Error('This image is not ready to open.')
+      if (image.state !== 'ready') throw new UserError('This image is not ready to open.')
       // A cache hit is never authority: getImage above must succeed under the
       // current JWT/RLS even when bytes are already in memory. Originals always
       // perform a fresh Storage read. No private bytes enter persistent storage.
@@ -150,7 +151,7 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
       const row = await command(projectId, 'begin_delete', mediaId)
       const removed = await db.storage.from(row.bucket_id).remove([row.object_path])
       assertCurrent()
-      if (removed.error) throw new Error('Image removal was interrupted. Retry removing it to finish.')
+      if (removed.error) throw new UserError('Image removal was interrupted. Retry removing it to finish.')
       await command(projectId, 'finish_delete', mediaId)
     },
     attachImage: (projectId: string, mediaId: string, target: MediaTarget) =>

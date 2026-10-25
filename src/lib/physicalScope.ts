@@ -3,6 +3,7 @@
  * owns authority; these helpers only decide what the UI can honestly show.
  */
 import type { AreaPhysicalTarget, PhysicalBuilding, ProjectPhysicalScope } from '../data/buildingContext'
+import { userErrorMessage } from './userErrors'
 
 /** Rows that make the Project target this whole Building: its own link, or its Site's. */
 export function wholeBuildingLinks(scopes: ProjectPhysicalScope[], building: Pick<PhysicalBuilding, 'id' | 'siteId'>): ProjectPhysicalScope[] {
@@ -40,7 +41,7 @@ export function unlinkSummary(name: string, result: UnlinkResult): string {
   return `${name} is no longer used by this project.${removed.length ? ` Removed ${removed.join(' and ')}.` : ''}`
 }
 
-/** Plain copy for the guarded scope command's error codes. */
+/** Plain copy for the guarded scope command's error codes; never raw text. */
 export function scopeErrorMessage(error: unknown, action: 'building' | 'room'): string {
   const text = error instanceof Error ? error.message : String(error)
   if (/\bbuilding_not_linked\b/.test(text)) return 'Link the whole building to this project first.'
@@ -50,5 +51,5 @@ export function scopeErrorMessage(error: unknown, action: 'building' | 'room'): 
     : 'This room is no longer part of that building. Reload and try again.'
   if (/\bsite_denied\b/.test(text)) return 'You can’t use that site in this project.'
   if (/\bproject_denied\b/.test(text)) return 'You no longer have access to this project.'
-  return text
+  return userErrorMessage(error)
 }

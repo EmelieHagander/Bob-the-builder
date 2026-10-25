@@ -2,6 +2,7 @@ import { useState } from 'react'
 import * as db from '../data/database'
 import type { Area } from '../data/types'
 import { FormError } from './form'
+import { userErrorMessage } from '../lib/userErrors'
 
 export function AreaArchiveNotice({ area, onChanged }: { area: Area; onChanged: () => void }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
@@ -9,7 +10,7 @@ export function AreaArchiveNotice({ area, onChanged }: { area: Area; onChanged: 
   async function restore() {
     setBusy(true); setError('')
     try { await db.setAreaArchived(area, false); onChanged() }
-    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)) }
+    catch (reason) { setError(userErrorMessage(reason, 'Could not restore this Area. Try again.')) }
     finally { setBusy(false) }
   }
   return <section className="solution-attention" aria-label="Archived Area">

@@ -10,10 +10,11 @@ import { PhasePill } from '../components/PhaseUI'
 import { Loading, useAsync } from '../components/ui'
 import { ProjectImages, StoredImage } from '../components/ProjectImages'
 import { formatDateTime } from '../lib/format'
+import { userErrorMessage } from '../lib/userErrors'
 
-const message = (e: unknown) => e instanceof Error ? e.message : String(e)
+const message = (e: unknown) => userErrorMessage(e, 'Could not save the solution. Try again.')
 function Retry({ error, retry }: { error: Error; retry: () => void }) {
-  return <div role="alert"><FormError>{error.message}</FormError><button className="btn" onClick={retry}>Reload solutions</button></div>
+  return <div role="alert"><FormError>{userErrorMessage(error, 'Could not load solutions.')}</FormError><button className="btn" onClick={retry}>Reload solutions</button></div>
 }
 function Evidence({ items }: { items: SolutionMeasurement[] }) {
   return <div className="fact-details"><h4>Measurements used by this version</h4>

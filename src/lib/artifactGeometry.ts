@@ -1,4 +1,5 @@
 import type { MeasurementTruth } from '../data/projectFacts'
+import { UserError } from './userErrors'
 
 export const STUD_WALL_ROLES = [
   'wall_width',
@@ -59,7 +60,7 @@ export function lengthToThousandthsOfMm(value: string, unit: string): number {
   const [whole, fraction = ''] = text.split('.')
   const thousandthsOfUnit = Number(whole) * 1000 + Number((fraction + '000').slice(0, 3))
   const result = thousandthsOfUnit * unitFactorToMm(unit)
-  if (!Number.isSafeInteger(result)) throw new Error('Length is too large to render safely.')
+  if (!Number.isSafeInteger(result)) throw new UserError('Length is too large to render safely.')
   return result
 }
 
@@ -69,14 +70,14 @@ export function lengthToMm(value: string, unit: string): number {
 
 function required(input: GeometryMeasurement, role: StudWallRole): number {
   if (input.truth === 'unknown' || input.value === null) {
-    throw new Error(`${role.replace(/_/g, ' ')} is unknown. Measure or estimate it explicitly before generating geometry.`)
+    throw new UserError(`${role.replace(/_/g, ' ')} is unknown. Measure or estimate it explicitly before generating geometry.`)
   }
   return lengthToThousandthsOfMm(input.value, input.unit)
 }
 
 export function generateStudWallGeometry(inputs: StudWallInputs, studSpacingMm: number): StudWallGeometry {
   if (!Number.isInteger(studSpacingMm) || studSpacingMm < 200 || studSpacingMm > 1200) {
-    throw new Error('Stud spacing must be a whole number from 200 to 1200 mm.')
+    throw new UserError('Stud spacing must be a whole number from 200 to 1200 mm.')
   }
 
   const wallWidth = required(inputs.wall_width, 'wall_width')
@@ -86,13 +87,13 @@ export function generateStudWallGeometry(inputs: StudWallInputs, studSpacingMm: 
   const openingWidth = required(inputs.opening_width, 'opening_width')
   const openingHeight = required(inputs.opening_height, 'opening_height')
 
-  if (wallWidth <= 0 || wallHeight <= 0) throw new Error('Wall width and height must be greater than zero.')
-  if (openingWidth <= 0 || openingHeight <= 0) throw new Error('Opening width and height must be greater than zero.')
+  if (wallWidth <= 0 || wallHeight <= 0) throw new UserError('Wall width and height must be greater than zero.')
+  if (openingWidth <= 0 || openingHeight <= 0) throw new UserError('Opening width and height must be greater than zero.')
 
   const openingRight = openingLeft + openingWidth
   const openingTop = openingBottom + openingHeight
   if (openingLeft < 0 || openingBottom < 0 || openingRight > wallWidth || openingTop > wallHeight) {
-    throw new Error('The opening must fit completely inside the wall dimensions.')
+    throw new UserError('The opening must fit completely inside the wall dimensions.')
   }
 
   const spacing = studSpacingMm * 1000

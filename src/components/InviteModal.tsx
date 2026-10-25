@@ -11,6 +11,7 @@ import { Modal } from './Modal'
 import { Field, FormError, inputStyle } from './form'
 import { FriendInviteForm } from './SharingCards'
 import { VolunteerLinks } from './VolunteerLinks'
+import { userErrorMessage } from '../lib/userErrors'
 
 export function InviteModal({
   projects,
@@ -53,7 +54,7 @@ export function InviteModal({
       setEmail('')
       onInvited?.()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(userErrorMessage(err, 'Could not send the invitation. Try again.'))
     } finally {
       setBusy(false)
     }

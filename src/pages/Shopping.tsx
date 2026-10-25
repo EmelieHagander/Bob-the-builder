@@ -5,6 +5,7 @@ import * as db from '../data/database'
 import { ChecklistRow, EmptyState, Icon, LoadFailed, Loading, MaterialPill, useAsync } from '../components/ui'
 import { MaterialModal } from '../components/editors'
 import type { Material } from '../data/types'
+import { categoryLabel } from '../lib/labels'
 
 /** Parse "1 920 kr" → 1920 for a rough running total. */
 function parseCost(cost: string): number {
@@ -43,6 +44,14 @@ export function Shopping() {
     })
   }
 
+  // Categories may be people's own words or saved codes; group under one human label.
+  const shownGroups = (groups ?? []).reduce<{ label: string; icon: string; items: Material[] }[]>((list, group) => {
+    const label = categoryLabel(group.category)
+    const existing = list.find(item => item.label === label)
+    if (existing) existing.items.push(...group.items)
+    else list.push({ label, icon: group.icon, items: [...group.items] })
+    return list
+  }, [])
   const total = materials?.length ?? 0
   const picked = Object.values(bought).filter(Boolean).length
   const estTotal = (materials ?? []).reduce((sum, m) => sum + parseCost(m.cost), 0)
@@ -127,11 +136,11 @@ export function Shopping() {
         </div>
       ) : (
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))', marginTop: 'var(--section-gap)', alignItems: 'start' }}>
-          {groups.map((g) => (
-            <div key={g.category} className="card" style={{ padding: 'var(--panel-padding)' }}>
+          {shownGroups.map((g) => (
+            <div key={g.label} className="card" style={{ padding: 'var(--panel-padding)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', marginBottom: 8 }}>
                 <Icon name={g.icon} weight="fill" size={18} color="var(--accent-2)" />
-                <span style={{ fontSize: 14.5, fontWeight: 700 }}>{g.category}</span>
+                <span style={{ fontSize: 14.5, fontWeight: 700 }}>{g.label}</span>
                 <span style={{ fontSize: 12, color: 'var(--ink-faint)', marginLeft: 'auto' }}>{g.items.length} items</span>
               </div>
               {g.items.map(row)}
