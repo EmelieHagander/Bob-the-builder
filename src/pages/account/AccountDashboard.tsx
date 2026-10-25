@@ -5,7 +5,7 @@
  * the app shows.
  */
 
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import * as db from '../../data/database'
 import type { AccountNote, Project } from '../../data/types'
@@ -42,6 +42,8 @@ export function AccountDashboard() {
   >(null)
 
   const reload = () => setVersion((v) => v + 1)
+  // A project saved before its building step failed must still appear after closing.
+  const savedProject = useRef(false)
   const openProject = (p: Project) => {
     db.setActiveProject(p.id)
     navigate('/project')
@@ -176,8 +178,14 @@ export function AccountDashboard() {
 
       {modal?.kind === 'new' && (
         <NewProjectModal
-          onClose={() => setModal(null)}
+          onClose={() => {
+            setModal(null)
+            if (savedProject.current) reload()
+            savedProject.current = false
+          }}
+          onSaved={() => { savedProject.current = true }}
           onCreated={(project) => {
+            savedProject.current = false
             setModal(null)
             openProject(project)
           }}
@@ -276,8 +284,8 @@ function NotesCard({ notes, onChanged }: { notes: AccountNote[] | null; onChange
 
 /* ─────────────────────────── New project ─────────────────────────── */
 
-function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: (project: Project) => void }) {
+function NewProjectModal({ onClose, onSaved, onCreated }: { onClose: () => void; onSaved: () => void; onCreated: (project: Project) => void }) {
   return <Modal title="New project" layer={100} onClose={onClose}>
-    <NewProjectForm onCreated={onCreated} onCancel={onClose} />
+    <NewProjectForm onCreated={onCreated} onCancel={onClose} onProjectSaved={onSaved} />
   </Modal>
 }

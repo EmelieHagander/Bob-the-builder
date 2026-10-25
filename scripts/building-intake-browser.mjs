@@ -24,7 +24,7 @@ export function createBuildingIntakeFixture(state, audit) {
       buildingId=randomUUID();kitchenId=randomUUID()
       const diningId=randomUUID(),bedroomId=randomUUID(),groundId=randomUUID(),upperId=randomUUID()
       state.buildings.push({...audit,id:buildingId,site_id:null,revision:1,name:'Teststuga',notes:'User-described layout; exact geometry is not established.'})
-      state.scopes.push({id:randomUUID(),project_id:'A',building_id:buildingId})
+      state.scopes.push({id:randomUUID(),project_id:'A',target_kind:'building',building_id:buildingId})
       for(const [id,name,position]of[[groundId,'Bottenvåning',0],[upperId,'Övervåning',1]])levels.push({...audit,id,building_id:buildingId,revision:1,name,position,notes:''})
       for(const [id,name,kind,level_id]of[[kitchenId,'Kök','kitchen_zone',groundId],[diningId,'Matplats','dining_zone',groundId],[bedroomId,'Sovrum','bedroom',upperId]])state.spaces.push({...audit,id,building_id:buildingId,revision:1,latest_revision:1,project_id:null,source_project_id:null,level_id,name,kind,truth:'provided_spec',source:'User description',notes:'Qualitative layout, not a measured footprint.',has_proposal:false})
       elements.push({...audit,id:randomUUID(),building_id:buildingId,revision:1,space_id:diningId,kind:'bench',name:'Avdelande bänk',description:'Divider, not a wall.',truth:'provided_spec',source:'User description',has_proposal:false})

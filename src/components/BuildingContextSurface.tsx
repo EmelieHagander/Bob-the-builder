@@ -6,10 +6,12 @@ import type {
   PhysicalRelationship,
   PhysicalSite,
   PhysicalSpace,
+  ProjectPhysicalScope,
   SpaceProposal,
   ElementProposal,
   RelationshipProposal,
 } from '../data/buildingContext'
+import { scopeErrorMessage, unlinkResult } from '../lib/physicalScope'
 import { BuildingContextEditor } from './BuildingContextEditor'
 import { BuildingSharingCard } from './SharingCards'
 import { inputStyle } from './form'
@@ -33,7 +35,8 @@ type BuildingContextGateway = {
   editSite(projectId: string, action: 'create', id: string, expected: number, data: Record<string, unknown>): Promise<unknown>
   editBuilding(projectId: string, action: 'create', id: string, expected: number, data: Record<string, unknown>): Promise<unknown>
   editNode(projectId: string, buildingId: string, kind: NodeKind, action: 'create', id: string, expected: number, data: Record<string, unknown>): Promise<unknown>
-  editScope(projectId: string, kind: 'project', action: 'link', id: string, data: Record<string, unknown>): Promise<unknown>
+  scopes(projectId: string): Promise<ProjectPhysicalScope[]>
+  editScope(projectId: string, kind: 'project', action: 'link' | 'unlink', id: string, data: Record<string, unknown>): Promise<unknown>
 }
 
 type Detail = {
@@ -55,6 +58,7 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
   const [sites, setSites] = useState<PhysicalSite[]>([])
   const [buildings, setBuildings] = useState<PhysicalBuilding[]>([])
   const [projectBuildings, setProjectBuildings] = useState<PhysicalBuilding[]>([])
+  const [scopes, setScopes] = useState<ProjectPhysicalScope[]>([])
   const [detail, setDetail] = useState<Detail>(emptyDetail)
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -66,6 +70,7 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
     setSites([])
     setBuildings([])
     setProjectBuildings([])
+    setScopes([])
     setDetail(emptyDetail)
     setRootError('')
     setDetailError('')
@@ -75,8 +80,13 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
     let alive = true
     setLoading(true)
     setRootError('')
-    Promise.all([context.sites(projectId), context.buildings(projectId), projectId ? context.projectBuildings(projectId) : Promise.resolve([])])
-      .then(([nextSites, nextBuildings, scoped]) => {
+    Promise.all([
+      context.sites(projectId),
+      context.buildings(projectId),
+      projectId ? context.projectBuildings(projectId) : Promise.resolve([]),
+      projectId ? context.scopes(projectId) : Promise.resolve([]),
+    ])
+      .then(([nextSites, nextBuildings, scoped, nextScopes]) => {
         if (!alive) return
         if (initialBuildingId && (!nextBuildings.some(b => b.id === initialBuildingId)
           || (projectId && !scoped.some(b => b.id === initialBuildingId)))) {
@@ -85,6 +95,7 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
         setSites(nextSites)
         setBuildings(nextBuildings)
         setProjectBuildings(scoped)
+        setScopes(nextScopes)
         setSelectedBuildingId(current => {
           if (current && nextBuildings.some(building => building.id === current)) return current
           if (initialBuildingId && nextBuildings.some(building => building.id === initialBuildingId) && (!projectId || scoped.some(building => building.id === initialBuildingId))) return initialBuildingId
@@ -96,6 +107,7 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
         setSites([])
         setBuildings([])
         setProjectBuildings([])
+        setScopes([])
         setSelectedBuildingId(null)
         setDetail(emptyDetail)
         setRootError(message(reason))
@@ -141,6 +153,16 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
   }
 
   const refresh = () => setVersion(value => value + 1)
+  // Room marks re-read only the scope, so the room list stays in place.
+  const reloadScopes = async () => {
+    try {
+      const [nextScopes, nextProjectBuildings] = await Promise.all([context.scopes(projectId), context.projectBuildings(projectId)])
+      setScopes(nextScopes)
+      setProjectBuildings(nextProjectBuildings)
+    } catch {
+      throw new Error('Saved, but the room list could not be refreshed. Reload to see the current rooms.')
+    }
+  }
   const selectedBuilding = buildings.find(building => building.id === selectedBuildingId)
   const spaceNames = new Map([...detail.spaces, ...detail.proposals.spaces].map(s => [s.id, s.name]))
   const detailDenied = detailError ? isDenied(detailError) : false
@@ -171,7 +193,9 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
       sites={sites}
       buildings={buildings}
       projectBuildingIds={projectBuildings.map(building => building.id)}
+      scopes={scopes}
       showProjectScope={Boolean(projectId)}
+      detailLoading={detailLoading}
       sharing={selectedBuilding && detail.canDirectEdit && <BuildingSharingCard key={selectedBuilding.id} buildingId={selectedBuilding.id} buildingName={selectedBuilding.name} />}
       selectedBuildingId={selectedBuildingId}
       levels={detail.levels}
@@ -189,7 +213,21 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
         if (!selectedBuildingId) throw new Error('Choose a building first.')
         await context.editNode(projectId, selectedBuildingId, kind, 'create', id, 0, data)
       }}
-      onLinkProject={async (id, data) => { await context.editScope(projectId, 'project', 'link', id, data) }}
+      onLinkProject={async (id, data) => {
+        try { await context.editScope(projectId, 'project', 'link', id, data) }
+        catch (reason) { throw new Error(scopeErrorMessage(reason, 'building')) }
+      }}
+      onToggleRoom={async (space, mark) => {
+        try {
+          if (mark) await context.editScope(projectId, 'project', 'unlink', mark.id, {})
+          else await context.editScope(projectId, 'project', 'link', crypto.randomUUID(), { target_kind: 'space', building_id: space.buildingId, space_id: space.id })
+        } catch (reason) { throw new Error(scopeErrorMessage(reason, 'room')) }
+        await reloadScopes()
+      }}
+      onUnlinkProject={async scope => {
+        try { return unlinkResult(await context.editScope(projectId, 'project', 'unlink', scope.id, {})) }
+        catch (reason) { throw new Error(scopeErrorMessage(reason, 'building')) }
+      }}
       onSaved={refresh}
     />}
     {!detailError && !detailLoading && projectId && (detail.proposals.spaces.length + detail.proposals.elements.length + detail.proposals.relationships.length > 0) &&
