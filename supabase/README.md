@@ -654,3 +654,23 @@ state, authority and historical accounting. No prompt, catalog or model changes
 are required. Deploy both matching closures after the migration and retain their
 existing authentication modes; [verification](../Docs/foundation-verification.md#atomic-drawing-continuation--2026-10-18)
 tracks actual installation separately from the code contract.
+
+### Bob building scope — source 2026-10-25
+
+**Source only; nothing is applied or deployed.** `ask-openai.ts` routes kind
+`bound_building_scope` to `bob_project_write_v21` and reads through
+`read_bob_building_scope_context`; every other kind keeps its RPC. The
+[write contract](../Docs/ask-bob-writes.md#fifth-implementation-building-and-room-scope--source-2026-10-25)
+owns behaviour. Each step needs the owner's explicit OK, in this order:
+
+1. Apply `20261025133000_project_room_scope.sql`.
+2. Apply `20261025150000_bob_building_scope.sql`.
+3. Deploy `ask-bob` and `bob-worker` from the same source, keeping their
+   existing authentication modes.
+4. Apply the generated `20261025150500_ai_building_scope_catalog.sql`
+   (`node --import tsx scripts/build-ai-building-scope-catalog.ts supabase/migrations/20261025150500_ai_building_scope_catalog.sql --check`
+   confirms it matches the executable tools).
+
+Rollback: reactivate the previous catalog for new jobs first. A runtime from
+before this change cannot restore a turn checkpoint that used these tools, so
+let such jobs finish before rolling either runtime back.

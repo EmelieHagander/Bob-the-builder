@@ -1335,3 +1335,37 @@ production (2026-10-25), are kept. `tests/project-room-scope-sql.test.ts` covers
 the rules; two older tests now insert their room-only fixture rows directly.
 Rollout: apply; the app keeps working with the old and new rules. Rollback:
 restore the previous function body from `20260913213712_household_project_sharing.sql`.
+
+### Bob building scope — 2026-10-25
+
+**Not applied yet.** Owner decisions: [building model](../Docs/building-model.md#bob-building-scope--owner-decisions-2026-10-25);
+tool contract: [Ask bob writes](../Docs/ask-bob-writes.md#fifth-implementation-building-and-room-scope--source-2026-10-25).
+`20261025150000_bob_building_scope.sql` stops unless the room-scope helper
+`project_targets_whole_building` exists, then adds:
+
+- `bob.read_bob_building_scope_snapshot(project, resource, id)` and
+  `bob.read_bob_building_scope_context(project, resource, building, query, after)`:
+  security invoker, executable by `authenticated` only, project access required.
+  Buildings are offered only when the caller can edit them or this project
+  targets them (Building, Site or room row), never archived. Pages hold 6
+  Buildings, 16 rooms of one offered Building or 8 Areas, plus one row that only
+  signals a next page. A snapshot does not depend on row security, so the
+  writer compares pins with the same function.
+- `bob_private.bob_project_write_v21` and the public `bob.bob_project_write_v21`
+  (serialization failure or deadlock becomes `PT409`; ACL as v20). Kind
+  `bound_building_scope` only; other kinds delegate to v20. Claim, project
+  access, quote, strict `{pins, command}` payload, the physical-scope advisory
+  lock plus `for key share` on the project row, exact replay before freshness,
+  the per-turn receipt quota, pins equal to fresh snapshots (`PT409`), and
+  server-resolved link rows. Each target calls the unchanged
+  `physical_scope_command`. A whole-Building unlink is refused with
+  `building_site_covered` or `building_household_follow` (`22023`); an unlink
+  with no whole-Building row raises `building_not_linked`. One receipt per call:
+  dataset `building_context`, the Building as `recordId`, `operation: updated`,
+  pins as before-record.
+
+No table, existing grant, RLS or data change. `tests/project-building-scope.test.ts`
+runs the migrated schema with editors, plain members, another project and an
+outsider. Rollout: room-scope migration, this migration, both runtimes, then the
+catalog publication ([order](../supabase/README.md#bob-building-scope--source-2026-10-25)).
+Rollback: reactivate the previous catalog; these functions can stay.
