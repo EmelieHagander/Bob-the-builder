@@ -95,7 +95,7 @@ test('a room mark and an Area room need the whole-building link, then any projec
   await reject(scope('A','area','link',u(16),{ area_id:'areaB', ...room },one),/project_denied/)
   await building('create',u(20),0,{ name:'Shed', notes:'' })
   await node(u(20),'space','create',u(21),0,{ name:'Shed room', kind:'storage', truth:'unknown', measurements:[] })
-  await reject(scope('A','project','link',u(17),{ target_kind:'space', building_id:u(2), space_id:u(21) },one),/building_denied/)
+  await reject(scope('A','project','link',u(17),{ target_kind:'space', building_id:u(2), space_id:u(21) },one),/space_not_in_building/)
   await reject(scope('A','project','link',u(17),{ target_kind:'space', building_id:u(20), space_id:u(21) },one),/building_not_linked/)
   await reject(scope('A','project','link',u(18),room,two),/project_denied/)
   await reject(scope('A','project','link',u(18),room,outsider),/project_denied/)

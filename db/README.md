@@ -1324,7 +1324,7 @@ adds the private helper `project_targets_whole_building(project, building)`
 - Building link: unchanged, requires `can_edit_building`.
 - Room/element mark and Area target: project access plus the whole-building
   link; `building_not_linked` (`22023`) otherwise. The Space/Element must belong
-  to that Building (`building_denied`), the Area to the project (`project_denied`).
+  to that Building (`space_not_in_building` / `element_not_in_building`), the Area to the project (`project_denied`).
 - Unlink of a Building/Site link deletes this project's Space/Element scope rows
   and Area targets for Buildings no longer covered, in the same transaction.
 - Links are idempotent (existing row returned). A per-project advisory lock

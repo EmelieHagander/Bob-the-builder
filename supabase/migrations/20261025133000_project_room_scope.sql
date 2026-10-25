@@ -75,8 +75,8 @@ begin
   elsif target in ('building','space','element') then
     -- Inside a Building this project already targets as a whole.
     if bid is null or not bob_private.project_targets_whole_building(p_project,bid) then raise exception 'building_not_linked' using errcode='22023'; end if;
-    if target='space' and not exists(select 1 from bob.building_spaces where id=spid and building_id=bid) then raise exception 'building_denied' using errcode='42501'; end if;
-    if target='element' and not exists(select 1 from bob.building_elements where id=eid and building_id=bid) then raise exception 'building_denied' using errcode='42501'; end if;
+    if target='space' and not exists(select 1 from bob.building_spaces where id=spid and building_id=bid) then raise exception 'space_not_in_building' using errcode='22023'; end if;
+    if target='element' and not exists(select 1 from bob.building_elements where id=eid and building_id=bid) then raise exception 'element_not_in_building' using errcode='22023'; end if;
   else raise exception 'Invalid physical scope command';
   end if;
   if p_kind='project' then

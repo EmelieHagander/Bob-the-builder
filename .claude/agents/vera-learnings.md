@@ -70,3 +70,12 @@ transcript scrolls. Use actual progress timestamps rather than poll times, and
 show connection loss without implying new activity. Bound the whole initial
 read, including member lookup; per-query timeouts alone cannot cover a stalled
 dependency. Fence late results after the deadline and preserve the unsent draft.
+
+## 2026-10-25 — Server-confirmed toggles still answer the tap
+
+**Rule:** a checkbox whose truth is a guarded server row shows the intended
+state beside **Saving…** while the write and read-back run, serialises further
+toggles, and falls back to the read-back state on failure. Re-read only the
+changed scope, not the whole page, so the list does not flash empty. Browser
+fixtures that serve Home must honour PostgREST `in.(…)` filters, or grouping
+checks pass vacuously.

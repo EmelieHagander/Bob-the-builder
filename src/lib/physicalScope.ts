@@ -44,6 +44,7 @@ export function unlinkSummary(name: string, result: UnlinkResult): string {
 export function scopeErrorMessage(error: unknown, action: 'building' | 'room'): string {
   const text = error instanceof Error ? error.message : String(error)
   if (/\bbuilding_not_linked\b/.test(text)) return 'Link the whole building to this project first.'
+  if (/\b(space|element)_not_in_building\b/.test(text)) return 'This room is no longer part of that building. Reload and try again.'
   if (/\bbuilding_denied\b/.test(text)) return action === 'building'
     ? 'Only someone who can edit this building can link it to a project.'
     : 'This room is no longer part of that building. Reload and try again.'

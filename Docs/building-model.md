@@ -576,6 +576,14 @@ marks **which rooms** (Spaces) it covers. An Area maps to rooms of that Building
 - Older room-only rows remain valid data. Bob intake, multi-floor plans and
   stair studies still require the whole-building link.
 
+App (same release): the project's Building & spaces page shows **Use in this
+project** only to Building editors, then a per-room **In this project** toggle,
+a "Rooms in this project" summary and **Unlink from this project** with the
+removal counts. The Area page has a **Rooms** panel. Project creation offers an
+optional building (an editable one or a new one), linked right after creation.
+This covers items 2 and 6 of §11.7; proposal acceptance and measurement linking
+remain open. A Bob tool for the same links is a separate follow-up.
+
 Database details: [db/README](../db/README.md#project-rooms-and-area-rooms--2026-10-25).
 
 ## 11.7 First UI surface

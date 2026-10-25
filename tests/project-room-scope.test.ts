@@ -36,6 +36,7 @@ test('Area room mappings are filtered by Area and target kind', () => {
 test('scope errors and unlink results use plain, honest copy', () => {
   assert.equal(scopeErrorMessage(new Error('building_denied'), 'building'), 'Only someone who can edit this building can link it to a project.')
   assert.match(scopeErrorMessage(new Error('building_denied'), 'room'), /no longer part of that building/)
+  assert.match(scopeErrorMessage(new Error('space_not_in_building'), 'room'), /no longer part of that building/)
   assert.equal(scopeErrorMessage(new Error('building_not_linked'), 'room'), 'Link the whole building to this project first.')
   assert.equal(scopeErrorMessage(new Error('project_denied'), 'room'), 'You no longer have access to this project.')
   assert.equal(scopeErrorMessage(new Error('Network down'), 'room'), 'Network down')
