@@ -12,6 +12,7 @@ import type { ContextSurface } from '../supabase/functions/_shared/bob-context-c
 import { catalogFixture, preContextStrategyCatalogFixture, preSelectiveToolsCatalogFixture, catalogCall } from './support/ai-catalog-fixture.ts'
 import { createProjectContext } from './support/colleague-catalog-fixture.ts'
 import { createMediaAdapter } from '../supabase/functions/_shared/project-context/media.ts'
+import { buildingLinkFact, createBuildingScope } from '../supabase/functions/_shared/project-building-scope.ts'
 
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
 const response = (data = 'Jag fortsätter från det sparade underlaget.'): OpenAIServiceResponse<string> => ({ success: true, data, responseId: 'final', model: 'fixture', usage })
@@ -81,6 +82,31 @@ test('pinned core reading tools are callable from the first step; unpinned turns
       for (const name of core) assert(!offered[0].includes(name), name + ' stays a card without the pin')
       assert.equal(offered.length, 3, 'describe, read, answer')
     }
+  }
+})
+
+test('a project without a whole building link starts with the building tools and states its links as data', async () => {
+  const fact = buildingLinkFact([
+    { record: { name: 'Boningshus', link: 'none', can_edit: true } },
+    { record: { name: 'Granngård', link: 'none', can_edit: false } },
+  ])
+  assert.deepEqual(fact, { linked: [], linkable: ['Boningshus'], whole: false })
+  assert.equal(buildingLinkFact({}), null)
+  assert.deepEqual(buildingLinkFact([{ record: { name: 'Boningshus', link: 'site', can_edit: false } }]), { linked: [{ name: 'Boningshus', link: 'site' }], linkable: [], whole: true })
+  for (const links of [fact!, { linked: [{ name: 'Boningshus', link: 'whole' }], linkable: [], whole: true }]) {
+    const f = fixture(), session = catalogFixture()
+    const buildingScope = createBuildingScope({ projectId: 'A', hasAccess: async () => true, read: async () => ({ data: [], error: null }) })
+    const offered: string[][] = [], footers: string[] = []
+    const result = await runProjectAnswer({ ...f.opts, aiCatalog: session, corePreload: true, buildingLinks: links, buildingScope,
+      callModel: catalogCall(async options => {
+        offered.push(names(options))
+        footers.push(String((options.messages ?? []).at(-1)?.content ?? ''))
+        return response()
+      }, session) })
+    assert(result.ok)
+    assert.equal(offered[0].includes('read_building_scope'), !links.whole, 'loaded only when no whole building is linked')
+    assert(offered[0].includes('search_project_data'))
+    assert(footers[0].includes(JSON.stringify({ linked: links.linked, owner_can_link: links.linkable })), 'links are data in the first note')
   }
 })
 

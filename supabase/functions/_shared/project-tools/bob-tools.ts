@@ -51,6 +51,9 @@ const shelfOf = (name: string) => TOOLBOX_SHELVES.find(s => s.tools.includes(nam
  * 38 of 57 turns began with a manual-only step; these three were the most
  * loaded). Offering is not authority: policy and gates still apply. */
 export const CORE_READ_PRELOAD = ['search_project_data', 'list_project_category', 'open_project_item']
+/** Loaded from the first step when the project links no whole building
+ * (2026-10-25: Bob answered from project data alone and missed the house). */
+export const BUILDING_SCOPE_PRELOAD = ['read_building_scope', 'change_building_scope']
 export const DRAWING_CONTINUATION_PRELOAD = ['read_construction_draft', 'check_construction_draft', 'design_project_cad',
   'read_drawing_requests', 'read_drawing_request_work', 'read_construction_changes', 'change_construction_parameters',
   'edit_construction_parts', 'save_cad_design']
