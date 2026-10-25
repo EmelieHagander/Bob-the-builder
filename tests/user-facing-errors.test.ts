@@ -9,7 +9,7 @@ import { join, relative } from 'node:path'
 const SRC = new URL('../src/', import.meta.url).pathname
 // Owned by the parallel building-context change; remove each entry once that
 // change converts the file (exit condition: these files pass this scan).
-const PENDING = new Set(['components/BuildingContextEditor.tsx', 'components/BuildingContextSurface.tsx'])
+const PENDING = new Set<string>()
 
 function sources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory()

@@ -10,7 +10,7 @@ import type {
   ProjectPhysicalScope,
   RelationshipKind,
 } from '../data/buildingContext'
-import { projectRoomMarks, unlinkSummary, wholeBuildingLinks, type UnlinkResult } from '../lib/physicalScope'
+import { projectRoomMarks, scopeErrorMessage, unlinkSummary, wholeBuildingLinks, type UnlinkResult } from '../lib/physicalScope'
 import { physicalTruthLabel } from '../lib/roomMeasurements'
 import { Field, FormError, inputStyle } from './form'
 import { Modal } from './Modal'
@@ -71,7 +71,7 @@ const relationOptions: { value: RelationshipKind; label: string }[] = [
 // Form options explain each choice; saved records use the shared short labels.
 const truthLabel = physicalTruthLabel
 const relationLabel = (relation: RelationshipKind) => relationOptions.find(option => option.value === relation)?.label ?? relation
-const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error)
+const errorMessage = (error: unknown, action: 'building' | 'room' = 'building') => scopeErrorMessage(error, action)
 
 export function BuildingContextEditor({
   sites,
@@ -120,7 +120,7 @@ export function BuildingContextEditor({
     if (!onToggleRoom || roomBusy) return
     setRoomBusy(space.id); setRoomError(''); setNotice('')
     try { await onToggleRoom(space, mark) }
-    catch (err) { setRoomError(`${space.name}: ${errorMessage(err)}`) }
+    catch (err) { setRoomError(`${space.name}: ${errorMessage(err, 'room')}`) }
     finally { setRoomBusy(null) }
   }
 

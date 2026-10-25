@@ -12,6 +12,7 @@ import type {
   RelationshipProposal,
 } from '../data/buildingContext'
 import { scopeErrorMessage, unlinkResult } from '../lib/physicalScope'
+import { userErrorMessage } from '../lib/userErrors'
 import { physicalTruthLabel, type MeasuredRoom, type RoomMeasurementMap } from '../lib/roomMeasurements'
 import { BuildingContextEditor } from './BuildingContextEditor'
 import { useRoomMeasurements } from './RoomMeasurements'
@@ -52,7 +53,7 @@ type Detail = {
 }
 
 const emptyDetail: Detail = { levels: [], spaces: [], elements: [], relationships: [], canDirectEdit: false, proposals: emptyProposals }
-const message = (error: unknown) => error instanceof Error ? error.message : String(error)
+const message = (error: unknown) => userErrorMessage(error)
 const isDenied = (error: string) => /\bdenied\b|\bunauthori[sz]ed\b|\bforbidden\b|\bpermission\b|row[- ]level security|\brls\b/i.test(error)
 
 export function BuildingContextSurface({ projectId, context, initialBuildingId }: { projectId: string; context: BuildingContextGateway; initialBuildingId?: string }) {
