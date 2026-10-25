@@ -27,7 +27,7 @@ drawing turn loaded these one or a few at a time, and the 42 model steps after a
 manual load hit the provider cache 9% of the time against 81% otherwise (2.03 of
 7.88 USD). Other work keeps the selective on-demand loading unchanged.
 
-**Core reading preload — 2026-10-25.** New jobs (execution pin
+**Core reading preload — deployed 2026-10-25** ([evidence](foundation-verification.md#core-reading-preload--2026-10-25)). New jobs (execution pin
 `corePreloadVersion: 1`) also start with `search_project_data`,
 `list_project_category` and `open_project_item` loaded (`CORE_READ_PRELOAD`),
 through the same preload path and gate. Measured reason: from 2026-10-19 to
