@@ -558,6 +558,26 @@ from household audience. A project that follows a Building for sharing must reta
 an exact Building/Space/Element scope to that Building. A Site-only scope is not
 an implicit household-sharing selection.
 
+### Project rooms and Area rooms — owner decision 2026-10-25
+
+A Project links to a **whole Building**, or to the Site that holds it, and then
+marks **which rooms** (Spaces) it covers. An Area maps to rooms of that Building.
+`20261025133000_project_room_scope.sql` changes `physical_scope_command` to match:
+
+- Linking a whole Building still requires a Building editor, because it shares
+  the Building with every project member.
+- Marking a room or element, or mapping an Area to one, needs project access
+  only, and only inside a Building the project already targets as a whole
+  (`building_not_linked` otherwise). It grants no new read access.
+- Unlinking the whole Building (or its Site) also removes this Project's room
+  marks and Area mappings for Buildings it no longer covers. The result reports
+  `removed_rooms` and `removed_area_targets`.
+- Repeating a link returns the existing row (`existing: true`).
+- Older room-only rows remain valid data. Bob intake, multi-floor plans and
+  stair studies still require the whole-building link.
+
+Database details: [db/README](../db/README.md#project-rooms-and-area-rooms--2026-10-25).
+
 ## 11.7 First UI surface
 
 2C gets a focused **Building context** page reachable from existing project/Area surfaces, not a new top-level navigation family. It must let a connected user:
