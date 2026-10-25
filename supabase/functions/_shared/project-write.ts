@@ -66,7 +66,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'construction_edit' | 'bound_plan_link' | 'bound_work' | 'bound_solution_create' | 'bound_solution_target' | 'bound_solution_evidence' | 'bound_project' | 'bound_solution' | 'construction_roles' | 'construction_consequence' | 'legacy_construction' | 'construction_parameters' | 'cad_shell' | 'cad_shell_steps' | 'supplier_article' | 'pack_purchase' | 'cut_plan_shopping' | 'cut_plan_stock' | 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
+  kind: 'construction_edit' | 'bound_building_scope' | 'bound_plan_link' | 'bound_work' | 'bound_solution_create' | 'bound_solution_target' | 'bound_solution_evidence' | 'bound_project' | 'bound_solution' | 'construction_roles' | 'construction_consequence' | 'legacy_construction' | 'construction_parameters' | 'cad_shell' | 'cad_shell_steps' | 'supplier_article' | 'pack_purchase' | 'cut_plan_shopping' | 'cut_plan_stock' | 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -76,6 +76,17 @@ export interface WritePayload {
 export interface WriteReadback extends ProjectWriteReceipt { record: Record<string, unknown> }
 /** Server-authored domain reasons that are safe and useful to return verbatim. */
 const LIFECYCLE_REASON = /Completed Tasks are project history and are kept\.|Image attachment unavailable|Restore the Area before adding or reopening work\.|Move or finish this Area[^.]*\.|Resolve the pending plan proposal that uses this Area before archiving\.|Complete or explicitly defer every Area before completing the Project\.|(Project|Area) is already in that phase|Area changed\. Reload before trying again\./
+/** Fixed physical-scope refusals Bob can explain; never raw database text. */
+const BUILDING_SCOPE_REASONS: Record<string, string> = {
+  building_denied: 'Linking a whole building needs edit rights to it, because the link shares the whole building with every project member. Someone who can edit the building can link it.',
+  site_denied: 'Linking a site needs access to that site.',
+  building_not_linked: 'The project does not link this building as a whole. Room marks and Area mappings need that link first, and linking needs edit rights to the building.',
+  space_not_in_building: 'A chosen room is not in this building. Read the rooms of this building again.',
+  element_not_in_building: 'A chosen element is not in this building.',
+  building_site_covered: 'The project\'s site link covers this building, so unlinking the building alone is refused. The owner can change the site link on the Building & spaces page.',
+  building_household_follow: 'The project shares with a household through this building, and unlinking it would end that sharing, so it is refused. The owner can change the project\'s sharing first.',
+}
+const BUILDING_SCOPE_REFUSAL = /\b(?:building_denied|site_denied|building_not_linked|space_not_in_building|element_not_in_building|building_site_covered|building_household_follow)\b/
 export interface WriteResult {
   status: 'saved' | 'invalid' | 'conflict' | 'denied' | 'unknown' | 'budget_exhausted'
   /** access: the database refused this record for this caller; the turn re-checks project access. */
@@ -353,6 +364,12 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
           if (payload.kind === 'bound_solution' && ['40001','PT409'].includes(error.code ?? '')) return { status: 'conflict', message: 'No change made. The solution or selected direction changed after this read. Read the edit context again and reconsider the change; never create a replacement alternative.' }
           if (payload.kind === 'bound_plan_link' && ['40001','40P01','PT409','23505'].includes(error.code ?? '')) return { status: 'conflict', message: 'No plan links changed. The plan, focus, Task or its links changed. Read plan link context again and apply only the intended change.' }
           if (payload.kind === 'bound_work' && ['40001','40P01','PT409','23505'].includes(error.code ?? '')) return { status: 'conflict', message: 'No change made. The work record, scope or its relationships changed. Read work context again and apply only the intended delta; never create a replacement.' }
+          if (payload.kind === 'bound_building_scope') {
+            if (['40001','40P01','PT409','23505'].includes(error.code ?? '')) return { status: 'conflict', message: 'No building scope changed. The building, its rooms, Areas or links changed. Read building scope again and apply only the intended change.' }
+            // A refused building link is an answerable outcome, not a lost project.
+            const reason = BUILDING_SCOPE_REFUSAL.exec(error.message ?? '')?.[0]
+            if (reason) return { status: 'invalid', message: 'No building scope changed. ' + BUILDING_SCOPE_REASONS[reason] }
+          }
           if (error.code === '42501') return { status: 'denied', reason: 'access' }
           if (['construction','construction_roles','construction_consequence','operational','cut_plan'].includes(payload.kind) && /construction_instance_roles_required/.test(error.message ?? '')) return { status: 'invalid', message: 'No quantity or cut was saved. Read the exact construction and explicitly classify its saved instance IDs with change_construction_roles; historical roles remain unknown until recorded.' }
           if (payload.kind === 'construction_roles' && /invalid_(?:instance_policy|construction_role)/.test(error.message ?? '')) return { status: 'invalid', message: 'No role change saved. Use distinct existing instance IDs and the matching role/quantity policy with an honest reason. Read the current construction before retrying.' }

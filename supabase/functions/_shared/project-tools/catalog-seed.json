@@ -948,5 +948,23 @@
     "always_load": false,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "read_building_scope",
+    "description": "Find the owner's buildings, their rooms and this project's Areas as server-bound choices.",
+    "how_to": "Identify the building the owner means among the listed ones. Only buildings you can edit or that this project already links are listed; a building reachable only through another project stays out. When several fit, ask which one. When none fits, an existing building must first be shared with you, and a new one is recorded with save_building_context.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "change_building_scope",
+    "description": "Link a building, mark its rooms and map Areas for this project.",
+    "how_to": "Act once the owner has clearly identified the building and rooms; ask only when several fit. After linking a whole building, tell the owner plainly that its rooms, notes and measurements are now visible to every project member. A building covered by the project's site link, or followed for household sharing, cannot be unlinked here; explain why and leave that choice to the owner. Room marks and Area mappings need only project access once the building is linked. This creates no buildings, rooms, elements or sites.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
   }
 ]

@@ -213,7 +213,7 @@ test('deployed wiring uses caller-JWT writes and fenced commit, not service-role
   const source=await readFile(new URL('../supabase/functions/_shared/ask-openai.ts',import.meta.url),'utf8')
   assert.match(source,/client\.rpc\(name, args\)/)
   assert.match(source,/\['bound_project', 'bound_solution'\]\.includes\(payload\.kind\) \? 'bob_project_write_v17' : 'bob_project_write_v16'/)
-  assert.match(source,/rpc\(payload\.kind === 'bound_plan_link' \? 'bob_project_write_v20' : payload\.kind === 'bound_work' \? 'bob_project_write_v19' : \['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'\]\.includes\(payload\.kind\) \? 'bob_project_write_v18'/)
+  assert.match(source,/rpc\(payload\.kind === 'bound_building_scope' \? 'bob_project_write_v21' : payload\.kind === 'bound_plan_link' \? 'bob_project_write_v20' : payload\.kind === 'bound_work' \? 'bob_project_write_v19' : \['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'\]\.includes\(payload\.kind\) \? 'bob_project_write_v18'/)
   assert.match(source,/rpc\('read_bob_plan_link_context'/)
   assert.match(source,/rpc\('read_bob_solution_context'/)
   assert.match(source,/rpc\('read_bob_edit_context'/)
