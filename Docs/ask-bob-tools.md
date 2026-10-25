@@ -49,7 +49,7 @@ that publish the contracts, so older pinned manifests keep their bench. The
 manual linking. [The write contract](ask-bob-writes.md#fifth-implementation-building-and-room-scope--source-2026-10-25)
 owns authority and receipts.
 
-**Building links at turn start — source 2026-10-25.** On 2026-10-25 Bob said a
+**Building links at turn start — deployed 2026-10-25** (PR #329, `c449ce7`; `bob-worker` v137, `ask-bob` v169 at 18:05 UTC after a read-only check found no active jobs; not yet observed in a live turn). On 2026-10-25 Bob said a
 project had no saved measurements: the project linked no building, so its reads
 were empty, while 12 measured values sat on the owner's room in an unlinked
 house. New jobs (execution pin `buildingLinkVersion: 1`) read their building
