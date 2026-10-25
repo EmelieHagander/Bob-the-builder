@@ -45,6 +45,11 @@ const shelfOf = (name: string) => TOOLBOX_SHELVES.find(s => s.tools.includes(nam
 /** Loaded from the first step of a turn whose thread has a pending drawing
  * request: the construction-drawing tools every such turn on 2026-10-20 read
  * one or a few at a time (7 manual loads each for read/check/design). */
+/** Loaded from the first step of new turns: the project reading tools Bob
+ * otherwise loaded with a separate describe_tool step first (2026-10-19..25:
+ * 38 of 57 turns began with a manual-only step; these three were the most
+ * loaded). Offering is not authority: policy and gates still apply. */
+export const CORE_READ_PRELOAD = ['search_project_data', 'list_project_category', 'open_project_item']
 export const DRAWING_CONTINUATION_PRELOAD = ['read_construction_draft', 'check_construction_draft', 'design_project_cad',
   'read_drawing_requests', 'read_drawing_request_work', 'read_construction_changes', 'change_construction_parameters',
   'edit_construction_parts', 'save_cad_design']

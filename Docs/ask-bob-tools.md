@@ -27,6 +27,16 @@ drawing turn loaded these one or a few at a time, and the 42 model steps after a
 manual load hit the provider cache 9% of the time against 81% otherwise (2.03 of
 7.88 USD). Other work keeps the selective on-demand loading unchanged.
 
+**Core reading preload — 2026-10-25.** New jobs (execution pin
+`corePreloadVersion: 1`) also start with `search_project_data`,
+`list_project_category` and `open_project_item` loaded (`CORE_READ_PRELOAD`),
+through the same preload path and gate. Measured reason: from 2026-10-19 to
+2026-10-25, 99 of 611 main steps only loaded manuals and 38 of 57 turns began
+with such a step; these three were the most loaded tools. They add about 950
+tokens to each request, sent from the first step so the prompt cache keeps them.
+Jobs started before the pin keep on-demand loading. Every other tool keeps the
+selective loading described above.
+
 **Owner decision — 2026-10-22:** do not redesign selective loading, allowed-tool
 restriction or instruction placement for provider caching. The cache work kept is
 a routing hint only ([decision A](ask-bob-conversations.md#pr3--bound-result-payloads-without-an-ai-history-summary)).

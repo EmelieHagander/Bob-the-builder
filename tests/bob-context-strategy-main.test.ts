@@ -10,6 +10,8 @@ import { fingerprint } from '../supabase/functions/_shared/bob-job-journal.ts'
 import { BobContinuation } from '../supabase/functions/_shared/bob-job-journal.ts'
 import type { ContextSurface } from '../supabase/functions/_shared/bob-context-continuation.ts'
 import { catalogFixture, preContextStrategyCatalogFixture, preSelectiveToolsCatalogFixture, catalogCall } from './support/ai-catalog-fixture.ts'
+import { createProjectContext } from './support/colleague-catalog-fixture.ts'
+import { createMediaAdapter } from '../supabase/functions/_shared/project-context/media.ts'
 
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
 const response = (data = 'Jag fortsätter från det sparade underlaget.'): OpenAIServiceResponse<string> => ({ success: true, data, responseId: 'final', model: 'fixture', usage })
@@ -53,6 +55,33 @@ test('selective main requests restore workflow knowledge and one authoritative m
  }
  assert(result?.ok);assert.equal(calls,4);assert.equal(yielded,3)
  assert.equal(f.reads.filter(r=>r.dataset==='project').length,2,'initial orientation and one new read; none replayed')
+})
+
+test('pinned core reading tools are callable from the first step; unpinned turns keep the describe round', async () => {
+  const core = ['list_project_category', 'open_project_item', 'search_project_data']
+  for (const corePreload of [true, false]) {
+    const f = fixture(), session = catalogFixture()
+    const offered: string[][] = []
+    // Images and project items come from the media context, as in production.
+    const projectContext = createProjectContext({ hasAccess: async () => true, sources: f.opts.lookup.sources, adapters: [createMediaAdapter('A', {
+      count: async () => 0, list: async () => [], read: async () => null, download: async () => new Uint8Array() })] })
+    const result = await runProjectAnswer({ ...f.opts, aiCatalog: session, projectContext, ...(corePreload ? { corePreload: true } : {}),
+      callModel: catalogCall(async options => {
+        offered.push(names(options))
+        if (offered.length === 1) return corePreload ? toolResponse('search_project_data', query, 'read') : toolResponse('describe_tool', { name: 'search_project_data' }, 'load')
+        if (offered.length === 2 && !corePreload) return toolResponse('search_project_data', query, 'read')
+        return response()
+      }, session) })
+    assert(result.ok)
+    if (corePreload) {
+      for (const name of core) assert(offered[0].includes(name), name + ' offered at the first step')
+      assert(offered[0].includes('describe_tool'), 'other tools still load on demand')
+      assert.equal(offered.length, 2, 'read at step one, answer at step two')
+    } else {
+      for (const name of core) assert(!offered[0].includes(name), name + ' stays a card without the pin')
+      assert.equal(offered.length, 3, 'describe, read, answer')
+    }
+  }
 })
 
 test('new main strategy sends compact memory, exact five originals, source-bound project orientation and a final data footer', async () => {
