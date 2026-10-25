@@ -37,17 +37,29 @@ tokens to each request, sent from the first step so the prompt cache keeps them.
 Jobs started before the pin keep on-demand loading. Every other tool keeps the
 selective loading described above.
 
-**Building scope tools — source 2026-10-25, not activated.** The generated
+**Building scope tools — activated 2026-10-25** ([evidence](foundation-verification.md#building-and-room-links--2026-10-25)). The generated
 publication `20261025150500_ai_building_scope_catalog.sql` adds
 `read_building_scope` and `change_building_scope` to the **Building and site**
 shelf, ahead of `save_building_context`, and to `workflow_facts_and_site`, whose
 card and method now name linking the project's building and rooms. They load on
-demand like other tools: no phase or core preload. The read has its own budget
+demand like other tools, except for the building-link preload below. The read has its own budget
 of 24 calls; the change uses the write gate. Handlers register only for manifests
 that publish the contracts, so older pinned manifests keep their bench. The
 `save_building_context` manual points to `change_building_scope` instead of
 manual linking. [The write contract](ask-bob-writes.md#fifth-implementation-building-and-room-scope--source-2026-10-25)
 owns authority and receipts.
+
+**Building links at turn start — source 2026-10-25.** On 2026-10-25 Bob said a
+project had no saved measurements: the project linked no building, so its reads
+were empty, while 12 measured values sat on the owner's room in an unlinked
+house. New jobs (execution pin `buildingLinkVersion: 1`) read their building
+links once before the first step (`read_bob_building_scope_context`, own journal
+stream `building:links`, skipped when resuming from a checkpoint). The first
+note carries them as data: `buildings: {linked, owner_can_link}` (names and link
+kind only). When no whole building or site is linked, `read_building_scope` and
+`change_building_scope` are loaded from the first step (`BUILDING_SCOPE_PRELOAD`),
+so Bob can find and link the house instead of reporting missing data. Linked
+projects keep on-demand loading.
 
 **Owner decision — 2026-10-22:** do not redesign selective loading, allowed-tool
 restriction or instruction placement for provider caching. The cache work kept is

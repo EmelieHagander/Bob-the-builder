@@ -27,7 +27,8 @@ import type { ContextSurface } from './bob-context-continuation.ts'
 import type { CurrentView } from '../../../src/domain/bobScreen.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { BOB_WRITE_LIMIT } from '../../../src/data/bobEvidence.ts'
-import { createBobToolSession, CORE_READ_PRELOAD, DRAWING_CONTINUATION_PRELOAD, sortToolbox } from './project-tools/bob-tools.ts'
+import { BUILDING_SCOPE_PRELOAD, createBobToolSession, CORE_READ_PRELOAD, DRAWING_CONTINUATION_PRELOAD, sortToolbox } from './project-tools/bob-tools.ts'
+import type { BuildingLinks } from './project-building-scope.ts'
 import type { ProjectCalculator } from './project-calculator.ts'
 import { type ToolPolicyReader, type ToolboxEntry, type ToolInstructions, checkedToolSnapshot } from './project-tools/session.ts'
 import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' }
@@ -158,6 +159,8 @@ export type ProjectAnswerOptions = {
   carryLoadedTools?: boolean;
   /** Pinned per execution: the core reading tools are loaded from the first step. */
   corePreload?: boolean;
+  /** Pinned per execution: which buildings this project links, read once at turn start. */
+  buildingLinks?: BuildingLinks;
   /** Pinned for new durable main turns; never changes a running old job. */
   completeRequest?: boolean;
   resultReferences?: boolean;
@@ -212,7 +215,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const toolInstructions = opts.toolInstructions ?? (contextStrategy ? 'lazy' : undefined)
   const catalog = restored ? restored.initial.catalog : opts.projectContext ? await opts.projectContext.catalog() : null
   // Set once the pending drawing requests are known below; prepare() reads it at the first model step.
-  let preloadTools: string[] = opts.corePreload ? CORE_READ_PRELOAD : []
+  let preloadTools: string[] = [...(opts.corePreload ? CORE_READ_PRELOAD : []), ...(opts.buildingLinks && !opts.buildingLinks.whole ? BUILDING_SCOPE_PRELOAD : [])]
   const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: () => preloadTools,
     ...(boundedOrientation ? { orientationReader: { tools: [ORIENTATION_DIRECTORY_TOOL], execute: (raw: unknown) => {
       if (!orientationReader) throw new Error('context_unavailable')
@@ -271,7 +274,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       ready: (reader: OrientationDirectoryReader) => { orientationReader = reader } } } : {}),
   }) : undefined
   const initialFooter = orientation ? { role: 'user' as const,
-    content: opts.aiCatalog.text('bob.note.prefix') + JSON.stringify({ orientation: orientation.footer }) } : undefined
+    content: opts.aiCatalog.text('bob.note.prefix') + JSON.stringify({ orientation: orientation.footer,
+      ...(opts.buildingLinks ? { buildings: { linked: opts.buildingLinks.linked, owner_can_link: opts.buildingLinks.linkable } } : {}) }) } : undefined
   // Legacy pins retain their original message order. New context explicitly
   // labels pending work as data and ends with source-bound request orientation.
   let messages: NonNullable<OpenAIServiceOptions['messages']> = restored ? structuredClone(restored.messages) : orientation ? buildManagedMessages(opts.aiCatalog, { ...opts, orientation, catalog, drawingRequests }) : [

@@ -116,3 +116,12 @@ test('core reading tools are preloaded only for jobs pinned at start (2026-10-25
   assert.match(code, /execution\.corePreloadVersion !== 1\) throw new Error\('core_preload_version_invalid'\)/)
   assert.match(code, /execution\.corePreloadVersion === 1 \? \{ corePreload: true \} : \{\}/)
 })
+
+test('building links are read once at turn start for pinned jobs, never on a checkpoint resume (2026-10-25)', async () => {
+  const code = await readFile(new URL('../supabase/functions/_shared/ask-openai.ts', import.meta.url), 'utf8')
+  const identity = code.slice(code.indexOf("memo('execution:identity'"), code.indexOf('modelBudget = createBobModelBudget'))
+  assert.match(identity, /buildingLinkVersion: 1 as const,/)
+  assert.match(code, /execution\.buildingLinkVersion !== 1\) throw new Error\('building_link_version_invalid'\)/)
+  assert.match(code, /execution\.buildingLinkVersion === 1 && !restart && writer/)
+  assert.match(code, /memo\('building:links', \{ project: opts\.projectId \}/)
+})

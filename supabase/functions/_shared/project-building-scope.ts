@@ -134,3 +134,15 @@ export function createBuildingScope(opts: {
   }
 }
 export type BuildingScope = ReturnType<typeof createBuildingScope>
+
+/** Turn-start fact: the buildings this project links and the caller's own
+ * unlinked ones, by name only. Data for Bob, never a grant. */
+export type BuildingLinks = { linked: { name: string; link: string }[]; linkable: string[]; whole: boolean }
+export function buildingLinkFact(rows: unknown): BuildingLinks | null {
+  if (!Array.isArray(rows)) return null
+  const records = rows.map(row => (row as { record?: Record<string, unknown> } | null)?.record)
+    .filter((record): record is Record<string, unknown> => !!record && typeof record.name === 'string' && typeof record.link === 'string')
+  const linked = records.filter(record => record.link !== 'none').slice(0, 6).map(record => ({ name: String(record.name), link: String(record.link) }))
+  const linkable = records.filter(record => record.link === 'none' && record.can_edit === true).slice(0, 6).map(record => String(record.name))
+  return { linked, linkable, whole: linked.some(item => item.link === 'whole' || item.link === 'site') }
+}
