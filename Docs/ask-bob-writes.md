@@ -175,6 +175,41 @@ manifests keep their original handlers. Install core, both runtimes, then the
 separate generated catalog. Plan decisions, evidence links and nested proposal
 identities remain outside this slice.
 
+### Fifth implementation: building and room scope — source 2026-10-25
+
+**Source only: not applied, deployed or activated.** The owner decisions and
+linking rules live in the [building model](building-model.md#bob-building-scope--owner-decisions-2026-10-25).
+`project-building-scope.ts` adds two tools on the Building and site shelf:
+
+| Tool | Effect | Refused or not included |
+| --- | --- | --- |
+| `read_building_scope` | Pages of 6 Buildings the caller can edit or this project already targets, 16 rooms of one of them, or 8 Areas, each as an opaque ref with link state, room marks and Area mappings | Buildings reachable only through another project; archived Buildings, rooms and Areas; database identities |
+| `change_building_scope` | Link or unlink a whole Building; mark or unmark rooms; map or unmap an Area to rooms or to the whole Building | A whole-Building unlink under the project's Site link or household follow; room marks or Area mappings without the whole-Building link; Elements, Sites and creating anything |
+
+Claimed-turn `bob_project_write_v21` handles kind `bound_building_scope`; all
+other kinds delegate unchanged to v20. It checks the claim, project access and
+current-message quote, accepts only `{pins, command}`, and takes the same
+per-project lock as `physical_scope_command` plus a key-share lock on the
+project row, which household sharing changes update. Exact retries return their
+receipt before freshness checks; the per-turn receipt quota applies to
+historical jobs. Every pin must equal a fresh `read_bob_building_scope_snapshot`
+(otherwise `PT409`). Link rows to remove are found on the server. Each target
+then goes through the unchanged `physical_scope_command`, which owns all
+authority: a whole-Building link needs a Building editor; room marks and Area
+mappings need project access and the whole-Building link.
+
+One `building_context` receipt per call (`operation: updated`, `recordId` = the
+Building) records the changes, the room marks and Area mappings an unlink
+removed, and fresh snapshots of the same records; the pins are its
+before-record. The tool returns fresh refs from that receipt, so a following
+change needs no new read. `building_denied`, `building_not_linked`,
+`space_not_in_building`/`element_not_in_building` and the two unlink refusals
+come back as answerable `invalid` results with a fixed explanation; only a lost
+project ends the turn. Conflicts ask Bob to read again. The turn checkpoint
+leaves out unused scope state, and a checkpoint without it restores as unused.
+Install the room-scope migration, this core migration, both runtimes from the
+same source, then the generated catalog.
+
 ### Remaining migration inventory
 
 | Family | Current boundary / remaining work |
@@ -186,7 +221,7 @@ identities remain outside this slice.
 | Materials and procurement | `manage_project_material`, `derive_cad_material_requirement`, supplier articles and pack purchases still expose source/allocation/version fields. Preserve deterministic quantities, stock reservations, existing allocations and exact published commitments. |
 | Catalog | `save_catalog_definition` needs bound existing definitions/materials/profile versions and preserved properties; source claims stay explicit. |
 | Image and drawing links | Attachment/detachment, finalization, drawing links and lifecycle choices still need complete bound source/target reads. |
-| Building, room and stair inputs | Bind existing physical context, source dimensions, current geometry and unchanged saved values. |
+| Building, room and stair inputs | Project and Area links to a Building and its rooms are bound in the fifth slice (source only). Intake, room-layout and stair inputs still need bound physical context, source dimensions, current geometry and unchanged saved values. |
 | Construction and CAD | Existing candidate/draft/calculation adapters already own portions of identity and derivation; audit every nested source/definition/instance/Step reference and stateful update before declaring this family complete. |
 
 This inventory describes migration work, not exceptions to the ownership rule.

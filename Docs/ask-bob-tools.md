@@ -37,6 +37,18 @@ tokens to each request, sent from the first step so the prompt cache keeps them.
 Jobs started before the pin keep on-demand loading. Every other tool keeps the
 selective loading described above.
 
+**Building scope tools — source 2026-10-25, not activated.** The generated
+publication `20261025150500_ai_building_scope_catalog.sql` adds
+`read_building_scope` and `change_building_scope` to the **Building and site**
+shelf, ahead of `save_building_context`, and to `workflow_facts_and_site`, whose
+card and method now name linking the project's building and rooms. They load on
+demand like other tools: no phase or core preload. The read has its own budget
+of 24 calls; the change uses the write gate. Handlers register only for manifests
+that publish the contracts, so older pinned manifests keep their bench. The
+`save_building_context` manual points to `change_building_scope` instead of
+manual linking. [The write contract](ask-bob-writes.md#fifth-implementation-building-and-room-scope--source-2026-10-25)
+owns authority and receipts.
+
 **Owner decision — 2026-10-22:** do not redesign selective loading, allowed-tool
 restriction or instruction placement for provider caching. The cache work kept is
 a routing hint only ([decision A](ask-bob-conversations.md#pr3--bound-result-payloads-without-an-ai-history-summary)).

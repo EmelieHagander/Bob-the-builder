@@ -19,6 +19,7 @@ let preContextStrategyRows:any[]|undefined,preContextStrategyVersions:Map<string
 let preContinuationRows:any[]|undefined,preContinuationVersions:Map<string,number>|undefined
 let preTaskWorkflowRows:any[]|undefined,preTaskWorkflowVersions:Map<string,number>|undefined
 let preSourceRenewalRows:any[]|undefined,preSourceRenewalVersions:Map<string,number>|undefined
+let preBuildingScopeRows:any[]|undefined,preBuildingScopeVersions:Map<string,number>|undefined
 // Materialise the explicit immutable publication patches in migration order.
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
@@ -85,6 +86,27 @@ for(const migration of migrations){
    else if(key==='bob.workflows'){const w=r.definition.workflows.find((w:any)=>w.name==='workflow_construction_drawing');w.tools.push('edit_construction_parts');w.method+=manual}
    else {r.definition.additional_description=(r.definition.additional_description??'')+manual;if(key==='tools.change_construction_parameters')r.definition.description=r.definition.description.replace('Use save_construction_draft for topology/material/formula changes.','Use edit_construction_parts for topology/material/formula changes.')}
   }
+ }
+ const buildingScope=source.match(/\$building_scope_contracts\$([\s\S]+?)\$building_scope_contracts\$/)
+ if(buildingScope){
+  preBuildingScopeRows=structuredClone(seed);preBuildingScopeVersions=new Map(versions)
+  const read=(tag:string)=>JSON.parse(source.match(new RegExp('\\$'+tag+'\\$([\\s\\S]+?)\\$'+tag+'\\$'))![1])
+  const policies=read('building_scope_policies'),manual=read('building_scope_manual'),workflow=read('building_scope_workflow'),contracts=JSON.parse(buildingScope[1])
+  const publish=(row:any)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'building-scope-v1'};versions.set(row.key,(versions.get(row.key)??0)+1)}
+  const template=seed.find(row=>row.key==='tools.read_plan_link_context')
+  for(const patch of contracts){
+   const policy=policies.find((p:any)=>p.name===patch.name),row=structuredClone(template);row.key='tools.'+patch.name
+   row.definition={...row.definition,...patch,handler:patch.name,required_parameters:patch.parameters.required,optional_parameters:[],card_description:policy.description,additional_description:policy.how_to}
+   row.metadata={publication:'building-scope-v1',server_fields:patch.parameters.required.includes('request_quote')?['request_quote']:[]}
+   seed.push(row);versions.set(row.key,1)
+  }
+  const intake=seed.find(row=>row.key==='tools.save_building_context');publish(intake)
+  intake.definition.additional_description=intake.definition.additional_description.replace(manual.from,manual.to)
+  const box=seed.find(row=>row.key==='bob.tools');publish(box)
+  for(const policy of policies){box.definition.catalog.push(policy);box.definition.contract_keys.push('tools.'+policy.name)}
+  const shelf=box.definition.shelves.find((s:any)=>s.label==='Building and site');shelf.tools=[...contracts.map((c:any)=>c.name),...shelf.tools]
+  const flows=seed.find(row=>row.key==='bob.workflows');publish(flows)
+  const w=flows.definition.workflows.find((w:any)=>w.name===workflow.name);w.card=workflow.card;w.tools.push(...contracts.map((c:any)=>c.name));w.method+=workflow.method
  }
  const memoryPointers=source.match(/\$memory_pointer_instructions\$([\s\S]+?)\$memory_pointer_instructions\$/)
  if(memoryPointers){
@@ -433,7 +455,7 @@ for(const migration of migrations){
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.
-for(const rows of [seed,originalSeed,...(preCompleteContextRows?[preCompleteContextRows]:[]),...(preSelectiveToolsRows?[preSelectiveToolsRows]:[]),...(preConstructionViewsRows?[preConstructionViewsRows]:[]),...(preConstructionEditsRows?[preConstructionEditsRows]:[]),...(preContextCoverageRows?[preContextCoverageRows]:[]),...(preTaskWorkflowRows?[preTaskWorkflowRows]:[]),...(preContinuationRows?[preContinuationRows]:[]),...(preSourceRenewalRows?[preSourceRenewalRows]:[]),...(preContextStrategyRows?[preContextStrategyRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+for(const rows of [seed,originalSeed,...(preCompleteContextRows?[preCompleteContextRows]:[]),...(preSelectiveToolsRows?[preSelectiveToolsRows]:[]),...(preConstructionViewsRows?[preConstructionViewsRows]:[]),...(preConstructionEditsRows?[preConstructionEditsRows]:[]),...(preContextCoverageRows?[preContextCoverageRows]:[]),...(preTaskWorkflowRows?[preTaskWorkflowRows]:[]),...(preContinuationRows?[preContinuationRows]:[]),...(preSourceRenewalRows?[preSourceRenewalRows]:[]),...(preBuildingScopeRows?[preBuildingScopeRows]:[]),...(preContextStrategyRows?[preContextStrategyRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):AiCatalogManifest{
  const modelTiers=new Map(rows.filter(row=>row.kind==='tier_binding').map(row=>[row.definition.model_name,row.definition.tier]))
  return{format_version:1,app:'bob',manifest_id:id,created_at:'2026-10-09T14:00:00Z',
@@ -454,6 +476,9 @@ const legacyManifest=fixtureManifest(originalSeed,new Map(originalSeed.map(row=>
 const preTaskWorkflowManifest=fixtureManifest(preTaskWorkflowRows??seed,preTaskWorkflowVersions??versions,'fixture-pre-task-workflow-manifest')
 const preContinuationManifest=fixtureManifest(preContinuationRows??seed,preContinuationVersions??versions,'fixture-pre-continuation-manifest')
 const preSourceRenewalManifest=fixtureManifest(preSourceRenewalRows??seed,preSourceRenewalVersions??versions,'fixture-pre-source-renewal-manifest')
+const preBuildingScopeManifest=fixtureManifest(preBuildingScopeRows??seed,preBuildingScopeVersions??versions,'fixture-pre-building-scope-manifest')
+/** The catalog before read_building_scope/change_building_scope were published. */
+export function preBuildingScopeCatalogFixture():AiCatalogSession{return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:structuredClone(preBuildingScopeManifest)})}
 export function preSourceRenewalCatalogFixture():AiCatalogSession{return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:preSourceRenewalManifest})}
 export function preContinuationCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preContinuationManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 export function legacyCatalogFixture():AiCatalogSession{return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:legacyManifest})}

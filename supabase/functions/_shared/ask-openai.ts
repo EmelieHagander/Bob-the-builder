@@ -1,5 +1,6 @@
 import { drawingErrorCode } from './drawing-errors.ts'
 import { createPlanLinks } from './project-plan-links.ts'
+import { createBuildingScope } from './project-building-scope.ts'
 import { createWorkRecords } from './project-work-records.ts'
 import { createSolutionActions } from './project-solution-actions.ts'
 import { createProjectEdits } from './project-edits.ts'
@@ -409,13 +410,16 @@ export async function answerWithOpenAi(opts: {
   }
   // Route new bound actions separately; pinned older journals retain their RPC names.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => rpc(payload.kind === 'bound_plan_link' ? 'bob_project_write_v20' : payload.kind === 'bound_work' ? 'bob_project_write_v19' : ['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'].includes(payload.kind) ? 'bob_project_write_v18' : ['bound_project', 'bound_solution'].includes(payload.kind) ? 'bob_project_write_v17' : 'bob_project_write_v16', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
+    payload => rpc(payload.kind === 'bound_building_scope' ? 'bob_project_write_v21' : payload.kind === 'bound_plan_link' ? 'bob_project_write_v20' : payload.kind === 'bound_work' ? 'bob_project_write_v19' : ['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'].includes(payload.kind) ? 'bob_project_write_v18' : ['bound_project', 'bound_solution'].includes(payload.kind) ? 'bob_project_write_v17' : 'bob_project_write_v16', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
     { unlimitedWork, taskWorkDiagnostics: contract.work_completion_version === 1 || contract.work_completion_version === 2 },
   ) : undefined
   const planLinks = createPlanLinks({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
     read: input => rpc('read_bob_plan_link_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
+  })
+  const buildingScope = createBuildingScope({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
+    read: input => rpc('read_bob_building_scope_context', { p_project: opts.projectId, p_resource: input.resource, p_building: input.building, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
   })
   const workRecords = createWorkRecords({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
     readSnapshot: input => rpc('read_bob_work_snapshot', { p_project: opts.projectId, p_resource: input.resource, p_id: input.key }, AbortSignal.timeout(12000)),
@@ -761,8 +765,11 @@ export async function answerWithOpenAi(opts: {
   const components: Record<string, { exportState(): unknown; restoreState(state: any): void } | undefined> = {
     projectLookup, groundingLookup, writer, projectContext, currentViewGuard, knowledgeReader, operationalReader,
     catalogReader, constructionTools, calculator, planAssistant, cadAssistant, imageTools, recordReader,
-    planLinks, workRecords, solutionActions, projectEdits, requestStore, modelBudget, contextContinuation, metrics,
+    planLinks, buildingScope, workRecords, solutionActions, projectEdits, requestStore, modelBudget, contextContinuation, metrics,
   }
+  // Added after earlier checkpoints were written: absent state restores as an
+  // unused component, and unused state is not saved.
+  const optionalComponents = new Set(['buildingScope'])
   if (restart) {
     const state = restart.state
     if (state.version !== 1 || !state.answer || !state.components || typeof state.components !== 'object'
@@ -771,7 +778,7 @@ export async function answerWithOpenAi(opts: {
     if (Object.keys(saved).some(name => !components[name])) throw new Error('turn_checkpoint_component_missing')
     for (const [name, component] of Object.entries(components)) {
       if (!component) continue
-      if (!(name in saved)) throw new Error('turn_checkpoint_component_missing')
+      if (!(name in saved)) { if (optionalComponents.has(name)) continue; throw new Error('turn_checkpoint_component_missing') }
       component.restoreState(saved[name])
     }
     const runtime = state.runtime as { imageRefs: [string, Opened][]; mainContextEpoch: number; priorDrawingAttemptUncertain: boolean; memoryEmbeddingOutcomeUncertain: boolean }
@@ -793,7 +800,8 @@ export async function answerWithOpenAi(opts: {
     state: restart?.state.answer as BobAnswerState | undefined,
     save: async (answer: BobAnswerState) => {
       await checkpoint.commit({ version: 1, answer,
-        components: Object.fromEntries(Object.entries(components).filter((entry): entry is [string, NonNullable<typeof entry[1]>] => !!entry[1]).map(([name, component]) => [name, component.exportState()])),
+        components: Object.fromEntries(Object.entries(components).filter((entry): entry is [string, NonNullable<typeof entry[1]>] => !!entry[1])
+          .filter(([name]) => name !== 'buildingScope' || buildingScope.used).map(([name, component]) => [name, component.exportState()])),
         workingContext: workingContext?.exportState(),
         runtime: { imageRefs: [...imageRefs], mainContextEpoch, priorDrawingAttemptUncertain, memoryEmbeddingOutcomeUncertain },
       })
@@ -807,7 +815,7 @@ export async function answerWithOpenAi(opts: {
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
-    ...opts, unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, calculator, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
+    ...opts, unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, calculator, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
     readToolPolicy,
     checkpoint: answerCheckpoint,
     // Older in-flight journals keep their recorded post-rollover requests.

@@ -6,7 +6,7 @@ import {READ_HISTORY_TOOL,HYBRID_HISTORY_TOOL} from '../supabase/functions/_shar
 const publication='bob-context-strategy-v1'
 const historyPolicy={name:'read_conversation_message',description:'Read an exact original message in this private conversation by its sequence.',how_to:'Use a sequence from the memory index or history search. Follow nextOffset to read long messages. Original conversation explains intent, not current saved project state; current authorization and private-thread ownership are checked for every page.',schema_version:1,always_load:false,preload_phases:[],active:true}
 const cards=(JSON.parse(readFileSync('supabase/functions/_shared/project-tools/catalog-seed.json','utf8')) as {name:string;description:string}[])
- .filter(row=>!['consult_plan_assistant','read_conversation_message','read_project_orientation','edit_construction_parts'].includes(row.name))
+ .filter(row=>!['consult_plan_assistant','read_conversation_message','read_project_orientation','edit_construction_parts','read_building_scope','change_building_scope'].includes(row.name))
  .map(row=>({key:'tools.'+row.name,...(row.name==='search_conversation_history'?{definition:HYBRID_HISTORY_TOOL.function}:{}),description:({
   design_project_cad:'Ask the drawing team to render and independently review an exact checked construction revision, or continue its existing drawing request.',
   read_drawing_request_work:'Read saved drawing gaps, Task and Step links, and the request work state.',

@@ -1,4 +1,5 @@
 import { SUPERSEDED_PLAN_LINK_TOOLS, type PlanLinks } from '../project-plan-links.ts'
+import type { BuildingScope } from '../project-building-scope.ts'
 import { SUPERSEDED_WORK_TOOLS, WORK_RECORD_TOOLS_V2, WORK_VALUE_TOOL_NAMES, type WorkRecords } from '../project-work-records.ts'
 import type { SolutionActions } from '../project-solution-actions.ts'
 import type { ProjectEdits } from '../project-edits.ts'
@@ -35,7 +36,7 @@ export const TOOLBOX_SHELVES: { label: string; tools: string[] }[] = [
   { label: 'Drawings and CAD', tools: ['read_construction_draft', 'save_construction_draft', 'edit_construction_parts', 'change_construction_parameters', 'transition_legacy_drawing', 'change_construction_roles', 'read_construction_changes', 'continue_construction_change', 'check_construction_draft', 'derive_construction_lists', 'design_project_cad', 'plan_cad_pieces', 'compose_cad_shell', 'read_cad_shell', 'link_cad_shell_steps', 'read_drawing_requests', 'read_drawing_request_work', 'link_drawing_gap', 'ensure_drawing_gap_task', 'cancel_drawing_request', 'restore_drawing_request', 'save_cad_design', 'link_project_drawing', 'save_project_building_plan', 'inspect_building_projection', 'save_project_stair', 'inspect_stair_options', 'create_project_room_layout', 'edit_project_room_layout', 'save_project_drawing'] },
   { label: 'Materials, stock and Shopping', tools: ['search_material_catalog', 'read_material_catalog', 'save_catalog_definition', 'manage_project_material', 'derive_cad_material_requirement', 'check_construction_cut_fit', 'save_construction_cut_plan', 'delete_shopping_item'] },
   { label: 'Images and mockups', tools: ['list_project_category', 'open_project_item', 'describe_project_image', 'generate_project_image', 'attach_project_image', 'detach_project_image', 'finalize_project_image'] },
-  { label: 'Building and site', tools: ['save_building_context'] },
+  { label: 'Building and site', tools: ['read_building_scope', 'change_building_scope', 'save_building_context'] },
   { label: 'Building knowledge', tools: ['search_building_knowledge'] },
 ]
 const shelfOf = (name: string) => TOOLBOX_SHELVES.find(s => s.tools.includes(name))?.label ?? 'Other tools'
@@ -66,7 +67,7 @@ export function createBobToolSession(opts: {
   toolInstructions?: ToolInstructions;
   knowledgeReader?: KnowledgeReader;
   context?: WorkingContext; projectContext?: ProjectContext; readPolicy: ToolPolicyReader;
-  operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; workRecords?: WorkRecords; planLinks?: PlanLinks; planAssistant?: ReturnType<typeof createPlanAssistant>;
+  operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; workRecords?: WorkRecords; planLinks?: PlanLinks; buildingScope?: BuildingScope; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }) {
   const writeGate = (): ToolGate => !opts.writer ? 'not_allowed' : opts.writer.uncertain ? 'write_uncertain' : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted'
   const readGate = (): ToolGate => opts.lookup.remaining > 0 ? 'available' : 'budget_exhausted'
@@ -110,6 +111,12 @@ export function createBobToolSession(opts: {
     ...(opts.planLinks?.tools ?? []).filter(spec => !opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + spec.function.name)).map(spec => ({ spec, version: 1,
       gate: (): ToolGate => spec.function.name === 'read_plan_link_context' ? opts.planLinks!.remaining > 0 ? 'available' : 'budget_exhausted' : writeGate(),
       execute: (v: unknown) => opts.planLinks!.execute(spec.function.name, v),
+    })),
+    // Only manifests that publish these contracts offer them; older pinned
+    // manifests keep their own bench.
+    ...(opts.buildingScope?.tools ?? []).filter(spec => !opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + spec.function.name)).map(spec => ({ spec, version: 1,
+      gate: (): ToolGate => spec.function.name === 'read_building_scope' ? opts.buildingScope!.remaining > 0 ? 'available' : 'budget_exhausted' : writeGate(),
+      execute: (v: unknown) => opts.buildingScope!.execute(spec.function.name, v),
     })),
     ...WRITE_TOOLS.map(spec => ({ spec, version: spec.function.name === 'save_project_solution' ? 2 : 1,
       ...(spec.function.name === 'propose_project_plan' ? { waitingFor: opts.aiCatalog?.text('tools.waiting.plan-direct') ?? 'use save_compiled_project_plan for a plan compiled or edited in this turn' } : {}),

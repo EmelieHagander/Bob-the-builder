@@ -586,6 +586,31 @@ remain open. A Bob tool for the same links is a separate follow-up.
 
 Database details: [db/README](../db/README.md#project-rooms-and-area-rooms--2026-10-25).
 
+### Bob building scope — owner decisions 2026-10-25
+
+**Source only; not applied or deployed.** In a claimed chat turn Bob can set
+the project's Building, rooms and Area mappings within the rules above, so an
+owner can name the rooms of their house and Bob does it in a few steps:
+
+1. **Which Buildings Bob offers.** Only Buildings the caller can edit
+   (`can_edit_building`) and Buildings this project already targets (a Building,
+   Site or room row), never archived ones. A Building the caller reads only
+   through another project is not offered: general read access
+   (`has_building_access`) is not a listing rule.
+2. **Linking.** When the owner clearly identifies the Building, Bob links it
+   directly; when several fit, he asks which. He always says what was shared:
+   the whole Building, with its rooms, notes and measurements, becomes visible to
+   every project member.
+3. **Unlinking.** Allowed, except that a whole-Building unlink is refused while
+   the project's Site link covers that Building or the project follows it for
+   household sharing (`project_household_shares`). The owner changes those
+   choices on their own pages. Unmarking rooms and unmapping Areas are allowed.
+
+Scope v1 covers Buildings, rooms (Spaces) and Areas; Elements and Sites stay on
+the Building & spaces page. Authority stays in `physical_scope_command`; Bob's
+tools add no right. Contract and receipts:
+[Ask bob writes](ask-bob-writes.md#fifth-implementation-building-and-room-scope--source-2026-10-25).
+
 ## 11.7 First UI surface
 
 2C gets a focused **Building context** page reachable from existing project/Area surfaces, not a new top-level navigation family. It must let a connected user:
