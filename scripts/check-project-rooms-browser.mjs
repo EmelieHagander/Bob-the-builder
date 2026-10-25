@@ -1,4 +1,4 @@
-// Project rooms, Area rooms and building choice at project creation.
+// Project rooms, Area rooms, room measurements and building choice at project creation.
 // Production React + database.ts + Supabase client; HTTP is fixture-only and
 // mirrors the physical_scope_command contract. SQL/RLS authority is tested
 // against the real migration separately.
@@ -26,8 +26,24 @@ const audit = { change_note: 'Room scope fixture', actor_label: 'Fixture member'
 const eq = (url, key) => url.searchParams.get(key)?.replace(/^eq\./, '')
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS' }
 
+// Immutable snapshots on one room revision (bob.space_measurements). Kids room
+// is at revision 2; its revision-1 snapshot is history and must never show.
+const snap = (id, space_id, space_revision, subject, value, unit, truth, source) => ({ id, space_id, building_id: 'house', space_revision, source_project_id: 'A', measurement_id: 'm-' + id, measurement_revision: 2, subject, value, unit, truth, source })
+const measurementRows = () => [
+  snap('k0', 'kids', 1, 'Rummets exakta längd', 4100, 'mm', 'estimated', 'Earlier guess'),
+  snap('k1', 'kids', 2, 'Rummets exakta längd', 3970, 'mm', 'measured', 'Laser, 2026-10-12'),
+  snap('k2', 'kids', 2, 'Rummets exakta bredd', 2700, 'mm', 'measured', 'Laser, 2026-10-12'),
+  snap('k3', 'kids', 2, 'Takhöjd vid sängens placering', 1920, 'mm', 'measured', 'Tape measure'),
+  snap('k4', 'kids', 2, 'N-sida: fönster karm-till-karm', 1030, 'mm', 'measured', 'Tape measure'),
+  snap('k5', 'kids', 2, 'Ö-sida: dörr karm-till-karm', 820, 'mm', 'provided_spec', 'Door supplier drawing'),
+  snap('k6', 'kids', 2, 'Takhöjd vid fönstret', null, 'mm', 'unknown', ''),
+  snap('k7', 'kids', 2, 'Garderob: djup', 60, 'cm', 'estimated', 'Owner estimate'),
+  snap('c1', 'kitchen', 1, 'Bänkdjup', 62, 'cm', 'measured', 'Tape measure'),
+]
+const byText = (a, b) => a < b ? -1 : a > b ? 1 : 0
+
 function freshState() {
-  const room = (id, building_id, name, kind) => ({ ...audit, id, building_id, revision: 1, latest_revision: 1, project_id: null, source_project_id: null, level_id: null, name, kind, notes: '', truth: 'unknown', source: '', has_proposal: false })
+  const room = (id, building_id, name, kind, revision = 1) => ({ ...audit, id, building_id, revision, latest_revision: revision, project_id: null, source_project_id: null, level_id: null, name, kind, notes: '', truth: 'unknown', source: '', has_proposal: false })
   return {
     projects: [{ id: 'A', slug: 'a', name: 'Porch A', description: '', location: '', type: 'Renovation', theme: 'birch', start_label: '', start_date: null, end_date: null }],
     buildings: [
@@ -35,7 +51,8 @@ function freshState() {
       { ...audit, id: 'barn', site_id: null, revision: 1, name: 'Neighbour barn', notes: '' },
     ],
     canEdit: { house: true, barn: false },
-    spaces: [room('kids', 'house', 'Kids room', 'Bedroom'), room('landing', 'house', 'Landing', 'Hall'), room('kitchen', 'house', 'Kitchen', 'Kitchen'), room('hayloft', 'barn', 'Hayloft', 'Loft')],
+    spaces: [room('kids', 'house', 'Kids room', 'Bedroom', 2), room('landing', 'house', 'Landing', 'Hall'), room('kitchen', 'house', 'Kitchen', 'Kitchen'), room('hayloft', 'barn', 'Hayloft', 'Loft')],
+    measurements: measurementRows(), measurementReads: [], failMeasurementRead: false,
     areas: [{ id: 'area-bunk', project_id: 'A', slug: 'bunk-bed', name: 'Bunk bed', description: 'Build a bunk bed', icon: 'bed', lead_id: null, assigned_pct: 0, materials_pct: 0, done_pct: 0, task_summary: 'No tasks yet', phase: 'design', archived_at: null, area_crew: [], area_reference_images: [] }],
     scopes: [], targets: [], creates: [], failLink: false, failRoomRead: false,
   }
@@ -127,6 +144,18 @@ async function fixture(viewport) {
       return respond({ json: rows.map(room => ({ ...room, project_id: project })) })
     }
     if (path === '/rest/v1/current_spaces') return respond({ json: state.spaces.filter(row => row.building_id === eq(url, 'building_id')) })
+    if (path === '/rest/v1/space_measurement_details') {
+      // Mirrors PostgREST: or=(and(space_id.eq."id",space_revision.eq.N),…), order, offset/limit.
+      const filter = url.searchParams.get('or') ?? ''
+      const wanted = [...filter.matchAll(/space_id\.eq\.("?)([^",)]+)\1,space_revision\.eq\.(\d+)/g)].map(match => `${match[2]}@${match[3]}`)
+      if (!wanted.length) errors.push('Unbounded measurement read: ' + url.search)
+      state.measurementReads.push(wanted)
+      if (state.failMeasurementRead) return respond({ status: 503, json: { message: 'Measurements temporarily unavailable' } })
+      const offset = Number(url.searchParams.get('offset') ?? 0), limit = Number(url.searchParams.get('limit') ?? 1000)
+      const rows = state.measurements.filter(row => wanted.includes(`${row.space_id}@${row.space_revision}`))
+        .sort((a, b) => byText(a.space_id, b.space_id) || byText(a.subject, b.subject) || byText(a.id, b.id))
+      return respond({ json: rows.slice(offset, offset + limit) })
+    }
     if (path === '/rest/v1/rpc/physical_scope_command') return respond(scopeCommand(state, request.postDataJSON()))
     if (path.startsWith('/rest/v1/') && method === 'GET') return respond({ json: [] })
     errors.push(method + ' ' + path)
@@ -143,10 +172,10 @@ async function assertPhoneLayout(page, viewport, label) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   assert(overflow <= 1, `${label}: no horizontal page scroll at ${viewport.width}px (overflow ${overflow})`)
 }
-async function assertReachable(locator, label) {
+async function assertReachable(locator, label, min = 44) {
   await locator.evaluate(node => node.scrollIntoView({ block: 'center' }))
   const box = await locator.boundingBox()
-  assert(box && box.height >= 44, `${label}: touch target is at least 44px high`)
+  assert(box && box.height >= min, `${label}: touch target is at least ${min}px high (${box?.height})`)
   assert(await locator.evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)) }), `${label}: not covered by fixed controls`)
 }
 
@@ -208,6 +237,61 @@ try {
     await assertPhoneLayout(page, viewport, 'Building rooms')
     await shot('project-rooms-building')
 
+    // 2b. Each room shows its saved measurements: one read for the Building,
+    // only the current room revision, verbatim labels, truth and source on tap.
+    const phone = viewport.width <= 860
+    const group = (scope, name) => scope.getByRole('group', { name: `${name} measurements`, exact: true })
+    const title = locator => locator.locator('.room-measurements-title')
+    const rowsOf = locator => locator.locator('.room-measurement > summary').allInnerTexts().then(texts => texts.map(text => text.replace(/\s+/g, ' ').trim()))
+    state.measurementReads = []
+    await page.reload()
+    let kids = group(page, 'Kids room')
+    await title(kids).getByText('· 7').waitFor()
+    assert.equal((await title(kids).innerText()).replace(/\s+/g, ' '), 'Measurements · 7')
+    assert.deepEqual(state.measurementReads, [['kids@2', 'landing@1', 'kitchen@1']], 'One read for the Building, at each room’s current revision')
+    assert.deepEqual(await rowsOf(kids), ['Garderob: djup 60 cm Estimated', 'N-sida: fönster karm-till-karm 1030 mm Measured', 'Rummets exakta bredd 2700 mm Measured'])
+    await group(page, 'Landing').getByText('No measurements saved for this room yet.', { exact: true }).waitFor()
+    assert.deepEqual(await rowsOf(group(page, 'Kitchen')), ['Bänkdjup 62 cm Measured'])
+    assert.equal(await group(page, 'Kitchen').getByRole('button').count(), 0, 'No Show all for a short list')
+    const more = kids.getByRole('button', { name: 'Show all 7 measurements', exact: true })
+    assert.equal(await more.getAttribute('aria-expanded'), 'false')
+    await assertReachable(more, 'Show all measurements', phone ? 44 : 36)
+    await more.click()
+    assert.equal(await kids.getByRole('button', { name: 'Show fewer', exact: true }).getAttribute('aria-expanded'), 'true')
+    assert.deepEqual(await rowsOf(kids), [
+      'Garderob: djup 60 cm Estimated', 'N-sida: fönster karm-till-karm 1030 mm Measured', 'Rummets exakta bredd 2700 mm Measured',
+      'Rummets exakta längd 3970 mm Measured', 'Takhöjd vid fönstret Not measured yet Unknown', 'Takhöjd vid sängens placering 1920 mm Measured',
+      'Ö-sida: dörr karm-till-karm 820 mm Specification',
+    ], 'Older-revision snapshots never show; an unknown value is not invented')
+    assert.equal(await page.getByText('4100 mm').count(), 0)
+    const length = kids.locator('.room-measurement').filter({ hasText: 'Rummets exakta längd' })
+    assert.equal(await length.getByText('Source: Laser, 2026-10-12').isVisible(), false, 'Source stays out of the row until asked')
+    await assertReachable(length.locator('summary'), 'Measurement row', phone ? 44 : 36)
+    await length.locator('summary').click()
+    await length.getByText('Source: Laser, 2026-10-12', { exact: true }).waitFor()
+    await length.getByText('Measurement version 2', { exact: true }).waitFor()
+    await kids.locator('.room-measurement').filter({ hasText: 'Takhöjd vid fönstret' }).locator('summary').click()
+    await kids.getByText('Source: not recorded', { exact: true }).waitFor()
+    await assertPhoneLayout(page, viewport, 'Room measurements')
+    await kids.evaluate(node => node.scrollIntoView({ block: 'start' }))
+    await shot('project-rooms-measurements')
+
+    // A failed read is not "no measurements", and Retry recovers in place.
+    state.failMeasurementRead = true
+    await page.reload()
+    const failed = page.getByRole('alert').filter({ hasText: 'Room measurements could not be loaded. Rooms are listed without them.' })
+    await failed.waitFor()
+    await group(page, 'Kids room').getByText('Measurements not loaded.', { exact: true }).waitFor()
+    assert.equal(await page.getByText('No measurements saved for this room yet.').count(), 0, 'A failed read is never shown as empty')
+    assert.equal(await toggle('Kids room').isChecked(), true, 'Rooms stay usable')
+    await assertReachable(failed.getByRole('button', { name: 'Retry', exact: true }), 'Retry measurements', phone ? 44 : 36)
+    await assertPhoneLayout(page, viewport, 'Room measurements failed')
+    await shot('project-rooms-measurements-failed')
+    state.failMeasurementRead = false
+    await failed.getByRole('button', { name: 'Retry', exact: true }).click()
+    await title(group(page, 'Kids room')).getByText('· 7').waitFor()
+    assert.equal(await failed.count(), 0)
+
     // 3. An Area maps to rooms of the linked building.
     await page.goto(base + '#/areas/bunk-bed')
     const rooms = page.getByRole('region', { name: 'Rooms', exact: true })
@@ -225,8 +309,28 @@ try {
     await page.reload()
     await rooms.locator('.area-room-row').getByText('Kids room', { exact: true }).waitFor()
     await assertReachable(rooms.getByRole('button', { name: 'Remove Kids room from this Area', exact: true }), 'Remove room')
+    kids = group(rooms, 'Kids room')
+    await title(kids).getByText('· 7').waitFor()
+    assert.deepEqual(await rowsOf(kids), ['Garderob: djup 60 cm Estimated', 'N-sida: fönster karm-till-karm 1030 mm Measured', 'Rummets exakta bredd 2700 mm Measured'])
+    assert.equal(state.measurementReads.at(-1).join(), 'kids@2', 'The panel reads its mapped rooms only')
+    await assertReachable(kids.getByRole('button', { name: 'Show all 7 measurements', exact: true }), 'Area show all')
+    await kids.getByRole('button', { name: 'Show all 7 measurements', exact: true }).click()
+    await kids.getByText('Takhöjd vid fönstret', { exact: true }).waitFor()
+    assert.equal(await rooms.getByText('4100 mm').count(), 0)
     await assertPhoneLayout(page, viewport, 'Area rooms')
     await shot('project-rooms-area')
+    state.failMeasurementRead = true
+    await page.reload()
+    const areaFailed = rooms.getByRole('alert').filter({ hasText: 'Room measurements could not be loaded.' })
+    await areaFailed.waitFor()
+    await group(rooms, 'Kids room').getByText('Measurements not loaded.', { exact: true }).waitFor()
+    assert.equal(await rooms.getByText('No measurements saved for this room yet.').count(), 0)
+    await rooms.getByRole('button', { name: 'Remove Kids room from this Area', exact: true }).waitFor()
+    await assertPhoneLayout(page, viewport, 'Area measurements failed')
+    await shot('project-rooms-area-measurements-failed')
+    state.failMeasurementRead = false
+    await areaFailed.getByRole('button', { name: 'Retry', exact: true }).click()
+    await title(group(rooms, 'Kids room')).getByText('· 7').waitFor()
     // A failed read is not an empty Area.
     state.failRoomRead = true
     await page.reload()
@@ -254,6 +358,9 @@ try {
     await rooms.getByText('This project has no building linked yet. Link one to choose the rooms this Area covers.', { exact: true }).waitFor()
     await rooms.getByRole('link', { name: 'Building & spaces', exact: true }).waitFor()
     await shot('project-rooms-area-empty')
+    // Account Buildings reads the same snapshots without a Project.
+    await page.goto(base + '#/account/buildings')
+    await title(group(page, 'Kids room')).getByText('· 7').waitFor()
     assert.deepEqual(errors, [])
 
     // 5. Project creation: existing building, new building, skip, failed link.

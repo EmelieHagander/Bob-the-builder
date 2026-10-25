@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type {
   PhysicalBuilding,
   PhysicalElement,
@@ -12,7 +12,9 @@ import type {
   RelationshipProposal,
 } from '../data/buildingContext'
 import { scopeErrorMessage, unlinkResult } from '../lib/physicalScope'
+import { physicalTruthLabel, type MeasuredRoom, type RoomMeasurementMap } from '../lib/roomMeasurements'
 import { BuildingContextEditor } from './BuildingContextEditor'
+import { useRoomMeasurements } from './RoomMeasurements'
 import { BuildingSharingCard } from './SharingCards'
 import { inputStyle } from './form'
 import { Loading } from './ui'
@@ -31,6 +33,7 @@ type BuildingContextGateway = {
   elements(projectId: string, buildingId: string): Promise<PhysicalElement[]>
   relationships(projectId: string, buildingId: string): Promise<PhysicalRelationship[]>
   proposals(projectId: string, buildingId: string): Promise<Proposals>
+  measurements(projectId: string, rooms: MeasuredRoom[]): Promise<RoomMeasurementMap>
   canDirectEdit(projectId: string, buildingId: string): Promise<boolean>
   editSite(projectId: string, action: 'create', id: string, expected: number, data: Record<string, unknown>): Promise<unknown>
   editBuilding(projectId: string, action: 'create', id: string, expected: number, data: Record<string, unknown>): Promise<unknown>
@@ -140,6 +143,11 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
     return () => { alive = false }
   }, [context, projectId, selectedBuildingId, version])
 
+  // One measurement read per Building, for the accepted revision of each listed room.
+  const listedRooms = useMemo(() => detail.spaces.filter(space => !space.archived), [detail.spaces])
+  const readMeasurements = useCallback((id: string, rooms: MeasuredRoom[]) => context.measurements(id, rooms), [context])
+  const roomMeasurements = useRoomMeasurements(projectId, listedRooms, readMeasurements)
+
   if (loading && buildings.length === 0) return <Loading label="Loading building context…" />
 
   if (rootError) {
@@ -203,6 +211,8 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
       elements={detail.elements}
       relationships={detail.relationships}
       canDirectEdit={detail.canDirectEdit}
+      roomMeasurements={roomMeasurements.load}
+      onRetryMeasurements={roomMeasurements.retry}
       onSelectBuilding={setSelectedBuildingId}
       onCreateSite={async (id, data) => { await context.editSite(projectId, 'create', id, 0, data) }}
       onCreateBuilding={async (id, data) => {
@@ -238,7 +248,7 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
           ...detail.proposals.elements.map(p => ({ ...p, label: p.name, type: 'Element' })),
           ...detail.proposals.relationships.map(p => ({ ...p, label: `${p.relation.replace(/_/g, ' ')} · ${spaceNames.get(p.subjectSpaceId) ?? 'Unresolved space'} → ${spaceNames.get(p.objectSpaceId) ?? 'Unresolved space'}`, type: 'Relationship' })),
         ].map(p => <article className="fact-source" key={`${p.type}:${p.id}`}>
-          <strong>{p.label}</strong><p>{p.type} · Proposed version {p.revision} · {p.truth}</p>
+          <strong>{p.label}</strong><p>{p.type} · Proposed version {p.revision} · {physicalTruthLabel(p.truth)}</p>
           <p>{'description' in p ? p.description : p.notes}</p><p>Source: {p.source || 'Not recorded'}</p>
         </article>)}
       </section>}

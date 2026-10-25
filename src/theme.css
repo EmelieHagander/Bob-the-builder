@@ -825,6 +825,26 @@ select {
 .area-room-add { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
 .area-room-add > .ui-field { flex: 1 1 180px; }
 .area-rooms .foundation-actions .btn, .area-rooms .btn { min-height: 44px; }
+/* Room measurements: verbatim saved snapshots under a room; source on tap. */
+.room-measurements { margin-top: var(--space-2); min-width: 0; max-width: 40rem; /* keeps each value near its label on wide rows */ }
+.room-measurements-title { margin: 0 0 var(--space-1); font-size: var(--text-small); font-weight: 750; color: var(--ink-soft); }
+.room-measurements-title > span { font-weight: 600; }
+.room-measurements-note { margin: 0; font-size: 13px; color: var(--ink-soft); }
+.room-measurement-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.room-measurement-list > li { border-bottom: 1px solid var(--line); }
+.room-measurement > summary { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; column-gap: var(--space-2); align-items: start; padding: var(--space-1) 0; cursor: pointer; list-style: none; }
+.room-measurement > summary::-webkit-details-marker { display: none; }
+.room-measurement > summary::before { content: '▸'; grid-column: 1; grid-row: 1 / span 2; color: var(--ink-soft); }
+.room-measurement[open] > summary::before { content: '▾'; }
+.room-measurement-subject { grid-column: 2; grid-row: 1 / span 2; font-size: var(--text-body); overflow-wrap: anywhere; }
+.room-measurement-value { grid-column: 3; grid-row: 1; text-align: right; font-size: var(--text-body); font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.room-measurement-truth { grid-column: 3; grid-row: 2; text-align: right; font-size: var(--text-small); color: var(--ink-soft); white-space: nowrap; }
+.room-measurement-source { padding: 0 0 var(--space-2) 20px; font-size: 13px; color: var(--ink-soft); }
+.room-measurement-source > p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.room-measurement > summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.room-measurements-more { margin-top: var(--space-2); }
+.room-measurements-failed { display: flex; align-items: center; flex-wrap: wrap; gap: var(--layout-gap); margin-top: var(--section-gap); }
+.room-measurements-failed > span { flex: 1 1 200px; min-width: 0; }
 @media (max-width: 560px) {
   .start-project { padding: var(--panel-padding); }
   .start-project-card { padding: var(--panel-padding); }

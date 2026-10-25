@@ -82,6 +82,15 @@ rooms in that Building are removed too. The Area page's **Rooms** panel maps an
 Area to rooms of Buildings the Project links as a whole. The backend scope
 command remains the authority. Covered by `scripts/check-project-rooms-browser.mjs`.
 
+Each room on Building & spaces, and each mapped room in the Area **Rooms**
+panel, shows its saved measurements (`RoomMeasurements`): only the snapshots of
+the room revision on screen, labels verbatim, value and unit as saved, a truth
+label (a missing value reads **Not measured yet**) and the source on tap. More
+than three collapse behind **Show all N measurements**. One read covers the
+page; a failed read says so once with Retry and is never shown as empty. Labels
+are not interpreted: a length × width × height summary waits for a typed field.
+Covered by the same browser script.
+
 ### Compact Project home and phone conversation
 
 Project home keeps the Project phase, mixed Area summary and a stable Drawings
@@ -259,6 +268,7 @@ physical-phone and named-participant acceptance.
 - Form primitives: `src/components/form.tsx`
 - Modal frame: `src/components/Modal.tsx`
 - Domain editors: `src/components/editors.tsx`
+- Room measurement list and truth labels: `src/components/RoomMeasurements.tsx` + `src/lib/roomMeasurements.ts`
 - AI drawer: `src/components/AskBob.tsx`
 - Page focus to Bob: `src/lib/bobSurface.ts` + `src/domain/bobScreen.ts`; [context contract](ask-bob-context.md#implemented-scope-and-remaining-target)
 - Drawing source map, exact-version status and shared request complements: `src/components/CadSourceMap.tsx`, `DrawingRequests.tsx` + [artifact contract](artifacts.md#parameter-sources-changes-and-request-complements--p3-deployed)
