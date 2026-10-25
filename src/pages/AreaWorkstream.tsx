@@ -20,6 +20,7 @@ import {
 } from '../components/ui'
 import { areaNextAction } from '../lib/projectPhase'
 import { AreaArchiveNotice } from '../components/AreaArchiveNotice'
+import { AreaRooms } from '../components/AreaRooms'
 
 type Tab = 'tasks' | 'materials' | 'images'
 const NEXT_TASK_STATUS: Record<TaskStatus, TaskStatus> = { todo: 'doing', doing: 'done', done: 'todo', blocked: 'doing' }
@@ -207,6 +208,7 @@ export function AreaWorkstream() {
             <AvatarStack people={resolve(area.crewIds)} /><span style={{ fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 650 }}>{area.crewIds.length} in the crew</span>
           </div>
         </div>
+        <AreaRooms projectId={projectId} area={area} />
         <div className="card" style={{ padding: 'var(--panel-padding)' }}>
           <strong style={{ fontSize: 14 }}>Planning tools</strong>
           <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>

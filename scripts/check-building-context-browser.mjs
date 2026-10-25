@@ -78,6 +78,7 @@ try {
         const linked = new Set(state.scopes.filter(scope => scope.project_id === projectId).map(scope => scope.building_id))
         return respond({ json: state.buildings.filter(row => linked.has(row.id)).map(row => ({ ...row, project_id: projectId })) })
       }
+      if (path === '/rest/v1/project_physical_scope') return respond({ json: state.scopes.filter(scope => scope.project_id === eq(url, 'project_id')) })
       if (path === '/rest/v1/current_levels' || path === '/rest/v1/current_elements') return respond({ json: [] })
       if (path === '/rest/v1/current_spaces') {
         if (state.deny) return respond({ status: 403, json: { message: 'building access denied' } })
@@ -111,7 +112,7 @@ try {
       if (path === '/rest/v1/rpc/physical_scope_command') {
         const { p_project, p_action, p_record, p_data: data } = request.postDataJSON()
         assert.equal(p_action, 'link')
-        state.scopes.push({ id: p_record, project_id: p_project, building_id: data.building_id })
+        state.scopes.push({ id: p_record, project_id: p_project, target_kind: data.target_kind, building_id: data.building_id })
         return respond({ json: state.scopes.at(-1) })
       }
 

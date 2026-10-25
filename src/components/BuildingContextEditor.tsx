@@ -7,14 +7,16 @@ import type {
   PhysicalSite,
   PhysicalSpace,
   PhysicalTruth,
+  ProjectPhysicalScope,
   RelationshipKind,
 } from '../data/buildingContext'
+import { projectRoomMarks, unlinkSummary, wholeBuildingLinks, type UnlinkResult } from '../lib/physicalScope'
 import { Field, FormError, inputStyle } from './form'
 import { Modal } from './Modal'
-import { Icon, List, ListItem } from './ui'
+import { Icon, List, ListItem, Loading } from './ui'
 
 type NodeKind = 'level' | 'space' | 'element' | 'relationship'
-type EditorMode = 'site' | 'building' | NodeKind | 'link' | null
+type EditorMode = 'site' | 'building' | NodeKind | 'link' | 'unlink' | null
 
 type NodeData = Record<string, unknown>
 
@@ -22,7 +24,11 @@ export interface BuildingContextEditorProps {
   sites: PhysicalSite[]
   buildings: PhysicalBuilding[]
   projectBuildingIds: string[]
+  /** This Project's scope rows; empty outside a Project. */
+  scopes?: ProjectPhysicalScope[]
   showProjectScope?: boolean
+  /** Details (rooms and edit permission) are still being read. */
+  detailLoading?: boolean
   sharing?: ReactNode
   selectedBuildingId: string | null
   levels: PhysicalLevel[]
@@ -35,6 +41,9 @@ export interface BuildingContextEditorProps {
   onCreateBuilding: (id: string, data: { site_id: string | null; name: string; notes: string }) => Promise<void>
   onCreateNode: (kind: NodeKind, id: string, data: NodeData) => Promise<void>
   onLinkProject: (id: string, data: { target_kind: 'building'; building_id: string }) => Promise<void>
+  /** Mark (no current mark) or unmark one room for this Project; resolves after read-back. */
+  onToggleRoom?: (space: PhysicalSpace, mark: ProjectPhysicalScope | null) => Promise<void>
+  onUnlinkProject?: (scope: ProjectPhysicalScope) => Promise<UnlinkResult>
   onSaved: () => void
 }
 
@@ -62,7 +71,9 @@ export function BuildingContextEditor({
   sites,
   buildings,
   projectBuildingIds,
+  scopes = [],
   showProjectScope = true,
+  detailLoading = false,
   sharing,
   selectedBuildingId,
   levels,
@@ -75,13 +86,35 @@ export function BuildingContextEditor({
   onCreateBuilding,
   onCreateNode,
   onLinkProject,
+  onToggleRoom,
+  onUnlinkProject,
   onSaved,
 }: BuildingContextEditorProps) {
   const [mode, setMode] = useState<EditorMode>(null)
+  const [roomBusy, setRoomBusy] = useState<string | null>(null)
+  const [roomError, setRoomError] = useState('')
+  const [notice, setNotice] = useState('')
   const selected = buildings.find(building => building.id === selectedBuildingId) ?? buildings[0] ?? null
   const scoped = selected ? projectBuildingIds.includes(selected.id) : false
   const spaceNames = useMemo(() => new Map(spaces.map(space => [space.id, space.name])), [spaces])
   const levelNames = useMemo(() => new Map(levels.map(level => [level.id, level.name])), [levels])
+  // Room marks need the whole Building (or its Site) in this Project.
+  const wholeLinks = selected && showProjectScope ? wholeBuildingLinks(scopes, selected) : []
+  const wholeLinked = wholeLinks.length > 0
+  const unlinkScope = wholeLinks.find(scope => scope.targetKind === 'building') ?? wholeLinks[0] ?? null
+  const marks = selected && showProjectScope ? projectRoomMarks(scopes, selected.id) : new Map<string, ProjectPhysicalScope>()
+  const markedSpaces = spaces.filter(space => marks.has(space.id))
+  const unlistedMarks = [...marks.keys()].filter(id => !spaces.some(space => space.id === id)).length
+  const activeSpaces = spaces.filter(space => !space.archived)
+  const siteName = (siteId: string | null) => sites.find(site => site.id === siteId)?.name ?? 'its site'
+
+  async function toggleRoom(space: PhysicalSpace, mark: ProjectPhysicalScope | null) {
+    if (!onToggleRoom || roomBusy) return
+    setRoomBusy(space.id); setRoomError(''); setNotice('')
+    try { await onToggleRoom(space, mark) }
+    catch (err) { setRoomError(`${space.name}: ${errorMessage(err)}`) }
+    finally { setRoomBusy(null) }
+  }
 
   return <div className="building-context-editor">
     <div className="foundation-actions" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -91,7 +124,7 @@ export function BuildingContextEditor({
       </div>
       {buildings.length > 0 && <label style={{ minWidth: 220 }}>
         <span className="foundation-hint" style={{ display: 'block', marginBottom: 4 }}>Building</span>
-        <select style={inputStyle} value={selected?.id ?? ''} onChange={event => onSelectBuilding(event.target.value)}>
+        <select style={inputStyle} value={selected?.id ?? ''} onChange={event => { setNotice(''); setRoomError(''); onSelectBuilding(event.target.value) }}>
           {buildings.map(building => <option key={building.id} value={building.id}>{building.name}</option>)}
         </select>
       </label>}
@@ -110,36 +143,68 @@ export function BuildingContextEditor({
             {selected.notes && <p style={{ margin: 0 }}>{selected.notes}</p>}
           </div>
           {showProjectScope && <div className="cluster" style={{ flexWrap: 'wrap' }}>
-            <span className="image-purpose">{scoped ? 'Used by this project' : 'Not linked to this project'}</span>
-            {!scoped && <button className="btn btn-primary" type="button" onClick={() => setMode('link')}>Use in this project</button>}
+            <span className="image-purpose">{wholeLinked ? 'Used by this project' : scoped ? 'Some rooms linked' : 'Not linked to this project'}</span>
+            {!wholeLinked && canDirectEdit && !detailLoading && <button className="btn btn-primary" type="button" onClick={() => setMode('link')}>Use in this project</button>}
+            {unlinkScope && onUnlinkProject && <button className="btn" type="button" onClick={() => { setNotice(''); setMode('unlink') }}>Unlink from this project</button>}
           </div>}
         </div>
-        {!canDirectEdit && scoped && showProjectScope && <p className="foundation-hint" style={{ marginBottom: 0 }}>
+        {showProjectScope && !wholeLinked && !canDirectEdit && !detailLoading && <p className="foundation-hint">
+          Only someone who can edit {selected.name} can link it to this project. Ask them to choose “Use in this project”.
+        </p>}
+        {showProjectScope && !wholeLinked && scoped && <p className="foundation-hint">
+          This project uses single rooms here, not the whole building. Link the whole building to choose rooms.
+        </p>}
+        {showProjectScope && wholeLinked && <div className="room-scope-summary">
+          <strong>Rooms in this project</strong>
+          {unlinkScope?.targetKind === 'site' && <p className="foundation-hint">Linked through the site {siteName(unlinkScope.siteId)}.</p>}
+          {detailLoading ? <p className="foundation-hint" role="status">Loading rooms…</p>
+            : markedSpaces.length || unlistedMarks ? <p>
+              {markedSpaces.map(space => space.archived ? `${space.name} (archived)` : space.name).join(', ')}
+              {unlistedMarks > 0 && `${markedSpaces.length ? ' · ' : ''}${unlistedMarks} ${unlistedMarks === 1 ? 'room is' : 'rooms are'} no longer listed`}
+            </p>
+            : <p className="foundation-hint">None marked yet. Tick the rooms this project covers below.</p>}
+        </div>}
+        {notice && <p className="foundation-hint" role="status">{notice}</p>}
+        {!canDirectEdit && !detailLoading && scoped && showProjectScope && <p className="foundation-hint" style={{ marginBottom: 0 }}>
           View only. Ask a building owner to update these details.
         </p>}
       </div>
 
-      {sharing}
+      {/* In a Project, its rooms come first; household sharing is building administration. */}
+      {!showProjectScope && sharing}
 
       <section className="card foundation-section" style={{ marginTop: 'var(--section-gap)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--layout-gap)', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div><h3 style={{ marginBottom: 3 }}>Spaces</h3><p className="foundation-hint" style={{ margin: 0 }}>Rooms and other spaces in this building.</p></div>
+          <div><h3 style={{ marginBottom: 3 }}>Spaces</h3><p className="foundation-hint" style={{ margin: 0 }}>{wholeLinked && onToggleRoom ? 'Tick the rooms this project covers.' : 'Rooms and other spaces in this building.'}</p></div>
           {canDirectEdit && <div className="cluster" style={{ flexWrap: 'wrap' }}>
             <button className="btn" type="button" onClick={() => setMode('level')}>Add level</button>
             <button className="btn btn-primary" type="button" onClick={() => setMode('space')}>Add space</button>
           </div>}
         </div>
-        {spaces.length === 0 ? <p style={{ marginTop: 'var(--section-gap)' }}>No spaces yet. Add only the room or space you know about.</p> : <List>
-          {spaces.filter(space => !space.archived).map(space => <ListItem key={space.id}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--layout-gap)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              <div><strong>{space.name}</strong><div className="foundation-hint">{space.kind || 'Space'}{space.levelId ? ` · ${levelNames.get(space.levelId) ?? 'Level'}` : ''}</div></div>
-              <span className="image-purpose">{truthLabel(space.truth)}</span>
+        {roomError && <div role="alert" style={{ marginTop: 'var(--section-gap)' }}><FormError>
+          <span>{roomError}</span> <button className="btn" type="button" onClick={() => { setRoomError(''); onSaved() }}>Reload</button>
+        </FormError></div>}
+        {detailLoading && spaces.length === 0 ? <Loading label="Loading rooms…" /> : spaces.length === 0 ? <p style={{ marginTop: 'var(--section-gap)' }}>No spaces yet. Add only the room or space you know about.</p> : <List>
+          {activeSpaces.map(space => {
+            const mark = marks.get(space.id) ?? null
+            const toggle = Boolean(showProjectScope && onToggleRoom && (wholeLinked || mark))
+            // While saving, show the intended state beside "Saving…"; failure restores the read-back state.
+            return <ListItem key={space.id}>
+            <div className="building-room-row">
+              <div className="building-room-text"><strong>{space.name}</strong><div className="foundation-hint">{space.kind || 'Space'}{space.levelId ? ` · ${levelNames.get(space.levelId) ?? 'Level'}` : ''}</div></div>
+              <div className="building-room-side">
+                <span className="image-purpose">{truthLabel(space.truth)}</span>
+                {toggle && <label className="foundation-check room-scope-toggle">
+                  <input type="checkbox" checked={roomBusy === space.id ? !mark : !!mark} disabled={roomBusy !== null} aria-label={`${space.name}: in this project`} onChange={() => void toggleRoom(space, mark)} />
+                  <span>{roomBusy === space.id ? 'Saving…' : 'In this project'}</span>
+                </label>}
+              </div>
             </div>
             {space.notes && <details className="space-notes" style={{ marginTop: 10 }}>
               <summary>Notes</summary><p style={{ marginBottom: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{space.notes}</p>
             </details>}
             {space.hasProposal && <p className="foundation-hint" style={{ marginBottom: 0 }}>Proposed change available.</p>}
-          </ListItem>)}
+          </ListItem>})}
         </List>}
       </section>
 
@@ -148,7 +213,7 @@ export function BuildingContextEditor({
           <div><h3 style={{ marginBottom: 3 }}>Known elements</h3><p className="foundation-hint" style={{ margin: 0 }}>Windows, doors and other building parts.</p></div>
           {canDirectEdit && <button className="btn" type="button" onClick={() => setMode('element')}>Add element</button>}
         </div>
-        {elements.filter(element => !element.archived).length === 0 ? <p style={{ marginTop: 'var(--section-gap)' }}>No building elements recorded.</p> : <List>
+        {elements.filter(element => !element.archived).length === 0 ? detailLoading ? null : <p style={{ marginTop: 'var(--section-gap)' }}>No building elements recorded.</p> : <List>
           {elements.filter(element => !element.archived).map(element => <ListItem key={element.id}>
             <strong>{element.name}</strong> <span className="foundation-hint">· {element.kind || 'element'}{element.spaceId ? ` · ${spaceNames.get(element.spaceId) ?? 'Space'}` : ''}</span>
             <div className="foundation-hint">{truthLabel(element.truth)}{element.source ? ` · ${element.source}` : ''}</div>
@@ -161,16 +226,27 @@ export function BuildingContextEditor({
           <div><h3 style={{ marginBottom: 3 }}>Spatial relationships</h3><p className="foundation-hint" style={{ margin: 0 }}>How the rooms connect or sit beside each other.</p></div>
           {canDirectEdit && spaces.length >= 2 && <button className="btn" type="button" onClick={() => setMode('relationship')}>Add relationship</button>}
         </div>
-        {relationships.filter(relation => !relation.archived).length === 0 ? <p style={{ marginTop: 'var(--section-gap)' }}>No room relationships recorded yet.</p> : <List>
+        {relationships.filter(relation => !relation.archived).length === 0 ? detailLoading ? null : <p style={{ marginTop: 'var(--section-gap)' }}>No room relationships recorded yet.</p> : <List>
           {relationships.filter(relation => !relation.archived).map(relation => <ListItem key={relation.id}>
             <strong>{spaceNames.get(relation.subjectSpaceId) ?? 'Space'}</strong> {relationLabel(relation.relation).toLowerCase()} <strong>{spaceNames.get(relation.objectSpaceId) ?? 'Space'}</strong>
             <div className="foundation-hint">{truthLabel(relation.truth)}{relation.source ? ` · ${relation.source}` : ''}</div>
           </ListItem>)}
         </List>}
       </section>
+      {showProjectScope && sharing}
     </>}
 
-    {mode && <CreatePhysicalModal
+    {mode === 'unlink' && selected && unlinkScope && onUnlinkProject && <UnlinkProjectModal
+      building={selected}
+      scope={unlinkScope}
+      siteName={siteName(unlinkScope.siteId)}
+      markedCount={marks.size}
+      stillCovered={wholeLinks.length > 1}
+      onClose={() => setMode(null)}
+      onUnlink={onUnlinkProject}
+      onDone={result => { setMode(null); setNotice(unlinkSummary(selected.name, result)); onSaved() }}
+    />}
+    {mode && mode !== 'unlink' && <CreatePhysicalModal
       mode={mode}
       sites={sites}
       building={selected}
@@ -199,7 +275,7 @@ function CreatePhysicalModal({
   onLinkProject,
   onSaved,
 }: {
-  mode: Exclude<EditorMode, null>
+  mode: Exclude<EditorMode, null | 'unlink'>
   sites: PhysicalSite[]
   building: PhysicalBuilding | null
   levels: PhysicalLevel[]
@@ -230,7 +306,8 @@ function CreatePhysicalModal({
 
   return <Modal title={title} onClose={() => { if (!busy) onClose() }}>
     {mode === 'link' ? <>
-      <p>Link <strong>{building?.name}</strong> to this project. This grants project-context reads; it does not make project members building editors.</p>
+      <p>Everyone in this project will see <strong>{building?.name}</strong> and its rooms. It does not let them change the building.</p>
+      <p className="foundation-hint">Next, tick the rooms this project covers.</p>
       {error && <div role="alert"><FormError>{error}</FormError></div>}
       <div className="foundation-actions"><button className="btn" disabled={busy} onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={busy || !building} onClick={async () => {
         if (!building) return
@@ -270,5 +347,40 @@ function CreatePhysicalModal({
         <div className="foundation-actions"><button className="btn" type="button" onClick={onClose}>Cancel</button><button className="btn btn-primary">{busy ? 'Saving…' : 'Save'}</button></div>
       </fieldset>
     </form>}
+  </Modal>
+}
+
+function UnlinkProjectModal({ building, scope, siteName, markedCount, stillCovered, onClose, onUnlink, onDone }: {
+  building: PhysicalBuilding
+  scope: ProjectPhysicalScope
+  siteName: string
+  markedCount: number
+  stillCovered: boolean
+  onClose: () => void
+  onUnlink: (scope: ProjectPhysicalScope) => Promise<UnlinkResult>
+  onDone: (result: UnlinkResult) => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const viaSite = scope.targetKind === 'site'
+  return <Modal title="Unlink from this project" onClose={() => { if (!busy) onClose() }}>
+    {viaSite
+      ? <p>This project uses <strong>{building.name}</strong> through the site <strong>{siteName}</strong>. Unlinking removes the whole site and every building on it from this project.</p>
+      : <p>Stop using <strong>{building.name}</strong> in this project?</p>}
+    {stillCovered ? <p className="foundation-hint">The project still covers {building.name} another way, so its room marks and Area rooms stay.</p>
+      : <ul className="unlink-consequences">
+        <li>{markedCount ? `This project’s ${markedCount} room ${markedCount === 1 ? 'mark is' : 'marks are'} removed.` : 'No rooms are marked, so none are removed.'}</li>
+        <li>Areas lose the rooms they were mapped to in {viaSite ? 'those buildings' : 'this building'}.</li>
+        <li>The building, its rooms and their history stay saved.</li>
+      </ul>}
+    {error && <div role="alert"><FormError>{error}</FormError></div>}
+    <div className="foundation-actions" style={{ justifyContent: 'flex-end' }}>
+      <button className="btn" type="button" disabled={busy} onClick={onClose}>Cancel</button>
+      <button className="btn btn-remove" type="button" disabled={busy} onClick={async () => {
+        setBusy(true); setError('')
+        try { onDone(await onUnlink(scope)) }
+        catch (err) { setError(errorMessage(err)); setBusy(false) }
+      }}>{busy ? 'Unlinking…' : viaSite ? 'Unlink site' : 'Unlink building'}</button>
+    </div>
   </Modal>
 }

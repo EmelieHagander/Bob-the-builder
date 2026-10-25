@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { wholeBuildingLinks } from '../lib/physicalScope'
 
 export type PhysicalTruth = 'measured' | 'provided_spec' | 'estimated' | 'ai_assessment' | 'unknown'
 export type PhysicalTargetKind = 'site' | 'building' | 'space' | 'element'
@@ -124,6 +125,15 @@ export interface AreaPhysicalTarget {
   spaceId: string | null
   elementId: string | null
 }
+/** What an Area can map to: rooms of Buildings the Project targets as a whole. */
+export interface ProjectRoomScope {
+  scopes: ProjectPhysicalScope[]
+  /** Buildings the Project targets as a whole (own link or Site link). */
+  buildings: PhysicalBuilding[]
+  /** Every readable room of those Buildings, archived rooms included for names. */
+  rooms: PhysicalSpace[]
+  areaTargets: AreaPhysicalTarget[]
+}
 export interface PhysicalHistoryVersion {
   id: string
   buildingId: string
@@ -211,7 +221,7 @@ export function createBuildingContext(
     if (rows.some(row => row.project_id && row.project_id !== projectId)) throw new Error('Physical project context mismatch.')
     return rows
   }
-  return {
+  const api = {
     async sites(projectId: string): Promise<PhysicalSite[]> {
       const { db, guard } = connection(projectId)
       const rows = checked(await db.from('current_sites').select('*').eq('archived', false).order('name')) as Row[]
@@ -327,6 +337,37 @@ export function createBuildingContext(
       const { db, guard } = connection(projectId)
       const saved = checked(await db.rpc('physical_scope_command', { p_project: projectId, p_kind: kind, p_action: action, p_record: id, p_data: data })) as Row
       guard(); return saved
+    },
+  }
+  return {
+    ...api,
+    /** Buildings the caller may link to a Project: linking needs Building edit rights. */
+    async editableBuildings(projectId: string): Promise<PhysicalBuilding[]> {
+      const all = await api.buildings(projectId)
+      const editable = await Promise.all(all.map(item => api.canDirectEdit(projectId, item.id)))
+      return all.filter((_, index) => editable[index])
+    },
+    /**
+     * Link a Project the caller has just created. Its id is the explicit context;
+     * the active-Project selection is unchanged until the caller opens it.
+     */
+    async linkCreatedProject(projectId: string, scopeId: string, buildingId: string) {
+      if (!projectId || !buildingId) throw new Error('Choose a project and a building first.')
+      const { db, guard } = connection('')
+      const saved = checked(await db.rpc('physical_scope_command', {
+        p_project: projectId, p_kind: 'project', p_action: 'link', p_record: scopeId,
+        p_data: { target_kind: 'building', building_id: buildingId },
+      })) as Row
+      guard(); return saved
+    },
+    /** Rooms an Area can map to, plus the Project's current scope and Area mappings. */
+    async projectRoomScope(projectId: string): Promise<ProjectRoomScope> {
+      const [scopes, linked, rooms, areaTargets] = await Promise.all([
+        api.scopes(projectId), api.projectBuildings(projectId), api.projectSpaces(projectId), api.areaTargets(projectId),
+      ])
+      const buildings = linked.filter(item => wholeBuildingLinks(scopes, item).length > 0)
+      const ids = new Set(buildings.map(item => item.id))
+      return { scopes, buildings, rooms: rooms.filter(room => ids.has(room.buildingId)), areaTargets }
     },
   }
 }

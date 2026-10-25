@@ -227,7 +227,9 @@ test('physical scope revocation hides raw geometry as well as view data, but kee
  const r=(await as(both,"select bob.search_bob_project_data_v6('A','artifacts',null,null,null,$1,null) result",[id(400)])).rows[0].result
  assert.equal(r.records[0].has_multifloor_plan,true);assert.equal(r.records[0].multifloor_plan,null)
  // A narrow room scope must not recreate whole-building coordinate authority.
- await as(both,'select bob.physical_scope_command($1,$2,$3,$4,$5)',['A','project','link',id(451),json({target_kind:'space',building_id:id(200),space_id:id(202)})])
+ // New room marks need the whole-building link (2026-10-25); an older room-only row stays valid data.
+ await assert.rejects(as(both,'select bob.physical_scope_command($1,$2,$3,$4,$5)',['A','project','link',id(451),json({target_kind:'space',building_id:id(200),space_id:id(202)})]),/building_not_linked/)
+ await pg.query("insert into bob.project_physical_scope(id,project_id,target_kind,building_id,space_id,created_by) values($1,'A','space',$2,$3,$4)",[id(451),id(200),id(202),both])
  assert.equal(await detail(400,1,both),undefined)
  await assert.rejects(save(405,data(),'create',0,both),/project_denied/)
 })

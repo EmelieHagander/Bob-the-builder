@@ -48,8 +48,11 @@ Project phases are **state**, not routes: do not add Concept / Design / Planning
 ### Project creation and room notes
 
 `NewProjectForm` is shared by the start screen and Account modal. Creation asks
-only for a Project name; empty details and an unscheduled build can be enriched
-later through the existing Project detail/schedule editor. Account navigation
+for a Project name and, optionally, its Building: one the creator can edit, a
+new Building by name, or **Choose later**. A failed Building step keeps the
+created Project and offers **Try again** or **Open project**. Empty details and
+an unscheduled build can be enriched later through the existing Project
+detail/schedule editor. Account navigation
 hides an already-open Bob composer without discarding its unsent project draft.
 The project creation modal renders above the Bob drawer. Creating a Project
 opens it. An empty Project (no Areas and no Tasks) leads with **What do you want
@@ -70,6 +73,14 @@ stay visible, and measurements, materials, target and project focus fold under
 Building & spaces uses practical labels. Space notes are collapsed under
 **Notes**, retained verbatim and expandable; truth labels and proposed/current
 separation remain visible. Presentation changes never delete physical records.
+
+In a Project, a Building linked as a whole lists its rooms with an **In this
+project** toggle and a **Rooms in this project** summary; rooms come before
+household sharing. Only a Building editor is offered **Use in this project**.
+**Unlink from this project** confirms that the Project's room marks and Area
+rooms in that Building are removed too. The Area page's **Rooms** panel maps an
+Area to rooms of Buildings the Project links as a whole. The backend scope
+command remains the authority. Covered by `scripts/check-project-rooms-browser.mjs`.
 
 ### Compact Project home and phone conversation
 

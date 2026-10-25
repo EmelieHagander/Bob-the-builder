@@ -94,7 +94,7 @@ The original product uses `Area` as a project-scoped physical/work zone. The per
 
 - `Area` — project work-zone container used by current collaboration/runtime flows;
 - `Site` / `Building` / `Space` / `BuildingElement` — implemented persistent physical context that may be reused across projects;
-- Areas may map to physical targets through the shipped backend relation; the dedicated Area-side mapping editor remains a narrow UI follow-up, and the entities must not be silently conflated.
+- Areas may map to rooms of a Building the Project links as a whole (Area **Rooms** panel, source ready 2026-10-25, not deployed; [building model](building-model.md#project-rooms-and-area-rooms--owner-decision-2026-10-25)); Area and Space must not be silently conflated.
 
 See `Docs/building-model.md` for the owning contract and `Docs/v1-plan.md` for delivery order.
 

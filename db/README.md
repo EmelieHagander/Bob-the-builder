@@ -1310,3 +1310,28 @@ The contract lives in
 Rollout: apply, then deploy `bob-worker` and `ask-bob` from the same source.
 Rollback: an older worker refuses version 2 CAD state; let active checkpoint
 jobs finish before rolling the worker back. The function can stay.
+
+### Project rooms and Area rooms — 2026-10-25
+
+**Not applied yet.** Owner decision: a project links a whole Building, then marks
+its rooms; Areas map to rooms of that Building
+([building model](../Docs/building-model.md#project-rooms-and-area-rooms--owner-decision-2026-10-25)).
+`20261025133000_project_room_scope.sql` replaces the body of
+`bob_private.physical_scope_command` (ACL and the `bob` wrapper unchanged) and
+adds the private helper `project_targets_whole_building(project, building)`
+(Building link, or a Site link covering it; executable by no client role):
+
+- Building link: unchanged, requires `can_edit_building`.
+- Room/element mark and Area target: project access plus the whole-building
+  link; `building_not_linked` (`22023`) otherwise. The Space/Element must belong
+  to that Building (`space_not_in_building` / `element_not_in_building`), the Area to the project (`project_denied`).
+- Unlink of a Building/Site link deletes this project's Space/Element scope rows
+  and Area targets for Buildings no longer covered, in the same transaction.
+- Links are idempotent (existing row returned). A per-project advisory lock
+  serializes scope changes.
+
+No table, grant or RLS change. Existing rows, including one room-only scope in
+production (2026-10-25), are kept. `tests/project-room-scope-sql.test.ts` covers
+the rules; two older tests now insert their room-only fixture rows directly.
+Rollout: apply; the app keeps working with the old and new rules. Rollback:
+restore the previous function body from `20260913213712_household_project_sharing.sql`.

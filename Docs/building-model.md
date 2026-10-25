@@ -558,6 +558,34 @@ from household audience. A project that follows a Building for sharing must reta
 an exact Building/Space/Element scope to that Building. A Site-only scope is not
 an implicit household-sharing selection.
 
+### Project rooms and Area rooms — owner decision 2026-10-25
+
+A Project links to a **whole Building**, or to the Site that holds it, and then
+marks **which rooms** (Spaces) it covers. An Area maps to rooms of that Building.
+`20261025133000_project_room_scope.sql` changes `physical_scope_command` to match:
+
+- Linking a whole Building still requires a Building editor, because it shares
+  the Building with every project member.
+- Marking a room or element, or mapping an Area to one, needs project access
+  only, and only inside a Building the project already targets as a whole
+  (`building_not_linked` otherwise). It grants no new read access.
+- Unlinking the whole Building (or its Site) also removes this Project's room
+  marks and Area mappings for Buildings it no longer covers. The result reports
+  `removed_rooms` and `removed_area_targets`.
+- Repeating a link returns the existing row (`existing: true`).
+- Older room-only rows remain valid data. Bob intake, multi-floor plans and
+  stair studies still require the whole-building link.
+
+App (same release): the project's Building & spaces page shows **Use in this
+project** only to Building editors, then a per-room **In this project** toggle,
+a "Rooms in this project" summary and **Unlink from this project** with the
+removal counts. The Area page has a **Rooms** panel. Project creation offers an
+optional building (an editable one or a new one), linked right after creation.
+This covers items 2 and 6 of §11.7; proposal acceptance and measurement linking
+remain open. A Bob tool for the same links is a separate follow-up.
+
+Database details: [db/README](../db/README.md#project-rooms-and-area-rooms--2026-10-25).
+
 ## 11.7 First UI surface
 
 2C gets a focused **Building context** page reachable from existing project/Area surfaces, not a new top-level navigation family. It must let a connected user:

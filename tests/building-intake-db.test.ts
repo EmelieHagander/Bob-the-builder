@@ -199,7 +199,9 @@ test('accepted snapshot sources survive an unrelated patch even after donor-proj
 
 test('full-building scope is required even when the caller can directly edit the Building from another project',async t=>{
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('oneB','B','One B','OB',$1)",[one])
-  await as(one,"select bob.physical_scope_command('B','project','link',$1,$2)",[id(351),json({target_kind:'space',building_id:building,space_id:ids.bedroom})])
+  // A room needs the whole-building link first (2026-10-25); older room-only rows stay valid data.
+  await assert.rejects(as(one,"select bob.physical_scope_command('B','project','link',$1,$2)",[id(351),json({target_kind:'space',building_id:building,space_id:ids.bedroom})]),/building_not_linked/)
+  await pg.query("insert into bob.project_physical_scope(id,project_id,target_kind,building_id,space_id,created_by) values($1,'B','space',$2,$3,$4)",[id(351),building,ids.bedroom,one])
   const c=await claim('Spara rummet.',one,'B');t.after(()=>finish(c))
   await assert.rejects(save(c,amend([op('new','space',{name:'Must not broaden scope'},'Spara rummet')],{request_quote:'Spara rummet'})),/building_scope_denied/)
 })
