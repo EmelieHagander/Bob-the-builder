@@ -1,6 +1,7 @@
 import { drawingErrorCode } from './drawing-errors.ts'
 import { createPlanLinks } from './project-plan-links.ts'
 import { buildingLinkFact, createBuildingScope } from './project-building-scope.ts'
+import { projectFactsPacket } from './project-facts.ts'
 import { createWorkRecords } from './project-work-records.ts'
 import { createSolutionActions } from './project-solution-actions.ts'
 import { createProjectEdits } from './project-edits.ts'
@@ -313,7 +314,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; turnUsdStop?: number } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; turnUsdStop?: number } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -324,6 +325,8 @@ export async function answerWithOpenAi(opts: {
       buildingLinkVersion: 1 as const,
       // Room dimensions read through search v9. Jobs without this pin keep v8.
       roomDimensionsVersion: 1 as const,
+      // Pure project facts at turn start and the compact construction table (2026-10-26). Jobs without this pin keep both as before.
+      projectFactsVersion: 1 as const,
       ...(checkpoint ? { groundingReadOrderVersion: 1 as const, modelDeadlineVersion: 1 as const } : {}),
       ...bobCompleteRequestVersions(!!checkpoint, contract),
       ...(checkpoint && contract.result_reference_version === 1 ? { resultWindowVersion: 1 as const } : {}),
@@ -345,6 +348,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.corePreloadVersion !== undefined && execution.corePreloadVersion !== 1) throw new Error('core_preload_version_invalid')
   if (execution.buildingLinkVersion !== undefined && execution.buildingLinkVersion !== 1) throw new Error('building_link_version_invalid')
   if (execution.roomDimensionsVersion !== undefined && execution.roomDimensionsVersion !== 1) throw new Error('room_dimensions_version_invalid')
+  if (execution.projectFactsVersion !== undefined && execution.projectFactsVersion !== 1) throw new Error('project_facts_version_invalid')
   if (execution.roomDimensionsVersion === 1) lookupRpc = 'search_bob_project_data_v9'
   const lookupOptions = { unlimitedWork,
     // Existing in-flight journals retain their recorded clock policy. New
@@ -494,6 +498,7 @@ export async function answerWithOpenAi(opts: {
   }
   const constructionOptions = {unlimitedWork,projectId:opts.projectId,message:opts.message,writer,hasAccess,
     ...(execution.constructionPageVersion === 1 ? { viewPageTokens: () => constructionViewBudget(constructionReadsInStep) } : {}),
+    ...(execution.projectFactsVersion === 1 ? { constructionTable: true } : {}),
     readDesignReadiness,
     ...constructionChangeReaders({
     prepareRoleChange:async(payload:import('./project-write.ts').WritePayload)=>{
@@ -844,6 +849,14 @@ export async function answerWithOpenAi(opts: {
       return error ? null : buildingLinkFact(data)
     }).catch(error => { rethrowContinuation(error); return null })
     : null
+  // One bounded read of saved project facts before the first step. A failed
+  // read degrades to unavailable; access is still checked at every step. A
+  // turn resumed from a checkpoint already holds them in its first messages.
+  const projectFacts = execution.projectFactsVersion === 1 && !restart
+    ? await readRpc('read_project_facts', { p_project: opts.projectId })
+      .then(({ data, error }) => projectFactsPacket(data, !!error, opts.projectId))
+      .catch(error => { rethrowContinuation(error); return projectFactsPacket(null, true, opts.projectId) })
+    : null
   try {
   const result=await runClaimedProjectTurn({
     aiCatalog,
@@ -859,6 +872,7 @@ export async function answerWithOpenAi(opts: {
     carryLoadedTools: execution.toolCarryVersion === 1,
     ...(execution.corePreloadVersion === 1 ? { corePreload: true } : {}),
     ...(buildingLinks ? { buildingLinks } : {}),
+    ...(execution.projectFactsVersion === 1 ? { pureFacts: true, ...(projectFacts ? { projectFacts } : {}) } : {}),
     ...(execution.completeRequestVersion === 1 ? { completeRequest: true } : {}),
     ...(execution.resultReferenceVersion === 1 ? { resultReferences: true } : {}),
     ...(contextStrategy ? { contextEpoch: () => mainContextEpoch,

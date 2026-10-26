@@ -267,6 +267,28 @@ whole-turn capacity/CPU and real-model cost belong to the final acceptance gate.
 [Verification](foundation-verification.md#construction-views--2026-10-19) records
 the local evidence, catalog compatibility and release order.
 
+### Compact construction table — owner decision 2026-10-26
+
+**Approved by the owner; source in progress, not deployed.** Construction
+turns averaged 16 `read_construction_draft` pages each. The live bunk bed is
+65,176 characters of raw recipe, parameters, joints and materials. Its
+compact table is about 7,200 characters.
+
+For jobs pinned with `projectFactsVersion: 1`, `view=overview` also returns
+one table for the exact revision:
+- **definitions:** id, primitive, x × y × z mm, material reference
+- **parts:** id, definition and role. An unclassified role stays `unknown`.
+- **joints:** id, method, the two part faces, and that joint's fastener from
+  `construction_fastener_schedule_for`
+- **fastener totals, glue packages, `complete`**, and the open-question count
+
+The table pages within the existing 6,000-token budget, with `next_read`,
+when a construction is larger. Placements, parameters, bindings and notes
+stay in their exact views. Bob opens them by ID only when a task needs them.
+It is a selection of canonical values, never a model summary. Checks,
+lists and drawing gates keep their own full reads. Unpinned jobs keep the
+counts-only overview.
+
 ### Instance roles and affected outputs — release D
 
 **Implemented; release installation/readback is tracked in [verification](foundation-verification.md#construction-instance-roles-and-consequences--release-d).** A version-1 `instance_policy` belongs to one exact construction revision. It contains one entry per stable recipe instance ID, an explicit role, its matching quantity policy and a reason. Geometry, definitions and numeric provenance remain in the existing construction; the policy does not alter the CAD recipe contract.

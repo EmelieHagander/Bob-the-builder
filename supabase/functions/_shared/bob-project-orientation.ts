@@ -17,7 +17,7 @@ export interface OrientationCard {
   id: string; name: string; level: Level; status: string | null; phase: string | null; sourceId: string;
 }
 export interface BoundedPresentation {
-  text: string; kind: 'original' | 'advisory_summary' | 'unavailable'; sourceIds: string[];
+  text: string; kind: 'original' | 'advisory_summary' | 'cut' | 'unavailable'; sourceIds: string[];
   tokens: number; maxTokens: number;
 }
 export interface ProjectOrientation {
@@ -45,12 +45,25 @@ const rows = (value: unknown): Row[] => {
 const text = (value: unknown) => typeof value === 'string' ? value : ''
 const revision = (value: unknown) => Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : null
 const pick = (row: Record<string, unknown>, keys: string[]) => Object.fromEntries(keys.filter(key => Object.hasOwn(row, key)).map(key => [key, row[key]]))
+/** Longest whole-code-point prefix whose rendering fits the token budget. */
+function longestPrefix(value: string, render: (prefix: string) => string, maxTokens: number): string {
+  const chars = Array.from(value)
+  let low = 0, high = chars.length
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2)
+    if (countContextTokens(render(chars.slice(0, mid).join(''))) <= maxTokens) low = mid; else high = mid - 1
+  }
+  return chars.slice(0, low).join('')
+}
 
 export async function prepareProjectOrientation(opts: {
   projectId: string; userId: string; briefing: LookupResult; currentView?: CurrentView;
   lookup: { search(value: LookupInput): Promise<LookupResult> }; context?: WorkingContext; message: string;
   callModel: ModelCall; hasAccess: () => Promise<boolean>; deadline: number;
   directory?: { maxTokens: number; pageMaxTokens: number; ready(reader: OrientationDirectoryReader): void };
+  /** 'cut' (pinned with project facts, 2026-10-26): an oversized block keeps its
+   * longest original prefix, labelled cut, instead of a model presentation. */
+  presentation?: 'model' | 'cut';
 }): Promise<ProjectOrientation> {
   if (!await opts.hasAccess()) throw new Error('project_denied')
   if (opts.briefing.projectId !== opts.projectId || opts.briefing.status !== 'ok'
@@ -168,13 +181,26 @@ export async function prepareProjectOrientation(opts: {
   const sourceDescription = focus.level === 'project' ? '' : focus.level === 'step'
     ? JSON.stringify({ goal: text(focusRow.goal), brief: text(focusRow.notes) })
     : text(focusRow.instructions ?? focusRow.description)
+  const footerText = (request: string, cut = false) => JSON.stringify({ project: projectCard.name, focus: { level: focus.level, name: focus.name, status: focus.status, phase: focus.phase },
+    currentRequest: request, ...(cut ? { currentRequestCut: true } : {}) })
   const blocks = [
     { key: 'overview', text: text(project.description), sourceIds: [projectSource], maxTokens: ORIENTATION_TOKEN_LIMITS.overview },
     { key: 'focus', text: sourceDescription, sourceIds: [focus.sourceId], maxTokens: ORIENTATION_TOKEN_LIMITS.focus },
-    { key: 'footer', text: JSON.stringify({ project: projectCard.name, focus: { level: focus.level, name: focus.name, status: focus.status, phase: focus.phase }, currentRequest: opts.message }),
+    { key: 'footer', text: footerText(opts.message),
       sourceIds: [...new Set([projectSource, focus.sourceId, requestSource])], maxTokens: ORIENTATION_TOKEN_LIMITS.footer },
   ]
   const presentations = new Map<string, BoundedPresentation>()
+  if (opts.presentation === 'cut') for (const block of blocks) {
+    if (countContextTokens(block.text) <= block.maxTokens) continue
+    // The footer keeps valid JSON: only the request is cut; the transcript holds it whole.
+    const value = block.key === 'footer' ? footerText(longestPrefix(opts.message, cut => footerText(cut, true), block.maxTokens), true)
+      : longestPrefix(block.text, cut => cut, block.maxTokens)
+    const tokens = countContextTokens(value)
+    // A footer whose names alone exceed the budget is reported, never sent to a model.
+    if (tokens > block.maxTokens) { warnings.push(`${block.key}:presentation_unavailable`); presentations.set(block.key, { text: '', kind: 'unavailable', sourceIds: block.sourceIds, tokens: 0, maxTokens: block.maxTokens }); continue }
+    warnings.push(`${block.key}:cut`)
+    presentations.set(block.key, { text: value, sourceIds: block.sourceIds, maxTokens: block.maxTokens, kind: 'cut', tokens })
+  }
   for (const block of blocks) {
     const tokens = countContextTokens(block.text)
     if (tokens <= block.maxTokens) presentations.set(block.key,

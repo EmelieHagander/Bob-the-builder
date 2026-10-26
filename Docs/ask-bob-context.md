@@ -39,6 +39,60 @@ for the immutable source, runtime readback and remaining model-acceptance bounda
 
 ## Decision
 
+### Owner decision — 2026-10-26: project facts at turn start
+
+**Approved by the owner; source in progress, not deployed.** Read-only
+production metrics, 2026-10-25 13:00 to 2026-10-26 11:45: 30 turns had a
+median of 127 s, 5 main model calls and 7.6 tool calls. 6.2 of those calls
+were reads. Almost every turn opened with 2–16 `search_project_data` /
+`list_project_category` calls of Bob's own, and a third of all searches
+returned nothing. Construction turns averaged 16 `read_construction_draft`
+pages each. Owner: much of the turn context should simply be facts.
+
+At the start of every new turn, code reads one bounded **project facts**
+packet and places it in the project frame next to the existing orientation.
+Each section reports total, included and omitted counts; nothing is ever
+presented as a complete list when it is not. The packet contains:
+
+- **Rooms** of the explicitly linked building(s), with length × width ×
+  height from `bob.project_room_dimensions` and its truth status. With no
+  link it says `not_linked`, which is distinct from "no rooms".
+- **Constructions:**
+  - current revision, part, definition and joint counts
+  - instance roles known or unknown
+  - open question count
+  - fastener totals and glue packages from
+    `construction_fastener_schedule_for`, with `complete`
+- **Drawings:**
+  - the current revision and its construction pin
+  - the **stored** source status from `current_drawing_overview`, never a
+    live per-revision assessment
+  - open drawing requests with their gap counts
+- **Material needs:**
+  - counts by state, including changed or stale needs
+  - fastener and glue needs
+  - what is published to Shopping
+
+Rules, from earlier incidents
+([audits](bob-launchpad-migration-audit-2026-10-19.md#tool-payload-audit),
+[coverage F5](bob-context-coverage-audit-2026-10-18.md)):
+- One security-invoker SQL read, with the user's JWT, under the 8 s
+  statement budget. It has its own journal stream and runs serially. It is
+  skipped when a turn resumes from a checkpoint, and pinned per job
+  (`projectFactsVersion`), so older jobs keep their exact context.
+- A failed read degrades to `unavailable`. Only lost access stops the turn.
+- The packet is an observation, not authority. Writes, checks and renders
+  re-read live records. A sample never rejects an exact ID outside it.
+- Pure facts: no model summary. For pinned jobs, oversized orientation blocks
+  are cut deterministically with `truncated` and a read pointer, instead of
+  calling `context-presentation`.
+- It sits after the static instructions and tools and stays byte-identical
+  within the turn, which keeps the provider cache prefix intact. No money,
+  IDs in human text or private personal fields.
+
+This replaces the model-based Context Router as the turn-start mechanism.
+Category reads below stay available for details.
+
 ### Owner refinement — 2026-10-19: small source views before main-model work
 
 **Specified, not implemented by the current Launchpad drafts.** Main Bob should

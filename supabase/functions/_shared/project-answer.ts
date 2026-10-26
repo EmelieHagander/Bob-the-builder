@@ -29,6 +29,7 @@ import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { BOB_WRITE_LIMIT } from '../../../src/data/bobEvidence.ts'
 import { BUILDING_SCOPE_PRELOAD, createBobToolSession, CORE_READ_PRELOAD, DRAWING_CONTINUATION_PRELOAD, sortToolbox } from './project-tools/bob-tools.ts'
 import type { BuildingLinks } from './project-building-scope.ts'
+import type { ProjectFacts } from './project-facts.ts'
 import type { ProjectCalculator } from './project-calculator.ts'
 import { type ToolPolicyReader, type ToolboxEntry, type ToolInstructions, checkedToolSnapshot } from './project-tools/session.ts'
 import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' }
@@ -59,7 +60,7 @@ function buildTurnFrame(aiCatalog: AiCatalogSession, projectId: string, briefing
  * project facts. These are labelled data messages, never role instructions. */
 function buildManagedMessages(aiCatalog: AiCatalogSession, opts: {
   projectId: string; message: string; context?: WorkingContext; currentView?: CurrentView;
-  orientation: ProjectOrientation; catalog: unknown; drawingRequests: unknown;
+  orientation: ProjectOrientation; catalog: unknown; drawingRequests: unknown; projectFacts?: ProjectFacts;
 }): NonNullable<OpenAIServiceOptions['messages']> {
   const text = (key: string) => aiCatalog.text('bob.frame.' + key)
   const { footer: _footer, ...orientation } = opts.orientation
@@ -75,6 +76,7 @@ function buildManagedMessages(aiCatalog: AiCatalogSession, opts: {
       ...(context?.recentWrites?.length ? [text('saved'), JSON.stringify({ recentWrites: context.recentWrites })] : []),
       ...(context?.recentSources?.length ? [text('sources'), JSON.stringify({ recentSources: context.recentSources })] : []),
       text('briefing-label'), JSON.stringify(orientation),
+      ...(opts.projectFacts ? [JSON.stringify({ project_facts: opts.projectFacts })] : []),
       ...(opts.catalog ? [text('catalog'), JSON.stringify(opts.catalog)] : []),
     ].join('\n\n') },
     ...(Array.isArray(opts.drawingRequests) && opts.drawingRequests.length
@@ -161,6 +163,9 @@ export type ProjectAnswerOptions = {
   corePreload?: boolean;
   /** Pinned per execution: which buildings this project links, read once at turn start. */
   buildingLinks?: BuildingLinks;
+  /** Pinned per execution (projectFactsVersion): orientation blocks are cut,
+   * never summarized by a model, and saved project facts join the briefing. */
+  pureFacts?: boolean; projectFacts?: ProjectFacts;
   /** Pinned for new durable main turns; never changes a running old job. */
   completeRequest?: boolean;
   resultReferences?: boolean;
@@ -269,6 +274,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     orientationReader = directory.reader
   }
   const orientation = restored ? restored.initial.orientation : contextStrategy ? await prepareProjectOrientation({ ...opts, briefing, deadline,
+    ...(opts.pureFacts ? { presentation: 'cut' as const } : {}),
     ...(boundedOrientation ? { directory: { maxTokens: Number(contract.orientation_max_tokens), pageMaxTokens: opts.resultReferences
       ? Math.min(2000, Number(contract.orientation_page_max_tokens)) : Number(contract.orientation_page_max_tokens),
       ready: (reader: OrientationDirectoryReader) => { orientationReader = reader } } } : {}),
