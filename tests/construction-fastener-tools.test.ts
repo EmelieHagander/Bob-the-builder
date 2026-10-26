@@ -103,3 +103,15 @@ test('the latest catalog publishes the field and the rule note; the publication 
  assert.match(source,/prompt_key==='tools\.derive_construction_lists'&&row\.metadata\?\.joint_fastener_version===1/)
  assert.match(source,/readRpc\('read_construction_fasteners'/)
 })
+
+test('fastener requirement refusals reach Bob as specific, answerable messages',async()=>{
+ const {createProjectWriter}=await import('../supabase/functions/_shared/project-write.ts')
+ const message='Add the screws to the list'
+ for(const [code,status,pattern] of [['fastener_group_not_in_schedule','invalid',/totals row of derive_construction_lists/],['fastener_requirement_exists','conflict',/revise that existing requirement/],
+  ['fastener_construction_required','invalid',/exact current saved construction revision/],['construction_derive_required','invalid',/blank, fastener or glue/]] as const){
+  const writer=createProjectWriter('p_fixture',message,async()=>({data:null,error:{code:code==='fastener_requirement_exists'?'PT409':'22023',message:code}}),
+   async()=>({data:[],error:null}),async()=>({data:{generation:1,receipts:[]},error:null}),{})
+  const r:any=await writer.commit({kind:'operational',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{resource:'cad_requirement',action:'create',fields:{quantity_mode:'fasteners'}}})
+  assert.equal(r.status,status,code);assert.match(r.message,pattern)
+ }
+})
