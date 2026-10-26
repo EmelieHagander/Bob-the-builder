@@ -14,7 +14,8 @@ import { projectRoomMarks, scopeErrorMessage, unlinkSummary, wholeBuildingLinks,
 import { physicalTruthLabel } from '../lib/roomMeasurements'
 import { Field, FormError, inputStyle } from './form'
 import { Modal } from './Modal'
-import { RoomMeasurements, RoomMeasurementsFailed, type RoomMeasurementsLoad } from './RoomMeasurements'
+import { RoomDimensions, RoomReadsFailed, type RoomDimensionsLoad } from './RoomDimensions'
+import { RoomMeasurements, type RoomMeasurementsLoad } from './RoomMeasurements'
 import { Icon, List, ListItem, Loading } from './ui'
 
 type NodeKind = 'level' | 'space' | 'element' | 'relationship'
@@ -41,6 +42,9 @@ export interface BuildingContextEditorProps {
   /** Saved measurements of the listed rooms; omitted where they are not read. */
   roomMeasurements?: RoomMeasurementsLoad
   onRetryMeasurements?: () => void
+  /** Room sizes of the listed rooms in this Project; omitted outside a Project. */
+  roomDimensions?: RoomDimensionsLoad
+  onRetryDimensions?: () => void
   onSelectBuilding: (buildingId: string) => void
   onCreateSite: (id: string, data: { name: string; notes: string }) => Promise<void>
   onCreateBuilding: (id: string, data: { site_id: string | null; name: string; notes: string }) => Promise<void>
@@ -89,6 +93,8 @@ export function BuildingContextEditor({
   canDirectEdit,
   roomMeasurements,
   onRetryMeasurements,
+  roomDimensions,
+  onRetryDimensions,
   onSelectBuilding,
   onCreateSite,
   onCreateBuilding,
@@ -192,7 +198,8 @@ export function BuildingContextEditor({
         {roomError && <div role="alert" style={{ marginTop: 'var(--section-gap)' }}><FormError>
           <span>{roomError}</span> <button className="btn" type="button" onClick={() => { setRoomError(''); onSaved() }}>Reload</button>
         </FormError></div>}
-        {roomMeasurements?.status === 'failed' && activeSpaces.length > 0 && onRetryMeasurements && <RoomMeasurementsFailed onRetry={onRetryMeasurements} />}
+        {activeSpaces.length > 0 && <RoomReadsFailed measurements={roomMeasurements} onRetryMeasurements={onRetryMeasurements}
+          dimensions={roomDimensions} onRetryDimensions={onRetryDimensions} />}
         {detailLoading && spaces.length === 0 ? <Loading label="Loading rooms…" /> : spaces.length === 0 ? <p style={{ marginTop: 'var(--section-gap)' }}>No spaces yet. Add only the room or space you know about.</p> : <List>
           {activeSpaces.map(space => {
             const mark = marks.get(space.id) ?? null
@@ -209,6 +216,7 @@ export function BuildingContextEditor({
                 </label>}
               </div>
             </div>
+            {roomDimensions && <RoomDimensions room={space} roomName={space.name} load={roomDimensions} />}
             {roomMeasurements && <RoomMeasurements room={space} roomName={space.name} load={roomMeasurements} />}
             {space.notes && <details className="space-notes" style={{ marginTop: 10 }}>
               <summary>Notes</summary><p style={{ marginBottom: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{space.notes}</p>

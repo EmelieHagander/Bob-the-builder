@@ -845,6 +845,11 @@ select {
 .room-measurements-more { margin-top: var(--space-2); }
 .room-measurements-failed { display: flex; align-items: center; flex-wrap: wrap; gap: var(--layout-gap); margin-top: var(--section-gap); }
 .room-measurements-failed > span { flex: 1 1 200px; min-width: 0; }
+.room-measurement-property { display: block; margin-top: 1px; font-size: var(--text-small); color: var(--ink-soft); }
+.room-dimensions { margin-top: var(--space-2); min-width: 0; max-width: 40rem; }
+.room-dimensions-size { margin: 0; font-size: var(--text-body); font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.room-dimensions-truth { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-1) 0 0; }
+.room-dimensions-conflict { margin: var(--space-1) 0 0; padding: var(--space-1) var(--space-2); border-radius: var(--r-sm); background: var(--clay-bg); color: var(--clay); font-size: 13px; overflow-wrap: anywhere; }
 @media (max-width: 560px) {
   .start-project { padding: var(--panel-padding); }
   .start-project-card { padding: var(--panel-padding); }

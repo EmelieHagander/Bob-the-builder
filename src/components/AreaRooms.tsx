@@ -9,7 +9,8 @@ import type { PhysicalSpace } from '../data/buildingContext'
 import type { Area } from '../data/types'
 import { areaRoomTargets, scopeErrorMessage } from '../lib/physicalScope'
 import { Field, FormError, inputStyle } from './form'
-import { RoomMeasurements, RoomMeasurementsFailed, useRoomMeasurements } from './RoomMeasurements'
+import { RoomDimensions, RoomReadsFailed, useRoomDimensions } from './RoomDimensions'
+import { RoomMeasurements, useRoomMeasurements } from './RoomMeasurements'
 import { Icon, List, ListItem, LoadFailed, Loading, Panel, useAsync } from './ui'
 
 export function AreaRooms({ projectId, area }: { projectId: string; area: Area }) {
@@ -31,6 +32,7 @@ export function AreaRooms({ projectId, area }: { projectId: string; area: Area }
     return data.rooms.filter(room => ids.has(room.id))
   }, [data, area.id])
   const measurements = useRoomMeasurements(projectId, mappedRooms, connected ? db.buildingContext.measurements : null)
+  const dimensions = useRoomDimensions(projectId, mappedRooms, connected ? db.buildingContext.dimensions : null)
 
   async function run(action: () => Promise<unknown>, roomName: string) {
     setBusy(true); setActionError('')
@@ -79,7 +81,8 @@ export function AreaRooms({ projectId, area }: { projectId: string; area: Area }
     {mapped.length === 0
       ? <p className="foundation-hint">No rooms chosen for this Area yet.</p>
       : <>
-        {measurements.load.status === 'failed' && mappedRooms.length > 0 && <RoomMeasurementsFailed onRetry={measurements.retry} />}
+        {mappedRooms.length > 0 && <RoomReadsFailed measurements={measurements.load} onRetryMeasurements={measurements.retry}
+          dimensions={dimensions.load} onRetryDimensions={dimensions.retry} />}
         <List>{mapped.map(target => {
           const room = roomsById.get(target.spaceId ?? '')
           const name = room ? `${label(room)}${room.archived ? ' (archived)' : ''}` : 'Room no longer available'
@@ -92,6 +95,7 @@ export function AreaRooms({ projectId, area }: { projectId: string; area: Area }
                 Remove
               </button>}
             </div>
+            {room && <RoomDimensions room={room} roomName={room.name} load={dimensions.load} />}
             {room && <RoomMeasurements room={room} roomName={room.name} load={measurements.load} />}
           </ListItem>
         })}</List>

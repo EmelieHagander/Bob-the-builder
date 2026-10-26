@@ -38,6 +38,15 @@ as a stand-in. Estimates remain explicitly estimated in lists, detail and histor
 changing an estimate to measured creates a new revision. User-recorded measured
 or specification provenance does not imply independent site verification.
 
+**What it measures — source only 2026-10-26.** A measurement identity may say
+once what it measures: `property` (room length/width, ceiling height, wall length,
+opening width/height, sill height, distance to an opening, other), optional
+`side` (N/E/S/W) and `reference`. It is identity metadata like the parent links:
+set at create, on revise of an unclassified record or by `classify`, never a new
+revision, and never changed afterwards (archive and replace instead). The subject
+stays the person's own label. Room use and owner definitions:
+[building model](building-model.md#room-dimensions--owner-decisions-2026-10-26).
+
 Components store name, kind, optional known count, observed condition,
 specification/description, notes, source image and intended action: inspect, reuse,
 remove or replace. Unknown count is null. Dimensions are linked measurement

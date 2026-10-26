@@ -292,7 +292,9 @@ A **Measurement** is a revisioned numeric project fact with unit, subject and pr
 
 A measured value, provided specification, estimate and unknown are different truth classes.
 
-Owner: [`project-facts.md`](project-facts.md).
+What a Measurement measures (room length, room width, ceiling height, an opening, …) is a typed field set once, not read from its subject. A room's **length** is its longest interior dimension, its **width** the shortest; its **ceiling height** holds for the whole room. A **room size** is read from these typed values only and never derived.
+
+Owner: [`project-facts.md`](project-facts.md); room use: [`building-model.md`](building-model.md#room-dimensions--owner-decisions-2026-10-26).
 
 ## Existing component
 

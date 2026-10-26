@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
 import type { Area, ProjectFact, FactKind, ExistingComponent } from '../data/types'
-import { describeMeasurement, INTENT_LABELS, TRUTH_LABELS, parseLength } from '../data/projectFacts'
-import type { LengthUnit, MeasurementTruth, ComponentIntent } from '../data/projectFacts'
+import { describeMeasurement, INTENT_LABELS, MEASUREMENT_PROPERTIES, MEASUREMENT_REFERENCE_MAX, MEASUREMENT_SIDES, TRUTH_LABELS, parseLength } from '../data/projectFacts'
+import type { LengthUnit, MeasurementTruth, ComponentIntent, MeasurementClassification, MeasurementProperty, MeasurementSide, Measurement } from '../data/projectFacts'
+import { MEASUREMENT_PROPERTY_LABELS, MEASUREMENT_SIDE_LABELS, measurementPropertyLabel } from '../lib/labels'
 import { Field, FormError, inputStyle } from '../components/form'
 import { Modal } from '../components/Modal'
 import { Icon, Loading, useAsync } from '../components/ui'
@@ -28,11 +29,75 @@ function SourceImage({ projectId, imageId, title }: { projectId: string; imageId
   </>
 }
 
+/* What a measurement measures: chosen once, then fixed (owner decision 2026-10-26). */
+const unclassified: MeasurementClassification = { property: null, side: null, reference: null }
+const fixedHint = 'Fixed once saved. To change it, archive this measurement and add a new one.'
+
+/** Classification payload: nothing when "not said", so saving never unsets it. */
+function classificationData(value: MeasurementClassification): Record<string, unknown> {
+  return value.property ? { property: value.property, side: value.side, reference: value.reference?.trim() || null } : {}
+}
+
+function MeasuresFields({ value, onChange }: { value: MeasurementClassification; onChange: (next: MeasurementClassification) => void }) {
+  return <>
+    <Field label="What does it measure?">
+      <select style={inputStyle} value={value.property ?? ''} onChange={e => {
+        const property = (e.target.value || null) as MeasurementProperty | null
+        onChange(property ? { ...value, property } : unclassified)
+      }}>
+        <option value="">Not said yet</option>
+        {MEASUREMENT_PROPERTIES.map(key => <option key={key} value={key}>{MEASUREMENT_PROPERTY_LABELS[key]}</option>)}
+      </select>
+    </Field>
+    {value.property && <div className="fact-form-row">
+      <Field label="Side (optional)">
+        <select style={inputStyle} value={value.side ?? ''} onChange={e => onChange({ ...value, side: (e.target.value || null) as MeasurementSide | null })}>
+          <option value="">No side</option>
+          {MEASUREMENT_SIDES.map(key => <option key={key} value={key}>{MEASUREMENT_SIDE_LABELS[key]}</option>)}
+        </select>
+      </Field>
+      <Field label="Measured from (optional)">
+        <input style={inputStyle} maxLength={MEASUREMENT_REFERENCE_MAX} value={value.reference ?? ''} placeholder="e.g. frame to frame"
+          onChange={e => onChange({ ...value, reference: e.target.value })} />
+      </Field>
+    </div>}
+    <p className="foundation-hint">Room length is the room’s longest inside measurement and width the shortest. Ceiling height is for the whole room; a height in one place gives where it was measured. {fixedHint}</p>
+  </>
+}
+
+function ClassifyMeasurement({ record, onClose, onSaved }: { record: Measurement; onClose: () => void; onSaved: () => void }) {
+  const [value, setValue] = useState<MeasurementClassification>(unclassified)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  return <Modal title={'What does ' + record.subject + ' measure?'} onClose={() => { if (!busy) onClose() }}>
+    <form onSubmit={async event => {
+      event.preventDefault()
+      if (busy || !value.property) return
+      setBusy(true); setError('')
+      try { await db.editProjectFact(record.projectId, 'measurement', 'classify', record.id, record.revision, classificationData(value)); onSaved() }
+      catch (err) { setError(message(err)) } finally { setBusy(false) }
+    }}>
+      <fieldset disabled={busy} className="foundation-form fact-fieldset">
+        <p className="foundation-hint">{describeMeasurement(record)} · {TRUTH_LABELS[record.truth]}. This adds no new version.</p>
+        <MeasuresFields value={value} onChange={setValue} />
+        {error && <div role="alert"><FormError>{error}</FormError></div>}
+        {busy && <p role="status">Saving and reading back…</p>}
+        <div className="foundation-actions">
+          <button type="button" className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" disabled={!value.property}>{busy ? 'Saving…' : 'Save'}</button>
+        </div>
+      </fieldset>
+    </form>
+  </Modal>
+}
+
 function FactSummary({ record }: { record: ProjectFact }) {
+  const measures = record.kind === 'measurement' ? measurementPropertyLabel(record) : null
   return <div className="fact-summary" style={{ margin: '6px 0' }}>
     {record.kind === 'measurement' ? <>
       <strong>{describeMeasurement(record)}</strong>
       <span className="image-purpose">{TRUTH_LABELS[record.truth]}</span>
+      {measures && <span className="image-purpose">{measures}</span>}
       {record.required && <span className="image-purpose">Required</span>}
     </> : <>
       <strong>{record.quantity === null ? 'Count unknown' : record.quantity + ' item' + (record.quantity === 1 ? '' : 's')}</strong>
@@ -74,6 +139,8 @@ function FactEditor({ projectId, kind, record, areas, initialArea, component, on
   const [condition, setCondition] = useState(part?.condition ?? '')
   const [specification, setSpecification] = useState(part?.specification ?? '')
   const [intent, setIntent] = useState<ComponentIntent>(part?.intent ?? 'inspect')
+  const [measures, setMeasures] = useState<MeasurementClassification>(unclassified)
+  const fixedMeasures = measurement ? measurementPropertyLabel(measurement) : null
   const [notes, setNotes] = useState(record?.notes ?? '')
   const [reason, setReason] = useState('')
   const [sourceImage, setSourceImage] = useState({ id: record?.sourceImageId ?? null, title: record?.sourceImageTitle ?? '' })
@@ -96,6 +163,7 @@ function FactEditor({ projectId, kind, record, areas, initialArea, component, on
           ...(kind === 'measurement' ? {
             subject: title, value: truth === 'unknown' ? null : parseLength(length), unit, truth, source, required,
             ...(!record && component ? { component_id: component.id } : {}),
+            ...(fixedMeasures ? {} : classificationData(measures)),
           } : { name: title, kind: componentKind, quantity: quantity || null, condition, specification, intent }),
         }
         await db.editProjectFact(projectId, kind, record ? 'revise' : 'create', id, record?.revision ?? 0, data)
@@ -103,9 +171,12 @@ function FactEditor({ projectId, kind, record, areas, initialArea, component, on
       } catch (err) { setError(message(err)) } finally { setBusy(false) }
     }}>
       <fieldset disabled={busy} className="foundation-form fact-fieldset">
-        <Field label={kind === 'measurement' ? 'What does it measure?' : 'Part name'}>
+        <Field label={kind === 'measurement' ? 'Name' : 'Part name'}>
           <input style={inputStyle} required maxLength={200} value={title} onChange={e => setTitle(e.target.value)} />
         </Field>
+        {kind === 'measurement' && (fixedMeasures
+          ? <p className="foundation-hint"><strong>Measures:</strong> {fixedMeasures}. {fixedHint}</p>
+          : <MeasuresFields value={measures} onChange={setMeasures} />)}
         {!record && !component ? <Field label="Area">
           <select style={inputStyle} value={areaId} onChange={e => setAreaId(e.target.value)}>
             <option value="">Project as a whole</option>{areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -221,7 +292,7 @@ export function ProjectFacts() {
     : kind === 'measurement' && requestedStatus === 'missing' ? 'missing' : 'active'
   const [offset, setOffset] = useState(0)
   const [version, setVersion] = useState(0)
-  const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit' | 'history' | 'lifecycle'; record: ProjectFact } | null>(null)
+  const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit' | 'history' | 'lifecycle'; record: ProjectFact } | { mode: 'classify'; record: Measurement } | null>(null)
   const { data: areas, error: areasError } = useAsync(() => db.getAreas(), [projectId])
   const { data: selected, error: partError, loading: partLoading } = useAsync(
     () => componentId ? db.getProjectFact(projectId, 'component', componentId) : Promise.resolve(null), [projectId, componentId, version])
@@ -286,6 +357,8 @@ export function ProjectFacts() {
         <details><summary style={{ fontSize: 13.5, fontWeight: 700 }}>Source and notes</summary><FactDetails record={record} /></details>
         <div className="foundation-actions" style={{ marginTop: 8, gap: 4, alignItems: 'center' }}>
           {!record.archived && record.kind === 'measurement' && <button className="btn btn-primary" style={compactPrimary} onClick={() => setModal({ mode: 'edit', record })}>Update</button>}
+          {!record.archived && record.kind === 'measurement' && !record.property && db.authEnabled() && <button className="btn" style={compactSecondary}
+            onClick={() => setModal({ mode: 'classify', record })}>What it measures</button>}
           {record.kind === 'component' && <button className="btn btn-primary" style={compactPrimary} aria-label="Measurements for part" onClick={() => navigateFilter('measurement', record.areaId ?? '', record.id, 'active')}>Measurements</button>}
           {!record.archived && record.kind === 'component' && <button className="btn" style={compactSecondary} onClick={() => setModal({ mode: 'edit', record })}>Update</button>}
           <button className="btn" style={compactSecondary} onClick={() => setModal({ mode: 'history', record })}>History</button>
@@ -302,5 +375,6 @@ export function ProjectFacts() {
       component={modal.mode === 'create' ? component : undefined} onClose={() => setModal(null)} onSaved={saved} />}
     {modal?.mode === 'history' && <FactHistory record={modal.record} onClose={() => setModal(null)} />}
     {modal?.mode === 'lifecycle' && <FactLifecycle record={modal.record} onClose={() => setModal(null)} onSaved={saved} />}
+    {modal?.mode === 'classify' && <ClassifyMeasurement record={modal.record} onClose={() => setModal(null)} onSaved={saved} />}
   </div>
 }

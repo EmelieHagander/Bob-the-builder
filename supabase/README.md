@@ -674,3 +674,25 @@ owns behaviour. Each step needs the owner's explicit OK, in this order:
 Rollback: reactivate the previous catalog for new jobs first. A runtime from
 before this change cannot restore a turn checkpoint that used these tools, so
 let such jobs finish before rolling either runtime back.
+
+### Room dimensions — source 2026-10-26
+
+**Source only; nothing applied or deployed.** New jobs pin
+`roomDimensionsVersion: 1` in `ask-openai.ts` and read through
+`search_bob_project_data_v9` (adds `room_dimensions`); journals without the pin
+keep v8. `project-lookup.ts` accepts the dataset. Bob's writers are unchanged.
+[Database contract](../db/README.md#room-dimensions--2026-10-26). Each step needs
+the owner's explicit OK, in this order:
+
+1. Apply `20261026130000_room_dimensions.sql` (the app's room size and the Facts
+   classification work once it is applied; no Edge change is needed for them).
+2. Deploy `ask-bob` and `bob-worker` from the same source, keeping their
+   existing authentication modes.
+3. Apply the generated `20261026130500_ai_room_dimensions_catalog.sql`
+   (`node --import tsx scripts/build-ai-room-dimensions-catalog.ts supabase/migrations/20261026130500_ai_room_dimensions_catalog.sql --check`).
+4. Run `scripts/classify-barnrum-measurements.sql` (owner-approved data, one
+   transaction, aborts on any mismatch, prints a summary).
+
+Rollback: reactivate the previous catalog for new jobs first; a runtime from
+before this change cannot replay a v9 read, so let pinned jobs finish before
+rolling either runtime back.

@@ -6,12 +6,24 @@ export type FactKind = 'measurement' | 'component'
 export type LengthUnit = 'mm' | 'cm' | 'm'
 export type MeasurementTruth = Exclude<TruthState, 'ai_assessment'>
 export type ComponentIntent = 'inspect' | 'reuse' | 'remove' | 'replace'
+/** What a measurement measures, set once on its identity (never on a revision). */
+export const MEASUREMENT_PROPERTIES = [
+  'room_length', 'room_width', 'ceiling_height', 'wall_length', 'opening_width', 'opening_height', 'sill_height', 'opening_offset', 'other',
+] as const
+export type MeasurementProperty = typeof MEASUREMENT_PROPERTIES[number]
+export const MEASUREMENT_SIDES = ['N', 'E', 'S', 'W'] as const
+export type MeasurementSide = typeof MEASUREMENT_SIDES[number]
+export interface MeasurementClassification {
+  property: MeasurementProperty | null; side: MeasurementSide | null; reference: string | null
+}
+/** Reference text limit, as the database enforces it. */
+export const MEASUREMENT_REFERENCE_MAX = 120
 export interface FactBase {
   id: string; projectId: string; areaId: string | null; revision: number
   sourceImageId: string | null; sourceImageTitle: string
   archived: boolean; notes: string; changeNote: string; actor: string; recordedAt: string
 }
-export interface Measurement extends FactBase {
+export interface Measurement extends FactBase, MeasurementClassification {
   kind: 'measurement'; subject: string; componentId: string | null
   value: string | null; unit: LengthUnit; millimetres: string | null
   truth: MeasurementTruth; source: string; required: boolean
@@ -59,9 +71,19 @@ function map(row: Row, kind: FactKind): ProjectFact {
     ...base, kind, subject: row.subject, componentId: row.component_id ?? null,
     value: row.value === null ? null : String(row.value), unit: row.unit,
     millimetres: row.millimetres ?? null, truth: row.truth, source: row.source, required: row.required,
+    ...classification(row),
   } : {
     ...base, kind, name: row.name, componentKind: row.kind, quantity: row.quantity,
     condition: row.condition, specification: row.specification, intent: row.intent,
+  }
+}
+/** Unrecognised codes read as unclassified rather than as a guessed property. */
+export function classification(row: Row): MeasurementClassification {
+  const property = (MEASUREMENT_PROPERTIES as readonly string[]).includes(row.property) ? row.property as MeasurementProperty : null
+  return {
+    property,
+    side: property && (MEASUREMENT_SIDES as readonly string[]).includes(row.side) ? row.side as MeasurementSide : null,
+    reference: property && typeof row.reference === 'string' && row.reference.trim() ? row.reference : null,
   }
 }
 const view = (kind: FactKind) => kind === 'measurement' ? 'current_measurements' : 'current_components'
@@ -104,7 +126,8 @@ export function createProjectFacts(client: SupabaseClient<any, any, any> | null,
       assertCurrent()
       return page(rows, kind, projectId, 12)
     },
-    async command(projectId: string, kind: FactKind, action: 'create' | 'revise' | 'archive' | 'restore',
+    /** `classify` says once what a measurement measures; it adds no revision. */
+    async command(projectId: string, kind: FactKind, action: 'create' | 'revise' | 'archive' | 'restore' | 'classify',
       id: string, expected: number, data: Record<string, unknown> = {}): Promise<ProjectFact> {
       const { db, assertCurrent } = connection(projectId)
       value(await db.rpc('evidence_command', {

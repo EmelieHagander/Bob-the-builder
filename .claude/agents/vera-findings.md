@@ -4,6 +4,16 @@
 
 Historical findings: [V01 — superseded placeholder-only media finding](archive/vera-findings-2026-10-18.md). Current media behavior is owned by `Docs/media-and-steps.md`.
 
+## FINDING-V14 — Foundations browser check fails before Facts on main
+
+**Status:** open (2026-10-26). `scripts/check-foundations-browser.mjs` fails on
+`eb024eb` (unchanged main) at Project home: the drawings-overview fixture asserts
+"Overview does not fetch geometry or export bytes" (`artifacts-browser.mjs`), and
+with that relaxed it later times out waiting for the "CAD shelf detail — drawing
+preview" image. Neither involves room sizes or Facts; the room-dimensions branch
+proved Facts at 320/390/1280 only in a scratch copy that skipped them. Fix the
+fixture or the page so the whole check passes again.
+
 ## FINDING-V13 — Backend sentences still stand in for error codes
 
 **Status:** open (2026-10-25). Screens no longer show raw text, codes or IDs

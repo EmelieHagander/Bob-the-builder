@@ -258,8 +258,10 @@ export async function answerWithOpenAi(opts: {
       current: checkpoint ? adapter.current : reuseFresh(adapter.current, unchanged => unchanged, (ref, expected) => ref + '\u0000' + expected),
     }
   }
+  // Jobs pinned with roomDimensionsVersion read v9 (adds room_dimensions); other journals keep v8.
+  let lookupRpc: 'search_bob_project_data_v8' | 'search_bob_project_data_v9' = 'search_bob_project_data_v8'
   const lookupTransport = checkpointed((projectId: string, input: LookupInput, signal: AbortSignal) =>
-    rpc('search_bob_project_data_v8', {
+    rpc(lookupRpc, {
       p_project_id: projectId, p_dataset: input.dataset, p_query: input.query,
       p_status: input.status, p_area_id: input.area_id, p_record_id: input.record_id, p_after_id: input.after_id ?? null,
     }, signal))
@@ -302,7 +304,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; turnUsdStop?: number } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; turnUsdStop?: number } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -311,6 +313,8 @@ export async function answerWithOpenAi(opts: {
       corePreloadVersion: 1 as const,
       // Building links read once at turn start. Jobs without this pin read nothing extra.
       buildingLinkVersion: 1 as const,
+      // Room dimensions read through search v9. Jobs without this pin keep v8.
+      roomDimensionsVersion: 1 as const,
       ...(checkpoint ? { groundingReadOrderVersion: 1 as const, modelDeadlineVersion: 1 as const } : {}),
       ...bobCompleteRequestVersions(!!checkpoint, contract),
       ...(checkpoint && contract.result_reference_version === 1 ? { resultWindowVersion: 1 as const } : {}),
@@ -331,6 +335,8 @@ export async function answerWithOpenAi(opts: {
   if (execution.constructionPageVersion !== undefined && execution.constructionPageVersion !== 1) throw new Error('construction_page_version_invalid')
   if (execution.corePreloadVersion !== undefined && execution.corePreloadVersion !== 1) throw new Error('core_preload_version_invalid')
   if (execution.buildingLinkVersion !== undefined && execution.buildingLinkVersion !== 1) throw new Error('building_link_version_invalid')
+  if (execution.roomDimensionsVersion !== undefined && execution.roomDimensionsVersion !== 1) throw new Error('room_dimensions_version_invalid')
+  if (execution.roomDimensionsVersion === 1) lookupRpc = 'search_bob_project_data_v9'
   const lookupOptions = { unlimitedWork,
     // Existing in-flight journals retain their recorded clock policy. New
     // work pins each observation, including invalid/failed reads, before its

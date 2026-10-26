@@ -28,19 +28,49 @@ const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers
 
 // Immutable snapshots on one room revision (bob.space_measurements). Kids room
 // is at revision 2; its revision-1 snapshot is history and must never show.
-const snap = (id, space_id, space_revision, subject, value, unit, truth, source) => ({ id, space_id, building_id: 'house', space_revision, source_project_id: 'A', measurement_id: 'm-' + id, measurement_revision: 2, subject, value, unit, truth, source })
+// `property`/`side`/`reference` mirror the measurement's typed classification.
+const snap = (id, space_id, space_revision, subject, value, unit, truth, source, property = null, side = null, reference = null) => ({ id, space_id, building_id: 'house', space_revision, source_project_id: 'A', measurement_id: 'm-' + id, measurement_revision: 2, subject, value, unit, truth, source, property, side, reference })
 const measurementRows = () => [
-  snap('k0', 'kids', 1, 'Rummets exakta längd', 4100, 'mm', 'estimated', 'Earlier guess'),
-  snap('k1', 'kids', 2, 'Rummets exakta längd', 3970, 'mm', 'measured', 'Laser, 2026-10-12'),
-  snap('k2', 'kids', 2, 'Rummets exakta bredd', 2700, 'mm', 'measured', 'Laser, 2026-10-12'),
-  snap('k3', 'kids', 2, 'Takhöjd vid sängens placering', 1920, 'mm', 'measured', 'Tape measure'),
-  snap('k4', 'kids', 2, 'N-sida: fönster karm-till-karm', 1030, 'mm', 'measured', 'Tape measure'),
-  snap('k5', 'kids', 2, 'Ö-sida: dörr karm-till-karm', 820, 'mm', 'provided_spec', 'Door supplier drawing'),
-  snap('k6', 'kids', 2, 'Takhöjd vid fönstret', null, 'mm', 'unknown', ''),
+  snap('k0', 'kids', 1, 'Rummets exakta längd', 4100, 'mm', 'estimated', 'Earlier guess', 'room_length'),
+  snap('k1', 'kids', 2, 'Rummets exakta längd', 3970, 'mm', 'measured', 'Laser, 2026-10-12', 'room_length'),
+  snap('k2', 'kids', 2, 'Rummets exakta bredd', 2700, 'mm', 'measured', 'Laser, 2026-10-12', 'room_width'),
+  snap('k3', 'kids', 2, 'Takhöjd vid sängens placering', 1920, 'mm', 'measured', 'Tape measure', 'ceiling_height'),
+  snap('k4', 'kids', 2, 'N-sida: fönster karm-till-karm', 1030, 'mm', 'measured', 'Tape measure', 'opening_width', 'N'),
+  snap('k5', 'kids', 2, 'Ö-sida: dörr karm-till-karm', 820, 'mm', 'provided_spec', 'Door supplier drawing', 'opening_width', 'E'),
+  snap('k6', 'kids', 2, 'Takhöjd vid fönstret', null, 'mm', 'unknown', '', 'ceiling_height', null, 'vid fönstret'),
   snap('k7', 'kids', 2, 'Garderob: djup', 60, 'cm', 'estimated', 'Owner estimate'),
   snap('c1', 'kitchen', 1, 'Bänkdjup', 62, 'cm', 'measured', 'Tape measure'),
+  snap('c2', 'kitchen', 1, 'Bredd vid diskbänk', 2400, 'mm', 'measured', 'Tape measure', 'room_width'),
+  snap('c3', 'kitchen', 1, 'Bredd vid fönster', 245, 'cm', 'measured', 'Folding rule', 'room_width'),
 ]
 const byText = (a, b) => a < b ? -1 : a > b ? 1 : 0
+
+// Mirrors bob.project_room_dimensions: per project room revision and typed key,
+// the strongest-truth values; known, conflict or unknown; never derived.
+function roomDimensionRows(state, project, wanted) {
+  const strength = { estimated: 1, provided_spec: 2, measured: 3 }, truthAt = [null, 'estimated', 'provided_spec', 'measured']
+  const mm = row => row.value === null ? null : String(row.value * (row.unit === 'm' ? 1000 : row.unit === 'cm' ? 10 : 1))
+  const mine = state.scopes.filter(row => row.project_id === project)
+  const rooms = state.spaces.filter(room => wanted.includes(`${room.id}@${room.revision}`) && mine.some(row =>
+    (row.target_kind === 'building' && row.building_id === room.building_id) || (row.target_kind === 'space' && row.space_id === room.id)))
+  return rooms.flatMap(room => {
+    const snaps = state.measurements.filter(row => row.space_id === room.id && row.space_revision === room.revision && row.property)
+    const keys = new Map(['room_length', 'room_width', 'ceiling_height'].map(property => [JSON.stringify([property, null, null]), [property, null, null]]))
+    for (const row of snaps) keys.set(JSON.stringify([row.property, row.side, row.reference]), [row.property, row.side, row.reference])
+    return [...keys.values()].map(([property, side, reference]) => {
+      const group = snaps.filter(row => row.property === property && row.side === side && row.reference === reference)
+      const best = Math.max(0, ...group.filter(row => row.value !== null).map(row => strength[row.truth]))
+      const winners = best ? group.filter(row => row.value !== null && strength[row.truth] === best) : group
+      const values = [...new Set(winners.map(mm).filter(Boolean))]
+      return { project_id: project, building_id: room.building_id, space_id: room.id, space_revision: room.revision, space_name: room.name,
+        level_id: null, room_archived: false, property, side, reference,
+        status: !best ? 'unknown' : values.length > 1 ? 'conflict' : 'known', truth: truthAt[best], millimetres: best && values.length === 1 ? values[0] : null,
+        measurements: winners.map(row => ({ snapshot_id: row.id, measurement_id: row.measurement_id, measurement_revision: row.measurement_revision,
+          source_project_id: row.source_project_id, subject: row.subject, value: row.value === null ? null : String(row.value), unit: row.unit,
+          millimetres: mm(row), truth: row.truth, source: row.source })) }
+    })
+  })
+}
 
 function freshState() {
   const room = (id, building_id, name, kind, revision = 1) => ({ ...audit, id, building_id, revision, latest_revision: revision, project_id: null, source_project_id: null, level_id: null, name, kind, notes: '', truth: 'unknown', source: '', has_proposal: false })
@@ -52,7 +82,7 @@ function freshState() {
     ],
     canEdit: { house: true, barn: false },
     spaces: [room('kids', 'house', 'Kids room', 'Bedroom', 2), room('landing', 'house', 'Landing', 'Hall'), room('kitchen', 'house', 'Kitchen', 'Kitchen'), room('hayloft', 'barn', 'Hayloft', 'Loft')],
-    measurements: measurementRows(), measurementReads: [], failMeasurementRead: false,
+    measurements: measurementRows(), measurementReads: [], failMeasurementRead: false, dimensionReads: [], failDimensionRead: false,
     areas: [{ id: 'area-bunk', project_id: 'A', slug: 'bunk-bed', name: 'Bunk bed', description: 'Build a bunk bed', icon: 'bed', lead_id: null, assigned_pct: 0, materials_pct: 0, done_pct: 0, task_summary: 'No tasks yet', phase: 'design', archived_at: null, area_crew: [], area_reference_images: [] }],
     scopes: [], targets: [], creates: [], failLink: false, failRoomRead: false,
   }
@@ -156,6 +186,15 @@ async function fixture(viewport) {
         .sort((a, b) => byText(a.space_id, b.space_id) || byText(a.subject, b.subject) || byText(a.id, b.id))
       return respond({ json: rows.slice(offset, offset + limit) })
     }
+    if (path === '/rest/v1/project_room_dimensions') {
+      const filter = url.searchParams.get('or') ?? ''
+      const wanted = [...filter.matchAll(/space_id\.eq\.("?)([^",)]+)\1,space_revision\.eq\.(\d+)/g)].map(match => `${match[2]}@${match[3]}`)
+      if (!wanted.length || !eq(url, 'project_id')) errors.push('Unbounded dimension read: ' + url.search)
+      state.dimensionReads.push(wanted)
+      if (state.failDimensionRead) return respond({ status: 503, json: { message: 'Dimensions temporarily unavailable' } })
+      const offset = Number(url.searchParams.get('offset') ?? 0), limit = Number(url.searchParams.get('limit') ?? 1000)
+      return respond({ json: roomDimensionRows(state, eq(url, 'project_id'), wanted).slice(offset, offset + limit) })
+    }
     if (path === '/rest/v1/rpc/physical_scope_command') return respond(scopeCommand(state, request.postDataJSON()))
     if (path.startsWith('/rest/v1/') && method === 'GET') return respond({ json: [] })
     errors.push(method + ' ' + path)
@@ -244,24 +283,45 @@ try {
     const title = locator => locator.locator('.room-measurements-title')
     const rowsOf = locator => locator.locator('.room-measurement > summary').allInnerTexts().then(texts => texts.map(text => text.replace(/\s+/g, ' ').trim()))
     state.measurementReads = []
+    state.dimensionReads = []
     await page.reload()
     let kids = group(page, 'Kids room')
     await title(kids).getByText('· 7').waitFor()
     assert.equal((await title(kids).innerText()).replace(/\s+/g, ' '), 'Measurements · 7')
     assert.deepEqual(state.measurementReads, [['kids@2', 'landing@1', 'kitchen@1']], 'One read for the Building, at each room’s current revision')
-    assert.deepEqual(await rowsOf(kids), ['Garderob: djup 60 cm Estimated', 'N-sida: fönster karm-till-karm 1030 mm Measured', 'Rummets exakta bredd 2700 mm Measured'])
+    // Typed measurements come first, each with what it measures under its label.
+    const kidsFirst = ['Rummets exakta längd Room length 3970 mm Measured', 'Rummets exakta bredd Room width 2700 mm Measured', 'Takhöjd vid sängens placering Ceiling height 1920 mm Measured']
+    assert.deepEqual(await rowsOf(kids), kidsFirst)
     await group(page, 'Landing').getByText('No measurements saved for this room yet.', { exact: true }).waitFor()
-    assert.deepEqual(await rowsOf(group(page, 'Kitchen')), ['Bänkdjup 62 cm Measured'])
+    assert.deepEqual(await rowsOf(group(page, 'Kitchen')), ['Bredd vid diskbänk Room width 2400 mm Measured', 'Bredd vid fönster Room width 245 cm Measured', 'Bänkdjup 62 cm Measured'])
     assert.equal(await group(page, 'Kitchen').getByRole('button').count(), 0, 'No Show all for a short list')
+
+    // 2c. Room size: L x W x H from the typed dimensions, truth shown, unknown and conflicts said.
+    const size = (scope, name) => scope.getByRole('group', { name: `${name} size`, exact: true })
+    const sizeText = async locator => (await locator.locator('.room-dimensions-size').innerText()).trim()
+    await size(page, 'Kids room').waitFor()
+    assert.equal(await sizeText(size(page, 'Kids room')), '3970 × 2700 mm · height 1920 mm')
+    assert.deepEqual(await size(page, 'Kids room').locator('.room-dimensions-truth > span').allInnerTexts(), ['Measured'])
+    assert.equal(await sizeText(size(page, 'Landing')), 'Length and width unknown · height unknown')
+    assert.equal(await size(page, 'Landing').locator('.room-dimensions-truth').count(), 0, 'No truth for unknown values')
+    assert.equal(await sizeText(size(page, 'Kitchen')), 'Length unknown, width conflicting · height unknown')
+    await size(page, 'Kitchen').getByRole('note').getByText('Width: different measured values, 2400 mm and 2450 mm. Check which is right.', { exact: true }).waitFor()
+    assert.deepEqual(state.dimensionReads, [['kids@2', 'landing@1', 'kitchen@1']], 'One size read for the Building')
+    assert.equal(await page.getByText('4100').count(), 0, 'An older revision never sizes the room')
+    const [sizeBox, listBox] = await Promise.all([size(page, 'Kids room').boundingBox(), kids.boundingBox()])
+    assert(sizeBox && listBox && sizeBox.y < listBox.y, 'Size sits above the measurement list')
+    await assertPhoneLayout(page, viewport, 'Room size')
+    await size(page, 'Kitchen').evaluate(node => node.scrollIntoView({ block: 'start' }))
+    await shot('project-rooms-size')
     const more = kids.getByRole('button', { name: 'Show all 7 measurements', exact: true })
     assert.equal(await more.getAttribute('aria-expanded'), 'false')
     await assertReachable(more, 'Show all measurements', phone ? 44 : 36)
     await more.click()
     assert.equal(await kids.getByRole('button', { name: 'Show fewer', exact: true }).getAttribute('aria-expanded'), 'true')
     assert.deepEqual(await rowsOf(kids), [
-      'Garderob: djup 60 cm Estimated', 'N-sida: fönster karm-till-karm 1030 mm Measured', 'Rummets exakta bredd 2700 mm Measured',
-      'Rummets exakta längd 3970 mm Measured', 'Takhöjd vid fönstret Not measured yet Unknown', 'Takhöjd vid sängens placering 1920 mm Measured',
-      'Ö-sida: dörr karm-till-karm 820 mm Specification',
+      ...kidsFirst, 'Takhöjd vid fönstret Ceiling height · vid fönstret Not measured yet Unknown',
+      'N-sida: fönster karm-till-karm Opening width · North side 1030 mm Measured', 'Ö-sida: dörr karm-till-karm Opening width · East side 820 mm Specification',
+      'Garderob: djup 60 cm Estimated',
     ], 'Older-revision snapshots never show; an unknown value is not invented')
     assert.equal(await page.getByText('4100 mm').count(), 0)
     const length = kids.locator('.room-measurement').filter({ hasText: 'Rummets exakta längd' })
@@ -292,6 +352,22 @@ try {
     await title(group(page, 'Kids room')).getByText('· 7').waitFor()
     assert.equal(await failed.count(), 0)
 
+    // A failed size read is said once and per room; the list stays; Retry recovers.
+    state.failDimensionRead = true
+    await page.reload()
+    const sizeFailed = page.getByRole('alert').filter({ hasText: 'Room sizes could not be loaded. Rooms are listed without them.' })
+    await sizeFailed.waitFor()
+    assert.equal(await page.getByText('Room size not loaded.', { exact: true }).count(), 3)
+    assert.equal(await page.getByText('Length and width unknown').count(), 0, 'A failed read is never shown as unknown')
+    await title(group(page, 'Kids room')).getByText('· 7').waitFor()
+    await assertReachable(sizeFailed.getByRole('button', { name: 'Retry', exact: true }), 'Retry sizes', phone ? 44 : 36)
+    await assertPhoneLayout(page, viewport, 'Room size failed')
+    await shot('project-rooms-size-failed')
+    state.failDimensionRead = false
+    await sizeFailed.getByRole('button', { name: 'Retry', exact: true }).click()
+    await size(page, 'Kids room').waitFor()
+    assert.equal(await sizeFailed.count(), 0)
+
     // 3. An Area maps to rooms of the linked building.
     await page.goto(base + '#/areas/bunk-bed')
     const rooms = page.getByRole('region', { name: 'Rooms', exact: true })
@@ -311,8 +387,13 @@ try {
     await assertReachable(rooms.getByRole('button', { name: 'Remove Kids room from this Area', exact: true }), 'Remove room')
     kids = group(rooms, 'Kids room')
     await title(kids).getByText('· 7').waitFor()
-    assert.deepEqual(await rowsOf(kids), ['Garderob: djup 60 cm Estimated', 'N-sida: fönster karm-till-karm 1030 mm Measured', 'Rummets exakta bredd 2700 mm Measured'])
+    assert.deepEqual(await rowsOf(kids), kidsFirst)
     assert.equal(state.measurementReads.at(-1).join(), 'kids@2', 'The panel reads its mapped rooms only')
+    await size(rooms, 'Kids room').waitFor()
+    assert.equal(await sizeText(size(rooms, 'Kids room')), '3970 × 2700 mm · height 1920 mm')
+    assert.equal(state.dimensionReads.at(-1).join(), 'kids@2', 'One size read for the panel')
+    const [areaSize, areaList] = await Promise.all([size(rooms, 'Kids room').boundingBox(), kids.boundingBox()])
+    assert(areaSize && areaList && areaSize.y < areaList.y, 'Area size sits above the list')
     await assertReachable(kids.getByRole('button', { name: 'Show all 7 measurements', exact: true }), 'Area show all')
     await kids.getByRole('button', { name: 'Show all 7 measurements', exact: true }).click()
     await kids.getByText('Takhöjd vid fönstret', { exact: true }).waitFor()
@@ -358,9 +439,10 @@ try {
     await rooms.getByText('This project has no building linked yet. Link one to choose the rooms this Area covers.', { exact: true }).waitFor()
     await rooms.getByRole('link', { name: 'Building & spaces', exact: true }).waitFor()
     await shot('project-rooms-area-empty')
-    // Account Buildings reads the same snapshots without a Project.
+    // Account Buildings reads the same snapshots without a Project, and no project size.
     await page.goto(base + '#/account/buildings')
     await title(group(page, 'Kids room')).getByText('· 7').waitFor()
+    assert.equal(await size(page, 'Kids room').count(), 0, 'Room size is read per project')
     assert.deepEqual(errors, [])
 
     // 5. Project creation: existing building, new building, skip, failed link.

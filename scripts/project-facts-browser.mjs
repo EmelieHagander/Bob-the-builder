@@ -23,6 +23,17 @@ export function createFactsFixture(timestamp, assets) {
         assert.equal(p_project, 'A')
         const old = records[kind].get(id)
         if (action !== 'create' && p_expected !== old?.revision) return fail('Record changed. Reload before saving again.')
+        // Mirrors evidence_command: what a measurement measures is set once and adds no version.
+        const classified = old?.property ?? null
+        if (data.property && classified && (data.property !== classified || (data.side ?? null) !== (old.side ?? null) || (data.reference ?? null) !== (old.reference ?? null))) {
+          await respond({ status: 409, json: { code: '55000', message: 'measurement_already_classified' } }); return true
+        }
+        if (action === 'classify') {
+          assert.equal(kind, 'measurement'); assert(data.property, 'Classify sends a property')
+          records[kind].set(id, { ...old, property: data.property, side: data.side ?? null, reference: data.reference ?? null })
+          await respond({ json: { id, revision: old.revision, property: data.property } })
+          return true
+        }
         const parent = data.component_id ? records.component.get(data.component_id) : null
         const source = data.source_media_id ? assets.get(data.source_media_id) : null
         const row = action === 'archive' || action === 'restore' ? {
@@ -31,7 +42,9 @@ export function createFactsFixture(timestamp, assets) {
           ...old, id, project_id: p_project, area_id: old?.area_id ?? parent?.area_id ?? data.area_id ?? null,
           component_id: old?.component_id ?? data.component_id ?? null,
           notes: '', source: '', required: false, condition: '', specification: '', kind: '', quantity: null, intent: 'inspect',
+          property: null, side: null, reference: null,
           ...data, quantity: data.quantity ? Number(data.quantity) : null, archived: false,
+          ...(classified ? { property: classified, side: old.side, reference: old.reference } : {}),
           source_media_id: source?.id ?? null, source_media_title: source?.title ?? '',
           change_note: action === 'create' ? 'Initial record' : data.change_note,
         }
@@ -71,7 +84,8 @@ export async function verifyFactsBrowser(page, base, fixture, width) {
   await page.getByRole('heading', { name: 'Measurements & existing parts', exact: true }).waitFor()
   await page.getByRole('button', { name: 'Add measurement', exact: true }).click()
   let editor = page.getByRole('dialog', { name: 'Add measurement', exact: true })
-  await editor.getByLabel('What does it measure?', { exact: true }).fill('Opening width')
+  await editor.getByLabel('Name', { exact: true }).fill('Opening width')
+  assert.equal(await editor.getByLabel('What does it measure?', { exact: true }).inputValue(), '', 'Nothing is said until chosen')
   await editor.getByLabel('Area', { exact: true }).selectOption('areaA')
   assert.equal(await editor.getByLabel('How certain is this value?', { exact: true }).inputValue(), 'unknown')
   assert(await editor.getByLabel('Value', { exact: true }).isDisabled())
@@ -160,6 +174,37 @@ export async function verifyFactsBrowser(page, base, fixture, width) {
   await editor.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.reload()
 
+  // Saying once what a measurement measures adds no version and is then fixed.
+  const versionBefore = [...fixture.records.measurement.values()].find(r => r.subject === 'Opening width').revision
+  await opening.getByRole('button', { name: 'What it measures', exact: true }).click()
+  const classify = page.getByRole('dialog', { name: 'What does Opening width measure?', exact: true })
+  assert(await classify.getByRole('button', { name: 'Save', exact: true }).isDisabled(), 'Nothing to save until chosen')
+  await classify.getByLabel('What does it measure?', { exact: true }).selectOption({ label: 'Opening width' })
+  await classify.getByLabel('Side (optional)', { exact: true }).selectOption({ label: 'North side' })
+  await classify.getByLabel('Measured from (optional)', { exact: true }).fill('frame to frame')
+  await page.screenshot({ path: 'test-results/project-facts-classify-' + width + '.png', fullPage: true })
+  await classify.getByRole('button', { name: 'Save', exact: true }).click()
+  await classify.waitFor({ state: 'hidden' })
+  await opening.getByText('Opening width · North side · frame to frame', { exact: true }).waitFor()
+  assert.equal(await opening.getByRole('button', { name: 'What it measures', exact: true }).count(), 0)
+  const classified = [...fixture.records.measurement.values()].find(r => r.subject === 'Opening width')
+  assert.deepEqual([classified.property, classified.side, classified.reference, classified.revision], ['opening_width', 'N', 'frame to frame', versionBefore])
+  await opening.getByRole('button', { name: 'Update', exact: true }).click()
+  await editor.getByText('Fixed once saved. To change it, archive this measurement and add a new one.', { exact: false }).first().waitFor()
+  assert.equal(await editor.getByLabel('What does it measure?', { exact: true }).count(), 0, 'A saved classification is not editable')
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click()
+  // Another editor classified it differently first: the refusal is explained.
+  fixture.remember('measurement', { ...classified, property: null, side: null, reference: null })
+  await page.reload()
+  await opening.getByRole('button', { name: 'What it measures', exact: true }).click()
+  fixture.records.measurement.set(classified.id, { ...fixture.records.measurement.get(classified.id), property: 'room_width' })
+  await classify.getByLabel('What does it measure?', { exact: true }).selectOption({ label: 'Room length' })
+  await classify.getByRole('button', { name: 'Save', exact: true }).click()
+  await classify.getByRole('alert').getByText('This measurement already says what it measures. To change that, archive it and add a new measurement.', { exact: true }).waitFor()
+  await classify.getByRole('button', { name: 'Cancel', exact: true }).click()
+  fixture.records.measurement.set(classified.id, { ...fixture.records.measurement.get(classified.id), property: 'opening_width', side: 'N', reference: 'frame to frame' })
+  await page.reload()
+
   await page.getByRole('button', { name: 'Existing parts', exact: true }).click()
   await page.getByRole('button', { name: 'Add existing part', exact: true }).click()
   const partEditor = page.getByRole('dialog', { name: 'Add existing part', exact: true })
@@ -184,13 +229,16 @@ export async function verifyFactsBrowser(page, base, fixture, width) {
   await page.getByText('Measurements for Existing window', { exact: true }).waitFor()
   await page.getByRole('button', { name: 'Add measurement', exact: true }).click()
   const dimension = page.getByRole('dialog', { name: 'Add measurement', exact: true })
-  await dimension.getByLabel('What does it measure?', { exact: true }).fill('Window width')
+  await dimension.getByLabel('Name', { exact: true }).fill('Window width')
+  await dimension.getByLabel('What does it measure?', { exact: true }).selectOption({ label: 'Opening width' })
   await dimension.getByRole('button', { name: 'Save measurement', exact: true }).click()
   await dimension.waitFor({ state: 'hidden' })
   await page.reload()
   await page.getByRole('article', { name: 'Window width', exact: true }).waitFor()
   assert.equal(await opening.count(), 0, 'Part scope must exclude unrelated measurements')
   assert.equal([...fixture.records.measurement.values()].find(r => r.subject === 'Window width').component_id, [...fixture.records.component.keys()][0])
+  assert.deepEqual(['property', 'side', 'reference'].map(key => [...fixture.records.measurement.values()].find(r => r.subject === 'Window width')[key]), ['opening_width', null, null])
+  await page.getByRole('article', { name: 'Window width', exact: true }).getByText('Opening width', { exact: true }).waitFor()
   await page.locator('.project-facts').evaluate(async element => {
     await Promise.all(element.getAnimations().map(animation => animation.finished))
   })
