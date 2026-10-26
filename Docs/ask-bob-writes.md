@@ -4,7 +4,7 @@ This document owns the source/runtime contract for bounded project writes. Hoste
 
 ## Human text holds only prose — owner decision 2026-10-26
 
-**Source only; not applied or deployed.** Owner decision: human text holds only
+**Deployed 2026-10-26** (PR #332; `bob-worker` v138, `ask-bob` v170; [evidence](foundation-verification.md#room-dimensions-and-human-text--2026-10-26)). Owner decision: human text holds only
 human prose; references are typed relations, never IDs or codes in free text.
 A read-only audit (2026-10-25) found snake_case codes in 24 of 78 Bob replies,
 full UUIDs in 12 and "rev N" in 18, and the same fragments in saved notes,

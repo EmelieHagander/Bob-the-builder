@@ -1392,7 +1392,7 @@ either way. Rollback: restore the previous body from `20261011090115`.
 
 ### Room dimensions — 2026-10-26
 
-**Source only, not applied yet.** Owner decisions 2026-10-25/26
+**Applied 2026-10-26:** `20261026071724_room_dimensions` (file `20261026130000`) and catalog `20261026071817_ai_room_dimensions_catalog` (file `20261026130500`); Barnrum classified by `scripts/classify-barnrum-measurements.sql` ([evidence](../Docs/foundation-verification.md#room-dimensions-and-human-text--2026-10-26)). Owner decisions 2026-10-25/26
 ([building model](../Docs/building-model.md#room-dimensions--owner-decisions-2026-10-26)):
 a room shows its length × width × height read straight from the database, for
 the app and Bob alike. `20261026130000_room_dimensions.sql`:

@@ -543,7 +543,7 @@ A later Project can therefore target the same stable Space identity while the pr
 
 ### Room dimensions — owner decisions 2026-10-26
 
-**Source only, not applied yet** ([database](../db/README.md#room-dimensions--2026-10-26)).
+**Live 2026-10-26** ([database](../db/README.md#room-dimensions--2026-10-26), [evidence](foundation-verification.md#room-dimensions-and-human-text--2026-10-26)).
 Measurements are read directly from the database so a room shows its
 length × width × height, in the app and to Bob. Labels are never interpreted;
 a measurement says what it measures through a typed field.
