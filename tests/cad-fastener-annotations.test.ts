@@ -1,6 +1,9 @@
-// CAD drawings carry the construction's fastener schedule (owner decisions
-// 2026-10-26, B2): publication accepts annotations version 1 as before, or
-// version 2 only with the exact rule schedule of the pinned construction revision.
+// Dormant database path. Owner decision 2026-10-26: drawings carry no
+// fasteners, so the Edge sends no schedule and refuses annotations version 2
+// (tests/cad-adapter.test.ts, tests/cad-transport.test.ts). Migration
+// 20261026171000 is applied and stays: publication accepts version 1 as before,
+// or version 2 only with the exact rule schedule of the pinned construction
+// revision. These tests pin that installed guard while it remains.
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
@@ -13,7 +16,7 @@ import {parameterPlan} from './support/cad-parameter-fixture.ts'
 import {manufacturePolicy} from './support/construction-instance-policy-fixture.ts'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 
-test('a drawing publishes annotations v2 only with the exact fastener schedule of its pinned construction revision',async t=>{
+test('dormant: the database still publishes annotations v2 only with the exact fastener schedule of its pinned construction revision; v1 stays valid',async t=>{
  const pg=await projectSchema();t.after(()=>pg.close())
  const owner=randomUUID(),turn=randomUUID(),message='Save my synthetic construction and drawing with fasteners.'
  const rpc=async(uid:string|null,name:string,args:any[],role='authenticated'):Promise<any>=>(await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result
@@ -37,7 +40,7 @@ test('a drawing publishes annotations v2 only with the exact fastener schedule o
  const catalog=new Map([[mat.recordId+'@1',{id:mat.recordId,revision:1,current_revision:1,kind:'material',profile_code:'sheet_stock',categories:['wood.plywood','sheet'],properties:{thickness:{value:'18',unit:'mm',truth:'provided_spec',parameter:null}}}]])
  const checked=checkConstruction({...draft,status:'ok',projectId:project,revision:1,current_revision:1,archived:false,source_state:'current',source_kind:'construction'},catalog,'2026-10-04')
  assert.equal(checked.concept_ready,true)
- // Read exactly as the Edge does before rendering: the caller's reader for the pinned revision.
+ // The caller's reader for the pinned revision (Bob's construction lists use it; drawings no longer do).
  const {status,project_id,artifact_id,revision,...schedule}=await rpc(owner,'bob.read_construction_fasteners',[project,checkpoint.recordId,1])
  assert.deepEqual([status,project_id,artifact_id,revision],['ok',project,checkpoint.recordId,1])
  assert.deepEqual(schedule.totals,[{kind:'screw',diameter_mm:4.0,length_mm:45,count:2,joint_ids:['corner']}])
@@ -66,7 +69,7 @@ test('a drawing publishes annotations v2 only with the exact fastener schedule o
  assert.deepEqual((await stored(saved.recordId,2)).annotations.fasteners,schedule)
 })
 
-test('the installed validator carries the guarded version 2 check exactly once',async t=>{
+test('dormant: the installed validator carries the guarded version 2 check exactly once',async t=>{
  const pg=await projectSchema();t.after(()=>pg.close())
  const def=(await pg.query(`select pg_get_functiondef('bob_private.validate_cad_construction_source()'::regprocedure) d`)).rows[0].d as string
  assert.equal(def.split('bob_private.construction_fastener_schedule_for(source)').length,2)

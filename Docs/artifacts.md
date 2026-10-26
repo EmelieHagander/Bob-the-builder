@@ -88,7 +88,16 @@ Generic Artifact revisions and older CAD saves cannot discard the construction c
 exercised by a live Bob turn.**
 - **B1:** the rule and the reader.
 - **B4:** Bob's override and lists ([tool contract](ask-bob-tools.md#joint-fasteners-in-construction-tools--2026-10-26)).
-- **B2:** the drawing table. **B3:** fastener and glue needs on the material list.
+- **B3:** fastener and glue needs on the
+  [material list](material-planning.md#fastener-and-glue-needs--2026-10-26).
+- **B2, the drawing table: withdrawn the same day.** Owner decision
+  2026-10-26: drawings carry no fastening methods. Fasteners live in Bob's
+  construction lists (`derive_construction_lists`) and the material list
+  only. The Edge stops reading and sending the schedule, accepts annotations
+  version 1 only, and the drawing view loses its Fasteners table. That
+  withdrawal is source only, not yet deployed. The CAD worker and migration
+  `20261026171000` stay as deployed and are
+  [dormant](cad-adapter.md#fastener-schedule-on-drawings--annotations-version-2-2026-10-26).
 - [Verification](foundation-verification.md#joint-fasteners--2026-10-26) holds
   the hosted evidence.
 
@@ -124,8 +133,8 @@ every saved construction, including historical ones, has a schedule.
   The rule's own answer stays visible as `proposal`. Bob's override also
   applies between two existing parts.
 - **Reading it.** `bob.read_construction_fasteners(project, artifact, revision)`
-  serves project members. It, the drawing check and the material needs all use
-  `construction_fastener_schedule_for(revision)`, which adds that revision's
+  serves project members. It, the dormant drawing check and the material needs
+  all use `construction_fastener_schedule_for(revision)`, which adds that revision's
   saved instance policy. Totals are grouped by kind, diameter and length.
   `complete` is false while any joint lacks a rule or a size.
 

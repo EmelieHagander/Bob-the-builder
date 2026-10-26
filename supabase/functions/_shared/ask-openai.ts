@@ -34,7 +34,7 @@ import type { OpenAIServiceOptions } from './openai-service.ts'
 import { createRecordDetailReader } from './project-record-detail.ts'
 import { createProjectImageTools } from './project-image-tools.ts'
 import { createCadAssistant, cadRenderInput } from './cad-assistant.ts'
-import { createCadTransport, readConstructionFasteners } from './cad-transport.ts'
+import { createCadTransport } from './cad-transport.ts'
 import { createMaterialCatalogReader } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
@@ -654,9 +654,9 @@ export async function answerWithOpenAi(opts: {
      if(!source)throw new Error('checked_construction_source_required')
      return memo('cad:render',cadRenderInput(recipe,source),async()=>{
       await beforeDispatch?.()
-      // The pinned revision fixes its schedule, so the journal input stays recipe + source.
-      const fasteners=await readConstructionFasteners((name,args)=>client.rpc(name,args).abortSignal(AbortSignal.timeout(10000)),opts.projectId,source)
-      return createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source,fasteners)
+      // Drawings carry no fasteners (owner decision 2026-10-26): they live in
+      // Bob's construction lists and the material list only.
+      return createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source)
      },45000)
     },
     checkConstruction:async(id,revision,fresh)=>{
