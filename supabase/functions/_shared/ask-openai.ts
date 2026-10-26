@@ -547,6 +547,13 @@ export async function answerWithOpenAi(opts: {
       const {data,error}=await readRpc('catalog_read',{p_project:opts.projectId,p_input:{action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}})
       if(error)throw new Error('construction_source_unavailable');return data
     },
+    // Jobs pinned to the joint-fasteners catalog read the server schedule in
+    // derive_construction_lists; earlier manifests keep their journal sequence.
+    ...(aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.derive_construction_lists'&&row.metadata?.joint_fastener_version===1)?{
+      readFasteners:async(id:string,revision:number)=>{
+        const {data,error}=await readRpc('read_construction_fasteners',{p_project:opts.projectId,p_artifact:id,p_revision:revision})
+        return error?null:data
+      }}:{}),
     readSources:async (pins:ReturnType<typeof parameterSourcePins>)=>{
       const project=new Map<string,Record<string,any>>()
       if(pins.project.length){

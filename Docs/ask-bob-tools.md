@@ -274,6 +274,35 @@ Deployed release B adds `change_construction_parameters` to the Drawings and CAD
 Release C adds `transition_legacy_drawing` on the same shelf/write gate. The database owns the copied geometry/graph and atomic origin/receipt; the model cannot send a replacement recipe or dimensions. Null evidence returns grouped gaps; exact existing-checkpoint reuse returns a `reused` Artifact receipt without creating a construction revision. The catalog adds this contract and updates only the CAD reader/render manuals and toolbox. Older immutable manifests omit the handler even when live tool policy includes it. [Artifact](artifacts.md#legacy-drawing-transition--release-c) owns first-pin/history semantics and [verification](foundation-verification.md#legacy-drawing-transition--release-c) owns installation/readback.
 
 
+## Joint fasteners in construction tools — 2026-10-26
+
+Publication `joint-fasteners-v1` (`scripts/build-ai-joint-fasteners-catalog.ts`)
+applies to manifests from that publication only. Earlier manifests keep their
+joint schema and journal sequence.
+
+- **The `fastener` field.** Each joint in `save_construction_draft`,
+  `transition_legacy_drawing` and `edit_construction_parts` has an optional
+  `fastener`.
+  - **Null applies the fixed rule.** Bob sends a choice only when the owner
+    chose another fastener, such as nails. A missing count or spacing is
+    spread by rule.
+  - **Explicit choices are the only ones stored.** Sending null for an
+    upserted joint removes an earlier choice.
+  - **The human-text guard checks the reason.**
+- **What `derive_construction_lists` shows.** It reads
+  `bob.read_construction_fasteners` for the exact revision and shows:
+  - each joint's fastener, with the rule's own proposal next to a choice
+  - totals by kind and size, and glue packages
+  - a `fastener_capacity_unverified` gap
+  - per-joint rule notes
+  An unreadable schedule shows as `fastener_schedule_unavailable`. Nothing is
+  invented.
+- **Older pinned calls.** Calls without the field get `fastener: null` before
+  schema validation, the same precedent as `instance_policy`.
+
+The rule and its limits are owned by
+[Artifacts](artifacts.md#joint-fasteners--owner-decisions-2026-10-26).
+
 ## Construction roles and continued changes — release D
 
 Three versioned catalog tools extend the existing Drawings/CAD shelf: `change_construction_roles`, `read_construction_changes` and `continue_construction_change`. [Artifact](artifacts.md#instance-roles-and-affected-outputs--release-d) owns roles and output-history semantics, [material](material-planning.md#role-aware-manufacturing-and-continuation--release-d) owns deterministic quantity/layout reuse, and [CAD](cad-adapter.md#reference-geometry-and-exact-role-versions--release-d) owns exact rendering. Full construction saves also expose nullable versioned `instance_policy`. Older pinned schemas may omit it; the runtime preserves uncertainty/inheritance and never assigns default manufacturing roles.

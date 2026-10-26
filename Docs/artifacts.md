@@ -84,9 +84,10 @@ Generic Artifact revisions and older CAD saves cannot discard the construction c
 
 ### Joint fasteners — owner decisions 2026-10-26
 
-**Status: B1 merged-source preparation**, covering the rule and the reader.
-The drawing table, the material list and Bob's override follow in the same
-delivery. [Verification](foundation-verification.md#joint-fasteners--2026-10-26)
+**Status: source on the delivery branch, not yet applied or deployed.**
+- **B1:** the rule and the reader.
+- **B4:** Bob's override and lists ([tool contract](ask-bob-tools.md#joint-fasteners-in-construction-tools--2026-10-26)).
+- **B2 and B3**, the drawing table and the material list, follow in the same delivery. [Verification](foundation-verification.md#joint-fasteners--2026-10-26)
 separates source from hosted application.
 
 Every joint gets a fastener **proposal** from fixed rules, not from a model.

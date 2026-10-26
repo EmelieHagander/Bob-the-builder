@@ -14,6 +14,22 @@
 
 The existing construction, drawing and writer tests pass: 148 tests.
 
+**B4 source:** Bob's override and lists, plus publication `20261026173000_ai_joint_fasteners_catalog.sql`.
+`tests/construction-fastener-tools.test.ts` covers:
+- Lists filled from the SQL schedule. An unreadable schedule is a gap. Without a reader the list is byte-identical to before.
+- The real edit tool: an old call without the field stores a five-key joint, and an explicit nail choice is kept.
+- Invalid kinds and codes in the reason are rejected.
+- The latest catalog carries the field and the rule notes.
+
+Earlier publications are rebuilt from current specs through
+`withoutJointFasteners`, and their builders and tests verify. 89 tests in the 18
+files that touch these tool schemas pass, and so do 532 tests in the 68 files
+that use the catalog fixtures.
+
+A rollback-only run of the publication against the hosted catalog gave:
+- `tools.save_construction_draft` v9, `tools.transition_legacy_drawing` v4 and `tools.edit_construction_parts` v2, each with exactly one joint schema carrying `fastener`.
+- `tools.derive_construction_lists` v5.
+
 A rollback-only run of the rule on the hosted bunk bed (revision 20) gave:
 - 102 screws, 4 × 45 mm.
 - 1 glue package, for three glued panels.

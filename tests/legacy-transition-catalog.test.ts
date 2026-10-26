@@ -4,6 +4,7 @@ import {execFileSync} from 'node:child_process'
 import {projectSchema} from './support/project-schema.ts'
 import {createAiCatalogSession,type AiCatalogManifest} from '../supabase/functions/_shared/ai-catalog.ts'
 import {CONSTRUCTION_LEGACY_TOOL,createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
+import {withoutJointFasteners} from '../supabase/functions/_shared/construction-fasteners.ts'
 import {createProjectWriter} from '../supabase/functions/_shared/project-write.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {createBobToolSession} from '../supabase/functions/_shared/project-tools/bob-tools.ts'
@@ -23,7 +24,9 @@ test('legacy publication preserves pinned catalogs/models; old benches survive n
  }
  const session=(manifest:AiCatalogManifest)=>createAiCatalogSession({rpc:async()=>{throw Error('Pinned only')}},{app:'bob',manifest})
  const now=session(current),before=session(previous)
- for(const catalog of [now,catalogFixture()])assert.deepEqual(catalog.tool('transition_legacy_drawing').function.parameters,CONSTRUCTION_LEGACY_TOOL.function.parameters)
+ // The legacy release predates joint fasteners; the latest catalog carries them.
+ assert.deepEqual(now.tool('transition_legacy_drawing').function.parameters,withoutJointFasteners(CONSTRUCTION_LEGACY_TOOL.function.parameters))
+ assert.deepEqual(catalogFixture().tool('transition_legacy_drawing').function.parameters,CONSTRUCTION_LEGACY_TOOL.function.parameters)
  const parameters:any=now.tool('transition_legacy_drawing',{server_quote:true}).function.parameters
  for(const field of ['recipe','parameters','parameter_plan','dimensions','request_quote'])assert(!parameters.properties[field])
  assert.throws(()=>before.tool('transition_legacy_drawing'),/ai_contract_missing/)

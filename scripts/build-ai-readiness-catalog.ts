@@ -5,9 +5,10 @@ import path from 'node:path'
 import { EXPERT_TOOLS } from '../supabase/functions/_shared/project-expert-tools.ts'
 import { DESIGN_CAD_TOOL as CURRENT_DESIGN_CAD_TOOL, withoutResumeViews } from '../supabase/functions/_shared/cad-assistant.ts'
 import { withLegacyCadViews } from '../supabase/functions/_shared/cad-adapter.ts'
+import { withoutJointFasteners } from '../supabase/functions/_shared/construction-fasteners.ts'
 import { CONSTRUCTION_SAVE_TOOL as CURRENT_CONSTRUCTION_SAVE_TOOL } from '../supabase/functions/_shared/construction-draft.ts'
 // This publication predates the 2026-10-21 view contract.
-const DESIGN_CAD_TOOL = withLegacyCadViews(withoutResumeViews(CURRENT_DESIGN_CAD_TOOL)), CONSTRUCTION_SAVE_TOOL = withLegacyCadViews(CURRENT_CONSTRUCTION_SAVE_TOOL)
+const DESIGN_CAD_TOOL = withLegacyCadViews(withoutResumeViews(CURRENT_DESIGN_CAD_TOOL)), CONSTRUCTION_SAVE_TOOL = withLegacyCadViews(withoutJointFasteners(CURRENT_CONSTRUCTION_SAVE_TOOL))
 
 const migrationRoot = 'supabase/migrations'
 const baseline = JSON.parse(readFileSync(path.join(migrationRoot, '20261009150000_seed_bob_ai_catalog.sql'), 'utf8').match(/\$ai_catalog_seed\$([\s\S]+?)\$ai_catalog_seed\$/)![1]) as any[]
