@@ -36,15 +36,6 @@ export type CadDrawingSource={artifact_id:string;revision:number}
 export type CadClearance={id:string;first_id:string;second_id:string;min_mm:number}
 export type CadMotion={id:string;moving_ids:string[];obstacle_ids:string[];delta:{x:number;y:number;z:number}}
 export type CadAssemblyRequest={contract_version:1;units:'mm';assembly_id:string;definitions:CadPrimitive[];instances:CadInstance[];views:CadView[];clearances?:CadClearance[];motions?:CadMotion[]}
-/** Fastener schedule of one saved construction revision (owner decisions
- * 2026-10-26): bob_private.construction_fastener_schedule applies fixed rules of
- * thumb to the saved geometry; it is a proposal, not a strength calculation.
- * The CAD engine draws it and echoes it as annotations version 2. */
-export type CadFastenerJoint={joint_id:string;method:string|null;source:'rule'|'override'|'no_rule'|'existing';kind:'screw'|'nail'|'bolt'|'glue'|'none'|null;
-  diameter_mm:number|null;length_mm:number|null;count:number|null;spacing_mm:number|null;through_instance_id:string|null;through_mm:number|null;
-  embed_mm:number|null;contact_length_mm:number|null;contact_width_mm:number|null;proposal:Record<string,unknown>|null;gaps:string[]}
-export type CadFastenerTotal={kind:'screw'|'nail'|'bolt';diameter_mm:number;length_mm:number;count:number;joint_ids:string[]}
-export type CadFastenerSchedule={rule_version:string;complete:boolean;joints:CadFastenerJoint[];totals:CadFastenerTotal[];glue_packages:0|1}
 /** Presentation pages do not divide or alter the saved construction. */
 export const CAD_PARTS_PER_PAGE=32
 export function cadPreviewKeys(recipe:CadAssemblyRequest){
@@ -108,33 +99,10 @@ function checkedGeometry(v:unknown,r:CadAssemblyRequest){
     ||x.status!==(x.pairs.length?'potential_obstruction':'clear_envelope')||x.pairs.some(p=>!obj(p)||!expected.moving_ids.includes(p.moving_id as string)||!expected.obstacle_ids.includes(p.obstacle_id as string))}))return false
   return true
 }
-const JOINT_FASTENER_KEYS=['joint_id','method','source','kind','diameter_mm','length_mm','count','spacing_mm','through_instance_id','through_mm','embed_mm','contact_length_mm','contact_width_mm','proposal','gaps']
-const label=(v:unknown,limit=200)=>typeof v==='string'&&v.length>0&&v.length<=limit
-const optionalSize=(v:unknown,integer=false)=>v===null||finite(v,1e6,true)&&(!integer||Number.isSafeInteger(v))
-export function parseCadFastenerSchedule(v:unknown):CadFastenerSchedule|null{
- if(!obj(v)||!exact(v,['rule_version','complete','joints','totals','glue_packages'])||!id(v.rule_version)||typeof v.complete!=='boolean'
-  ||(v.glue_packages!==0&&v.glue_packages!==1)||!Array.isArray(v.joints)||v.joints.length>1024||!Array.isArray(v.totals)||v.totals.length>1024)return null
- const ids=new Set<string>()
- for(const j of v.joints){
-  if(!obj(j)||!exact(j,JOINT_FASTENER_KEYS)||!label(j.joint_id)||ids.has(j.joint_id as string)||!['rule','override','no_rule','existing'].includes(j.source as string)
-   ||![null,'screw','nail','bolt','glue','none'].includes(j.kind as string|null)||[j.method,j.through_instance_id].some(x=>x!==null&&!label(x))
-   ||(j.proposal!==null&&!obj(j.proposal))||!Array.isArray(j.gaps)||j.gaps.length>16||j.gaps.some(g=>!label(g,80))
-   ||!['diameter_mm','length_mm','spacing_mm','through_mm','embed_mm','contact_length_mm','contact_width_mm'].every(k=>optionalSize(j[k]))||!optionalSize(j.count,true))return null
-  ids.add(j.joint_id as string)
- }
- if(v.totals.some(t=>!obj(t)||!exact(t,['kind','diameter_mm','length_mm','count','joint_ids'])||!['screw','nail','bolt'].includes(t.kind as string)
-  ||!finite(t.diameter_mm,1e6,true)||!finite(t.length_mm,1e6,true)||!Number.isSafeInteger(t.count)||(t.count as number)<1
-  ||!Array.isArray(t.joint_ids)||t.joint_ids.length<1||t.joint_ids.some(x=>!ids.has(x as string))))return null
- return v as unknown as CadFastenerSchedule
-}
-/** expected: null when no schedule was sent (version 1 only), the sent schedule
- * (version 2 echoing it exactly), or undefined when reading a saved manifest. */
-function checkedAnnotations(value:unknown,recipe:CadAssemblyRequest,box:Record<string,any>,expected?:CadFastenerSchedule|null) {
- if(!obj(value))return false
- const version=expected===null?1:expected?2:value.version
- if((version!==1&&version!==2)||value.version!==version||!exact(value,['version','coverage','views',...(version===2?['fasteners']:[])])
-  ||version===2&&(!parseCadFastenerSchedule(value.fasteners)||!!expected&&stable(value.fasteners)!==stable(expected))
-  ||value.coverage!=='complete'||!obj(value.views)
+/** Version 1 only. Drawings carry no fasteners (owner decision 2026-10-26):
+ * the worker's version 2 with a fastener schedule is dormant and refused here. */
+function checkedAnnotations(value:unknown,recipe:CadAssemblyRequest,box:Record<string,any>) {
+ if(!obj(value)||!exact(value,['version','coverage','views'])||value.version!==1||value.coverage!=='complete'||!obj(value.views)
   ||Object.keys(value.views).sort().join(',')!==[...recipe.views].sort().join(','))return false
  const definitions=new Map(recipe.definitions.map(d=>[d.id,d]))
  const parts=[...recipe.instances].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0).map((i,index)=>{
@@ -148,15 +116,13 @@ function checkedAnnotations(value:unknown,recipe:CadAssemblyRequest,box:Record<s
  }
  return true
 }
-/** fasteners: see checkedAnnotations. A sent schedule must come back drawn. */
-export function parseCadAssemblyResult(v:unknown,r:CadAssemblyRequest,fasteners?:CadFastenerSchedule|null):CadAssemblyResult|null{
+export function parseCadAssemblyResult(v:unknown,r:CadAssemblyRequest):CadAssemblyResult|null{
   if(!obj(v)||v.contract_version!==1||v.assembly_id!==r.assembly_id||!obj(v.engine)||v.engine.name!=='build123d'||v.engine.version!=='0.13.0'||v.engine.units!=='mm'
     ||!bounds(v.bounding_box_mm)||!Array.isArray(v.instances)||v.instances.length!==r.instances.length||!obj(v.exports))return null
   if(stable(v.definitions)!==stable(r.definitions))return null
   if((r.clearances?.length||r.motions?.length)&&!obj(v.checks))return null
   if(v.checks!==undefined&&!checkedGeometry(v.checks,r))return null
-  if(fasteners&&v.annotations===undefined)return null
-  if(v.annotations!==undefined&&!checkedAnnotations(v.annotations,r,v.bounding_box_mm as Record<string,any>,fasteners))return null
+  if(v.annotations!==undefined&&!checkedAnnotations(v.annotations,r,v.bounding_box_mm as Record<string,any>))return null
   const seen=new Set<string>()
   for(const row of v.instances){if(!obj(row)||typeof row.id!=='string'||seen.has(row.id)||!r.instances.some(i=>i.id===row.id&&i.definition_id===row.definition_id)||!bounds(row.bounding_box_mm))return null;seen.add(row.id)}
   for(const key of ['step',...r.views]){const e=v.exports[key];if(!obj(e)||!exact(e,['file','sha256'])||typeof e.file!=='string'||!/^[A-Za-z0-9_.-]{1,100}$/.test(e.file)||typeof e.sha256!=='string'||!/^[0-9a-f]{64}$/.test(e.sha256))return null}
@@ -166,6 +132,6 @@ export type CadTransport=(request:CadAssemblyRequest,signal:AbortSignal)=>Promis
 export function createCadAdapter(transport:CadTransport,timeoutMs=20000){
   return{async render(input:unknown){const request=parseCadAssemblyRequest(input);if(!request)return{status:'invalid' as const}
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs)
-    try{const result=parseCadAssemblyResult(await transport(request,controller.signal),request,null);return result?{status:'ok' as const,result}:{status:'unavailable' as const}}
+    try{const result=parseCadAssemblyResult(await transport(request,controller.signal),request);return result?{status:'ok' as const,result}:{status:'unavailable' as const}}
     catch{return{status:'unavailable' as const}}finally{clearTimeout(timer)}}}
 }

@@ -1,4 +1,4 @@
-import { cadPreviewKeys, parseCadAssemblyResult, parseCadFastenerSchedule, type CadAssemblyRequest, type CadDrawingSource, type CadFastenerSchedule } from './cad-adapter.ts'
+import { cadPreviewKeys, parseCadAssemblyResult, type CadAssemblyRequest, type CadDrawingSource } from './cad-adapter.ts'
 import type { CadPacket } from './cad-assistant.ts'
 /** Plain loop: Uint8Array.from with a mapper costs ~100 ms per MB of CPU. */
 function decodeBase64(encoded:string):Uint8Array<ArrayBuffer>{const text=atob(encoded),raw=new Uint8Array(text.length);for(let i=0;i<text.length;i++)raw[i]=text.charCodeAt(i);return raw}
@@ -15,38 +15,20 @@ export async function verifyCadFiles(files:Record<string,unknown>,views:readonly
  }
 }
 
-type RpcCall=(name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:{code?:string}|null}>
-/** The fastener schedule of exactly the pinned construction revision, read as
- * the caller through bob.read_construction_fasteners (fixed rules of thumb,
- * not a strength calculation). A drawing never shows another revision's. */
-export async function readConstructionFasteners(call:RpcCall,projectId:string,source:CadDrawingSource):Promise<CadFastenerSchedule>{
- const {data,error}=await call('read_construction_fasteners',{p_project:projectId,p_artifact:source.artifact_id,p_revision:source.revision})
- if(error)throw new Error(error.code==='42501'?'project_denied':'construction_fasteners_unavailable')
- const row=data as Record<string,unknown>|null
- if(!row||row.status!=='ok'||row.project_id!==projectId||String(row.artifact_id).toLowerCase()!==source.artifact_id.toLowerCase()||row.revision!==source.revision)
-  throw new Error('construction_fasteners_unavailable')
- const {status:_status,project_id:_project,artifact_id:_artifact,revision:_revision,...schedule}=row
- const parsed=parseCadFastenerSchedule(schedule)
- if(!parsed)throw new Error('construction_fasteners_unavailable')
- return parsed
-}
-
 /** The host and secret are deployment configuration, never model input. A
- * fastener schedule travels only with its construction source and must come
- * back drawn as annotations version 2; without one the worker answers version 1. */
+ * drawing is sent recipe + source only; it carries no fasteners (owner
+ * decision 2026-10-26), so the result must be annotations version 1. */
 export function createCadTransport(endpoint:string|undefined,token:string|undefined,fetcher:typeof fetch=fetch){
- return async(recipe:CadAssemblyRequest,drawingSource?:CadDrawingSource,fasteners?:CadFastenerSchedule):Promise<CadPacket>=>{
+ return async(recipe:CadAssemblyRequest,drawingSource?:CadDrawingSource):Promise<CadPacket>=>{
   if(!endpoint||!token)throw new Error('cad_not_configured')
-  if(fasteners&&!drawingSource)throw new Error('cad_fasteners_without_source')
   const url=new URL(endpoint);if(url.protocol!=='https:')throw new Error('invalid_cad_host')
-  const body=drawingSource?{recipe,drawing_source:drawingSource,...(fasteners?{fasteners}:{})}:recipe
-  const response=await fetcher(url,{method:'POST',redirect:'error',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(45000)})
+  const response=await fetcher(url,{method:'POST',redirect:'error',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(drawingSource?{recipe,drawing_source:drawingSource}:recipe),signal:AbortSignal.timeout(45000)})
   if(!response.ok||!response.body)throw new Error('cad_unavailable')
   const reader=response.body.getReader(),chunks:Uint8Array[]=[];let size=0
   while(true){const {value,done}=await reader.read();if(done)break;size+=value.byteLength;if(size>6*1024*1024){await reader.cancel();throw new Error('cad_output_too_large')}chunks.push(value)}
   const bytes=new Uint8Array(size);let offset=0;for(const c of chunks){bytes.set(c,offset);offset+=c.length}
   const packet=JSON.parse(new TextDecoder().decode(bytes))
-  const manifest=parseCadAssemblyResult(packet.manifest,recipe,fasteners??null)
+  const manifest=parseCadAssemblyResult(packet.manifest,recipe)
   if(!manifest||!packet.files||typeof packet.files!=='object')throw new Error('invalid_cad_result')
   if(drawingSource&&(packet.manifest.drawing_source?.artifact_id!==drawingSource.artifact_id||packet.manifest.drawing_source?.revision!==drawingSource.revision
    ||Object.keys(packet.manifest.drawing_source).sort().join(',')!=='artifact_id,revision'))throw new Error('cad_construction_source_mismatch')

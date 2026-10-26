@@ -284,3 +284,26 @@ test('snapshot identity preserves exact record keys and literal text that resemb
   assert.notEqual(changedText.packet.directory!.snapshotId, changedKey.packet.directory!.snapshotId)
   assert.deepEqual(await changedText.reader.execute({ section: 'recentSharedFacts', snapshot_id: first.packet.directory!.snapshotId, after_cursor: null }), { status: 'stale_snapshot' })
 })
+
+test('pinned pure facts cut oversized blocks to their original prefix and never call a model (2026-10-26)', async () => {
+  const f = fixture()
+  f.project.description = 'Förbered en våningssäng med förvaring. '.repeat(120)
+  f.steps[1].goal = '未確認の寸法。'.repeat(300)
+  const message = 'Fortsätt med ritningen och kontrollera måtten. '.repeat(60)
+  const original = f.project.description
+  const packet = await prepareProjectOrientation({ ...f.opts, message, presentation: 'cut' })
+  for (const presentation of [packet.overview, packet.focus.description, packet.footer]) {
+    assert.equal(presentation.kind, 'cut')
+    assert.equal(presentation.tokens, countContextTokens(presentation.text))
+    assert(presentation.tokens <= presentation.maxTokens && presentation.tokens > 0)
+  }
+  assert(original.startsWith(packet.overview.text), 'the overview is an exact original prefix')
+  const footer = JSON.parse(packet.footer.text)
+  assert.equal(footer.currentRequestCut, true)
+  assert(message.startsWith(footer.currentRequest) && footer.currentRequest.length > 0, 'only the request is cut and the footer stays JSON')
+  for (const key of ['overview', 'focus', 'footer']) assert(packet.warnings.includes(`${key}:cut`))
+  assert.equal(f.project.description, original)
+  // Short originals are unchanged in either mode.
+  const short = await prepareProjectOrientation({ ...fixture().opts, presentation: 'cut' })
+  assert.equal(short.overview.kind, 'original'); assert.equal(short.footer.kind, 'original')
+})

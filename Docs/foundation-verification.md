@@ -5,6 +5,12 @@
 **PR #337 (`6190984`) is merged, applied and deployed (11:44–11:51 UTC); not
 yet exercised by a live Bob turn or a drawing with a fastener table.**
 
+**Superseded the same day (owner decision 2026-10-26):** drawings carry no
+fasteners. The drawing table (B2) is
+[withdrawn and dormant](cad-adapter.md#fastener-schedule-on-drawings--annotations-version-2-2026-10-26);
+the withdrawal is source only, not yet deployed. The evidence below records
+what #337 shipped.
+
 - **Owner decision, existing parts:** a joint whose two parts both have the
   role `existing_part` (wall to wall in a room that is already built) gets
   `source: existing` and no fastener unless Bob sets one. The schedule takes

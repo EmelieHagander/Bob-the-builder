@@ -88,7 +88,16 @@ Generic Artifact revisions and older CAD saves cannot discard the construction c
 exercised by a live Bob turn.**
 - **B1:** the rule and the reader.
 - **B4:** Bob's override and lists ([tool contract](ask-bob-tools.md#joint-fasteners-in-construction-tools--2026-10-26)).
-- **B2:** the drawing table. **B3:** fastener and glue needs on the material list.
+- **B3:** fastener and glue needs on the
+  [material list](material-planning.md#fastener-and-glue-needs--2026-10-26).
+- **B2, the drawing table: withdrawn the same day.** Owner decision
+  2026-10-26: drawings carry no fastening methods. Fasteners live in Bob's
+  construction lists (`derive_construction_lists`) and the material list
+  only. The Edge stops reading and sending the schedule, accepts annotations
+  version 1 only, and the drawing view loses its Fasteners table. That
+  withdrawal is source only, not yet deployed. The CAD worker and migration
+  `20261026171000` stay as deployed and are
+  [dormant](cad-adapter.md#fastener-schedule-on-drawings--annotations-version-2-2026-10-26).
 - [Verification](foundation-verification.md#joint-fasteners--2026-10-26) holds
   the hosted evidence.
 
@@ -124,8 +133,8 @@ every saved construction, including historical ones, has a schedule.
   The rule's own answer stays visible as `proposal`. Bob's override also
   applies between two existing parts.
 - **Reading it.** `bob.read_construction_fasteners(project, artifact, revision)`
-  serves project members. It, the drawing check and the material needs all use
-  `construction_fastener_schedule_for(revision)`, which adds that revision's
+  serves project members. It, the dormant drawing check and the material needs
+  all use `construction_fastener_schedule_for(revision)`, which adds that revision's
   saved instance policy. Totals are grouped by kind, diameter and length.
   `complete` is false while any joint lacks a rule or a size.
 
@@ -266,6 +275,38 @@ another full construction-result copy. Existing checkpoint storage limits remain
 whole-turn capacity/CPU and real-model cost belong to the final acceptance gate.
 [Verification](foundation-verification.md#construction-views--2026-10-19) records
 the local evidence, catalog compatibility and release order.
+
+### Compact construction table — owner decision 2026-10-26
+
+**Approved by the owner; source in progress, not deployed.** Construction
+turns averaged 16 `read_construction_draft` pages each. The live bunk bed is
+65,176 characters of raw recipe, parameters, joints and materials. Its
+compact table is about 7,200 characters.
+
+For jobs pinned with `projectFactsVersion: 1`, `view=overview` also returns
+one table for the exact revision. Each section is `columns` plus row arrays:
+- **definitions:** `id, primitive, size_mm, material_ref`. `size_mm` names
+  each primitive's dimensions, for example box x/y/z.
+- **parts:** `id, definition_id, role`. A role comes only from the saved
+  instance policy; anything else stays `unknown`.
+- **joints:** `id, method, first, second, fastener`, with faces written as
+  `instance_id.face`. The fastener is the joint's row from
+  `construction_fastener_schedule_for`: source, kind, diameter, length,
+  count and the rule gaps.
+- **fasteners:** `complete`, totals, glue packages and
+  `basis: rule_of_thumb_proposal`. Without a schedule it is
+  `{status: unavailable}`.
+- **open_questions:** a count.
+
+The live bunk bed fits one read at 3,237 tokens, fasteners included. A larger
+construction pages definitions, then parts, then joints, then totals within
+the step budget. Coverage uses `scope: overview_table`. A section missing from
+a page is on another page, never "none". The cursor is bound to the revision
+and to whether a schedule was present. Placements, parameters, bindings and notes
+stay in their exact views. Bob opens them by ID only when a task needs them.
+It is a selection of canonical values, never a model summary. Checks,
+lists and drawing gates keep their own full reads. Unpinned jobs keep the
+counts-only overview.
 
 ### Instance roles and affected outputs — release D
 

@@ -281,3 +281,31 @@ test('the first actual model input for a 1000-Area project is bounded and deferr
   }, session) })
   assert(result.ok); assert.equal(calls, 3)
 })
+
+test('pinned project facts join the fresh briefing as data, after the orientation, without a presentation model (2026-10-26)', async () => {
+  const facts = { status: 'ok' as const, version: 1, project_id: 'A', as_of: '2026-10-26T12:00:00Z',
+    rooms: { status: 'ok', total: 1, included: 1, omitted: 0, items: [{ room_id: 'r1', name: 'Barnrum', building: 'Boningshus', length_mm: 3970, width_mm: 2700, height_mm: 1920 }] },
+    constructions: { total: 1, included: 1, omitted: 0, items: [{ artifact_id: 'c1', title: 'Våningssäng', revision: 20, parts: 53, joints: 36 }] } }
+  const f = fixture(), session = catalogFixture()
+  const briefings: string[] = [], roles: string[] = []
+  let calls = 0
+  const result = await runProjectAnswer({ ...f.opts, aiCatalog: session, corePreload: true, pureFacts: true, projectFacts: facts,
+    callModel: catalogCall(async options => {
+      roles.push(String(options.catalogRoleKey))
+      if (options.catalogRoleKey !== 'ask-bob') return response()
+      calls++
+      const frame = (options.messages ?? []).map(m => String(m.content)).find(content => content.includes(session.text('bob.frame.briefing-label')))!
+      briefings.push(frame)
+      return response()
+    }, session) })
+  assert(result.ok)
+  assert.equal(calls, 1)
+  const label = session.text('bob.frame.briefing-label'), packet = JSON.stringify({ project_facts: facts })
+  assert(briefings[0].indexOf(packet) > briefings[0].indexOf(label), 'facts follow the orientation under the briefing label')
+  assert.equal(briefings[0].split(packet).length - 1, 1)
+  assert(!roles.includes('context-presentation'))
+  // Unpinned turns carry no facts.
+  const plain: string[] = []
+  await runProjectAnswer({ ...fixture().opts, aiCatalog: session, callModel: catalogCall(async options => { plain.push(JSON.stringify(options.messages)); return response() }, session) })
+  assert(!plain.join('').includes('project_facts'))
+})

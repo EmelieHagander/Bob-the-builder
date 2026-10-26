@@ -1,5 +1,7 @@
 import { countSerializedTokens } from './bob-token-budget.ts'
 import { stableJsonValue } from './bob-job-journal.ts'
+import type { FastenerSchedule } from './construction-fasteners.ts'
+import { INSTANCE_ROLE_POLICY } from './construction-instance-policy.ts'
 
 type Row = Record<string, any>
 type Item = { collection: string; id: string; value: unknown }
@@ -89,6 +91,60 @@ export function constructionViewItems(draft:Row,view:string,ids:string[]):{items
  return {items:out,missing_ids:[...missing]}
 }
 
+/** Compact construction table (owner decision 2026-10-26, pinned per job).
+ * Headers once, then row arrays of exact saved values; no AI summary. */
+const TABLE_SIZES:Record<string,string[]>={box:['x_mm','y_mm','z_mm'],cylinder:['diameter_mm','length_mm'],tube:['outside_diameter_mm','wall_thickness_mm','length_mm']}
+const TABLE_SECTIONS:Record<string,Row>={
+ definitions:{columns:['id','primitive','size_mm','material_ref']},
+ parts:{columns:['id','definition_id','role']},
+ joints:{columns:['id','method','first','second','fastener'],first:'instance_id.face',second:'instance_id.face',fastener:['source','kind','diameter_mm','length_mm','count','gaps']},
+ fastener_totals:{columns:['kind','diameter_mm','length_mm','count','joint_ids']},
+}
+const TABLE_MESSAGE='Compact table of exact saved values. Placements, formulas, materials, reasons and notes are in the named views: open exact records by ID. Role unknown means not recorded. Fasteners are the server rule-of-thumb proposal with its rule gaps, not verified strength. No current check is inferred from a saved draft or historical result.'
+export type ConstructionTableOption={table:true;fasteners?:FastenerSchedule|null}
+
+/** Fixed row order: definitions, parts, joints, then the server fastener totals.
+ * Fasteners come only from the SQL schedule, with its rule gaps (for example
+ * narrow_contact) kept visible; roles only from the saved policy. */
+function tableRows(draft:Row,fasteners:FastenerSchedule|null):Item[]{
+ const roles=new Map<unknown,unknown>(arr(draft.instance_policy?.instances).map(r=>[r?.instance_id,r?.role]))
+ const role=(id:unknown)=>{const r=roles.get(id);return typeof r==='string'&&Object.hasOwn(INSTANCE_ROLE_POLICY,r)?r:'unknown'}
+ const schedule=new Map<unknown,Row>(fasteners?arr(fasteners.joints).map(f=>[f?.joint_id,f]):[])
+ const fastener=(id:unknown)=>{const f=schedule.get(id);return f?[f.source??null,f.kind??null,f.diameter_mm??null,f.length_mm??null,f.count??null,f.gaps??null]:null}
+ const end=(e:Row)=>`${e?.instance_id}.${e?.face}`
+ const size=(d:Row)=>Object.hasOwn(TABLE_SIZES,d.primitive)?TABLE_SIZES[d.primitive].map(k=>d[k]??null):null
+ return [
+  ...arr(draft.recipe?.definitions).map(d=>({collection:'definitions',id:String(d.id),value:[d.id,d.primitive,size(d),d.material_ref??null]})),
+  ...arr(draft.recipe?.instances).map(i=>({collection:'parts',id:String(i.id),value:[i.id,i.definition_id,role(i.id)]})),
+  ...arr(draft.joints).map(j=>({collection:'joints',id:String(j.id),value:[j.id,j.method,end(j.first),end(j.second),fastener(j.id)]})),
+  ...(fasteners?arr(fasteners.totals).map((t,n)=>({collection:'fastener_totals',id:String(n),value:[t.kind,t.diameter_mm,t.length_mm,t.count,t.joint_ids]})):[]),
+ ]
+}
+/** One page of the table. A section appears when this page holds its rows, or
+ * when it is empty overall: an absent section means "on another page", never "none". */
+function presentTable(records:Row[],all:Item[],fasteners:FastenerSchedule|null,openQuestions:number):Row{
+ const filled=new Set(all.map(r=>r.collection)),out:Row={}
+ const section=(name:string)=>{
+  const rows=records.filter(r=>r.collection===name&&!('fragment'in r)).map(r=>r.value as unknown[])
+  if(!rows.length&&filled.has(name))return null
+  const sizes=name==='definitions'?{size_mm:Object.fromEntries(Object.entries(TABLE_SIZES).filter(([p])=>rows.some(r=>r[1]===p)))}:{}
+  return {...TABLE_SECTIONS[name],...sizes,rows}
+ }
+ for(const name of ['definitions','parts','joints']){const s=section(name);if(s)out[name]=s}
+ const totals=fasteners&&section('fastener_totals')
+ out.fasteners=fasteners?{complete:fasteners.complete,...(totals?{totals}:{}),glue_packages:fasteners.glue_packages,basis:'rule_of_thumb_proposal'}:{status:'unavailable'}
+ out.open_questions=openQuestions
+ const fragments=records.filter(r=>'fragment'in r)
+ if(fragments.length)out.fragments=fragments
+ return out
+}
+/** The whole table in one value: definitions, parts (roles), joints (server
+ * fasteners) and the fastener summary, or fasteners {status:'unavailable'}. */
+export function constructionTable(draft:Row,fasteners?:FastenerSchedule|null):Row{
+ const rows=tableRows(draft,fasteners??null)
+ return presentTable(rows,rows,fasteners??null,arr(draft.open_questions).length)
+}
+
 function resultItems(output:Row):Item[]{
  const result:Item[]=[]
  const visit=(value:any,path:string)=>{
@@ -107,20 +163,23 @@ function resultItems(output:Row):Item[]{
 
 /** A cursor binds the immutable record selection, not the latest project head.
  * Whole rows are preferred. Oversized rows expose exact Unicode JSON fragments,
- * never an unlabeled truncation or a fabricated shortened fact. */
-async function page(query:ConstructionViewQuery,header:Row,rows:Item[],budget:number):Promise<Row>{
+ * never an unlabeled truncation or a fabricated shortened fact. A layout may
+ * bind extra selection inputs, present the page's rows differently and name the
+ * read after the last page; without one, pages are unchanged. */
+type PageLayout={binding?:Row;scope?:string;present?:(records:Row[])=>Row;last?:Row}
+async function page(query:ConstructionViewQuery,header:Row,rows:Item[],budget:number,layout:PageLayout={}):Promise<Row>{
  if(!Number.isSafeInteger(budget)||budget<CONSTRUCTION_VIEW_TOKENS||budget>CONSTRUCTION_VIEW_MAX_TOKENS)throw new Error('construction_view_budget_invalid')
- const binding=(await exactHash({artifact_id:query.artifact_id,revision:query.revision,view:query.view,ids:query.ids,result_id:query.result_id,section:query.section})).slice(0,24)
+ const binding=(await exactHash({artifact_id:query.artifact_id,revision:query.revision,view:query.view,ids:query.ids,result_id:query.result_id,section:query.section,...layout.binding})).slice(0,24)
  let index=0,offset=0
  if(query.after){const m=/^cv1:([a-f0-9]{24}):(\d+):(\d+)$/.exec(query.after);if(!m||m[1]!==binding)throw new Error('construction_view_cursor_invalid');index=Number(m[2]);offset=Number(m[3])}
  if(!Number.isSafeInteger(index)||index<0||index>rows.length||!Number.isSafeInteger(offset)||offset<0||index===rows.length&&offset!==0)throw new Error('construction_view_cursor_invalid')
  const startOffset=offset
  const token=(i:number,o:number)=>i<rows.length?`cv1:${binding}:${i}:${o}`:null
- const envelope=(records:unknown[],i:number,o:number)=>({...header,view:query.view,items:records,
+ const envelope=(records:Row[],i:number,o:number)=>({...header,view:query.view,...(layout.present?layout.present(records):{items:records}),
   coverage:{total_items:rows.length,start_index:index,start_offset:startOffset,next_index:i,fragment_offset:o,
-   end_of_selection:i===rows.length,complete:index===0&&startOffset===0&&i===rows.length,scope:'selected_view_only'},
-  next_read:i<rows.length?{...query,after:token(i,o)}:null})
- const records:unknown[]=[];let next=index
+   end_of_selection:i===rows.length,complete:index===0&&startOffset===0&&i===rows.length,scope:layout.scope??'selected_view_only'},
+  next_read:i<rows.length?{...query,after:token(i,o)}:layout.last??null})
+ const records:Row[]=[];let next=index
  if(countSerializedTokens(envelope([],next,offset))>budget)throw new Error('construction_view_header_too_large')
  while(next<rows.length){
   const row=rows[next]
@@ -166,7 +225,9 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
    details_omitted:true,message:'Open the exact result sections for findings and constraints before relying on this assessment. A construction result is not a drawing or manufacturing approval.'}
  }
  function sections(rows:Item[]){const counts=new Map<string,number>();for(const row of rows)counts.set(row.collection,(counts.get(row.collection)??0)+1);return [...counts].map(([name,count])=>({name,count}))}
- async function read(draft:Row,query:ConstructionViewQuery,budget=CONSTRUCTION_VIEW_TOKENS):Promise<Row>{
+ /** table (pinned per job) adds the compact construction table to the overview;
+  * without it the overview stays exactly as before. */
+ async function read(draft:Row,query:ConstructionViewQuery,budget=CONSTRUCTION_VIEW_TOKENS,table?:ConstructionTableOption):Promise<Row>{
   if(query.view==='result'){
    const o=query.result_id&&seen.get(query.result_id)
    if(!o||o.artifact_id!==query.artifact_id||o.revision!==query.revision)return {status:'not_found',projectId,message:'No observed result for this exact construction revision in this turn.'}
@@ -181,15 +242,20 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
   if(query.view==='notes'&&query.ids.length)return {status:'invalid',message:'Read notes without an ID filter; all original questions remain available.'}
   const header={projectId,status:'ok',artifact_id:draft.artifact_id,revision:draft.revision,current_revision:draft.current_revision,source_state:draft.source_state,archived:draft.archived,roles_recorded:draft.instance_policy!=null}
   if(query.view==='overview'){
-   if(query.after||query.ids.length)return {status:'invalid',message:'Overview has no item cursor or ID filter. Choose a detail view.'}
+   if(table?.table===true&&query.ids.length)return {status:'invalid',message:'Overview has no ID filter. Open exact records by ID in a detail view.'}
+   if(table?.table!==true&&(query.after||query.ids.length))return {status:'invalid',message:'Overview has no item cursor or ID filter. Choose a detail view.'}
    const recent=[...observations].reverse().filter(o=>o.artifact_id===draft.artifact_id&&o.revision===draft.revision)
    const kinds=new Set<string>(),refs=recent.filter(o=>{if(kinds.has(o.kind))return false;kinds.add(o.kind);return true}).map(reference)
-   return {...header,title:draft.title,area_id:draft.area_id,target_revision:draft.target_revision,construction_status:'draft',rendered:false,reviewed:false,
+   const overview={...header,title:draft.title,area_id:draft.area_id,target_revision:draft.target_revision,construction_status:'draft',rendered:false,reviewed:false,
     counts:{definitions:arr(draft.recipe?.definitions).length,instances:arr(draft.recipe?.instances).length,nodes:arr(draft.parameters?.nodes).length,
      bindings:arr(draft.parameters?.bindings).length,joints:arr(draft.joints).length,materials:arr(draft.materials).length,
      unknown_roles:draft.instance_policy==null?arr(draft.recipe?.instances).length:arr(draft.instance_policy.instances).filter(r=>r.role==='unknown').length,roles_recorded:draft.instance_policy!=null,open_questions:arr(draft.open_questions).length},
-    previous_results:refs,views:views.filter(v=>!['overview','result'].includes(v)),details_omitted:true,
-    next_read:{...query,revision:draft.revision,view:'notes'},message:'Description, questions, parts and dependencies are available in the named views. No current check is inferred from a saved draft or historical result.'}
+    previous_results:refs,views:views.filter(v=>!['overview','result'].includes(v)),details_omitted:true}
+   if(table?.table!==true)return {...overview,next_read:{...query,revision:draft.revision,view:'notes'},message:'Description, questions, parts and dependencies are available in the named views. No current check is inferred from a saved draft or historical result.'}
+   // The cursor also binds whether the server schedule was present: its rows differ.
+   const fasteners=table.fasteners??null,rows=tableRows(draft,fasteners),openQuestions=arr(draft.open_questions).length
+   return page({...query,revision:draft.revision},{...overview,message:TABLE_MESSAGE},rows,budget,{binding:{table:1,fasteners:fasteners!==null},scope:'overview_table',
+    present:records=>({table:presentTable(records,rows,fasteners,openQuestions)}),last:{...query,revision:draft.revision,view:'notes',after:null}})
   }
   const selected=constructionViewItems(draft,query.view,query.ids)
   return page({...query,revision:draft.revision},{...header,missing_ids:selected.missing_ids,selection:query.ids,

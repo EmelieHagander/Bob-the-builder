@@ -4,6 +4,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
+import {execFileSync} from 'node:child_process'
 import {createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
 import {constructionLists} from '../supabase/functions/_shared/construction-lists.ts'
 import {parseFastenerSchedule,storedJoints,withRuleFasteners,withoutJointFasteners} from '../supabase/functions/_shared/construction-fasteners.ts'
@@ -108,10 +109,44 @@ test('fastener requirement refusals reach Bob as specific, answerable messages',
  const {createProjectWriter}=await import('../supabase/functions/_shared/project-write.ts')
  const message='Add the screws to the list'
  for(const [code,status,pattern] of [['fastener_group_not_in_schedule','invalid',/totals row of derive_construction_lists/],['fastener_requirement_exists','conflict',/revise that existing requirement/],
-  ['fastener_construction_required','invalid',/exact current saved construction revision/],['construction_derive_required','invalid',/blank, fastener or glue/]] as const){
+  ['fastener_construction_required','invalid',/exact current saved construction revision/],['construction_derive_required','invalid',/blank, fastener or glue/],
+  ['fastener_quantity_exact','invalid',/^No requirement saved\. Fastener and glue needs are exact counts from the schedule; leave waste_percent out\. If a spare is sensible, recommend it in your reply instead, separate from the need\.$/]] as const){
   const writer=createProjectWriter('p_fixture',message,async()=>({data:null,error:{code:code==='fastener_requirement_exists'?'PT409':'22023',message:code}}),
    async()=>({data:[],error:null}),async()=>({data:{generation:1,receipts:[]},error:null}),{})
   const r:any=await writer.commit({kind:'operational',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{resource:'cad_requirement',action:'create',fields:{quantity_mode:'fasteners'}}})
   assert.equal(r.status,status,code);assert.match(r.message,pattern)
  }
+})
+
+test('the latest catalog says fastener and glue needs are exact; the publication touches only the derive tool and is reproducible',async t=>{
+ // Owner decision 2026-10-26: show the exact count; Bob may recommend a spare in words.
+ const latest=catalogFixture(),derive=latest.definition('tools.derive_cad_material_requirement')
+ const note=' Fastener and glue needs are exact counts from the schedule, so omit waste_percent (or send 0); purchase_increment stays the pack size. If a spare is sensible, recommend it in the reply as a suggestion, separate from the need.'
+ assert(derive.definition.additional_description.endsWith(note))
+ assert.equal(derive.definition.additional_description.split(note).length,2)
+ assert.doesNotMatch(note,/["“”]|e\.g\.|for example/,'model-facing notes carry no example utterances')
+ assert.equal(derive.metadata.publication,'exact-fasteners-v1');assert.equal(derive.metadata.exact_fastener_version,1);assert.equal(derive.metadata.joint_fastener_version,1)
+ assert.deepEqual(latest.manifest().definitions.filter(row=>row.metadata?.exact_fastener_version===1).map(row=>row.prompt_key),['tools.derive_cad_material_requirement'])
+ const publication='supabase/migrations/20261026190500_ai_exact_fasteners_catalog.sql'
+ assert.match(execFileSync(process.execPath,['--import','tsx','scripts/build-ai-exact-fasteners-catalog.ts',publication,'--check'],{encoding:'utf8'}),/matches its builder/)
+
+ // The SQL publication against the full schema: one new derive version equal to
+ // the fixture, every other definition unchanged, older manifests intact, re-run a no-op.
+ let prior:any
+ const pg=await projectSchema(async(db,name)=>{if(name==='20261026190500_ai_exact_fasteners_catalog.sql')prior=((await db.query("select shared.resolve_ai_catalog('bob',null) m")).rows[0] as any).m})
+ t.after(()=>pg.close())
+ const published=((await pg.query("select shared.resolve_ai_catalog('bob',null) m")).rows[0] as any).m
+ const byKey=(m:any)=>new Map<string,any>(m.definitions.map((row:any)=>[row.prompt_key,row]))
+ const before=byKey(prior),after=byKey(published)
+ assert.deepEqual([...after.keys()].sort(),[...before.keys()].sort())
+ for(const [key,row] of after)if(key!=='tools.derive_cad_material_requirement')assert.deepEqual(row,before.get(key),key)
+ const old=before.get('tools.derive_cad_material_requirement'),next=after.get('tools.derive_cad_material_requirement')
+ assert.equal(next.version,old.version+1);assert.equal(old.definition.additional_description.includes(note),false)
+ assert.deepEqual(next.definition,derive.definition);assert.deepEqual(next.metadata,derive.metadata)
+ assert.deepEqual(next.available_variables,old.available_variables);assert.deepEqual(next.flow,old.flow)
+ assert.deepEqual(((await pg.query("select shared.resolve_ai_catalog('bob',$1) m",[prior.manifest_id])).rows[0] as any).m,prior)
+ const active=async()=>((await pg.query("select active_version_id from shared.ai_prompts where app='bob' and prompt_key='tools.derive_cad_material_requirement'")).rows[0] as any).active_version_id
+ const current=await active()
+ await pg.exec(await readFile(new URL('../'+publication,import.meta.url),'utf8'))
+ assert.equal(await active(),current,'Re-running is a no-op')
 })

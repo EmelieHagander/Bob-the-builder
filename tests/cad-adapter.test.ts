@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {createCadAdapter,parseCadAssemblyRequest,parseCadAssemblyResult,parseCadFastenerSchedule,CAD_VIEW_NAMES,CAD_MAX_VIEWS,type CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
+import {createCadAdapter,parseCadAssemblyRequest,parseCadAssemblyResult,CAD_VIEW_NAMES,CAD_MAX_VIEWS,type CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
 import {fastenerSchedule} from './support/fastener-schedule-fixture.ts'
 import {cadParts,cadCutListCsv} from '../src/data/cadParts.ts'
 const req=():CadAssemblyRequest=>({contract_version:1,units:'mm',assembly_id:'assembly.test',
@@ -24,29 +24,20 @@ test('annotation metadata must name exact parts and dimensions, never fabricated
   const wrong=structuredClone(p);mutate(wrong);assert.equal((await createCadAdapter(async()=>wrong).render(r)).status,'unavailable')
  }
 })
-test('annotations version 2 echoes exactly the fastener schedule that was sent; version 1 stays valid without one',()=>{
+test('drawings carry no fasteners: annotations are version 1 only and a version 2 schedule is refused',async()=>{
+ // Owner decision 2026-10-26: fasteners live in Bob's construction lists and the
+ // material list. The worker can still answer version 2 (dormant); the edge refuses it.
  const r=req(),p:any=result(r),schedule=fastenerSchedule()
  const parts=r.instances.map((i,index)=>({number:'P'+(index+1),instance_id:i.id,definition_id:i.definition_id,blank_mm:{x_mm:45,y_mm:70,z_mm:1600}}))
  const views={front:{coverage:'complete',dimensions:[{axis:'x',mm:1000},{axis:'z',mm:1600}],parts},top:{coverage:'complete',dimensions:[{axis:'x',mm:1000},{axis:'y',mm:70}],parts}}
  const v1={...p,annotations:{version:1,coverage:'complete',views}},v2={...p,annotations:{version:2,coverage:'complete',views,fasteners:schedule}}
- assert(parseCadAssemblyResult(v1,r,null));assert.equal(parseCadAssemblyResult(v2,r,null),null,'no schedule sent: only version 1')
- assert(parseCadAssemblyResult(v2,r,structuredClone(schedule)));assert.equal(parseCadAssemblyResult(v1,r,schedule),null,'a sent schedule must come back drawn')
- assert.equal(parseCadAssemblyResult(p,r,schedule),null,'missing annotations cannot drop a sent schedule')
- const changed=structuredClone(v2);changed.annotations.fasteners.totals[1].count=5
- assert.equal(parseCadAssemblyResult(changed,r,schedule),null,'the engine cannot alter the schedule')
- // A saved manifest is read without knowing what was sent: v1, or v2 with a well-formed schedule.
- assert(parseCadAssemblyResult(v1,r));assert(parseCadAssemblyResult(v2,r))
- for(const mutate of [(s:any)=>s.extra=1,(s:any)=>s.glue_packages=2,(s:any)=>s.joints[0].count=2.5,(s:any)=>s.totals[0].joint_ids=['invented'],(s:any)=>s.joints[1].joint_id='left_rail',(s:any)=>delete s.joints[0].gaps]){
-  const bad=structuredClone(schedule);mutate(bad)
-  assert.equal(parseCadFastenerSchedule(bad),null,mutate.toString())
-  assert.equal(parseCadAssemblyResult({...v2,annotations:{...v2.annotations,fasteners:bad}},r),null)
- }
- assert.deepEqual(parseCadFastenerSchedule(schedule),schedule)
- // A joint between two existing parts carries no new fastener.
- const existing=structuredClone(schedule);existing.joints.push({...existing.joints[0],joint_id:'existing_walls',source:'existing',kind:null,diameter_mm:null,length_mm:null,count:null,spacing_mm:null,proposal:null,gaps:[]})
- assert.deepEqual(parseCadFastenerSchedule(existing),existing)
- assert.equal(parseCadFastenerSchedule({...existing,joints:existing.joints.map((j:any)=>({...j,source:'guess'}))}),null)
+ assert(parseCadAssemblyResult(v1,r))
+ assert.equal(parseCadAssemblyResult(v2,r),null,'a rendered or saved version 2 manifest is refused')
+ assert.equal(parseCadAssemblyResult({...v1,annotations:{...v1.annotations,fasteners:schedule}},r),null,'version 1 cannot carry a schedule')
+ assert.equal(parseCadAssemblyResult({...v2,annotations:{version:2,coverage:'complete',views}},r),null)
  assert.equal(parseCadAssemblyResult({...v2,annotations:{...v2.annotations,version:3}},r),null)
+ assert.equal((await createCadAdapter(async()=>v1).render(r)).status,'ok')
+ assert.equal((await createCadAdapter(async()=>v2).render(r)).status,'unavailable')
 })
 test('transport errors are unavailable, never empty geometry',async()=>{assert.equal((await createCadAdapter(async()=>{throw new Error('offline')}).render(req())).status,'unavailable')})
 test('large annotated models preserve every instance through the 512-part recipe boundary',async()=>{

@@ -13,6 +13,7 @@ import {cadPreviewKeys} from '../supabase/functions/_shared/cad-adapter.ts'
 import { shapeId,handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {parameterPlan} from './support/cad-parameter-fixture.ts'
 import {manufacturePolicy} from './support/construction-instance-policy-fixture.ts'
+import {fastenerSchedule} from './support/fastener-schedule-fixture.ts'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 import {drawingCandidateCommitment} from '../supabase/functions/_shared/drawing-request-recovery.ts'
 import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
@@ -163,6 +164,16 @@ test('K3 renders the full reference geometry and bounds; its contextual overlaps
  assert.equal(good.a.candidate!.packet.manifest.bounding_box_mm.max[0],198)
  assert.equal(good.a.candidate!.packet.manifest.bob_construction.check.physical_part_count,2)
  for(const overlaps of [[{first_id:'arm',second_id:'upright',volume_mm3:1}],[{first_id:'reference',second_id:'foreign',volume_mm3:1}]])assert.equal((await run(overlaps)).result.reason,'construction_geometry_disagrees')
+})
+test('a render answering annotations version 2 with a fastener schedule is refused: drawings carry no fasteners',async()=>{
+ // Owner decision 2026-10-26. The worker's version 2 path is dormant; the assistant accepts version 1 only.
+ for(const version of [2,3]){
+  const f=runtime()
+  const a=f.assistant({render:async(r:any)=>({recipe:r,manifest:{bounding_box_mm:checkConstruction(f.draft,f.catalog,'2026-10-04').bounds_mm,checks:{collisions:{status:'complete',overlaps:[]}},annotations:{version,coverage:'complete',fasteners:fastenerSchedule()}},files:{front:'Zml4dHVyZQ=='},previews:Object.fromEntries(r.views.map((v:string)=>[v,'Zml4dHVyZQ==']))})})
+  const result:any=await a.consult(request)
+  assert.equal(result.status,'unavailable');assert.equal(result.reason,'annotations_unavailable',String(version))
+  assert.equal(a.candidate,null);assert.equal(f.counts().reviews,0)
+ }
 })
 test('K3 cannot render a stale, unchecked, colliding or jointless checkpoint',async()=>{
  for(const mutate of [(d:any)=>d.source_state='changed',(d:any)=>d.current_revision=2,(d:any)=>d.recipe.instances[1].placement.x=10,(d:any)=>d.joints=[]]){

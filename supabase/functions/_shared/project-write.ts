@@ -418,11 +418,12 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
           if (payload.kind === 'operational' && error.message?.includes('construction_requirement_exists')) return { status: 'conflict', message: 'A current blank requirement already exists for this construction definition and quantity mode. Read requirements and revise that same identity; do not create a duplicate.' }
           if (payload.kind === 'operational' && error.message?.includes('construction_derive_required')) return { status: 'invalid', message: 'Recalculate this existing construction requirement (blank, fastener or glue) with derive_cad_material_requirement and the same record_id/current revision. Manual revision cannot replace its deterministic source proof.' }
           if (payload.kind === 'operational') {
-            const fastener = /\b(fastener_group_not_in_schedule|fastener_requirement_exists|fastener_construction_required)\b/.exec(error.message ?? '')?.[1]
+            const fastener = /\b(fastener_group_not_in_schedule|fastener_requirement_exists|fastener_construction_required|fastener_quantity_exact)\b/.exec(error.message ?? '')?.[1]
             if (fastener) return { status: fastener === 'fastener_requirement_exists' ? 'conflict' : 'invalid', message: {
               fastener_group_not_in_schedule: 'No requirement saved. Use a kind, diameter and length exactly as a totals row of derive_construction_lists for this construction revision; glue needs at least one glued joint.',
               fastener_requirement_exists: 'No requirement saved. This construction already has a need for that fastener size or glue; revise that existing requirement instead.',
               fastener_construction_required: 'No requirement saved. Fastener and glue needs come from an exact current saved construction revision; read it again and use its ID and revision.',
+              fastener_quantity_exact: 'No requirement saved. Fastener and glue needs are exact counts from the schedule; leave waste_percent out. If a spare is sensible, recommend it in your reply instead, separate from the need.',
             }[fastener] }
           }
           if (payload.kind === 'operational' && error.message?.includes('construction_cut_fit_required')) return { status: 'invalid', message: 'Construction blank quantities are saved concept needs. Reserve only an exact saved cut_plan through manage_project_material(resource=cut_plan), with its current plan/reservation revisions and real bound stock. Do not allocate raw sheets to individual blank needs or send these blanks to Shopping. Keep that gap explicit.' }

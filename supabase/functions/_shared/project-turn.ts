@@ -40,6 +40,7 @@ export async function runClaimedProjectTurn(opts: {
   carryLoadedTools?: boolean;
   corePreload?: boolean;
   buildingLinks?: import('./project-building-scope.ts').BuildingLinks;
+  pureFacts?: boolean; projectFacts?: import('./project-facts.ts').ProjectFacts;
   registerContextSurface?: (refresh: () => Promise<ContextSurface>) => void;
   prepareContext?: () => Promise<WorkingContext>;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;

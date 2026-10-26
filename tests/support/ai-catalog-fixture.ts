@@ -131,6 +131,16 @@ for(const migration of migrations){
    const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'joint-fasteners-v1',joint_fastener_version:1};versions.set(row.key,versions.get(row.key)!+1)
   }
  }
+ const exactFasteners=source.match(/\$exact_fasteners_spec\$([\s\S]+?)\$exact_fasteners_spec\$/)
+ if(exactFasteners){
+  for(const patch of JSON.parse(exactFasteners[1]).patches){
+   const row=seed.find(row=>row.key===patch.key)
+   if(row.metadata?.exact_fastener_version===1)continue
+   if(row.metadata?.joint_fastener_version!==1)throw new Error('exact_fasteners_requires_joint_fasteners: '+patch.key)
+   row.definition.additional_description=(row.definition.additional_description??'')+patch.note
+   const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'exact-fasteners-v1',exact_fastener_version:1};versions.set(row.key,versions.get(row.key)!+1)
+  }
+ }
  const memoryPointers=source.match(/\$memory_pointer_instructions\$([\s\S]+?)\$memory_pointer_instructions\$/)
  if(memoryPointers){
   for(const key of ['context-summary.contract','schema.bob_conversation_brief_v2']){
