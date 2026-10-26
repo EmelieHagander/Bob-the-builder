@@ -275,15 +275,25 @@ turns averaged 16 `read_construction_draft` pages each. The live bunk bed is
 compact table is about 7,200 characters.
 
 For jobs pinned with `projectFactsVersion: 1`, `view=overview` also returns
-one table for the exact revision:
-- **definitions:** id, primitive, x × y × z mm, material reference
-- **parts:** id, definition and role. An unclassified role stays `unknown`.
-- **joints:** id, method, the two part faces, and that joint's fastener from
-  `construction_fastener_schedule_for`
-- **fastener totals, glue packages, `complete`**, and the open-question count
+one table for the exact revision. Each section is `columns` plus row arrays:
+- **definitions:** `id, primitive, size_mm, material_ref`. `size_mm` names
+  each primitive's dimensions, for example box x/y/z.
+- **parts:** `id, definition_id, role`. A role comes only from the saved
+  instance policy; anything else stays `unknown`.
+- **joints:** `id, method, first, second, fastener`, with faces written as
+  `instance_id.face`. The fastener is the joint's row from
+  `construction_fastener_schedule_for`: source, kind, diameter, length,
+  count and the rule gaps.
+- **fasteners:** `complete`, totals, glue packages and
+  `basis: rule_of_thumb_proposal`. Without a schedule it is
+  `{status: unavailable}`.
+- **open_questions:** a count.
 
-The table pages within the existing 6,000-token budget, with `next_read`,
-when a construction is larger. Placements, parameters, bindings and notes
+The live bunk bed fits one read at 3,237 tokens, fasteners included. A larger
+construction pages definitions, then parts, then joints, then totals within
+the step budget. Coverage uses `scope: overview_table`. A section missing from
+a page is on another page, never "none". The cursor is bound to the revision
+and to whether a schedule was present. Placements, parameters, bindings and notes
 stay in their exact views. Bob opens them by ID only when a task needs them.
 It is a selection of canonical values, never a model summary. Checks,
 lists and drawing gates keep their own full reads. Unpinned jobs keep the
