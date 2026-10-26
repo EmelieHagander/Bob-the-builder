@@ -54,6 +54,7 @@ const CHAT_HISTORY_PREFIX = 'bob:ask-bob-history:v1'
 const MAX_SAVED_MESSAGES = 80
 const BUSY_RESEND_INTERVAL_MS = 8_000
 const BUSY_RESEND_MS = 20 * 60_000
+const LOST_REPLY_CHECK_MS = 5 * 60_000
 
 function parseSavedChat(raw: string | null): ChatMessage[] {
   if (!raw) return []
@@ -778,6 +779,12 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         holdUntilFree({ text, turnId: clientTurnId, screen, imageIds })
         return
       }
+      // A phone that sleeps right after sending loses both the reply and the
+      // first check. The server may already be working, so keep checking.
+      if (waitingFree?.turnId === clientTurnId) setWaitingFree(null)
+      setRecovering({ text, turnId: clientTurnId, screen, imageIds, expiresAt: Date.now() + LOST_REPLY_CHECK_MS })
+      setHistoryNotice('Connection interrupted. Checking for Bob’s answer…')
+      return
     }
     if (!isCurrent()) return
     setWorking(false)

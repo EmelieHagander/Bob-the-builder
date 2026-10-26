@@ -654,7 +654,14 @@ No restored message is automatically submitted. A 409 or uncertain HTTP result
 reads history; only the same user-turn receipt acknowledges the message. Unrelated
 pending work may be observed, but cannot discard this copy. The retry button sends
 the original UUID and screen; new sends cannot replace the retained attempt.
-Successful receipt/reset removes it. The owner can explicitly dismiss the local
+Successful receipt/reset removes it.
+If the reply and that history read are both lost (for example, a phone that
+sleeps right after sending), the drawer keeps checking the same turn for five
+minutes, including when the app returns to the foreground. It shows "Connection
+interrupted" rather than a failure. It offers Retry only when history shows the
+message was not received or the window ends. This lost-reply correction is
+committed but not yet deployed. `scripts/check-bob-reset-browser.mjs` covers it.
+The owner can explicitly dismiss the local
 retry; its visible bubble remains marked unconfirmed and no backend cancellation
 or new send occurs. Retrying preserves any newer draft in the composer. Guest
 device-local history is unchanged.

@@ -30,7 +30,7 @@ try {
     const histories = new Map(['A', 'B'].map(id => [id, { id: crypto.randomUUID(), next_seq: 3, messages: [{ role: 'user', text: `OLD CHAT ${id}`, turn_id: 'initial-turn', delivery_state: 'completed', seq: 1 }, { role: 'assistant', text: `OLD ANSWER ${id}`, turn_id: 'initial-turn', delivery_state: 'completed', seq: 2 }] }]))
     const errors = []
     let resetMode = 'success', authMode = 'member', resetCalls = 0
-    let sendMode = 'normal', answerCalls = 0, releaseAnswer
+    let sendMode = 'normal', answerCalls = 0, releaseAnswer, offline = false
     let cancelMode = 'success', renewMode = 'success', cancelCalls = 0
     const sentTurns=[]
     let pauseHistory = false, historyPaused, releaseHistory
@@ -46,6 +46,7 @@ try {
       const respond = options => route.fulfill({ ...options, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' } })
       const who = { ...user, id: authMode === 'other' ? '00000000-0000-0000-0000-000000000099' : user.id, email: authMode === 'guest' ? 'guest@bob.local' : user.email }
       if (req.method() === 'OPTIONS') return respond({ status: 204 })
+      if (offline && url.pathname.startsWith('/rest/v1/')) return route.abort('internetdisconnected')
       if (url.pathname === '/rest/v1/rpc/drawing_work_list') return respond({ json: { items: [], next_cursor: null } })
       if (url.pathname === '/functions/v1/ask-bob' && req.postDataJSON()?.action === 'renew_requests') {
         if (renewMode === 'unavailable') return respond({status:503,json:{ok:false,error:'service_unavailable'}})
@@ -118,9 +119,12 @@ try {
       }
       if (url.pathname === '/rest/v1/bob_messages') {
         historyReads++
-        const h = [...histories.values()].find(h => h.id === url.searchParams.get('thread_id')?.replace('eq.', ''))
+        // The latest window joins the active thread by project; older pages and
+        // the latest-user read address the thread directly.
+        const project = url.searchParams.get('bob_threads.project_id')?.replace('eq.', '')
+        const h = project ? histories.get(project) : [...histories.values()].find(h => h.id === url.searchParams.get('thread_id')?.replace('eq.', ''))
         assert(url.searchParams.get('limit'), 'Transcript queries are bounded')
-        const snapshot = structuredClone(bobHistoryRows(h?.messages ?? [], url))
+        const snapshot = structuredClone(bobHistoryRows(h?.id ? h.messages : [], url).map(row => ({ ...row, thread_id: h.id, bob_threads: { id: h.id } })))
         if (pauseHistory) { pauseHistory = false; historyPaused(); await new Promise(resolve => { releaseHistory = resolve }) }
         return respond({ json: snapshot })
       }
@@ -181,8 +185,9 @@ try {
             } : finish
             return respond({ status: 202, json: { ok: true, status: 'accepted', projectId: body.projectId, jobId: pending.jobId, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() } })
           }
-          if (sendMode === 'lost' || sendMode === 'busy') {
+          if (sendMode === 'lost' || sendMode === 'busy' || sendMode === 'offline') {
             releaseAnswer = finish
+            if (sendMode === 'offline') offline = true
             return sendMode === 'busy' ? respond({ status: 409, json: { error: 'turn_in_flight' } }) : route.abort('failed')
           }
           await new Promise(resolve => { releaseAnswer = () => { finish(); resolve() } })
@@ -352,6 +357,22 @@ try {
       assert.equal(answerCalls, before + 1)
       assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
     }
+    // A phone that sleeps right after sending loses the reply and the first
+    // checks. The drawer keeps checking instead of asking to resend the work.
+    sendMode = 'offline'
+    const beforeOffline = answerCalls
+    await drawer.getByRole('textbox').fill('Pending offline')
+    await drawer.getByRole('button', { name: 'Send', exact: true }).click()
+    await drawer.getByText('Connection interrupted. Checking for Bob’s answer…', { exact: true }).first().waitFor({ timeout: 25000 })
+    assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
+    assert.equal(await drawer.getByText('I could not retrieve an answer for this project. Please try again.', { exact: true }).count(), 0)
+    offline = false
+    await drawer.getByText('Bob is working on the project…', { exact: true }).waitFor()
+    releaseAnswer()
+    await drawer.getByText('Bob is working on the project…', { exact: true }).waitFor({ state: 'hidden' })
+    await drawer.getByText('Pending offline', { exact: true }).waitFor()
+    assert.equal(answerCalls, beforeOffline + 1)
+    assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
     // Stop is reachable during a durable job, survives a lost reply, and keeps saved receipts.
     sendMode = 'background'
     await drawer.getByRole('textbox').fill('Continue until the planning brief is saved')
