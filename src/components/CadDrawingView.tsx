@@ -1,5 +1,6 @@
 import type { CadDrawing } from '../data/artifacts'
 import { cadParts, cadCutListCsv } from '../data/cadParts'
+import { cadFastenerSummary } from '../data/cadFasteners'
 import type { DrawingSourceStatus } from '../data/drawingSources'
 import { CadSourceMap } from './CadSourceMap'
 import { lazy, Suspense, useCallback, useState } from 'react'
@@ -14,6 +15,8 @@ export function CadDrawingView({value,title,projectId,artifactId,revision,source
  const fallback=useCallback((message:string)=>{setInteractive(false);setNotice(message)},[])
  const names:Record<string,string>={front:'Front',back:'Back',left:'Left',right:'Right',top:'Top',bottom:'Bottom',isometric:'Overview',isometric_front_left:'Overview front-left',isometric_back_left:'Overview back-left',isometric_back_right:'Overview back-right'}
  const checks=value.manifest?.checks
+ // Readers given only files and recipe (volunteers) get no claim either way.
+ const fasteners=value.manifest?cadFastenerSummary(value.manifest):null
  if(sourceStatus?.source_state==='unavailable')return <section aria-label={`${title} CAD drawings`}>
   <p className="solution-attention">Current-use drawing preview is withheld until source access and freshness can be checked. This saved revision remains part of the project history.</p>
   <CadSourceMap recipe={value.recipe} manifest={value.manifest} projectId={projectId} sourceStatus={sourceStatus} />
@@ -40,6 +43,18 @@ export function CadDrawingView({value,title,projectId,artifactId,revision,source
    <div style={{overflowX:'auto'}}><table><thead><tr><th>Part</th><th>Quantity</th><th>Blank dimensions (mm)</th><th>Cuts</th></tr></thead><tbody>
    {cadParts(value.recipe).map(d=><tr key={d.id}><td>{d.id}</td><td>{d.quantity}</td><td>{d.dimensions}</td><td>{d.cuts}</td></tr>)}
   </tbody></table></div></details>
+  {fasteners&&<details><summary>Fasteners</summary>
+   {fasteners==='none'?<p>No fastener schedule was recorded for this drawing version.</p>
+    :fasteners==='unreadable'?<p>The fastener schedule saved with this drawing version could not be shown.</p>:<>
+    <p>Proposal from rules of thumb, not a strength calculation. Check edge distances, pilot holes and product approval before building.</p>
+    {fasteners.rows.length?<div style={{overflowX:'auto'}}><table><thead><tr><th>No.</th><th>Fastener (mm)</th><th>Count</th><th>Basis</th></tr></thead><tbody>
+     {fasteners.rows.map(row=><tr key={row.number}><td>{row.number}</td><td>{row.fastener} {row.size}</td><td>{row.quantity}</td><td>{row.basis}</td></tr>)}
+    </tbody></table></div>:<p>No screws, nails or bolts in the saved joints.</p>}
+    {fasteners.glue&&<p>{fasteners.glue}</p>}
+    {fasteners.unsized>0&&<p className="solution-attention">No fastener rule or size yet for {fasteners.unsized} {fasteners.unsized===1?'joint':'joints'}.</p>}
+    {fasteners.notes.length>0&&<><p>Check before building:</p><ul>{fasteners.notes.map(note=><li key={note.label}>{note.label}: {note.joints} {note.joints===1?'joint':'joints'}</li>)}</ul></>}
+   </>}
+  </details>}
   <details><summary>Geometry checks</summary>
    {!checks?<p>No collision or clearance check was recorded for this version.</p>:<>
     <p>Overlap check: {checks.collisions?.status==='complete'?'complete':'partial'}. {checks.collisions?.overlaps?.length??0} overlaps found. An overlap may be an intended joint; review it before building.</p>
