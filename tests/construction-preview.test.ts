@@ -91,3 +91,29 @@ test('CSV quotes spreadsheet formula-like material labels', () => {
   if (result.status !== 'preliminary') return
   assert.match(preliminaryCutCsv(result), /"'=HYPERLINK/)
 })
+
+test('fastener schedule: exact server counts are parsed strictly and appended to the CSV without waste', async () => {
+  const { parseConstructionFasteners } = await import('../src/data/buildPreparation.ts')
+  const artifact = '11111111-1111-4111-8111-111111111111'
+  const joint = (id: string, extra: Record<string, unknown> = {}) => ({ joint_id: id, source: 'rule', kind: 'screw', diameter_mm: 4, length_mm: 45, count: 3, gaps: [], ...extra })
+  const schedule = { status: 'ok', artifact_id: artifact, revision: 6, rule_version: 'fastener-rules-v1', complete: false, glue_packages: 1,
+    totals: [{ kind: 'screw', diameter_mm: 4, length_mm: 45, count: 6, joint_ids: ['j1', 'j2'] }],
+    joints: [joint('j1'), joint('j2', { gaps: ['narrow_contact'] }), joint('j3', { source: 'no_rule', kind: null, count: null, gaps: ['no_rule_for_method'] }),
+      joint('j4', { source: 'existing', kind: null, diameter_mm: null, length_mm: null, count: null })] }
+  const parsed = parseConstructionFasteners(schedule, artifact, 6)
+  assert.deepEqual(parsed, { complete: false, totals: [{ kind: 'screw', diameterMm: 4, lengthMm: 45, count: 6, joints: 2 }], gluePackages: 1, unsizedJoints: 1, flaggedJoints: 1 })
+  // Another revision, another rule version or a malformed total is never shown as a count.
+  assert.equal(parseConstructionFasteners(schedule, artifact, 7), null)
+  assert.equal(parseConstructionFasteners({ ...schedule, rule_version: 'fastener-rules-v2' }, artifact, 6), null)
+  assert.equal(parseConstructionFasteners({ ...schedule, totals: [{ ...schedule.totals[0], count: 2.5 }] }, artifact, 6), null)
+  assert.equal(parseConstructionFasteners({ status: 'not_found' }, artifact, 6), null)
+  const list = preliminaryConstructionList(fixture())
+  assert.equal(list.status, 'preliminary')
+  if (list.status !== 'preliminary') return
+  const plain = preliminaryCutCsv(list), withFasteners = preliminaryCutCsv(list, parsed)
+  assert(withFasteners.startsWith(plain), 'parts rows are unchanged')
+  assert.match(withFasteners, /"Fasteners - exact count from the saved joints, no waste added, not a strength calculation"/)
+  assert.match(withFasteners, /"screw","4","45","6","2"/)
+  assert.match(withFasteners, /"Glue packages","1"/)
+  assert.match(withFasteners, /"Not counted","1 joint has no fastener rule or size yet"/)
+})

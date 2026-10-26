@@ -1,6 +1,6 @@
 import { constructionInstancePolicy } from '../../supabase/functions/_shared/construction-instance-policy.ts'
 import { constructionLists } from '../../supabase/functions/_shared/construction-lists.ts'
-import type { ConstructionPreparationSource } from '../data/buildPreparation'
+import type { ConstructionFasteners, ConstructionPreparationSource } from '../data/buildPreparation'
 
 export interface PreliminaryPart {
   definitionId: string
@@ -73,7 +73,7 @@ export function preliminaryConstructionList(source: ConstructionPreparationSourc
 }
 
 /** Explicitly preliminary export. Formula-like catalog names are never interpreted by spreadsheets. */
-export function preliminaryCutCsv(value: Extract<PreliminaryResult, { status: 'preliminary' }>): string {
+export function preliminaryCutCsv(value: Extract<PreliminaryResult, { status: 'preliminary' }>, fasteners?: ConstructionFasteners | null): string {
   const cell = (input: unknown) => '"' + String(input).replace(/^[=+\-@\t\r]/, "'$&").replace(/"/g, '""') + '"'
   const data: unknown[][] = [
     ['PRELIMINARY ONLY - NOT APPROVED FOR CUTTING'],
@@ -83,6 +83,15 @@ export function preliminaryCutCsv(value: Extract<PreliminaryResult, { status: 'p
       part.definitionId, part.materialName, part.materialRevision, part.quantity,
       part.dimensions.x, part.dimensions.y, part.dimensions.z, part.partLabels.join(' '),
     ]),
+    // Exact schedule counts, no waste added; a rule-of-thumb proposal, not a strength calculation.
+    ...(fasteners ? [
+      [],
+      ['Fasteners - exact count from the saved joints, no waste added, not a strength calculation'],
+      ['Kind', 'Diameter (mm)', 'Length (mm)', 'Count', 'Joints'],
+      ...fasteners.totals.map(t => [t.kind, t.diameterMm, t.lengthMm, t.count, t.joints]),
+      ...(fasteners.gluePackages ? [['Glue packages', fasteners.gluePackages]] : []),
+      ...(!fasteners.complete ? [['Not counted', fasteners.unsizedJoints + (fasteners.unsizedJoints === 1 ? ' joint has' : ' joints have') + ' no fastener rule or size yet']] : []),
+    ] : []),
   ]
   return data.map(row => row.map(cell).join(',')).join('\r\n') + '\r\n'
 }

@@ -39,6 +39,34 @@ export interface ConstructionPreparationSource {
   catalog: Map<string, Row>
 }
 
+/** Exact screw, nail, bolt and glue counts from the server fastener schedule
+ * (owner decisions 2026-10-26): a rule-of-thumb proposal with no waste added,
+ * never a strength calculation. */
+export interface ConstructionFasteners {
+  complete: boolean
+  totals: { kind: 'screw' | 'nail' | 'bolt'; diameterMm: number; lengthMm: number; count: number; joints: number }[]
+  gluePackages: number
+  /** Joints the rule could not size, and sized joints with rule warnings. */
+  unsizedJoints: number
+  flaggedJoints: number
+}
+
+export function parseConstructionFasteners(value: unknown, artifactId: string, revision: number): ConstructionFasteners | null {
+  const v = value as Row | null
+  if (!v || v.status !== 'ok' || v.artifact_id !== artifactId || v.revision !== revision || v.rule_version !== 'fastener-rules-v1'
+    || typeof v.complete !== 'boolean' || !Array.isArray(v.totals) || !Array.isArray(v.joints) || !Number.isSafeInteger(v.glue_packages)) return null
+  const totals: ConstructionFasteners['totals'] = []
+  for (const t of v.totals as Row[]) {
+    if (!['screw', 'nail', 'bolt'].includes(t?.kind) || !Number.isFinite(t.diameter_mm) || !Number.isFinite(t.length_mm)
+      || !Number.isSafeInteger(t.count) || !Array.isArray(t.joint_ids)) return null
+    totals.push({ kind: t.kind, diameterMm: t.diameter_mm, lengthMm: t.length_mm, count: t.count, joints: t.joint_ids.length })
+  }
+  const mechanical = (j: Row) => ['screw', 'nail', 'bolt'].includes(j?.kind)
+  const unsized = (v.joints as Row[]).filter(j => j?.source === 'no_rule' || mechanical(j) && [j.diameter_mm, j.length_mm, j.count].some(x => x === null))
+  const flagged = (v.joints as Row[]).filter(j => Array.isArray(j?.gaps) && j.gaps.length && !unsized.includes(j))
+  return { complete: v.complete, totals, gluePackages: v.glue_packages, unsizedJoints: unsized.length, flaggedJoints: flagged.length }
+}
+
 function checked<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new Error(result.error.message)
   if (result.data === null) throw new Error('The saved construction could not be read.')
@@ -103,6 +131,13 @@ export function createBuildPreparation(client: SupabaseClient<any, any, any> | n
         ...head, areaId: byId.get(head.id)?.area_id ?? null,
         recordedAt: byId.get(head.id)?.recorded_at ?? '',
       })).sort((a, b) => b.recordedAt.localeCompare(a.recordedAt) || a.id.localeCompare(b.id))
+    },
+
+    async fasteners(projectId: string, artifactId: string, revision: number): Promise<ConstructionFasteners | null> {
+      const { db, guard } = connection(projectId)
+      const data = checked(await db.rpc('read_construction_fasteners', { p_project: projectId, p_artifact: artifactId, p_revision: revision }))
+      guard()
+      return parseConstructionFasteners(data, artifactId, revision)
     },
 
     async source(projectId: string, artifactId: string, revision: number): Promise<ConstructionPreparationSource> {

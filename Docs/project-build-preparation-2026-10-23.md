@@ -1,6 +1,17 @@
 # Project build preparation — 2026-10-23
 
-Status: **implemented on review branch, not merged/deployed**. Pull request [#322](https://github.com/EmelieHagander/Bob-the-builder/pull/322). This is a product-facing first slice, **not** a complete, approved manufacturing or shopping plan.
+Status: **merged 2026-10-26 with the owner's go-ahead, brought up to date with main and published to Pages.** Pull request [#322](https://github.com/EmelieHagander/Bob-the-builder/pull/322), integrated through the session branch. This is a product-facing first slice, **not** a complete, approved manufacturing or shopping plan.
+
+Changes made when merging on 2026-10-26:
+- **English copy.** The app UI is English, so the page and the project and account next steps are English. Bob's draft request is English too.
+- **Exact screws, nails and glue.** The page reads `bob.read_construction_fasteners` for the chosen revision and shows the server schedule:
+  - totals by kind and size, the number of joints and glue packages;
+  - joints the rule cannot size, and joints with rule warnings.
+  These are exact counts with no waste added
+  ([owner decision](material-planning.md#exact-counts-without-waste--owner-decision-2026-10-26)).
+  They are a rule of thumb, not a strength calculation. The CSV adds them after the parts.
+- **Tables** reuse the shared `.box-parts` table style.
+- **No raw IDs.** Raw definition IDs are no longer shown under part names.
 
 ## Source of truth
 
@@ -33,7 +44,7 @@ Those counts were confirmed by read-only SQL queries; no user-project data was c
 ## Guardrails
 
 - Always expose **preliminary** status. CSV export is labeled **NOT APPROVED FOR CUTTING**.
-- Do not infer sheet counts, raw board lengths, saw order, waste, screws, anchors, material/stock quality, load-bearing capacity or shopping quantities from the 3D blank volume.
+- Do not infer sheet counts, raw board lengths, saw order, waste, anchors, material/stock quality, load-bearing capacity or shopping quantities from the 3D blank volume. Screws, nails and glue come only from the server fastener schedule, never from the blank volume.
 - A missing or changed source, unknown manufacturing role, unbound material or unsupported manufactured primitive produces an explicit gap **without** quantities.
 - Continue with existing bounded derivation/fit/reservation/shopping commands; don't bypass their authority, permissions, review gates or source freshness.
 - Return users to the saved source/normal material/Shopping surfaces; don't pretend an in-browser preliminary preview was saved as an approved cut plan.

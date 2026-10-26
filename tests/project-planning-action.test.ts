@@ -13,7 +13,7 @@ test('area target and saved construction take priority without a project-level t
   value.constructions.push({ id: 'c1', title: 'Kärnkonstruktion', areaId: 'a_bed', revision: 20, recordedAt: '2026-10-22' })
   const action = nextProjectPlanningAction(value, names)
   assert.equal(action.to, '/build-lists?area=a_bed&construction=c1')
-  assert.match(action.title, /kaplista/)
+  assert.match(action.title, /cut list/)
   assert.match(action.text, /v20/)
 })
 

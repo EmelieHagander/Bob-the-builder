@@ -48,10 +48,10 @@ export function nextProjectPlanningAction(snapshot: ProjectPlanningSnapshot, are
     const first = outstanding[0]
     return {
       to: '/facts?kind=measurement&status=missing',
-      icon: 'ruler', eyebrow: 'Nästa steg',
-      title: outstanding.length + (outstanding.length === 1 ? ' mått behöver kontrolleras' : ' mått behöver kontrolleras'),
-      text: 'Börja med ' + first.subject + (first.areaId ? ' i ' + (areaNames.get(first.areaId) ?? 'området') : '')
-        + '. Andra uppgifter som redan är registrerade behöver inte mätas om.',
+      icon: 'ruler', eyebrow: 'Next step',
+      title: 'Check ' + outstanding.length + (outstanding.length === 1 ? ' required measurement' : ' required measurements'),
+      text: 'Start with ' + first.subject + (first.areaId ? ' in ' + (areaNames.get(first.areaId) ?? 'its Area') : '')
+        + '. Measurements that are already recorded do not need to be taken again.',
     }
   }
 
@@ -61,28 +61,28 @@ export function nextProjectPlanningAction(snapshot: ProjectPlanningSnapshot, are
     const to = '/build-lists' + queryArea(currentConstruction.areaId)
       + (currentConstruction.areaId ? '&' : '?') + 'construction=' + encodeURIComponent(currentConstruction.id)
     return {
-      to, icon: 'package', eyebrow: 'Nästa steg',
-      title: 'Granska kaplista och inköpsunderlag',
-      text: 'Konstruktion v' + currentConstruction.revision + (area ? ' för ' + area : '')
-        + ' är sparad. Se preliminära tillverkningsdelar och vad Bob behöver färdigställa före kapning och beställning.',
+      to, icon: 'package', eyebrow: 'Next step',
+      title: 'Review the cut list and purchasing needs',
+      text: 'Construction v' + currentConstruction.revision + (area ? ' for ' + area : '')
+        + ' is saved. See the preliminary parts and what Bob still has to finish before cutting and ordering.',
     }
   }
 
   const scope = snapshot.targets[0]
   if (!scope) return {
-    to: '/solutions', icon: 'path', eyebrow: 'Nästa steg',
-    title: 'Välj konstruktionsmål',
-    text: 'Inget beslutat mål hittades för projektet eller dess områden. Välj riktning innan tillverkningsunderlag skapas.',
+    to: '/solutions', icon: 'path', eyebrow: 'Next step',
+    title: 'Choose the target',
+    text: 'No target is decided for the project or its Areas. Choose the direction before building documents are made.',
   }
   if (!hasCurrentScopeDrawing(snapshot)) return {
-    to: '/artifacts' + queryArea(scope.areaId), icon: 'blueprint', eyebrow: 'Nästa steg',
-    title: 'Ta fram en aktuell ritning',
-    text: (scope.areaId ? (areaNames.get(scope.areaId) ?? 'Området') : 'Projektet')
-      + ' har ett sparat konstruktionsmål. Granska ritningens källversion innan du går vidare.',
+    to: '/artifacts' + queryArea(scope.areaId), icon: 'blueprint', eyebrow: 'Next step',
+    title: 'Turn the target into a current drawing',
+    text: (scope.areaId ? (areaNames.get(scope.areaId) ?? 'The Area') : 'The project')
+      + ' has a saved target. Check the drawing\'s source version before moving on.',
   }
   return {
-    to: '/areas', icon: 'check-circle', eyebrow: 'Nästa steg',
-    title: 'Ordna byggmomenten',
-    text: 'Ett mål och ett aktuellt ritningsunderlag finns registrerade. Planera beroenden och uppgifter innan byggstart.',
+    to: '/areas', icon: 'check-circle', eyebrow: 'Next step',
+    title: 'Plan the build steps',
+    text: 'A target and a current drawing are recorded. Plan dependencies and tasks before the build starts.',
   }
 }

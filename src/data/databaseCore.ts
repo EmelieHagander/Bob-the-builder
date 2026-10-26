@@ -209,6 +209,7 @@ export const getCadShellPieceRecipes = artifacts.shellPieceRecipes
 export const getCadWireframe = artifacts.wireframe
 export const getBuildConstructions = buildPreparation.constructions
 export const getBuildConstructionSource = buildPreparation.source
+export const getBuildConstructionFasteners = buildPreparation.fasteners
 export const getProjectTargetScopes = buildPreparation.targets
 export const getConstructionCutPlans = materialPlanning.cutPlans
 export const getMaterialStock = materialPlanning.stock

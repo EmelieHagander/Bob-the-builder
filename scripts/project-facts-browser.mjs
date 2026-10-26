@@ -99,7 +99,7 @@ export async function verifyFactsBrowser(page, base, fixture, width) {
   // The home Dashboard is the fast planning path: the saved unknown must surface
   // as the next step and drill directly into the To measure selection.
   await page.goto(base+'#/project')
-  const nextStep = page.getByRole('link').filter({ hasText: '1 mått behöver kontrolleras' })
+  const nextStep = page.getByRole('link').filter({ hasText: 'Check 1 required measurement' })
   await nextStep.getByText('Opening width', { exact: false }).waitFor()
   const missingCard = page.getByRole('region', { name: 'Planning next steps' })
   await missingCard.getByText('Still missing', { exact: true }).waitFor()

@@ -133,7 +133,7 @@ export function ProjectHome() {
 
     <PlanningTools folded={building}>
     <nav className="project-shortcuts" aria-label="Project tools">
-      <Link className="btn" to="/build-lists"><Icon name="package" size={18} /><span>Kaplista &amp; inköp</span></Link>
+      <Link className="btn" to="/build-lists"><Icon name="package" size={18} /><span>Cut list &amp; purchasing</span></Link>
       <Link className="btn" to="/facts" aria-label="Measurements & existing parts"><Icon name="ruler" size={18} /><span>Measurements</span></Link>
       <Link className="btn" to="/material-plan"><Icon name="package" size={18} /><span>Material plan</span></Link>
       <Link className="btn" to="/solutions"><Icon name="path" size={18} /><span>Solutions &amp; target</span></Link>
