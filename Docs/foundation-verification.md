@@ -1,45 +1,69 @@
 # Foundation verification and rollout
 
-## FORM concept loop — local synthetic verification, 2026-10-26
+<a id="form-concept-loop--local-synthetic-verification-2026-10-26"></a>
+## FORM concept loop — core/backend installed, release pending, 2026-10-26
 
-**Source implementation only; no hosted migration, catalog activation, deploy or
-live model/CAD run.** The [Solution contract](solutions.md#early-concept-geometry-form--source-implementation-2026-10-26)
+**PR [#343](https://github.com/EmelieHagander/Bob-the-builder/pull/343) is merged
+with core migration and backend installed; frontend and catalog activation are pending**
+from `8b7eef15b49ee10b8a429246286ea7a6e28c7912`. The merged tree matches
+the final reviewed tree. The [Solution contract](solutions.md#early-concept-geometry-form--source-implementation-2026-10-26)
 owns the model; [State](bob-delivery-flow.md#form-10--tidig-designloop-releasegrindar-2026-10-26)
 owns remaining acceptance and the [backend guide](../supabase/README.md#form-concept-release--source-only-2026-10-26)
-owns release order.
+owns release order and rollback.
 
-- 96 focused Node/TypeScript tests pass across the concept, SQL, bounded edits,
-  solution actions, construction checks, checked drawing and design-readiness
-  seams. A subsequent 35-test pass covers catalog parity, tool runtime and SQL
-  readiness, including repeated concept SQL tests. The isolated PGlite fixture
-  applies both migration directories. Both current and historical bound-edit
-  catalog builders reproduce their committed publications.
-- The same generic model handles box height/thickness, a bunk-bed ladder
-  correction with unchanged drawers and source features, and three barn rooms
-  along X. The barn's XZ section at Y=1500 omits wall openings/ladders; the wall
-  section includes them. The impossible 4000 mm stack within 3500 mm remains a
-  conflict; pitched roof geometry is an explicit unsupported item. These are
-  synthetic cases, not structural assessments.
-- Canonical SQL saves/readback, immutable history, no implicit target selection,
-  resumed bound edits, receipt replay, concurrent-edit conflict, outsider denial,
-  changed measurement pins, and exact construction mapping are exercised. A
-  newly selected Solution revision leaves the prior construction unchanged and
-  marks its source changed. Missing/unsupported geometry cannot become ready.
-- Frontend production build and focused Deno checks of the changed shared
-  modules pass. The generated catalog matches its builder. Full Edge entrypoint
-  checking is blocked by the environment refusing the existing esm.sh dependency;
-  this is not an Edge entrypoint pass.
-- Browser scenarios are wired into the existing foundations flow at 320/390/1280
-  px: views, named cuts, gaps, zoom/fit, simulated canonical correction followed
-  by reload, and wrong-project rejection/retry. They have **not run here** because
-  Chrome/Chromium is absent; no browser was installed. CI and the full suite were
-  not run under the repository's explicit-owner-request rule.
-- Archie and Vera guidance was followed in a manual source review by the
-  implementing agent. This is not an independent steward or visual acceptance.
+- **Final CI:** [run 40385569543](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/40385569543)
+  on `82c7fbd3719f4b421be9fd038cbc8fea9498886e` passed: 1,870 tests, no failures, complete Edge
+  checks, production builds, PWA and every browser flow. FORM runs at 320/390/1280 px
+  inside foundations. Browser evidence uses intercepted HTTP; screenshots were
+  inspected, and no local browser was installed.
+- **Regression corrections:** Build mode places Plan immediately after the build
+  focus. Existing browser fixtures now follow joined active-thread history, the
+  combined Artifact overview read, Construction reads and specialized material
+  work routing. The 44 px target check allows only 0.001 px rounding. Unit checks
+  compare the exact-fastener publication at its historical boundary and verify
+  all concept prose fields through the bounded editor, preserving rejection of
+  internal codes and acceptance of typed identities.
+- **Same generic model:** box height/thickness, bunk-bed ladder corrections with
+  unchanged drawers/features, and three barn rooms along X. XZ at Y=1500 excludes
+  wall ladders/openings; the wall section includes them. The impossible 4000 mm
+  stack within 3500 mm stays a conflict, and pitched roofs remain unsupported.
+  These are synthetic geometric cases, not structural assessments.
+- **Hosted migrations, managed ledger:**
+  - `20261026194946_solution_concept_model`, source
+    `20261026210000_solution_concept_model.sql`, SHA-256
+    `7ad149592ef8a8182f2b1f56754c5a1727b7e739a76aaa911529a9b5bcef7e56`.
+  - **Prepared, not applied:** `20261026210100_ai_form_concept_catalog.sql`, SHA-256
+    `ea7b9c492eb35c387c9932bf4d2164bfffcc69e951d0ed55d81f4eae8d2dc413`.
+- **Hosted rollback-only proof:** ordinary authenticated Solution save/readback
+  for box/bed/barn, exact Construction and idempotent retry, rejection of changed
+  geometry with deferred constraints flushed, source invalidation after a new
+  selected revision, and outsider denial all pass. Synthetic users/project/turn
+  are rolled back. No real project was changed and no model/CAD call was made.
+  Helper privileges and invoker/search-path settings, plus both triggers, were
+  read back. No new security-advisor findings relative to the captured pre-release baseline.
+- **Runtime:** `ask-bob` v175 (JWT verification retained) and
+  `bob-worker` v143 (existing custom-auth mode retained)
+  use the reviewed runtime sources, confirmed by deployed source readback;
+  compiler-erased type-only dependencies are excluded. No active Bob jobs were
+  observed before either deployment. The CAD worker was unchanged.
+- **Frontend pending:** no Pages run was started. The Cloud Browser connection
+  stopped responding, including recovery/reset; the GitHub connector has no
+  workflow-dispatch operation. Resume with manual `deploy.yml` on `main`,
+  verifying that runtime/frontend files match the reviewed source above (a
+  documentation-only follow-up does not require another runtime deploy).
+- **Catalog pending, activate last:** after matching Pages publication succeeds,
+  apply the prepared catalog migration and read back its two versions and
+  preservation of unrelated definitions/metadata. Active versions remain
+  workflows v6 (`dcc836cb-61c8-486a-bf99-e0bc786bf998`) and edit v2
+  (`00cb972f-b0ed-4ebf-b141-bbfad0faa01e`). These are also rollback targets after
+  publication; retain the new readers/validators.
 
+Archie and Vera guidance was followed manually, not by independent agents.
 Real owner corrections, independent CAD comparison against original images,
-Step/save receipts, member browser readback, and before/after cost/rework metrics
-remain the separate acceptance gate. No measured improvement is claimed.
+Step/save receipts, member browser readback and before/after cost/rework metrics
+remain open. The first handoff only maps unrotated boxes exactly; refinement
+into multiple construction parts and engineering CAD sections remain outside it.
+No reduction in actual model cost or false approvals is claimed.
 
 ## Project facts, exact fasteners and drawings without fasteners — 2026-10-26
 

@@ -132,7 +132,8 @@ history, cross-project references, stale decisions, pinned targets/evidence and
 parent/file cleanup. Drive real production UI at 320/390/1280px using HTTP fixtures;
 separately prove deployed Auth/PostgREST/Storage with disposable data and cleanup.
 
-## Early concept geometry (FORM) — source implementation, 2026-10-26
+<a id="early-concept-geometry-form--source-implementation-2026-10-26"></a>
+## Early concept geometry (FORM) — backend installed, frontend/catalog pending, 2026-10-26
 
 Decision: the optional `design_intent.model` belongs to the immutable Solution
 revision. It can exist before a selected target. No new table, ProjectPhase,
@@ -167,5 +168,7 @@ receives the full pinned intent, including the model and its view/constraint dat
 the handoff uses the selected model's named coordinate frame. Changed linked
 measurements block construction readiness until their revisions are reconciled.
 
-Release/acceptance remains in [State](bob-delivery-flow.md#state); this is not a
-hosted or real-model acceptance claim.
+Core and matching backend are installed; frontend and catalog publication are
+pending. [Verification](foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26)
+records its exact source and hosted readback. Real owner/model acceptance remains
+in [State](bob-delivery-flow.md#state).

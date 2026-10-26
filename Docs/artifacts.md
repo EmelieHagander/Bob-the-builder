@@ -1034,7 +1034,10 @@ SQL publication guards reject stale/archived construction, changed catalog/measu
 
 Saved blank needs pin this same Artifact/revision through the existing material requirement contract; see [K4 material owner](material-planning.md#k4-construction-blank-needs--2026-10-05). Reading derived lists alone is not a saved delivery. Raw-stock cutting and product/assembly checks remain gaps.
 
-## FORM concept handoff — source only, 2026-10-26
+<a id="form-concept-handoff--source-only-2026-10-26"></a>
+## FORM concept handoff — installed, 2026-10-26
+
+Technical installation and remaining acceptance: [release evidence](foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26).
 
 Early geometry belongs to [Solution](solutions.md#early-concept-geometry-form--source-implementation-2026-10-26), not a parallel Artifact type.
 A construction Artifact already pins the exact selected Solution; its existing
