@@ -177,7 +177,8 @@ export function createBobToolSession(opts: {
         if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==1||typeof (v as any).request_quote!=='string') return {status:'invalid',saved:false}
         const proposal=opts.planAssistant!.compiledProposal
         if(!proposal) return {status:'missing_context',saved:false}
-        return opts.writer!.write('propose_project_plan',{...proposal,request_quote:(v as any).request_quote})
+        // The plan colleague wrote this text; Bob cannot rewrite it in this call.
+        return opts.writer!.write('propose_project_plan',{...proposal,request_quote:(v as any).request_quote},{humanText:false})
       },
     }] : []),
   ]

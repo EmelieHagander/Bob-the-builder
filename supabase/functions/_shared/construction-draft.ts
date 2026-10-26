@@ -10,6 +10,7 @@ import { CAD_PARAMETERS_SCHEMA, CadParameterBindingGap, CadParameterGap, compile
 import {CONSTRUCTION_PARAMETER_CHANGES_SCHEMA,compileConstructionParameterChange} from './construction-parameters.ts'
 import { INSTANCE_POLICY_SCHEMA,constructionInstancePolicy } from './construction-instance-policy.ts'
 import { CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL } from './construction-consequences.ts'
+import { humanTextRejection, proseFields } from './human-text.ts'
 import { schemaIssues } from './schema-issues.ts'
 import { rethrowContinuation, type BobJournal } from './bob-job-journal.ts'
 import type { ProjectWriter,WritePayload } from './project-write.ts'
@@ -99,6 +100,17 @@ export const CONSTRUCTION_CUT_SAVE_TOOL=tool('save_construction_cut_plan','Save 
  candidate_sources:{type:'array',minItems:1,maxItems:8,items:obj({candidate_id:id,kind:{type:'string',enum:['hypothetical','stock','catalog_part']},record_id:nullableUuid,revision:nullableRev})},
  change_note:{type:'string',minLength:1,maxLength:1000},request_quote:{type:'string',minLength:1,maxLength:500},
 })
+/** Text people read in construction writes: titles, notes, reasons and open
+ * questions (shown on drawings and source maps). Ids, keys and paths are typed. */
+const CONSTRUCTION_PROSE:Record<string,readonly string[]>={
+ save_construction_draft:['title','description','change_note','parameter_plan.frames.*.reason','parameter_plan.nodes.*.reason','instance_policy.instances.*.reason','joints.*.reason','open_questions.*'],
+ transition_legacy_drawing:['change_note','joints.*.reason','open_questions.*'],
+ change_construction_parameters:['change_note','changes.*.reason'],
+ edit_construction_parts:['change_note','changes.nodes.upsert.*.reason','changes.joints.upsert.*.reason','changes.roles.upsert.*.reason'],
+ change_construction_roles:['change_note','changes.*.reason'],
+ continue_construction_change:['change_note','review_note'],
+ save_construction_cut_plan:['change_note','candidates.*.note'],
+}
 export type ConstructionToolsState = { version:1; used:number } | { version:2; used:number; observations:ConstructionObservation[] }
 export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;unlimitedWork?:boolean;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
@@ -136,6 +148,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   if(name===CONSTRUCTION_SAVE_TOOL.function.name&&raw&&typeof raw==='object'&&!Array.isArray(raw)&&!('instance_policy' in raw))raw={...raw,instance_policy:null}
   const issues=schemaIssues(spec.function.parameters,raw)
   if(issues.length)return {status:'invalid',issues}
+  const prose=humanTextRejection(proseFields(raw,CONSTRUCTION_PROSE[name]??[]))
+  if(prose)return {status:'invalid',validation:{code:'human_text',fields:prose.fields},message:'No change made. '+prose.message}
   const v=raw as any
   if(!await opts.hasAccess())return {status:'denied'}
   try{

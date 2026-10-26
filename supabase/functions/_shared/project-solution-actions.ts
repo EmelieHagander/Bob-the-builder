@@ -1,5 +1,6 @@
 import { fingerprint, rethrowContinuation } from './bob-job-journal.ts'
-import { applyProjectDelta, displayEditSnapshot, PROJECT_EDIT_TOOLS, type EditSnapshot } from './project-edits.ts'
+import { applyProjectDelta, changeProseRejection, displayEditSnapshot, PROJECT_EDIT_TOOLS, type EditSnapshot } from './project-edits.ts'
+import { humanTextRejection, type HumanTextRejection } from './human-text.ts'
 import { parseDesignIntent } from './project-design-intent.ts'
 import type { ProjectWriter, WritePayload } from './project-write.ts'
 
@@ -86,8 +87,12 @@ export function createSolutionActions(opts: {
       if (!opts.writer || !SOLUTION_ACTION_TOOLS.some(t => t.function.name === name)) return { status: 'denied' }
       const v = value as Record<string, any>, chosen = contexts.get(v?.solution_ref), scope = contexts.get(v?.scope_ref), base = contexts.get(v?.base_ref)
       let payload: WritePayload | null = null, issue = '', key = solution(chosen) ? chosen.resource + ':' + chosen.key : 'unbound'
+      let humanText: HumanTextRejection | null = null
       try {
         if (!v || !nonempty(v.reason, 1000)) throw Error('Provide the reason for the requested change.')
+        // The reason is saved as the change note, alignment basis or selection reason.
+        humanText = name === 'create_solution_alternative' ? changeProseRejection(v.changes, v.reason) : humanTextRejection([['reason', v.reason], ['note', v.note]])
+        if (humanText) throw Error(humanText.message)
         const common = { expected_updated_at: null, request_quote: v.request_quote }
         if (name === 'create_solution_alternative') {
           if (opts.writer.unresolvedTools.some(t => ['edit_project_record', 'change_solution_evidence', 'select_solution_alternative'].includes(t))) throw Error('Resolve the failed edit or selection before creating an alternative. Creation cannot repair it.')
@@ -134,7 +139,7 @@ export function createSolutionActions(opts: {
         }
       } catch (error) { rethrowContinuation(error); issue = error instanceof Error ? error.message : 'Invalid action.' }
       const result = await opts.writer.commitBound(name, key, payload)
-      if (issue && result.status === 'invalid') return { status: 'invalid', message: 'No change made. ' + issue }
+      if (issue && result.status === 'invalid') return { status: 'invalid', message: 'No change made. ' + issue, ...(humanText ? { validation: { code: 'human_text', fields: humanText.fields } } : {}) }
       // Receipts remain server-owned; a fresh read supplies another usable ref.
       return result.status === 'saved' ? { status: 'saved', message: name === 'select_solution_alternative' ? 'Selected the existing alternative for this scope.' : 'Saved. Read the same solution before further changes.', selected_updated: name === 'change_solution_evidence' && chosen?.target !== null } : result
     },
