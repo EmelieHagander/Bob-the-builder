@@ -336,6 +336,52 @@ Needs must be current, unarchived, share the article content unit, have current 
 
 **Still open in K4:** reconciling current endpoint/UI release evidence, the separately scoped physical member/model trial with real stock/product inputs, product-bound hardware quantities per joint and linked/access-checked assembly. Declared source fields are not captured manufacturer evidence; the [cross-domain data review](bob-delivery-flow.md#kvarstående-datagränser--kodgranskning-2026-10-10) records that remaining boundary. The project lock is the serialization boundary; `scripts/check-cad-lineage-concurrency.ts` covers it with seven real PostgreSQL pack races.
 
+## Fastener and glue needs — 2026-10-26
+
+**Status: source and isolated SQL tests (B3); not applied or deployed.**
+Owner decisions 2026-10-26 ([joint fasteners](artifacts.md#joint-fasteners--owner-decisions-2026-10-26)):
+screws, nails and bolts reach the material list and Shopping as quantities
+grouped by kind and size; glue is **one package per construction**. Quantities
+come from the B1 fastener schedule of one saved construction revision. They are
+rule-of-thumb proposals, not a strength calculation.
+
+- **Derive.** The existing `derive_cad_material_requirement` path takes the
+  construction Artifact/revision and `quantity_mode`:
+  - `fasteners` with `fastener_kind` (`screw|nail|bolt`), `diameter_mm` and
+    `length_mm` exactly as one group of `read_construction_fasteners` totals:
+    one need of that group's total count in `pcs`, method `construction_fasteners` v1;
+  - `glue`: one need of 1 `pcs` (one package), method `construction_glue` v1,
+    only when the construction has a glued joint.
+  The caller supplies name, category, Area/Task, allowance, purchase increment,
+  stock allocations and notes, never quantity, unit, method or basis.
+- **Unknown stays unknown.** Joints without a rule (dowel, bolted, unresolved)
+  or without a size or count are not counted. The basis says how many, and the
+  provenance row keeps `schedule_complete=false`. A size the schedule does not
+  list is refused.
+- **Identity.** One active need per construction and group. A revision keeps
+  its group; blank and fastener needs cannot turn into each other. Manual
+  revisions are refused; archive/restore carry the provenance, and restore is
+  fenced against a duplicate like blank needs.
+- **Buying.** Unlike blank needs, fastener and glue needs may hold matching
+  `pcs` stock (through the derive path), publish to Shopping and join a
+  [pack purchase](#k4-supplier-articles-and-pack-purchases), but only while
+  the construction and its sources are current. Blank needs keep every guard.
+- **Changes.** A new construction revision marks them for review and captures
+  them as change work. `continue_construction_change` recalculates the same
+  need at the new revision, or archives it when its group has left the
+  schedule; a direct re-derive completes the item too. A new size is a new need.
+- **Glue representation.** A glue need is an ordinary requirement of 1 `pcs`
+  with typed glue provenance: no new unit, catalog profile or category. A glue
+  product can later bind through a supplier article over the existing `liquid`
+  catalog profile.
+
+The Material plan labels these needs ("Fasteners for the joints", "Glue for the
+joints"), shows the server's basis and allows Shopping when current. Product,
+pilot holes, edge distances and end grain stay open with the K2 joint gaps.
+Bob's tool guidance and a schedule read for Bob are not part of this change.
+[Database owner](../db/README.md#fastener-and-glue-requirements--2026-10-26)
+lists the schema and functions.
+
 
 
 ## Calculator replay — 2026-10-12 code boundary

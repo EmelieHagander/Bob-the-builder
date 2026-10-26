@@ -54,7 +54,7 @@
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
 | construction checkpoints, drawings, source freshness, Project-home previews, work-Step links and exact lineage | `Docs/artifacts.md`; [parameter changes and version ownership](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10) are deployed in B; [legacy transition](artifacts.md#legacy-drawing-transition--release-c) is deployed in C; D is technically installed; real acceptance remains in State |
-| material requirements, deterministic quantities, construction cut plans, stock/reuse, supplier articles, pack purchases and Shopping handoff | `Docs/material-planning.md` |
+| material requirements, deterministic quantities, construction cut plans, fastener and glue needs, stock/reuse, supplier articles, pack purchases and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | AI personas, colleague titles/purposes, tool contracts, tiers, activation and pinned definition manifests | [AI definition catalog](../supabase/README.md#ai-definition-catalog-and-model-tiers) — versioned DB authority; release installation and real-model acceptance tracked separately |
 | Ask bob's tool/colleague cards, instruction loading, authority and common calculator | `Docs/ask-bob-tools.md` — activated card strategy and pinned whole-bench compatibility; existing calculation owners and first common-tool boundary |
