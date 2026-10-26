@@ -6,6 +6,12 @@
 
 ## Current landing map — P3 deployed
 
+**Later decisions take precedence:** the [2026-10-26 startup facts](ask-bob-context.md#owner-decision--2026-10-26-project-facts-at-turn-start)
+are implemented and replace the proposed automatic model router. The next
+reader increment is the [task-specific source packet](ask-bob-context.md#task-source-packet),
+with delivery order in [FORM State](bob-delivery-flow.md#form-next). The broader
+registry/router/lens sequence below is not a prerequisite for that increment.
+
 | Concern | Actual owner / remaining boundary |
 | --- | --- |
 | Strict screen pointer and safe hydrated types | `src/domain/bobScreen.ts`; Task work Step (`planStepId`) and selected instruction (`instructionId`) stay distinct. |
