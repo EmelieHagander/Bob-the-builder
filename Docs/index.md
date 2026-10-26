@@ -60,7 +60,7 @@
 | Ask bob's tool/colleague cards, instruction loading, authority and common calculator | `Docs/ask-bob-tools.md` — activated card strategy and pinned whole-bench compatibility; existing calculation owners and first common-tool boundary |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` — implemented screen seam and image-only catalog vs remaining broader target; `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
 | Ask bob bounded project writes, receipts and retry | `Docs/ask-bob-writes.md` |
-| no IDs or codes in human text: writer rejection, notices, labels | [Human text rule](ask-bob-writes.md#human-text-holds-only-prose--owner-decision-2026-10-26) — owner decision 2026-10-26, source only |
+| no IDs or codes in human text: writer rejection, notices, labels | [Human text rule](ask-bob-writes.md#human-text-holds-only-prose--owner-decision-2026-10-26) — owner decision 2026-10-26, live 2026-10-26 |
 | Ask bob conversation continuity, reset, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |
 | Drawing continuation ownership and preserved cost history | [Atomic database transition](../db/README.md#atomic-drawing-continuation--2026-10-18); [current work policy](ask-bob-conversations.md#active-memory-and-continued-work--2026-10-17) |
 | how to verify a change | `.claude/skills/verify/SKILL.md` — automated tests, build and connected-mode browser fixtures |
@@ -96,7 +96,7 @@ The original product uses `Area` as a project-scoped physical/work zone. The per
 - `Area` — project work-zone container used by current collaboration/runtime flows;
 - `Site` / `Building` / `Space` / `BuildingElement` — implemented persistent physical context that may be reused across projects;
 - Areas may map to rooms of a Building the Project links as a whole (Area **Rooms** panel, live 2026-10-25; [building model](building-model.md#project-rooms-and-area-rooms--owner-decision-2026-10-25)); Area and Space must not be silently conflated.
-- A room's length × width × height comes from typed measurements through one shared view for the app and Bob (**source only 2026-10-26**, not applied; [building model](building-model.md#room-dimensions--owner-decisions-2026-10-26), [database](../db/README.md#room-dimensions--2026-10-26)).
+- A room's length × width × height comes from typed measurements through one shared view for the app and Bob (**live 2026-10-26**; [building model](building-model.md#room-dimensions--owner-decisions-2026-10-26), [database](../db/README.md#room-dimensions--2026-10-26)).
 
 See `Docs/building-model.md` for the owning contract and `Docs/v1-plan.md` for delivery order.
 

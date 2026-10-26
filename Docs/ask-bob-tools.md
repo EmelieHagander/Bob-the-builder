@@ -61,7 +61,7 @@ kind only). When no whole building or site is linked, `read_building_scope` and
 so Bob can find and link the house instead of reporting missing data. Linked
 projects keep on-demand loading.
 
-**Room dimensions dataset — source only 2026-10-26, not applied or deployed.**
+**Room dimensions dataset — activated 2026-10-26** ([evidence](foundation-verification.md#room-dimensions-and-human-text--2026-10-26)).
 `search_project_data` gains the dataset `room_dimensions`: one record per room in
 this project with its name, building name, revision and typed dimensions (length,
 width, ceiling height, openings; side and reference) from

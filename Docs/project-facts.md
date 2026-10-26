@@ -38,7 +38,7 @@ as a stand-in. Estimates remain explicitly estimated in lists, detail and histor
 changing an estimate to measured creates a new revision. User-recorded measured
 or specification provenance does not imply independent site verification.
 
-**What it measures — source only 2026-10-26.** A measurement identity may say
+**What it measures — live 2026-10-26.** A measurement identity may say
 once what it measures: `property` (room length/width, ceiling height, wall length,
 opening width/height, sill height, distance to an opening, other), optional
 `side` (N/E/S/W) and `reference`. It is identity metadata like the parent links:

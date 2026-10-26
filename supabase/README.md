@@ -677,7 +677,7 @@ let such jobs finish before rolling either runtime back.
 
 ### Room dimensions — source 2026-10-26
 
-**Source only; nothing applied or deployed.** New jobs pin
+**Deployed 2026-10-26** (`bob-worker` v139, `ask-bob` v171; [evidence](../Docs/foundation-verification.md#room-dimensions-and-human-text--2026-10-26)). New jobs pin
 `roomDimensionsVersion: 1` in `ask-openai.ts` and read through
 `search_bob_project_data_v9` (adds `room_dimensions`); journals without the pin
 keep v8. `project-lookup.ts` accepts the dataset. Bob's writers are unchanged.

@@ -1,5 +1,41 @@
 # Foundation verification and rollout
 
+## Room dimensions and human text — 2026-10-26
+
+**PR #331 (`eb024eb`, room measurements and human error copy in the app),
+PR #332 (`211d913`, Bob rejects IDs and codes in prose) and PR #333
+(`1656f16`, typed room dimensions) are merged, applied and deployed; not yet
+exercised by a live Bob turn.**
+
+- **Local evidence:** #331: 62 `src/`-importing test files 483/483, guards
+  23/23, browser checks project-rooms, building-context, sharing,
+  project-phases, volunteer and project-work pass (project 337, foundations 100
+  and material-catalog 145 fail identically on `main`). #332: 75 files 699/699.
+  #333: 198 files 1477/1477; project-rooms, building-context and sharing
+  browser checks pass; catalog `--check` passes.
+- **Hosted application (managed ledger, from `main`):**
+  `20261026065520_human_construction_blank_basis` (file `20261026120000`),
+  `20261026071724_room_dimensions` (file `20261026130000`, SQL SHA-256
+  `fe1535bf78a7b902ac3180b1f0bb6d83d49beb42f4c93a6e02cb3e33448a9996`),
+  `20261026071817_ai_room_dimensions_catalog` (file `20261026130500`,
+  `1e2c779b6d5b801755edf13057730d5d978e72ac8dc52e19e136cb5bebdfbe9a`).
+  Readback: `bob.project_room_dimensions` selectable by `authenticated`, not
+  `anon`; `search_bob_project_data_v9` present; measurement `property`,
+  `side`, `reference` columns present.
+- **Hosted deploys:** read-only checks found no active Bob jobs before each.
+  #332: `bob-worker` v138 / `ask-bob` v170 (06:55 UTC). #333: `bob-worker`
+  v139 / `ask-bob` v171 (07:17 UTC); bundles contain `roomDimensionsVersion`
+  and `search_bob_project_data_v9`. Pages: run 378 (#331) succeeded; a run from
+  `1656f16` followed #333.
+- **Barnrum classification (owner-approved):** `scripts/classify-barnrum-measurements.sql`
+  (SHA-256 `b08f425b87df90116c867928bf4409f756ada621f0483601af9e31653eb338ee`)
+  classified all 12 measurements and mirrored each onto its room snapshot.
+  The view now reads Barnrum as 3970 × 2700 mm, height 1920 mm (measured) in
+  both "Barnrum – våningssäng" and "Våningssäng2"; the veranda's 7
+  measurements stay unclassified, so its dimensions read unknown.
+- **Not verified here:** a live Bob turn using `room_dimensions` or hitting a
+  `human_text` rejection; the app against the hosted database on a phone.
+
 ## Building and room links — 2026-10-25
 
 **Merged in PR #326 (`535c6d2`, app and room rules) and PR #327 (`5aac4ae`,
