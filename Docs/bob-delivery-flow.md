@@ -390,16 +390,7 @@ Serverbundna work-record- och planlänkverktyg samt konflikttransporten är nu i
 
 ### FORM 1.0 — tidig designloop (releasegrindar, 2026-10-26)
 
-**Nästa handling:** slutför frontendpubliceringen genom manuell `deploy.yml` på
-`main`; kontrollera att produktionsfilerna matchar den verifierade releasen
-(dokumentationsändringar är tillåtna). Cloud Browser-anslutningen slutade svara
-innan publiceringen kunde startas, och GitHub-anslutningen saknar dispatch.
-Core och båda backendfunktionerna är installerade. Publicera
-`20261026210100_ai_form_concept_catalog.sql` först efter lyckad Pages-körning och
-återläs de två aktiverade katalogversionerna enligt
-[releaseordningen](../supabase/README.md#form-concept-release--source-only-2026-10-26).
-
-**Därefter:** gå igenom hela flödet med ägaren: 2D, beskrivning, valfri
+**Nästa handling:** gå igenom hela flödet med ägaren: 2D, beskrivning, valfri
 mockup, detaljerad konstruktion, plock-/kaplista och 3D. Precisera vad varje
 AI-anrop faktiskt ska avgöra, vad kod kan härleda och vad granskningarna efter
 2D respektive 3D måste kontrollera mot originalkraven. Återanvänd
@@ -407,7 +398,7 @@ AI-anrop faktiskt ska avgöra, vad kod kan härleda och vad granskningarna efter
 domänägare. Förfining från en konceptdel till flera byggdelar behöver ett
 spårbart mappningskontrakt; detta är nästa designfråga, inte ny installerad funktion.
 
-Installerade delar, den kvarstående publiceringen och CI-belägg finns i
+Den tekniska installationen, publiceringen och CI-belägg finns i
 [releasebeviset](foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26).
 [Solution-ägaren](solutions.md#early-concept-geometry-form--source-implementation-2026-10-26)
 äger modellen. Därefter kvarstår låda, våningssäng och lada med riktiga

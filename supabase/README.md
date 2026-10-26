@@ -698,15 +698,14 @@ before this change cannot replay a v9 read, so let pinned jobs finish before
 rolling either runtime back.
 
 <a id="form-concept-release--source-only-2026-10-26"></a>
-## FORM concept release — core/backend installed, publication pending, 2026-10-26
+## FORM concept release — technically installed, 2026-10-26
 
 Technical installation and remaining acceptance: [release evidence](../Docs/foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26).
 
 Domain owner: [Solutions](../Docs/solutions.md#early-concept-geometry-form--source-implementation-2026-10-26).
-Core and both backend functions are installed. Matching frontend publication and
-catalog activation remain pending because the Cloud Browser connection failed;
-the GitHub connector cannot dispatch workflows. Real owner/model acceptance
-remains separate. For a release under the owner's mandate, verify the project is
+Core, both backend functions, matching frontend and catalog are installed.
+Real owner/model acceptance remains separate. For a release under the owner's
+mandate, verify the project is
 `yuobtgoidmmmwfqenkau` and the exact reviewed commit before each step:
 
 1. Run the requested manual CI/browser checks on that commit, including foundations

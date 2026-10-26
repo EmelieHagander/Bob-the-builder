@@ -1,10 +1,10 @@
 # Foundation verification and rollout
 
 <a id="form-concept-loop--local-synthetic-verification-2026-10-26"></a>
-## FORM concept loop — core/backend installed, release pending, 2026-10-26
+## FORM concept loop — technically installed, 2026-10-26
 
 **PR [#343](https://github.com/EmelieHagander/Bob-the-builder/pull/343) is merged
-with core migration and backend installed; frontend and catalog activation are pending**
+and technically installed: core, backend, frontend and catalog**
 from `8b7eef15b49ee10b8a429246286ea7a6e28c7912`. The merged tree matches
 the final reviewed tree. The [Solution contract](solutions.md#early-concept-geometry-form--source-implementation-2026-10-26)
 owns the model; [State](bob-delivery-flow.md#form-10--tidig-designloop-releasegrindar-2026-10-26)
@@ -32,7 +32,8 @@ owns release order and rollback.
   - `20261026194946_solution_concept_model`, source
     `20261026210000_solution_concept_model.sql`, SHA-256
     `7ad149592ef8a8182f2b1f56754c5a1727b7e739a76aaa911529a9b5bcef7e56`.
-  - **Prepared, not applied:** `20261026210100_ai_form_concept_catalog.sql`, SHA-256
+  - `20261026202810_ai_form_concept_catalog`, source
+    `20261026210100_ai_form_concept_catalog.sql`, SHA-256
     `ea7b9c492eb35c387c9932bf4d2164bfffcc69e951d0ed55d81f4eae8d2dc413`.
 - **Hosted rollback-only proof:** ordinary authenticated Solution save/readback
   for box/bed/barn, exact Construction and idempotent retry, rejection of changed
@@ -46,17 +47,27 @@ owns release order and rollback.
   use the reviewed runtime sources, confirmed by deployed source readback;
   compiler-erased type-only dependencies are excluded. No active Bob jobs were
   observed before either deployment. The CAD worker was unchanged.
-- **Frontend pending:** no Pages run was started. The Cloud Browser connection
-  stopped responding, including recovery/reset; the GitHub connector has no
-  workflow-dispatch operation. Resume with manual `deploy.yml` on `main`,
-  verifying that runtime/frontend files match the reviewed source above (a
-  documentation-only follow-up does not require another runtime deploy).
-- **Catalog pending, activate last:** after matching Pages publication succeeds,
-  apply the prepared catalog migration and read back its two versions and
-  preservation of unrelated definitions/metadata. Active versions remain
-  workflows v6 (`dcc836cb-61c8-486a-bf99-e0bc786bf998`) and edit v2
-  (`00cb972f-b0ed-4ebf-b141-bbfad0faa01e`). These are also rollback targets after
-  publication; retain the new readers/validators.
+- **Frontend:** manual [Pages run 40395490981](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/40395490981)
+  (#384) succeeded on `14ae897cb5a5bf9b175ecf056eef8a2f8ac9f322`; its only
+  differences from the implementation merge are seven documentation files.
+  Build `121827292509` and deploy `121827600801` passed. Artifact `12686152717`
+  has SHA-256 `5f38f1388a551617785e6e73f41238c57c6392b6d848a591e84b580a4767a89d`.
+  The public HTML, entry bundle `assets/index-BQBtgAIk.js` and FORM viewer chunk
+  `assets/Solutions-DAIPDzyR.js` returned HTTP 200 and match that artifact
+  byte-for-byte. The entry bundle targets the intended
+  Supabase project. A fresh browser renders the normal live sign-in screen;
+  this proves publication, not authenticated member/model acceptance.
+  The previous browser blocker was resolved with a fresh tab; no workflow,
+  permission, environment protection or concurrency setting was changed.
+- **Catalog, activated after Pages:** `bob.workflows` v7
+  (`f0fc53e4-be3c-4642-9484-3f2d02d686eb`) and `tools.edit_project_record` v3
+  (`95e0ed78-961c-457c-bf1f-ee70aa928e2a`) carry `form-concept-v1`.
+  Readback verifies the new method/manual and unchanged other definitions,
+  metadata, content, flow, variables and definition envelope. The publication
+  builder matches executable contracts. Previous workflows v6
+  (`dcc836cb-61c8-486a-bf99-e0bc786bf998`) and edit v2
+  (`00cb972f-b0ed-4ebf-b141-bbfad0faa01e`) remain the rollback targets;
+  retain the new readers/validators and saved models.
 
 Archie and Vera guidance was followed manually, not by independent agents.
 Real owner corrections, independent CAD comparison against original images,
