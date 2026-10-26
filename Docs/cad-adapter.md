@@ -956,7 +956,40 @@ Construction comparison uses complete JSON values, ignoring object-key order onl
 
 The immutable construction remains the source Artifact. The saved drawing has its own existing CAD Artifact identity and `manifest.bob_construction` pins the exact source and revision-bound K2 report. SQL locks the source/catalog heads, compares the recipe (only requested views may differ), full parameter graph and target/Area, and rejects changed or missing pins at publication. Revisions cannot drop or switch construction identity. Historical drawings remain unchanged and become visibly stale when their construction or catalog sources change. The existing claimed-turn receipt, drawing-request commitment and work-link commands still establish delivery.
 
-The authenticated worker accepts the old recipe request and a bounded `{recipe,drawing_source:{artifact_id,revision}}` envelope. Source identity/revision is printed on every SVG and returned in its manifest; the Edge transport checks it. The kernel assembly and STEP stay in canonical millimetres. SVG page composition is explicitly **not to scale**: it adds overall X/Z, Y/Z or X/Y dimensions to orthographic views, overall XYZ text to isometric views, and P-number callouts plus exact local blank dimensions mapped to saved instance IDs. These are concept annotations, not manufacturing tolerances, fastener layout, machining allowances or structural certification. The 2026-10-17 paged annotation implementation removes the separate 24-instance delivery ceiling: annotations cover the existing recipe limit of 512 instances. Each view is one SVG with numbered sheets of at most 32 callouts, all using the same complete kernel geometry, overall bounds and exact construction revision. Shared SVG geometry avoids copying paths for every sheet. Part numbers stay stable across sheets; coincident projections receive separated, bounded labels. Each sheet is rasterized separately at the existing 1024-pixel preview resolution; the transport requires every deterministic sheet key and validates its hash against metadata bound to the complete SVG. All sheets reach independent review and the review/save commitment. Geometry, parameter-node, collision, time and byte bounds still apply. [Paged annotation verification](foundation-verification.md#paged-cad-annotations--2026-10-17) owns deployment and owner acceptance.
+The authenticated worker accepts the old recipe request and a bounded `{recipe,drawing_source:{artifact_id,revision}}` envelope. Source identity/revision is printed on every SVG and returned in its manifest; the Edge transport checks it. The kernel assembly and STEP stay in canonical millimetres. SVG page composition is explicitly **not to scale**: it adds overall X/Z, Y/Z or X/Y dimensions to orthographic views, overall XYZ text to isometric views, and P-number callouts plus exact local blank dimensions mapped to saved instance IDs. These are concept annotations, not manufacturing tolerances, fastener layout, machining allowances or structural certification; the rule-of-thumb fastener schedule of [annotations version 2](#fastener-schedule-on-drawings--annotations-version-2-2026-10-26) is a proposal, not a fastener layout. The 2026-10-17 paged annotation implementation removes the separate 24-instance delivery ceiling: annotations cover the existing recipe limit of 512 instances. Each view is one SVG with numbered sheets of at most 32 callouts, all using the same complete kernel geometry, overall bounds and exact construction revision. Shared SVG geometry avoids copying paths for every sheet. Part numbers stay stable across sheets; coincident projections receive separated, bounded labels. Each sheet is rasterized separately at the existing 1024-pixel preview resolution; the transport requires every deterministic sheet key and validates its hash against metadata bound to the complete SVG. All sheets reach independent review and the review/save commitment. Geometry, parameter-node, collision, time and byte bounds still apply. [Paged annotation verification](foundation-verification.md#paged-cad-annotations--2026-10-17) owns deployment and owner acceptance.
+
+### Fastener schedule on drawings — annotations version 2, 2026-10-26
+
+**Status: B2 source prepared, not deployed.** It implements the
+[joint fastener owner decisions](artifacts.md#joint-fasteners--owner-decisions-2026-10-26).
+
+- **Edge.** Before dispatch, the Edge reads `bob.read_construction_fasteners`
+  as the caller for exactly the pinned construction revision. It sends
+  `{recipe, drawing_source, fasteners}`. The `cad:render` journal input stays
+  `{recipe, drawing_source}`, because the pinned revision fixes its schedule.
+- **Worker.** The worker draws a band on sheet 1 of every view. The band has
+  rows F1, F2… in the saved totals order: kind, d x L in mm, count and the
+  rule/override basis. It also lists glue packages, joints without a rule or
+  size, and rule warnings. The band is labelled "proposal from rules of thumb,
+  no strength calculation". The manifest has `annotations.version: 2`, and
+  `annotations.fasteners` is the schedule exactly as sent. Without a schedule,
+  the manifest stays version 1 and the old envelopes still work. The request
+  limit is 1 MiB.
+- **Checks.** When a schedule is sent, the transport accepts only version 2
+  with that exact schedule; without one, it accepts only version 1. SQL
+  publication (`20261026171000_cad_fastener_annotations.sql`) accepts version 1
+  without a schedule. It accepts version 2 only when `annotations.fasteners`
+  equals `construction_fastener_schedule` of the pinned revision. Saved
+  drawings stay valid, and archive/restore copies stay exempt.
+- **Reading it.** The drawing view shows a Fasteners table from the saved
+  manifest, and a version without a schedule says so. `bob.read_cad_artifact`
+  strips nulls from the schedule, as from the rest of its manifest view.
+- **Deploy order.** Deploy the CAD worker first, then migrations B1 and B2,
+  then the Edge. `CAD_TRANSPORT_CONTRACT` is deliberately unchanged. A new
+  value changes the drawing runtime fingerprint, and `queue_drawing_events`
+  then re-queues waiting drawing requests, which is paid work.
+- **Still open.** Strength, edge distances, pilot holes, end grain and product
+  approval stay with the K2 `joint_product_and_capacity_unverified` gaps.
 
 Visible view headings use a neutral assembly label. The stable `assembly_id` remains the manifest/recipe identity; it may contain dimensions from an earlier revision and must not become a current dimension claim in the heading. Current sizes come from the kernel bounds and exact part dimensions. Correcting presentation does not revise the checked construction.
 
