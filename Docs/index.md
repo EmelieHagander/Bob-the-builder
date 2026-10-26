@@ -60,6 +60,7 @@
 | Ask bob's tool/colleague cards, instruction loading, authority and common calculator | `Docs/ask-bob-tools.md` — activated card strategy and pinned whole-bench compatibility; existing calculation owners and first common-tool boundary |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` — implemented screen seam and image-only catalog vs remaining broader target; `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
 | Ask bob bounded project writes, receipts and retry | `Docs/ask-bob-writes.md` |
+| no IDs or codes in human text: writer rejection, notices, labels | [Human text rule](ask-bob-writes.md#human-text-holds-only-prose--owner-decision-2026-10-26) — owner decision 2026-10-26, source only |
 | Ask bob conversation continuity, reset, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |
 | Drawing continuation ownership and preserved cost history | [Atomic database transition](../db/README.md#atomic-drawing-continuation--2026-10-18); [current work policy](ask-bob-conversations.md#active-memory-and-continued-work--2026-10-17) |
 | how to verify a change | `.claude/skills/verify/SKILL.md` — automated tests, build and connected-mode browser fixtures |

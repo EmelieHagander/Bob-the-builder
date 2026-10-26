@@ -1,6 +1,7 @@
 import { fingerprint, rethrowContinuation } from './bob-job-journal.ts'
 import { parseProjectWrite, TASK_WORK_VALIDATION_CODES, type ProjectWriter, type WritePayload } from './project-write.ts'
 import { schemaIssues } from './schema-issues.ts'
+import { humanTextRejection, type HumanTextRejection } from './human-text.ts'
 import { WORK_VALUE_TOOL_NAMES } from './project-tools/session.ts'
 export { WORK_VALUE_TOOL_NAMES } from './project-tools/session.ts'
 
@@ -53,6 +54,18 @@ const exact = (v: unknown, keys: string[]): v is Record<string, any> => !!v && t
 const nonempty = (v: unknown, max = 1000): v is string => typeof v === 'string' && !!v.trim() && v.length <= max
 const contentFields: Partial<Record<WorkResource, string[]>> = { project: ['start_date', 'end_date'], areas: ['name', 'description'], tasks: ['name', 'instructions'], measurements: ['subject', 'value', 'unit', 'truth', 'source', 'notes', 'required'], build_days: ['title', 'day', 'time', 'place', 'food'] }
 const pick = (r: Record<string, any>, keys: string[]) => Object.fromEntries(keys.map(k => [k, r[k]]))
+/** Content paths holding text people read; values, units, truth, dates and
+ * need kinds are typed. Only text this call supplies is checked, so unchanged
+ * saved text never blocks an unrelated edit. */
+const PROSE_PATHS = ['/name', '/description', '/instructions', '/subject', '/source', '/notes', '/title', '/day', '/time', '/place', '/food', '/label']
+function changedProse(changes: unknown, schemaVersion: 1 | 2): [string, unknown][] {
+  if (!Array.isArray(changes)) return []
+  return changes.flatMap((c): [string, unknown][] => {
+    if (!c || typeof c !== 'object' || !PROSE_PATHS.includes(c.path)) return []
+    if (schemaVersion === 2) return [[c.path.slice(1), c.value]]
+    try { return [[c.path.slice(1), JSON.parse(c.value_json)]] } catch { return [] }
+  })
+}
 export function applyWorkDelta(resource: WorkResource, record: Record<string, any>, changes: unknown) {
   if (!Array.isArray(changes) || !changes.length || changes.length > 40) throw Error('Provide between 1 and 40 requested changes.')
   const result = structuredClone(record), allowed = contentFields[resource] ?? []
@@ -162,8 +175,16 @@ export function createWorkRecords(opts: {
       if (!opts.writer || !WORK_RECORD_TOOLS.some(t => t.function.name === name)) return { status: 'denied' }
       const v = value as Record<string, any>, s = snapshots.get(v?.ref ?? v?.target_ref ?? v?.task_ref), scope = snapshots.get(v?.scope_ref), base = snapshots.get(v?.base_ref), source = snapshots.get(v?.source_ref)
       let domain: WritePayload | null = null, payload: WritePayload | null = null, issue = '', key = s ? s.resource + ':' + s.key : 'unbound', pins: WorkSnapshot[] = []
+      let humanText: HumanTextRejection | null = null
       try {
         if (!v || !nonempty(v.reason) || !nonempty(v.request_quote, 500)) throw Error('Provide the reason for the requested change.')
+        // The reason is saved as a measurement change note or phase history.
+        const resource = name === 'create_work_record' ? v.resource : s?.resource
+        const savedReason = resource === 'measurements' && ['edit_work_record', 'create_work_record'].includes(name) || name === 'change_work_state' && v.action === 'phase'
+        humanText = humanTextRejection([
+          ...(['edit_work_record', 'create_work_record', 'change_task_readiness'].includes(name) ? changedProse(v.changes, schemaVersion) : []),
+          ...(savedReason ? [['reason', v.reason] as const] : []), ...(name === 'change_task_readiness' ? [['note', v.note] as const] : [])])
+        if (humanText) throw Error(humanText.message)
         if (name === 'create_work_record') {
           if (opts.writer.unresolvedTools.some(t => ['edit_work_record', 'change_work_relation', 'change_work_state', 'change_task_readiness'].includes(t))) throw Error('Resolve the failed edit first. Creation cannot repair it.')
           const scopes: Record<string, string[]> = { areas: ['project'], tasks: ['areas', 'plan_steps'], measurements: ['project', 'areas', 'components'], build_days: ['project'] }
@@ -266,7 +287,7 @@ export function createWorkRecords(opts: {
           : 'No change made. current is the fresh target; reconsider the intended delta using current.ref. Read other scope or source records again if they changed. Never create a replacement.' }
           : { ...feedback, ...(!deleted && opts.readSnapshot ? { refresh_status: 'unavailable' } : {}) }
       }
-      return issue && result.status === 'invalid' ? { ...result, message: 'No change made. ' + issue } : result
+      return issue && result.status === 'invalid' ? { ...result, message: 'No change made. ' + issue, ...(humanText ? { validation: { code: 'human_text', fields: humanText.fields } } : {}) } : result
     },
   }
 }

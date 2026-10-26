@@ -17,6 +17,8 @@ import { isProjectWriteReceipt } from '../../../src/data/bobEvidence.ts'
 import { DRAWING_PROPERTIES, DRAWING_DESCRIPTION, parseDrawingWrite } from './project-drawing-write.ts'
 import { COMPOSE_CAD_SHELL_TOOL, LINK_CAD_SHELL_STEPS_TOOL, parseCadShellWrite, parseCadShellStepsWrite } from './cad-shell.ts'
 import { LIFECYCLE_TOOLS, LIFECYCLE_TOOL_NAMES, parseLifecycleWrite } from './project-lifecycle.ts'
+import { humanTextRejection, proseFields } from './human-text.ts'
+import { DESIGN_INTENT_PROSE } from './project-design-intent.ts'
 
 const nullableText = { type: ['string', 'null'] }
 const text = { type: 'string' }
@@ -65,6 +67,33 @@ export const WRITE_TOOLS = [
     notes: text, required: { type: 'boolean' }, change_note: text, request_quote: quote,
   }),
 ]
+/** Human prose fields per write tool (dotted paths, '*' any index or key).
+ * Ids, enums, numbers, keys and quotes of the owner are typed and not listed. */
+export const SOLUTION_PROSE = ['title', 'description', 'assumptions', 'tradeoffs', 'change_note', ...DESIGN_INTENT_PROSE.map(path => 'design_intent.' + path)]
+const DRAWING_PROSE = ['title', 'description', 'assumptions', 'change_note']
+export const WRITE_TOOL_PROSE: Record<string, readonly string[]> = {
+  save_project_description: ['description'],
+  save_project_area: ['name', 'description'],
+  save_project_task: ['name', 'instructions'],
+  save_project_measurement: ['subject', 'source', 'notes', 'change_note'],
+  save_project_build_day: ['title', 'day', 'time', 'place', 'food'],
+  manage_task_readiness: ['data.label', 'data.notes', 'data.note'],
+  manage_project_material: ['data.name', 'data.specification', 'data.notes', 'data.assumptions', 'data.basis', 'data.title', 'data.change_note', 'data.sheet_format.note'],
+  derive_cad_material_requirement: ['data.name', 'data.assumptions', 'data.change_note'],
+  save_project_solution: SOLUTION_PROSE,
+  select_project_target: ['reason'],
+  set_project_phase: ['reason'],
+  save_catalog_definition: ['name', 'aliases.*', 'notes', 'properties.*.note'],
+  propose_project_plan: ['summary', 'reason', 'steps.*.title', 'steps.*.goal', 'steps.*.notes', 'steps.*.requirements.*.title', 'steps.*.requirements.*.description'],
+  decide_project_plan: ['decision_note'],
+  save_project_drawing: DRAWING_PROSE,
+  create_project_room_layout: DRAWING_PROSE,
+  edit_project_room_layout: ['change_note'],
+  save_project_stair: [...DRAWING_PROSE, 'recipe.source'],
+  save_project_building_plan: [...DRAWING_PROSE, 'recipe.levels.*.source', 'recipe.spaces.*.source', 'recipe.probes.*.label'],
+  compose_cad_shell: ['title', 'description', 'assumptions', 'components.*.reason', 'placement.reason', 'component.reason'],
+  save_building_context: ['new_building_name', 'new_building_notes', ...['notes_append', 'name', 'kind', 'notes', 'subject', 'description'].map(field => 'operations.*.fields.' + field)],
+}
 export interface WritePayload {
   kind: 'construction_edit' | 'bound_building_scope' | 'bound_plan_link' | 'bound_work' | 'bound_solution_create' | 'bound_solution_target' | 'bound_solution_evidence' | 'bound_project' | 'bound_solution' | 'construction_roles' | 'construction_consequence' | 'legacy_construction' | 'construction_parameters' | 'cad_shell' | 'cad_shell_steps' | 'supplier_article' | 'pack_purchase' | 'cut_plan_shopping' | 'cut_plan_stock' | 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
   record_id: string | null
@@ -96,7 +125,7 @@ export interface WriteResult {
   validation?: Pick<WriteValidationIssue, 'code' | 'fields'>
 }
 export interface WriteValidationIssue {
-  code: 'tool_shape' | 'request_quote' | 'field_value' | 'task_location' | 'domain_fields' | TaskWorkValidationCode
+  code: 'tool_shape' | 'request_quote' | 'field_value' | 'task_location' | 'domain_fields' | 'human_text' | TaskWorkValidationCode
   fields: string[]
   message: string
 }
@@ -217,12 +246,17 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   }
   return { ...base, kind: 'measurement', expected_revision: v.expected_revision as number, data }
 }
+const RECEIPT_LABELS: Record<string, string> = { project: 'Project', areas: 'Area', tasks: 'Task', measurements: 'Measurement', artifacts: 'Drawing',
+  building_context: 'Building', catalog: 'Catalog item', plan: 'Project plan', solutions: 'Solution', target: 'Selected solution', media: 'Image',
+  stock: 'Stock item', requirements: 'Material requirement', cut_plans: 'Cutting plan', materials: 'Shopping item', events: 'Build day' }
 function checkedReceipt(value: unknown, projectId: string): WriteReadback {
   const r = value as WriteReadback
   if (!isProjectWriteReceipt(r, projectId) || !r.record || r.record.id !== r.recordId
     || (r.dataset === 'artifacts' && (r.record.revision !== r.revision || r.record.area_id !== r.areaId))
     || (['catalog','plan','cut_plans'].includes(r.dataset) && r.record.revision !== r.revision)) throw new Error('Invalid write receipt')
   const { related_receipts: _related, ...clean } = r as WriteReadback & { related_receipts?: unknown }
+  // Older writers label an unnamed record with its ID; people see a kind instead.
+  if (clean.label.trim() === clean.recordId) clean.label = RECEIPT_LABELS[clean.dataset] ?? 'Project record'
   return { ...clean, record: withDerivedStair(withDerivedBuildingPlan(withDerivedRoomLayout(r.record, projectId), projectId), projectId) }
 }
 export function compactReceipts(receipts: WriteReadback[]): ProjectWriteReceipt[] {
@@ -324,9 +358,13 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       settled = true
       return result.generation
     },
-    async write(name: string, value: unknown): Promise<WriteResult> {
+    /** humanText=false only for content Bob did not author in this call (a
+     * proposal compiled by the plan colleague); his own prose is always checked. */
+    async write(name: string, value: unknown, options: { humanText?: boolean } = {}): Promise<WriteResult> {
       let issue: WriteValidationIssue | undefined
-      const payload = parseProjectWrite(name, value, projectId, userMessage, detail => { issue = detail })
+      let payload = parseProjectWrite(name, value, projectId, userMessage, detail => { issue = detail })
+      const prose = payload && options.humanText !== false ? humanTextRejection(proseFields(value, WRITE_TOOL_PROSE[name] ?? [])) : null
+      if (prose) { issue = { code: 'human_text', fields: prose.fields, message: prose.message }; payload = null }
       let result = await this.commit(payload)
       if (!payload && result.status === 'invalid') {
         const issues = schemaIssues(WRITE_TOOLS.find(t => t.function.name === name)?.function.parameters ?? {}, value)

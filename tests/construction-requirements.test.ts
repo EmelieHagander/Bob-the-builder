@@ -6,6 +6,7 @@ import { projectSchema, asProjectUser } from './support/project-schema.ts'
 import { parameterPlan } from './support/cad-parameter-fixture.ts'
 import { compileCadParameters } from '../supabase/functions/_shared/cad-parameters.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
+import { humanTextIssues } from '../supabase/functions/_shared/human-text.ts'
 
 test('construction blanks use ordinary receipts and material revisions; lineage, duplicate, authority, allocation and stale-source guards', async t => {
  const pg = await projectSchema(); t.after(() => pg.close())
@@ -43,6 +44,8 @@ test('construction blanks use ordinary receipts and material revisions; lineage,
   const record = (await call('bob.read_project_work', [project, JSON.stringify({ resource: 'requirement', record_id: requirement.recordId, after_id: null })])).records[0]
   assert.equal(record.required_quantity, 1); assert.equal(record.method_key, 'construction_blank_pieces'); assert.equal(record.method_version, '2')
   assert.equal(record.artifact_id, construction.recordId); assert.equal(record.artifact_revision, 1); assert.match(record.basis, /200 x 100 x 18/)
+  // Human text holds only prose; the typed source row below carries the links.
+  assert.match(record.basis, /^Counted from the saved construction "Two-part bracket": 1 blank of 200 x 100 x 18 mm\. /); assert.deepEqual(humanTextIssues(record.basis), [])
   const source: any = (await asProjectUser(pg, user, 'select * from bob.material_requirement_construction_sources where requirement_id=$1', [requirement.recordId])).rows[0]
   assert.deepEqual(source.instance_ids, ['foot']); assert.deepEqual(source.blank_mm, { x: 200, y: 100, z: 18 }); assert.equal(source.material_binding.material_id, material.recordId)
   const replay=await call('bob.read_calculation_source',[project,'material',requirement.recordId,1])
@@ -56,6 +59,8 @@ test('construction blanks use ordinary receipts and material revisions; lineage,
    const replay=await call('bob.read_calculation_source',[project,'material',saved.id??saved.recordId,1])
    assert.equal(replay.calculation.base_provenance.status,'replayed');assert.equal(replay.calculation.base_provenance.value,q)
    assert.equal(replay.calculation.base_provenance.unit,unit);assert.equal(replay.calculation.base_provenance.source.artifact_revision,1)
+   const basis=(await asProjectUser(pg,user,'select basis from bob.material_requirement_revisions where requirement_id=$1',[saved.id??saved.recordId])).rows[0] as {basis:string}
+   assert.match(basis.basis,new RegExp(`: 1 blank of 200 x 100 x 18 mm, ${q} ${unit} in total\\. `));assert.deepEqual(humanTextIssues(basis.basis),[])
   }
  })
  await t.test('a second used definition saves in the same claimed turn without changing the first receipt or history', async () => {

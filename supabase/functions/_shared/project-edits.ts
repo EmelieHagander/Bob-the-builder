@@ -1,6 +1,7 @@
 import { fingerprint, rethrowContinuation } from './bob-job-journal.ts'
 import { parseDesignIntent } from './project-design-intent.ts'
-import type { ProjectWriter, WritePayload, WriteResult } from './project-write.ts'
+import { SOLUTION_PROSE, type ProjectWriter, type WritePayload, type WriteResult } from './project-write.ts'
+import { humanTextRejection, proseFields, type HumanTextRejection } from './human-text.ts'
 import type { ProjectSource } from '../../../src/data/provenance.ts'
 
 const object = (properties: Record<string, unknown>) => ({ type: 'object', additionalProperties: false, properties, required: Object.keys(properties) })
@@ -36,6 +37,16 @@ export type ProjectEditsState = {
 }
 const exact = (v: unknown, keys: string[]): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).sort().join(',') === [...keys].sort().join(',')
 const fail = (message: string): WriteResult => ({ status: 'invalid', message: 'No change made. ' + message })
+
+/** Prose this call supplies through content changes (decoded value_json at its
+ * path), plus the saved reason. Unchanged saved text is never re-checked. */
+export function changeProseRejection(changes: unknown, reason: unknown): HumanTextRejection | null {
+  const fields: [string, unknown][] = Array.isArray(changes) ? changes.flatMap(change => {
+    if (!change || typeof change !== 'object' || typeof change.path !== 'string' || typeof change.value_json !== 'string') return []
+    try { return proseFields(JSON.parse(change.value_json), SOLUTION_PROSE, change.path.split('/').slice(1)) } catch { return [] }
+  }) : []
+  return humanTextRejection([...fields, ['reason', reason]])
+}
 const safeText = (v: unknown, max: number, empty = false): v is string => typeof v === 'string' && v.length <= max && (empty || !!v.trim())
 
 /** Clone the pinned read, never a newly fetched head. Paths deliberately cannot
@@ -172,9 +183,11 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
       const v = value as Record<string, any>
       const snapshot = v && typeof v.edit_ref === 'string' ? contexts.get(v.edit_ref) : undefined
       const key = snapshot ? snapshot.resource + ':' + snapshot.key : 'unbound'
-      let payload: WritePayload | null = null, invalid: string | undefined
+      let payload: WritePayload | null = null, invalid: string | undefined, humanText: HumanTextRejection | null = null
       try {
         if (!exact(v, ['edit_ref', 'changes', 'reason', 'request_quote']) || !snapshot || !safeText(v.reason, 1000)) throw new Error('Read and choose a server-issued edit_ref, then supply changes and a reason.')
+        humanText = changeProseRejection(v.changes, v.reason)
+        if (humanText) throw new Error(humanText.message)
         if (snapshot.target && snapshot.head_revision !== undefined && snapshot.head_revision !== snapshot.record.revision) throw new Error('The selected version is older than this solution’s latest version. Read the alternatives and reconcile the selected direction explicitly before editing; do not overwrite newer work.')
         const record = await applyProjectDelta(snapshot, v.changes, v.reason)
         payload = snapshot.resource === 'project_description'
@@ -183,7 +196,7 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
               data: { target: snapshot.target, solution: { title: record.title, description: record.description, assumptions: record.assumptions, tradeoffs: record.tradeoffs, source_media_id: record.source_media_id, design_intent: record.design_intent, measurements: snapshot.measurements, change_note: v.reason } } }
       } catch (error) { rethrowContinuation(error); invalid = error instanceof Error ? error.message : 'Invalid content changes.' }
       const result = await opts.writer.commitBound('edit_project_record', key, payload)
-      if (invalid && result.status === 'invalid') return fail(invalid)
+      if (invalid && result.status === 'invalid') return { ...fail(invalid), ...(humanText ? { validation: { code: 'human_text', fields: humanText.fields } } : {}) }
       // The canonical receipt stays in the writer for delivery/recovery. The
       // model gets content and outcome, never a new set of IDs to transcribe.
       return result.status === 'saved' ? { status: 'saved', selected_updated: snapshot?.target !== null && snapshot?.resource !== 'project_description', message: 'Saved the same record. Read again before another edit.', content: displayEditSnapshot({ ...snapshot!, record: result.receipt!.record }) } : result

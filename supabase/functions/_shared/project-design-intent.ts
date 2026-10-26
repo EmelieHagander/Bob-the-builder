@@ -40,6 +40,8 @@ export const DESIGN_INTENT_SCHEMA=object({
  })},
  alignment:object({status:{type:'string',enum:['draft','aligned']},basis:text(2000)}),
 })
+/** Free-text design fields people read; ids, enums and source links are typed. */
+export const DESIGN_INTENT_PROSE=['summary','references.*.note','features.*.description','choices.*.question','choices.*.alternatives.*','choices.*.recommendation','choices.*.basis','choices.*.consequences','choices.*.selected_direction','choices.*.decision_basis','choices.*.deferral.reason','alignment.basis']
 const exact=(v:any,keys:string[])=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join(',')===keys.slice().sort().join(',')
 const string=(v:unknown,max:number,empty=false):v is string=>typeof v==='string'&&Array.from(v).length<=max&&(empty||!!v.trim())
 const uuid=(v:unknown):v is string=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)

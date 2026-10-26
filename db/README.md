@@ -1369,3 +1369,22 @@ runs the migrated schema with editors, plain members, another project and an
 outsider. Rollout: room-scope migration, this migration, both runtimes, then the
 catalog publication ([order](../supabase/README.md#bob-building-scope--source-2026-10-25)).
 Rollback: reactivate the previous catalog; these functions can stay.
+
+### Human construction blank basis — 2026-10-26
+
+**Source only; not applied.** Owner decision: human text holds only human prose;
+references are typed relations
+([write contract](../Docs/ask-bob-writes.md#human-text-holds-only-prose--owner-decision-2026-10-26)).
+`20261026120000_human_construction_blank_basis.sql` replaces the body of
+`bob_private.material_requirement_cad_command` (from
+`20261011090115_construction_instance_roles.sql`; ACL unchanged). Only the
+`basis` sentence changes: it names the construction drawing's title, the blank
+count and size and, for length/area modes, the total, instead of artifact,
+definition, material and part IDs with revisions. Those links remain typed in
+`material_requirement_construction_sources`. Authority, source freshness,
+instance roles, quantities, method key/version and lineage are unchanged.
+
+No table, grant, RLS or data change; existing requirement revisions keep their
+saved basis. `tests/construction-requirements.test.ts` checks the new text has no
+IDs or codes. Rollout: apply; the app shows a summary for construction blanks
+either way. Rollback: restore the previous body from `20261011090115`.

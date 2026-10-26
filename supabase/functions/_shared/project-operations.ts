@@ -112,6 +112,12 @@ export function parseOperationalWrite(name:string,v:Record<string,any>,report?:(
   }
   return base
 }
+/** A source is labelled by its own name, else by a neutral name for its kind,
+ * never by its database ID. */
+const RECORD_LABELS:Record<string,string>={task_work:'Task',stock:'Stock item',requirement:'Material requirement',cut_plan:'Cutting plan',product:'Supplier product',pack_purchase:'Pack purchase',shopping:'Shopping item',build_day:'Build day'}
+export function recordLabel(resource:string,r:Record<string,unknown>):string{
+  return [r.name,r.title,r.task_name].find((x):x is string=>typeof x==='string'&&!!x.trim())??RECORD_LABELS[resource]??'Project record'
+}
 export type OperationalReaderState = { version: 1; projectId: string; used: number; partial: boolean; sources: ProjectSource[] }
 export function createOperationalReader(projectId:string,read:(v:Record<string,unknown>)=>Promise<{data:any;error:any}>,hasAccess:()=>Promise<boolean>,sources:ProjectSource[],options:{unlimitedWork?:boolean}={}){
   let used=0,partial=false
@@ -133,7 +139,7 @@ export function createOperationalReader(projectId:string,read:(v:Record<string,u
       const {data,error}=await read(v)
       if(error||!data||data.projectId!==projectId||!Array.isArray(data.records))throw new Error('unavailable')
       if(!await hasAccess())return{status:'denied'}
-      for(const r of data.records)if(r.id&&!sources.some(s=>s.dataset===v.resource&&s.recordId===r.id))sources.push({projectId,dataset:v.resource,recordId:r.id,label:r.name??r.title??r.task_name??r.id,updatedAt:r.updated_at??r.recorded_at??null,retrievedAt:new Date().toISOString(),truth:'unknown'})
+      for(const r of data.records)if(r.id&&!sources.some(s=>s.dataset===v.resource&&s.recordId===r.id))sources.push({projectId,dataset:v.resource,recordId:r.id,label:recordLabel(v.resource,r),updatedAt:r.updated_at??r.recorded_at??null,retrievedAt:new Date().toISOString(),truth:'unknown'})
       partial ||= !!data.truncated
       return{status:data.records.length?'ok':'empty',...data}
     }catch(error){rethrowContinuation(error);partial=true;return{status:'unavailable'}}

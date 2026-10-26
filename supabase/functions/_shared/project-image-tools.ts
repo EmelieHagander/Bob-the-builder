@@ -1,5 +1,6 @@
 import { rethrowContinuation } from './bob-job-journal.ts'
 import type { ProjectWriter } from './project-write.ts'
+import { humanTextRejection } from './human-text.ts'
 import { parseBobImageIds } from '../../../src/domain/bobImages.ts'
 const str={type:'string'}
 function tool(name:string,description:string,properties:Record<string,unknown>){return {type:'function' as const,function:{name,description,parameters:{type:'object',additionalProperties:false,properties,required:Object.keys(properties)}}}}
@@ -49,6 +50,9 @@ export function createProjectImageTools(opts:{unlimitedWork?:boolean;projectId:s
   }
   if((!opts.unlimitedWork&&generated)||opts.writer.remaining<2)return {status:'budget_exhausted'}
   if(v.prompt.length>6000||v.title.length>200||!['proposal','instruction'].includes(v.purpose))return {status:'invalid'}
+  // The title is shown with the image; the prompt is for the image model.
+  const prose=humanTextRejection([['title',v.title]])
+  if(prose)return {status:'invalid',validation:{code:'human_text',fields:prose.fields},message:'No image generated. '+prose.message}
   // Removing the turn quota must not turn a retry or unfinished upload into a
   // second paid generation. Keep the saved identity and recover it explicitly.
   const requestKey=JSON.stringify([v.prompt,v.title,v.purpose,v.target_kind,v.target_id,referenceIds])

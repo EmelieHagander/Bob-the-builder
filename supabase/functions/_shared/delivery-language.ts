@@ -24,11 +24,13 @@ export function parseDeliveryLanguage(value:unknown):DeliveryLexicon|null{
 }
 
 /** An omitted notice lists verified receipts without claiming the whole request
- * complete. The caller, never the language model, selects the outcome. */
-export interface NoticeInput { notice?: DeliveryNotice; missing?: string[]; receipts?: ProjectWriteReceipt[]; detail?: string }
+ * complete. The caller, never the language model, selects the outcome. Owner
+ * text carries only the notice meaning, missing results and receipt labels:
+ * outcome codes and Bob's internal guidance stay in model-facing channels. */
+export interface NoticeInput { notice?: DeliveryNotice; missing?: string[]; receipts?: ProjectWriteReceipt[] }
 const receiptLabel=(r:ProjectWriteReceipt)=>r.label+(r.revision!==undefined?' · v'+r.revision:'')
 export function neutralDeliveryNotice(input: NoticeInput): string {
-  return [...(input.notice?['⚠']:[]), ...(input.missing??[]).map(x=>'○ '+x), ...(input.receipts??[]).map(r=>'✓ '+receiptLabel(r)),...(input.detail?[input.detail]:[])].join('\n')
+  return [...(input.notice?['⚠']:[]), ...(input.missing??[]).map(x=>'○ '+x), ...(input.receipts??[]).map(r=>'✓ '+receiptLabel(r))].join('\n')
 }
 export function createDeliveryLanguage(opts: {
   userId: string; message: string; context?: string; deadline?: number; hasAccess: () => Promise<boolean>;
@@ -36,7 +38,7 @@ export function createDeliveryLanguage(opts: {
 }) {
   let lexicon:DeliveryLexicon|null=null
   const fallback=(input:NoticeInput)=>lexicon?[...(input.notice?[lexicon[input.notice]]:[]),...(input.missing?.length?[lexicon.missing_label+'\n'+input.missing.map(x=>'• '+x).join('\n')]:[]),
-    ...(input.receipts?.length?[lexicon.saved_label+'\n'+input.receipts.map(r=>'• '+receiptLabel(r)).join('\n')]:[]),...(input.detail?[input.detail]:[])].join('\n\n'):neutralDeliveryNotice(input)
+    ...(input.receipts?.length?[lexicon.saved_label+'\n'+input.receipts.map(r=>'• '+receiptLabel(r)).join('\n')]:[])].join('\n\n'):neutralDeliveryNotice(input)
   const format=async (input: NoticeInput): Promise<string> => {
     // No provider is needed to retain receipts. During total provider failure,
     // use language-neutral status marks plus original record/request labels.
