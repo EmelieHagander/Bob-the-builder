@@ -25,8 +25,8 @@ exercised by a live Bob turn.**
 - **Hosted deploys:** read-only checks found no active Bob jobs before each.
   #332: `bob-worker` v138 / `ask-bob` v170 (06:55 UTC). #333: `bob-worker`
   v139 / `ask-bob` v171 (07:17 UTC); bundles contain `roomDimensionsVersion`
-  and `search_bob_project_data_v9`. Pages: run 378 (#331) succeeded; a run from
-  `1656f16` followed #333.
+  and `search_bob_project_data_v9`. Pages: run 378 (#331) and run 379 (#333, from
+  `1656f16`) succeeded.
 - **Barnrum classification (owner-approved):** `scripts/classify-barnrum-measurements.sql`
   (SHA-256 `b08f425b87df90116c867928bf4409f756ada621f0483601af9e31653eb338ee`)
   classified all 12 measurements and mirrored each onto its room snapshot.
