@@ -58,6 +58,7 @@ try {
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
     await context.route(api + '/**', async route => {
       const inboxPath = new URL(route.request().url()).pathname
+      if (inboxPath === '/rest/v1/rpc/read_construction_draft') return route.fulfill({status:200,json:{status:'ok',projectId:route.request().postDataJSON().p_project,items:[],truncated:false,next_cursor:null},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
       if (inboxPath === '/rest/v1/rpc/drawing_work_list') return route.fulfill({status:200,json:{items:[],next_cursor:null},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
       if (inboxPath === '/functions/v1/ask-bob' && route.request().method()==='POST' && route.request().postDataJSON()?.action==='renew_requests') return route.fulfill({status:200,json:{ok:true,renewed:0},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
 
@@ -70,6 +71,7 @@ try {
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
       if (method === 'OPTIONS') return respond({ status: 204 })
       if (path === '/rest/v1/rpc/project_plan_read') return respond({json:{record:request.postDataJSON().p_project==='A'?currentPlan:null}})
+      if (new URL(route.request().url()).pathname === '/rest/v1/rpc/read_project_work') return respond({json:{projectId:route.request().postDataJSON().p_project,records:[],truncated:false,next_cursor:null}})
       if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_work_read') return respond({json:{project_id:route.request().postDataJSON().p_project,vocabulary_version:'2026-09-24.1',status:'not_initialized',revision:null,focus_step_id:null,areas:[],steps:(currentPlan?.steps??[]).map(s=>({...s,area_id:null,phase:'build',responsible_kind:'bob',responsible_person_id:null,tasks:s.tasks??[],related_tasks:[],requirements:[]})),unorganised_tasks:[]}})
       if (path === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture-refresh', token_type: 'bearer', expires_in: 3600, expires_at: expiry, user } })
       if (path === '/auth/v1/user') return respond({ json: user })
@@ -540,6 +542,11 @@ try {
     await page.getByText('No active alternatives in this selection.', { exact: true }).waitFor()
     await page.getByText('No target selected for the Project. Add alternatives, then choose one version for this scope.', { exact: true }).waitFor()
     assert.equal(await page.getByRole('article', { name: 'Keep the porch', exact: true }).count(), 0)
+    await page.goto(base + '#/build-lists')
+    await page.getByRole('heading', { name: 'Kaplista & inköp', exact: true }).waitFor()
+    await page.getByText('Ingen aktiv, sparad konstruktion hittades i detta område.', { exact: false }).waitFor()
+    await page.getByRole('heading', { name: 'Material & inköp', exact: true }).waitFor()
+    assert.equal(await page.getByRole('link', { name: 'Inköpslista', exact: true }).count(), 1)
     await page.goto(base + '#/artifacts')
     await page.getByText('No active drawings in this selection.', { exact: true }).waitFor()
     await page.getByText('Choose a target for Project before creating a plan or drawing.', { exact: true }).waitFor()

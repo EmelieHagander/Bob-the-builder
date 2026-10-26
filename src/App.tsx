@@ -17,6 +17,7 @@ const ProjectFacts = lazy(() => import('./pages/ProjectFacts').then(module => ({
 const Solutions = lazy(() => import('./pages/Solutions').then(module => ({ default: module.Solutions })))
 const Artifacts = lazy(() => import('./pages/Artifacts').then(module => ({ default: module.Artifacts })))
 const MaterialPlan = lazy(() => import('./pages/MaterialPlan').then(module => ({ default: module.MaterialPlan })))
+const BuildPreparation = lazy(() => import('./pages/BuildPreparation').then(module => ({ default: module.BuildPreparation })))
 const BuildingContext = lazy(() => import('./pages/BuildingContext').then(module => ({ default: module.BuildingContext })))
 const People = lazy(() => import('./pages/People').then(module => ({ default: module.People })))
 const Events = lazy(() => import('./pages/Events').then(module => ({ default: module.Events })))
@@ -119,6 +120,7 @@ function ProjectApp() {
         <Route path="/solutions" element={<Solutions />} />
         <Route path="/artifacts" element={<Artifacts />} />
         <Route path="/material-plan" element={<MaterialPlan />} />
+        <Route path="/build-lists" element={<BuildPreparation />} />
         <Route path="/building" element={<BuildingContext projectId={project.id} context={db.buildingContext} />} />
         <Route path="/people" element={<People />} />
         <Route path="/events" element={<Events />} />

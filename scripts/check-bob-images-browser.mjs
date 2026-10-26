@@ -76,6 +76,7 @@ try{
       }
       if(url.pathname==='/rest/v1/rpc/bob_chat_inbox')return respond({json:null})
       if(url.pathname==='/rest/v1/rpc/bob_mark_chat_read')return respond({json:null})
+      if (url.pathname === '/rest/v1/rpc/read_construction_draft') return respond({json:{status:'ok',projectId:route.request().postDataJSON().p_project,items:[],truncated:false,next_cursor:null}})
       if(url.pathname==='/rest/v1/rpc/project_work_read')return respond({json:{project_id:body().p_project,vocabulary_version:'2026-09-24.1',status:'not_initialized',revision:null,focus_step_id:null,areas:[],steps:[],unorganised_tasks:[]}})
       if(url.pathname==='/rest/v1/rpc/project_plan_read')return respond({json:{record:null}})
       if(url.pathname==='/rest/v1/rpc/drawing_work_list')return respond({json:{items:[],next_cursor:null}})

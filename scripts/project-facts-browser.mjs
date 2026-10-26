@@ -66,6 +66,7 @@ export function createFactsFixture(timestamp, assets) {
       if (eq('area_id')) rows = rows.filter(r => r.area_id === eq('area_id'))
       if (eq('component_id')) rows = rows.filter(r => r.component_id === eq('component_id'))
       if (eq('archived')) rows = rows.filter(r => r.archived === (eq('archived') === 'true'))
+      if (eq('required')) rows = rows.filter(r => Boolean(r.required) === (eq('required') === 'true'))
       if (url.searchParams.has('truth')) rows = rows.filter(r => ['unknown', 'estimated'].includes(r.truth))
       rows.sort((a, b) => isHistory ? b.revision - a.revision : b.recorded_at.localeCompare(a.recorded_at) || a.id.localeCompare(b.id))
       if (eq('id')) await respond({ json: rows[0] ?? null })
@@ -98,7 +99,7 @@ export async function verifyFactsBrowser(page, base, fixture, width) {
   // The home Dashboard is the fast planning path: the saved unknown must surface
   // as the next step and drill directly into the To measure selection.
   await page.goto(base+'#/project')
-  const nextStep = page.getByRole('link').filter({ hasText: 'Measure 1 missing dimension' })
+  const nextStep = page.getByRole('link').filter({ hasText: '1 mått behöver kontrolleras' })
   await nextStep.getByText('Opening width', { exact: false }).waitFor()
   const missingCard = page.getByRole('region', { name: 'Planning next steps' })
   await missingCard.getByText('Still missing', { exact: true }).waitFor()
