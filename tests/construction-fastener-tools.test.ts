@@ -130,10 +130,11 @@ test('the latest catalog says fastener and glue needs are exact; the publication
  const publication='supabase/migrations/20261026190500_ai_exact_fasteners_catalog.sql'
  assert.match(execFileSync(process.execPath,['--import','tsx','scripts/build-ai-exact-fasteners-catalog.ts',publication,'--check'],{encoding:'utf8'}),/matches its builder/)
 
- // The SQL publication against the full schema: one new derive version equal to
- // the fixture, every other definition unchanged, older manifests intact, re-run a no-op.
+ // Compare the full schema at this publication's boundary; later publications
+ // may legitimately revise other definitions. Older manifests stay intact.
  let prior:any
- const pg=await projectSchema(async(db,name)=>{if(name==='20261026190500_ai_exact_fasteners_catalog.sql')prior=((await db.query("select shared.resolve_ai_catalog('bob',null) m")).rows[0] as any).m})
+ const migration=publication.split('/').at(-1)!
+ const pg=await projectSchema(async(db,name)=>{if(name===migration)prior=((await db.query("select shared.resolve_ai_catalog('bob',null) m")).rows[0] as any).m},migration)
  t.after(()=>pg.close())
  const published=((await pg.query("select shared.resolve_ai_catalog('bob',null) m")).rows[0] as any).m
  const byKey=(m:any)=>new Map<string,any>(m.definitions.map((row:any)=>[row.prompt_key,row]))
