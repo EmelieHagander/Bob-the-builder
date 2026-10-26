@@ -9,6 +9,8 @@ import { createConstructionTools } from '../supabase/functions/_shared/construct
 import { createProjectImageTools } from '../supabase/functions/_shared/project-image-tools.ts'
 import { createOperationalReader, recordLabel } from '../supabase/functions/_shared/project-operations.ts'
 import type { ProjectSource } from '../src/data/provenance.ts'
+import { conceptFixture } from './support/solution-concept-fixtures.ts'
+import { parseDesignIntent } from '../supabase/functions/_shared/project-design-intent.ts'
 
 const id = '3f2a9c1e-4b5d-4c3a-9e8f-1a2b3c4d5e6f'
 const kinds = (text: string) => humanTextIssues(text).map(i => i.kind)
@@ -69,7 +71,9 @@ test('the rejection names fields and kinds, shows the fragments and suggests no 
   assert.doesNotMatch(rejection.message, /e\.g\.|for example|such as|like "|t\.ex/i)
 })
 
-test('every human prose path names a field the write tool offers', () => {
+test('every human prose path names an offered field or a bounded Solution model field', () => {
+  const concept = { design_intent: conceptFixture('barn') }
+  assert(parseDesignIntent(concept.design_intent))
   const offered = (schema: any, path: string[]): boolean => {
     if (!path.length) return true
     if (schema?.anyOf) return schema.anyOf.some((s: any) => offered(s, path))
@@ -81,7 +85,13 @@ test('every human prose path names a field the write tool offers', () => {
   for (const [name, paths] of Object.entries(WRITE_TOOL_PROSE)) {
     const tool = WRITE_TOOLS.find(t => t.function.name === name)
     assert(tool, name)
-    for (const path of paths) assert(offered(tool.function.parameters, path.split('.')), name + ' ' + path)
+    for (const path of paths) {
+      // Models use the existing JSON edit seam, not the legacy creation schema.
+      // The shared prose guard must still cover their persisted text fields.
+      if (name === 'save_project_solution' && path.startsWith('design_intent.model.')) {
+        assert(proseFields(concept, [path]).length > 0, name + ' ' + path)
+      } else assert(offered(tool.function.parameters, path.split('.')), name + ' ' + path)
+    }
   }
 })
 
@@ -94,6 +104,29 @@ function writerFixture(reply: (payload: WritePayload) => unknown = p => receipt(
     async () => ({ data: [], error: null }), async () => ({ data: { generation: 2, receipts: [] }, error: null }), { unlimitedWork: true })
   return { writer, sent }
 }
+
+test('every concept prose field rejects internal codes through whole-model edits; typed model IDs remain valid', async () => {
+  const intent = conceptFixture('barn'), { model, ...withoutModel } = intent
+  const record = { id: 'sol1', revision: 1, title: 'Barn', description: 'Concept', assumptions: '', tradeoffs: '', source_media_id: null, design_intent: withoutModel }
+  const { writer, sent } = writerFixture(() => ({ ...receipt('solutions', 'sol1', 'Barn', { ...record, revision: 2, design_intent: intent }), revision: 2, related_receipts: [] }))
+  const snapshot: EditSnapshot = { project_id: 'A', key: 'sol1', resource: 'solutions', scope_label: 'Project', record, measurements: [], target: null }
+  const edits = createProjectEdits({ projectId: 'A', writer, hasAccess: async () => true, unlimitedWork: true, read: async () => ({ data: [snapshot], error: null }) })
+  const [{ edit_ref }] = (await edits.execute('read_project_edit_context', { resource: 'solutions', query: null, next_ref: null })).entries
+  const save = (value: unknown) => edits.execute('edit_project_record', { edit_ref, changes: [{ op: 'set', path: '/design_intent/model', value_json: JSON.stringify(value) }], reason: 'Owner requested a concept', request_quote: 'Spara uppgiften' })
+  const paths = WRITE_TOOL_PROSE.save_project_solution.filter(path => path.startsWith('design_intent.model.'))
+  for (const [path] of proseFields({ design_intent: intent }, paths)) {
+    const changed: any = structuredClone(model), keys = path.split('.').slice(2)
+    let parent = changed
+    for (const key of keys.slice(0, -1)) parent = parent[key]
+    parent[keys.at(-1)!] = 'needs_data'
+    const rejected = await save(changed)
+    assert.equal(rejected.status, 'invalid', path)
+    assert.deepEqual(rejected.validation, { code: 'human_text', fields: [path] }, path)
+  }
+  assert.equal(sent.length, 0)
+  assert.equal((await save(model)).status, 'saved')
+  assert.equal(sent.length, 1, 'typed IDs and plain descriptions are accepted')
+})
 
 test('legacy writes reject prose with IDs or codes as invalid with no write, and save clean text', async () => {
   const { writer, sent } = writerFixture()
