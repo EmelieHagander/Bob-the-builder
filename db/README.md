@@ -1503,7 +1503,7 @@ the new methods either way. Rollback: rename the previous cad body back,
 recreate the manual wrapper from `20261005173845`, reverse the two guarded
 replacements, then drop the table and helpers.
 
-**Exact counts — source and isolated tests; not applied.** Owner decision
+**Exact counts — applied 2026-10-26 (PR #339, ledger `20261026132718`).** Owner decision
 2026-10-26: fastener and glue needs show the exact schedule count, without
 waste ([material owner](../Docs/material-planning.md#exact-counts-without-waste--owner-decision-2026-10-26)).
 `20261026190000_exact_fastener_needs.sql` makes two guarded replaces from the
@@ -1523,7 +1523,7 @@ replaces of both snippets.
 
 ### Project facts reader — 2026-10-26
 
-**Source and isolated tests; not applied.** Owner decision and product contract:
+**Applied 2026-10-26 (PR #339, ledger `20261026132719`).** Owner decision and product contract:
 [project facts at turn start](../Docs/ask-bob-context.md#owner-decision--2026-10-26-project-facts-at-turn-start).
 `20261026200000_project_facts.sql` stops unless the stored source status, room
 dimensions and fastener migrations are installed, then adds:

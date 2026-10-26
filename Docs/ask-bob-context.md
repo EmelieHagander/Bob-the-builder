@@ -41,7 +41,7 @@ for the immutable source, runtime readback and remaining model-acceptance bounda
 
 ### Owner decision — 2026-10-26: project facts at turn start
 
-**Approved by the owner; source in progress, not deployed.** Read-only
+**Live: merged in PR #339, applied and deployed 2026-10-26 ([evidence](foundation-verification.md#project-facts-exact-fasteners-and-drawings-without-fasteners--2026-10-26)); not yet exercised by a live Bob turn.** Read-only
 production metrics, 2026-10-25 13:00 to 2026-10-26 11:45: 30 turns had a
 median of 127 s, 5 main model calls and 7.6 tool calls. 6.2 of those calls
 were reads. Almost every turn opened with 2–16 `search_project_data` /

@@ -341,7 +341,7 @@ Needs must be current, unarchived, share the article content unit, have current 
 **Status: merged in PR #337, applied and deployed 2026-10-26** (migration
 `20261026172000`, [evidence](foundation-verification.md#joint-fasteners--2026-10-26));
 not yet exercised by a live Bob turn. The [exact-count rule](#exact-counts-without-waste--owner-decision-2026-10-26)
-below is source only, not yet applied or deployed.
+below is live since PR #339 (2026-10-26).
 Owner decisions 2026-10-26 ([joint fasteners](artifacts.md#joint-fasteners--owner-decisions-2026-10-26)):
 screws, nails and bolts reach the material list and Shopping as quantities
 grouped by kind and size; glue is **one package per construction**. Quantities
@@ -393,7 +393,7 @@ lists the schema and functions.
 
 ### Exact counts without waste — owner decision 2026-10-26
 
-**Status: source and isolated tests; not yet applied or deployed.** Owner:
+**Status: merged in PR #339, applied and deployed 2026-10-26 ([evidence](foundation-verification.md#project-facts-exact-fasteners-and-drawings-without-fasteners--2026-10-26)); not yet exercised by a live Bob turn.** Owner:
 "show the exact count, not with waste; Bob may recommend extra for waste, but
 the numbers must be exact."
 

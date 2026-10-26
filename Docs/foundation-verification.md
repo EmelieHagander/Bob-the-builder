@@ -1,5 +1,56 @@
 # Foundation verification and rollout
 
+## Project facts, exact fasteners and drawings without fasteners — 2026-10-26
+
+**PR #339 (`e3b13e2`) is merged, applied and deployed (13:27–13:30 UTC); not
+yet exercised by a live Bob turn.** Contracts:
+[project facts at turn start](ask-bob-context.md#owner-decision--2026-10-26-project-facts-at-turn-start),
+[compact construction table](artifacts.md#compact-construction-table--owner-decision-2026-10-26),
+[exact counts](material-planning.md#exact-counts-without-waste--owner-decision-2026-10-26),
+[dormant drawing schedule](cad-adapter.md#fastener-schedule-on-drawings--annotations-version-2-2026-10-26).
+
+- **Baseline to compare against.** Read-only metrics, 2026-10-25 13:00 to
+  2026-10-26 11:45:
+  - 30 turns: median 127 s, 5 main model calls, 7.6 tool calls, 6.2 of them
+    reads, USD 0.25 a turn.
+  - Almost every turn opened with 2–16 of Bob's own searches, and a third of
+    the searches returned nothing.
+  - Construction turns averaged 16 construction page reads.
+- **Local evidence:** 1,209 tests across the 166 test files that touch the
+  changed modules, the catalog fixture or the project schema, with 0 failures.
+  The app typecheck is clean, and both catalog builders pass `--check`.
+- **Rollback-only runs on hosted data before release:**
+  - All three migrations applied, and both guarded replaces matched the
+    installed bodies.
+  - The publication changed exactly one tool.
+  - `read_project_facts` on Barnrum took 1.5 s cold and 0.8 s warm and
+    returned 2,064 characters.
+  - That run found the room-level link (`rooms_only`), which was fixed before
+    merge.
+- **Hosted application (managed ledger, from `main`):**
+  - `20261026132718_exact_fastener_needs` (file `20261026190000`, SHA-256
+    `67e80f77de923b637ebcae2345f0b5b705c91d3017a4dd6d7f474dff84d80e12`)
+  - `20261026132719_project_facts` (file `20261026200000`,
+    `3359a78488e8b84f25e2cef7f18b15a5ab8c8dacb06f9bf8cb505bac29846966`)
+  - `20261026132805_ai_exact_fasteners_catalog` (file `20261026190500`,
+    `95b17790fcda0b8fd21b01b6b7b0a952da43a174129485ffb385502fa9ce7d22`)
+- **Readback:**
+  - The fastener command carries `fastener_quantity_exact`.
+  - `bob.read_project_facts` exists, and `anon` cannot execute it.
+  - `tools.derive_cad_material_requirement` v5 is active with
+    `exact-fasteners-v1`.
+- **Hosted deploys:**
+  - Read-only checks found no active Bob jobs before each deploy.
+  - `bob-worker` v142 and `ask-bob` v174 are live. Both bundles contain
+    `read_project_facts`, `projectFactsVersion`, `constructionTable` and
+    `fastener_quantity_exact`, and neither contains `readConstructionFasteners`.
+  - Pages run 382 succeeded.
+  - The CAD worker was not redeployed and is dormant for version 2.
+- **Not verified here:**
+  - Live turn metrics after the release.
+  - A Bob turn that reads the table, or that is refused for waste.
+  - The app on a phone.
+
 ## Joint fasteners — 2026-10-26
 
 **PR #337 (`6190984`) is merged, applied and deployed (11:44–11:51 UTC); not
