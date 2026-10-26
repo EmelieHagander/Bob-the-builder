@@ -1502,3 +1502,55 @@ pack purchase versus blank guards, and access. Rollout: apply; the app labels
 the new methods either way. Rollback: rename the previous cad body back,
 recreate the manual wrapper from `20261005173845`, reverse the two guarded
 replacements, then drop the table and helpers.
+
+### Project facts reader — 2026-10-26
+
+**Source and isolated tests; not applied.** Owner decision and product contract:
+[project facts at turn start](../Docs/ask-bob-context.md#owner-decision--2026-10-26-project-facts-at-turn-start).
+`20261026200000_project_facts.sql` stops unless the stored source status, room
+dimensions and fastener migrations are installed, then adds:
+
+- `bob.read_project_facts(project)`: plpgsql, `stable`, security invoker,
+  empty search path; `project_denied` (`42501`) first unless the caller has
+  project access. Executable by `authenticated` only. Every read runs as the
+  caller under row security. Output `version: 1`; every list carries `total`,
+  `included`, `omitted` and `items`:
+  - **rooms** (24): `project_spaces` rooms with length, width and ceiling height
+    from `bob.project_room_dimensions` (status, truth, millimetres, conflicting
+    values), marked rooms first. `not_linked` without a whole-Building or
+    covering Site link, unlike a linked Building without rooms.
+  - **constructions** (8, newest first): head revision of each current
+    construction Artifact; definition, part, joint and open-question counts,
+    roles from `artifact_construction_instance_policies` (missing policy: every
+    part unknown) and fastener totals from
+    `bob_private.construction_fastener_schedule_for`, run for included rows only.
+  - **drawings** (8): current CAD Artifacts, their typed construction pin
+    (`artifact_construction_drawings`) and `source_status`; `other_artifacts`
+    counts current Artifacts that are neither.
+  - **drawing_requests** (5): open requests (not `saved`/`cancelled`) with
+    their blocking gap count.
+  - **materials**: current needs by Shopping state, `changed`,
+    `changed_unknown`, fastener and glue needs and `shopping_published`. Routes
+    as the publish guards define them: a requirement link to an existing
+    Shopping row, a published pack purchase, or a published cut plan.
+- `bob_private.project_facts_drawing_requests(project)`: security definer, the
+  same access check, executable by `authenticated` only; reads the private
+  request and gap tables and returns request ID, status, update time and
+  blocking gaps.
+
+**Never a live source assessment.** `artifact_source_status`, and therefore
+`current_drawing_overview` and `drawing_request_work`, run
+`artifact_source_assessment` for every row without a fresh stored state: always
+in a project whose status is never stored (physical pins, multifloor/stair
+studies, another project's private catalog item), otherwise for up to 30 s
+after any change to the project's inputs.
+`current_material_requirements.artifact_changed` runs it for every need on a
+construction revision. The reader takes the source status only from
+`artifact_source_states` whose `computed_seq` equals the project's counter
+(`not_stored` otherwise, `not_assessed` for a stored null) and never reads
+`artifact_changed`; a construction need without a fresh stored state counts as
+`changed_unknown`. No money, model or chat text, email, diet, Auth or person
+fields. `tests/project-facts-sql.test.ts` replaces the assessment with a
+tripwire, checks that those views fail on the fixture and that the reader
+returns the same facts. Rollout: apply; nothing reads it until the Bob runtime
+calls it. Rollback: drop both functions.
