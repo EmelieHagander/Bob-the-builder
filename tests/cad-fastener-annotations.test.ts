@@ -69,6 +69,6 @@ test('a drawing publishes annotations v2 only with the exact fastener schedule o
 test('the installed validator carries the guarded version 2 check exactly once',async t=>{
  const pg=await projectSchema();t.after(()=>pg.close())
  const def=(await pg.query(`select pg_get_functiondef('bob_private.validate_cad_construction_source()'::regprocedure) d`)).rows[0].d as string
- assert.equal(def.split('bob_private.construction_fastener_schedule(source.recipe,source.joints)').length,2)
+ assert.equal(def.split('bob_private.construction_fastener_schedule_for(source)').length,2)
  assert.doesNotMatch(def,/'version' is distinct from '1'::jsonb or new\.manifest/)
 })

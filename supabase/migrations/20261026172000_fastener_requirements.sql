@@ -118,7 +118,7 @@ begin
  select s.source_state into state from bob_private.artifact_source_assessment(p_project,source.artifact_id,source.artifact_revision) s;
  if state is distinct from 'current' then raise exception 'construction_source_changed' using errcode='PT409'; end if;
 
- schedule:=bob_private.construction_fastener_schedule(source.recipe,source.joints);
+ schedule:=bob_private.construction_fastener_schedule_for(source);
  if mode='glue' then
   v_kind:='glue';
   -- Owner decision 2026-10-26: one glue package per construction.
@@ -261,7 +261,7 @@ begin
  select * into q from bob.material_requirement_revisions where project_id=p_project and requirement_id=p_requirement and revision=p_revision;
  select * into src from bob.artifact_construction_revisions where project_id=p_project and artifact_id=p_artifact and artifact_revision=p_to;
  if not found then raise exception 'construction_changed' using errcode='PT409'; end if;
- schedule:=bob_private.construction_fastener_schedule(src.recipe,src.joints);
+ schedule:=bob_private.construction_fastener_schedule_for(src);
  if f.kind='glue' then n:=case when coalesce((schedule->>'glue_packages')::integer,0)>0 then 1 else 0 end;
  else
   select (t->>'count')::integer into n from jsonb_array_elements(schedule->'totals') t

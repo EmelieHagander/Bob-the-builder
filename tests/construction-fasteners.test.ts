@@ -63,6 +63,32 @@ test('a Bob override replaces the rule, keeps the rule proposal visible and spre
  assert.equal(unset.joints[0].source,'rule')
 })
 
+test('two existing parts get no new fastener unless Bob chooses one; new-to-existing keeps the rule',async t=>{
+ const pg=await projectSchema();t.after(()=>pg.close())
+ // An already built wall corner, plus a new 45 mm cleat screwed to one of the walls.
+ const recipe={definitions:[box('wall',95,1000,2400),box('wall2',1000,95,2400),box('cleat',45,300,45)],
+  instances:[at('w1','wall'),at('w2','wall2',95,0),at('s','cleat',95,200,1200)]}
+ const role=(instance_id:string,r:string)=>({instance_id,role:r,quantity_policy:r==='existing_part'?'retain':'manufacture',reason:'Fixture'})
+ const policy={version:1,instances:[role('w1','existing_part'),role('w2','existing_part'),role('s','build_part')]}
+ const joints=[joint('walls','screwed_butt',['w1','x_max'],['w2','x_min']),joint('shelf','screwed_butt',['w1','x_max'],['s','x_min']),
+  joint('walls_glued','glued_butt',['w1','x_max'],['w2','x_min'])]
+ const run=async(js:unknown,p:unknown)=>(await pg.query('select bob_private.construction_fastener_schedule($1::jsonb,$2::jsonb,$3::jsonb) s',[JSON.stringify(recipe),JSON.stringify(js),JSON.stringify(p)])).rows[0].s
+ const s=await run(joints,policy)
+ const by=Object.fromEntries(s.joints.map((j:any)=>[j.joint_id,j]))
+ assert.equal(by.walls.source,'existing');assert.equal(by.walls.kind,null);assert.equal(by.walls.count,null);assert.deepEqual(by.walls.gaps,[])
+ assert.equal(by.walls_glued.source,'existing');assert.equal(s.glue_packages,0)
+ assert.equal(by.shelf.source,'rule');assert.equal(by.shelf.kind,'screw');assert.equal(by.shelf.length_mm,120);assert.equal(by.shelf.count,3)
+ assert.deepEqual(s.totals.map((r:any)=>r.joint_ids),[['shelf']])
+ assert.equal(s.complete,true)
+ // Bob's explicit choice still applies between existing parts.
+ const bolt={kind:'bolt',diameter_mm:10,length_mm:180,count:2,spacing_mm:null,reason:'Tie the two walls'}
+ const chosen=await run([joint('walls','screwed_butt',['w1','x_max'],['w2','x_min'],{fastener:bolt})],policy)
+ assert.equal(chosen.joints[0].source,'override');assert.deepEqual(chosen.totals.map((r:any)=>[r.kind,r.count]),[['bolt',2]])
+ // Without a policy (or with unknown roles) the rule applies as before.
+ assert.equal((await run(joints,null)).joints[0].source,'rule')
+ assert.equal((await run(joints,{version:1,instances:[role('w1','existing_part'),{...role('w2','unknown'),quantity_policy:'unknown'}]})).joints[0].source,'rule')
+})
+
 // Independent world boxes from the shared CAD frame convention.
 function worldBoxes(recipe:any){
  const defs=new Map(recipe.definitions.map((d:any)=>[d.id,d])),out=new Map<string,{min:number[];max:number[]}>()
@@ -160,5 +186,14 @@ test('read_construction_fasteners serves members of the project only',async t=>{
  const mine=await read(owner)
  assert.equal(mine.status,'ok');assert.equal(mine.revision,1);assert.equal(mine.joints[0].count,3)
  assert.equal((await read(owner,7)).status,'not_found')
+ // The saved revision's instance policy is applied: both parts existing -> no new fastener.
+ await pg.query("set session_replication_role=replica")
+ await pg.query(`insert into bob.artifact_construction_revisions(project_id,artifact_id,artifact_revision,recipe,parameters,materials,joints,open_questions)
+  values($1,$2,2,$3,'{}','[]',$4,'[]')`,[project,artifact,JSON.stringify(recipe),JSON.stringify([joint('j','screwed_butt',['g','x_max'],['s','x_min'])])])
+ await pg.query('insert into bob.artifact_construction_instance_policies values($1,$2,2,$3)',[project,artifact,JSON.stringify({version:1,instances:[
+  {instance_id:'g',role:'existing_part',quantity_policy:'retain',reason:'Built'},{instance_id:'s',role:'existing_part',quantity_policy:'retain',reason:'Built'}]})])
+ await pg.query("set session_replication_role=origin")
+ const built=await read(owner,2)
+ assert.equal(built.joints[0].source,'existing');assert.deepEqual(built.totals,[])
  await assert.rejects(read(outsider),/project_denied/)
 })

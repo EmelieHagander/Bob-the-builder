@@ -9,8 +9,8 @@
 -- Publication accepts:
 --  * version 1 without a schedule, exactly as before;
 --  * version 2 only when annotations.fasteners equals
---    bob_private.construction_fastener_schedule of the pinned construction
---    revision, so a drawing cannot carry an edited or another revision's
+--    bob_private.construction_fastener_schedule_for the pinned construction
+--    revision (with its instance policy), so a drawing cannot carry an edited or another revision's
 --    schedule.
 -- Saved drawings stay valid. Archive/restore copies keep their exemption: the
 -- validator returns before this check for an exact lifecycle copy.
@@ -28,7 +28,7 @@ declare fn regprocedure:='bob_private.validate_cad_construction_source()'::regpr
  old_check constant text:=$q$new.manifest->'annotations'->'version' is distinct from '1'::jsonb or new.manifest->'annotations'->>'coverage' is distinct from 'complete'$q$;
  new_check constant text:=$q$(case new.manifest->'annotations'->'version'
    when '1'::jsonb then new.manifest->'annotations' ? 'fasteners'
-   when '2'::jsonb then new.manifest->'annotations'->'fasteners' is distinct from bob_private.construction_fastener_schedule(source.recipe,source.joints)
+   when '2'::jsonb then new.manifest->'annotations'->'fasteners' is distinct from bob_private.construction_fastener_schedule_for(source)
    else true end) or new.manifest->'annotations'->>'coverage' is distinct from 'complete'$q$;
 begin
  def:=pg_get_functiondef(fn);

@@ -15,12 +15,17 @@
 --  * dowel, bolted, unresolved -> no rule.
 -- A joint may carry an optional "fastener" override chosen by Bob (for example
 -- nails); a missing override count is spread by the same spacing rule.
+-- A joint between two existing parts (instance role existing_part, e.g. two
+-- walls of an already built room) gets no new fastener unless Bob chose one.
 -- This is a concept proposal from rules of thumb, not a strength calculation.
 --
 -- 1. bob_private.valid_joint_fastener validates an override.
 -- 2. bob_private.check_construction accepts 5-key joints and 6-key joints with
 --    a valid fastener (recreated from its installed body).
--- 3. bob_private.construction_fastener_schedule(recipe, joints) is the pure rule.
+-- 3. bob_private.construction_fastener_schedule(recipe, joints, policy) is the
+--    pure rule; construction_fastener_schedule_for(revision row) adds the
+--    revision's instance policy. Every reader, drawing check and material need
+--    uses the latter.
 -- 4. bob.read_construction_fasteners reads it for one saved revision.
 -- Existing constructions and drawings stay valid; nothing is stored.
 begin;
@@ -57,7 +62,7 @@ begin
 end $$;
 
 -- Pure rule: the same answer for the same saved recipe and joints.
-create function bob_private.construction_fastener_schedule(p_recipe jsonb,p_joints jsonb) returns jsonb
+create function bob_private.construction_fastener_schedule(p_recipe jsonb,p_joints jsonb,p_policy jsonb default null) returns jsonb
 language plpgsql immutable set search_path='' as $$
 declare
  standard constant numeric[]:=array[16,20,25,30,35,40,45,50,55,60,70,80,90,100,120,140,160,180,200];
@@ -68,8 +73,9 @@ declare
  ta numeric; tb numeric; t numeric; embed numeric; through text; ov numeric[]; lc numeric; wc numeric;
  d numeric; len numeric; lmax numeric; e numeric; n integer; spacing numeric; gaps text[];
  kind text; source text; proposal jsonb; rows jsonb:='[]'; mech jsonb; glue integer:=0; complete boolean:=true;
- method text; passes integer;
+ method text; passes integer; existing text[]:='{}'; pair boolean;
 begin
+ existing:=array(select x->>'instance_id' from jsonb_array_elements(case when jsonb_typeof(p_policy->'instances')='array' then p_policy->'instances' else '[]' end) x where x->>'role'='existing_part');
  for def in select value from jsonb_array_elements(coalesce(p_recipe->'definitions','[]')) loop
   defs:=defs||jsonb_build_object(def->>'id',def);
  end loop;
@@ -135,6 +141,14 @@ begin
   elsif method<>'screwed_butt' then gaps:=gaps||'no_rule_for_method'::text;
   end if;
   o:=j->'fastener';
+  -- Two existing parts are already joined: no new fastener unless chosen.
+  pair:=(j->'first'->>'instance_id')=any(existing) and (j->'second'->>'instance_id')=any(existing);
+  if pair and jsonb_typeof(o) is distinct from 'object' then
+   rows:=rows||jsonb_build_array(jsonb_build_object('joint_id',j->>'id','method',method,'source','existing','kind',null,
+    'diameter_mm',null,'length_mm',null,'count',null,'spacing_mm',null,'through_instance_id',null,'through_mm',null,'embed_mm',null,
+    'contact_length_mm',lc,'contact_width_mm',wc,'proposal',null,'gaps','[]'::jsonb));
+   continue;
+  end if;
   source:=case when jsonb_typeof(o)='object' then 'override' when kind is not null then 'rule' else 'no_rule' end;
   -- The rule's own answer stays visible next to an override.
   passes:=case when source='override' then 2 else 1 end;
@@ -169,8 +183,17 @@ begin
   group by 1,2,3) x;
  return jsonb_build_object('rule_version','fastener-rules-v1','complete',complete,'joints',rows,'totals',mech,'glue_packages',glue);
 end $$;
-revoke all on function bob_private.construction_fastener_schedule(jsonb,jsonb) from public,anon,service_role;
-grant execute on function bob_private.construction_fastener_schedule(jsonb,jsonb) to authenticated;
+revoke all on function bob_private.construction_fastener_schedule(jsonb,jsonb,jsonb) from public,anon,service_role;
+grant execute on function bob_private.construction_fastener_schedule(jsonb,jsonb,jsonb) to authenticated;
+
+-- The schedule of one saved revision with its own instance policy.
+create function bob_private.construction_fastener_schedule_for(c bob.artifact_construction_revisions) returns jsonb
+language sql stable security invoker set search_path='' as $$
+ select bob_private.construction_fastener_schedule(c.recipe,c.joints,(select p.policy from bob.artifact_construction_instance_policies p
+  where p.project_id=c.project_id and p.artifact_id=c.artifact_id and p.artifact_revision=c.artifact_revision))
+$$;
+revoke all on function bob_private.construction_fastener_schedule_for(bob.artifact_construction_revisions) from public,anon,service_role;
+grant execute on function bob_private.construction_fastener_schedule_for(bob.artifact_construction_revisions) to authenticated;
 
 -- One saved construction revision; current revision when p_revision is null.
 create function bob.read_construction_fasteners(p_project text,p_artifact uuid,p_revision integer default null) returns jsonb
@@ -182,7 +205,7 @@ begin
  where r.project_id=p_project and r.artifact_id=p_artifact and r.artifact_revision=coalesce(p_revision,a.current_revision);
  if not found then return jsonb_build_object('status','not_found'); end if;
  return jsonb_build_object('status','ok','project_id',p_project,'artifact_id',p_artifact,'revision',c.artifact_revision)
-  ||bob_private.construction_fastener_schedule(c.recipe,c.joints);
+  ||bob_private.construction_fastener_schedule_for(c);
 end $$;
 revoke all on function bob.read_construction_fasteners(text,uuid,integer) from public,anon,service_role;
 grant execute on function bob.read_construction_fasteners(text,uuid,integer) to authenticated;

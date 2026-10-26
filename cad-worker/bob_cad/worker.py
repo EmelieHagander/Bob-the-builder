@@ -197,7 +197,7 @@ def validate_fasteners(raw:Any)->dict[str,Any]:
     ids=set()
     for j in raw["joints"]:
         if (not isinstance(j,dict) or set(j)!=FASTENER_JOINT_FIELDS or not _text(j["joint_id"]) or j["joint_id"] in ids
-            or j["source"] not in ("rule","override","no_rule") or j["kind"] not in (None,"screw","nail","bolt","glue","none")
+            or j["source"] not in ("rule","override","no_rule","existing") or j["kind"] not in (None,"screw","nail","bolt","glue","none")
             or any(j[k] is not None and not _text(j[k]) for k in ("method","through_instance_id"))
             or (j["proposal"] is not None and not isinstance(j["proposal"],dict))
             or not isinstance(j["gaps"],list) or len(j["gaps"])>16 or any(not _text(g,80) for g in j["gaps"])): raise CadContractError("fastener_joint")

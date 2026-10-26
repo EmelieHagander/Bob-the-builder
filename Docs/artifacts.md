@@ -91,7 +91,7 @@ Generic Artifact revisions and older CAD saves cannot discard the construction c
 separates source from hosted application.
 
 Every joint gets a fastener **proposal** from fixed rules, not from a model.
-`bob_private.construction_fastener_schedule(recipe, joints)` (`fastener-rules-v1`)
+`bob_private.construction_fastener_schedule(recipe, joints, policy)` (`fastener-rules-v1`)
 reads the saved geometry with the CAD frame convention: uncut boxes at
 right-angle rotations, the same faces as the K2 checker. Nothing is stored, so
 every saved construction, including historical ones, has a schedule.
@@ -110,12 +110,21 @@ every saved construction, including historical ones, has a schedule.
 - **`glued_butt` → glue.** One glue package per construction goes to the
   material list.
 - **`dowel`, `bolted`, `unresolved`** have no rule (`no_rule_for_method`).
+- **Existing to existing → nothing new.** When the revision's instance policy
+  gives both parts the role `existing_part` (for example two walls of a room
+  that is already built), the joint gets `source: existing` and no fastener,
+  glue or count. It does not lower `complete`. A joint from a new part to an
+  existing one keeps the rule. Without a policy, or with `unknown` roles, the
+  rule applies.
 - **Override.** A joint may carry an optional `fastener`
   `{kind: screw|nail|bolt|glue|none, diameter_mm, length_mm, count, spacing_mm, reason}`,
   for example nails chosen by Bob. A missing count is spread by the same rule.
-  The rule's own answer stays visible as `proposal`.
+  The rule's own answer stays visible as `proposal`. Bob's override also
+  applies between two existing parts.
 - **Reading it.** `bob.read_construction_fasteners(project, artifact, revision)`
-  serves project members. Totals are grouped by kind, diameter and length.
+  serves project members. It, the drawing check and the material needs all use
+  `construction_fastener_schedule_for(revision)`, which adds that revision's
+  saved instance policy. Totals are grouped by kind, diameter and length.
   `complete` is false while any joint lacks a rule or a size.
 
 These are rule-of-thumb concept proposals. Strength, edge distances, pilot

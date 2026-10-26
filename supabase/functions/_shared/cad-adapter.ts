@@ -40,7 +40,7 @@ export type CadAssemblyRequest={contract_version:1;units:'mm';assembly_id:string
  * 2026-10-26): bob_private.construction_fastener_schedule applies fixed rules of
  * thumb to the saved geometry; it is a proposal, not a strength calculation.
  * The CAD engine draws it and echoes it as annotations version 2. */
-export type CadFastenerJoint={joint_id:string;method:string|null;source:'rule'|'override'|'no_rule';kind:'screw'|'nail'|'bolt'|'glue'|'none'|null;
+export type CadFastenerJoint={joint_id:string;method:string|null;source:'rule'|'override'|'no_rule'|'existing';kind:'screw'|'nail'|'bolt'|'glue'|'none'|null;
   diameter_mm:number|null;length_mm:number|null;count:number|null;spacing_mm:number|null;through_instance_id:string|null;through_mm:number|null;
   embed_mm:number|null;contact_length_mm:number|null;contact_width_mm:number|null;proposal:Record<string,unknown>|null;gaps:string[]}
 export type CadFastenerTotal={kind:'screw'|'nail'|'bolt';diameter_mm:number;length_mm:number;count:number;joint_ids:string[]}
@@ -116,7 +116,7 @@ export function parseCadFastenerSchedule(v:unknown):CadFastenerSchedule|null{
   ||(v.glue_packages!==0&&v.glue_packages!==1)||!Array.isArray(v.joints)||v.joints.length>1024||!Array.isArray(v.totals)||v.totals.length>1024)return null
  const ids=new Set<string>()
  for(const j of v.joints){
-  if(!obj(j)||!exact(j,JOINT_FASTENER_KEYS)||!label(j.joint_id)||ids.has(j.joint_id as string)||!['rule','override','no_rule'].includes(j.source as string)
+  if(!obj(j)||!exact(j,JOINT_FASTENER_KEYS)||!label(j.joint_id)||ids.has(j.joint_id as string)||!['rule','override','no_rule','existing'].includes(j.source as string)
    ||![null,'screw','nail','bolt','glue','none'].includes(j.kind as string|null)||[j.method,j.through_instance_id].some(x=>x!==null&&!label(x))
    ||(j.proposal!==null&&!obj(j.proposal))||!Array.isArray(j.gaps)||j.gaps.length>16||j.gaps.some(g=>!label(g,80))
    ||!['diameter_mm','length_mm','spacing_mm','through_mm','embed_mm','contact_length_mm','contact_width_mm'].every(k=>optionalSize(j[k]))||!optionalSize(j.count,true))return null

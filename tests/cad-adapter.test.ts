@@ -42,6 +42,10 @@ test('annotations version 2 echoes exactly the fastener schedule that was sent; 
   assert.equal(parseCadAssemblyResult({...v2,annotations:{...v2.annotations,fasteners:bad}},r),null)
  }
  assert.deepEqual(parseCadFastenerSchedule(schedule),schedule)
+ // A joint between two existing parts carries no new fastener.
+ const existing=structuredClone(schedule);existing.joints.push({...existing.joints[0],joint_id:'existing_walls',source:'existing',kind:null,diameter_mm:null,length_mm:null,count:null,spacing_mm:null,proposal:null,gaps:[]})
+ assert.deepEqual(parseCadFastenerSchedule(existing),existing)
+ assert.equal(parseCadFastenerSchedule({...existing,joints:existing.joints.map((j:any)=>({...j,source:'guess'}))}),null)
  assert.equal(parseCadAssemblyResult({...v2,annotations:{...v2.annotations,version:3}},r),null)
 })
 test('transport errors are unavailable, never empty geometry',async()=>{assert.equal((await createCadAdapter(async()=>{throw new Error('offline')}).render(req())).status,'unavailable')})
