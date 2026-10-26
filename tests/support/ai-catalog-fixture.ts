@@ -108,6 +108,14 @@ for(const migration of migrations){
   const flows=seed.find(row=>row.key==='bob.workflows');publish(flows)
   const w=flows.definition.workflows.find((w:any)=>w.name===workflow.name);w.card=workflow.card;w.tools.push(...contracts.map((c:any)=>c.name));w.method+=workflow.method
  }
+ const roomDimensions=source.match(/\$room_dimensions_spec\$([\s\S]+?)\$room_dimensions_spec\$/)
+ if(roomDimensions){
+  const spec=JSON.parse(roomDimensions[1]),row=seed.find(row=>row.key===spec.key),dataset=row.definition.parameters.properties.dataset
+  if(!dataset.enum.includes(spec.dataset)){
+   dataset.enum=[...spec.datasets];dataset.description+=spec.note
+   const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'room-dimensions-v1'};versions.set(row.key,versions.get(row.key)!+1)
+  }
+ }
  const memoryPointers=source.match(/\$memory_pointer_instructions\$([\s\S]+?)\$memory_pointer_instructions\$/)
  if(memoryPointers){
   for(const key of ['context-summary.contract','schema.bob_conversation_brief_v2']){
