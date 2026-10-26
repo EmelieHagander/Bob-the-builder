@@ -398,6 +398,20 @@ async function restoredRenderStepSave(load:(files:Record<string,string>,fingerpr
  const offered=(await tools.prepare()).some(tool=>tool.function.name==='save_cad_design')
  return {result,payloads,files,cad,offered,loads,renders,reviewsAfter:f.counts().reviews-before.reviews,rendersAfter:f.counts().renders-before.renders}
 }
+test('a candidate reviewed in the same call saves without preview pixels; the review keeps them',async()=>{
+ const f=runtime(),recipe=f.draft.recipe,files:Record<string,string>={},exports:Record<string,{file:string;sha256:string}>={}
+ for(const key of ['step',...recipe.views]){files[key]=randomBytes(1_000).toString('base64');exports[key]={file:key+'.out',sha256:createHash('sha256').update(Buffer.from(files[key],'base64')).digest('hex')}}
+ const render=async(r:any)=>({recipe:r,manifest:{bounding_box_mm:checkConstruction(f.draft,f.catalog,'2026-10-04').bounds_mm,checks:{collisions:{status:'complete',overlaps:[]}},annotations:{version:1,coverage:'complete'},engine:{name:'build123d'},assembly_id:r.assembly_id,exports},
+  files,previews:Object.fromEntries(cadPreviewKeys(r).map(v=>[v,'Zml4dHVyZQ==']))})
+ const cad=f.assistant({render})
+ assert.equal((await cad.consult(request)).status,'ready')
+ const ready=await cad.candidateForSave()
+ assert.equal(ready.status,'ready')
+ if(ready.status!=='ready')return
+ assert.equal('previews' in ready.candidate.packet,false)
+ assert.deepEqual(ready.candidate.packet.files,files)
+ assert(cad.candidate!.packet.previews,'the held candidate keeps its previews for review')
+})
 test('a restored version 2 candidate saves its exact render-step files, read once',async()=>{
  const r=await restoredRenderStepSave(async files=>[structuredClone(files)])
  assert.equal(r.payloads.length,1,JSON.stringify(r.result));assert.deepEqual(r.payloads[0].data.packet.files,r.files)

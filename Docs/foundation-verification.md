@@ -1,5 +1,64 @@
 # Foundation verification and rollout
 
+## Drawing save payload and write retry — 2026-10-26
+
+**Merged source; not yet deployed** (needs the `bob-worker` and `ask-bob` Edge deploy).
+
+**Symptom.** A reviewed Barnrum drawing (request `e21a2db2…`) failed to save
+twice: on 2026-10-22 at 18:30 (`write_not_saved`) and on 2026-10-26 at 09:06
+(`drawing_save_unconfirmed`). Both times `bob_project_write_v16` was cancelled
+at the 8 s `authenticated` statement timeout (SQLSTATE 57014). Each failure
+cost a new review.
+
+**What it was not.**
+- **Lock waits.** `log_lock_waits` is on (`deadlock_timeout` 1 s), and a
+  controlled advisory-lock wait was logged as expected. No wait was logged
+  for either failure.
+- **Load from other apps.** The database was otherwise quiet.
+- **A cold backend.** Every rollback-only replay ran on a fresh backend.
+
+**Cause.**
+- `candidateForSave` returned the in-memory reviewed candidate, including
+  `packet.previews`. These are the review PNGs: eight sheets since the
+  2026-10-21 six-view and paged-annotation releases.
+- The database never stores previews; it stores the manifest, with preview
+  hashes, and the files. The 28-layer writer chain still carried the whole
+  payload, and its cost grows faster than the payload does.
+- Rollback-only replays of the exact stored `reviewed_candidate`, run as the
+  owner through the public writer, took:
+
+  | Previews in the payload | Save time |
+  |---|---|
+  | none | 1.35 s |
+  | 8 × ~180 kB | 4.5 s |
+  | 8 × ~400 kB | 29 s |
+  | 8 × ~700 kB | 89 s |
+
+- Earlier saves (2026-10-05…13) carried 3–4 previews of about 0.6–0.7 MB in
+  total and stayed under the limit. Saves restored from a checkpoint already
+  dropped previews (2026-10-21).
+
+**Change.**
+- `candidateForSave` now returns the candidate without `packet.previews`. The
+  held candidate keeps them for review.
+- Project writes go through `withStatementRetry`. A write that the database
+  cancelled at the statement timeout is sent once more inside the same
+  journaled operation. A cancelled statement rolled back its whole
+  transaction, and receipts keep exact replays idempotent.
+- Lost responses and client timeouts are never resent.
+- Content-free `[Write outcome]` logs record each attempt's elapsed time and
+  SQLSTATE, plus any successful write of 3 s or more.
+
+**Tests.**
+- `tests/checked-construction-drawing.test.ts`: a candidate reviewed in the
+  same call saves without previews.
+- `tests/read-retry.test.ts`: write retry, no resend after a lost response,
+  and content-free logs.
+- `tests/bob-write-runtime.test.ts`: wiring.
+
+**Hosted acceptance remains.** The next live drawing save has to show a
+`[Write outcome]` time well under 8 s and a saved receipt.
+
 ## Room dimensions and human text — 2026-10-26
 
 **PR #331 (`eb024eb`, room measurements and human error copy in the app),

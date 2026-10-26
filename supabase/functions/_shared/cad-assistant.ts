@@ -184,7 +184,11 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
    }
    held.packet={...held.packet,files:found}
   }
-  return {status:'ready',candidate:structuredClone(held)}
+  // Preview pixels serve only the review. The database stores the manifest
+  // (with preview hashes) and files; carrying ~8 sheet PNGs made the save
+  // payload several MB and the writer chain exceeded its 8 s statement limit.
+  const {previews:_previews,...packet}=held.packet
+  return {status:'ready',candidate:structuredClone({...held,packet})}
  },
  async consult(raw:unknown){
   if(terminalFailure)return withoutBudgetDetails(terminalFailure)

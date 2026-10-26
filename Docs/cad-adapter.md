@@ -6,6 +6,14 @@ Every project CAD drawing requires one saved, checked construction revision with
 
 Bob never sends Python, SQL, URLs or arbitrary CAD code to the geometry engine. Bob produces a bounded, versioned construction request. The adapter validates it and a separate stateless worker translates it to build123d/Open Cascade.
 
+## Save payload without preview pixels — 2026-10-26
+
+The save payload never carries preview pixels. `candidateForSave` returns the
+reviewed candidate's recipe, manifest (with preview hashes) and files only.
+The held candidate keeps its previews for the review. With eight review sheets
+in the save payload, the writer chain exceeded the 8 s statement timeout
+([evidence](foundation-verification.md#drawing-save-payload-and-write-retry--2026-10-26)).
+
 ## Current colleague route — coverage correction 2026-10-18
 
 **Published; [coverage release evidence](foundation-verification.md#bob-context-coverage-corrections--2026-10-18)

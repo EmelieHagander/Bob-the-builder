@@ -2,6 +2,20 @@
 
 This document owns the source/runtime contract for bounded project writes. Hosted release evidence belongs in the merged release PR and [foundation verification](foundation-verification.md). Dated extension sections below retain their original rollout context; current tool availability comes from the live catalog and handlers.
 
+## Statement-timeout retry — 2026-10-26
+
+Project writes use `withStatementRetry` (`supabase/functions/_shared/read-retry.ts`).
+
+- **When it resends.** Only when the database itself cancelled the write at
+  the statement timeout (SQLSTATE 57014). The cancelled transaction saved
+  nothing, so the same write is sent once more, inside the same journaled
+  operation and with a fresh 12 s allowance.
+- **When it never resends.** Conflicts, refusals, lost responses and client
+  timeouts. Their outcome is either final or unknown.
+- **Logs.** Each attempt logs its elapsed time and SQLSTATE without content,
+  and so does any successful write of 3 s or more.
+- [Evidence](foundation-verification.md#drawing-save-payload-and-write-retry--2026-10-26).
+
 ## Human text holds only prose — owner decision 2026-10-26
 
 **Deployed 2026-10-26** (PR #332; `bob-worker` v138, `ask-bob` v170; [evidence](foundation-verification.md#room-dimensions-and-human-text--2026-10-26)). Owner decision: human text holds only

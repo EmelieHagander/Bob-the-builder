@@ -46,7 +46,7 @@ import { callOpenAIResponses, callOpenAIEmbeddings, generateImage, uploadOpenAIV
 import { createBobContextContinuation, type ContextSurface } from './bob-context-continuation.ts'
 import { BOB_RESULT_WINDOW_TOKENS, BOB_CONSTRUCTION_RESULT_TOKENS } from './bob-result-references.ts'
 import { CONSTRUCTION_VIEW_TOOL, constructionViewBudget } from './construction-views.ts'
-import { readWithStatementRetry } from './read-retry.ts'
+import { readWithStatementRetry, withStatementRetry } from './read-retry.ts'
 import { createMemoryRetrieval, journalMemoryStore } from './bob-memory-retrieval.ts'
 import { createJournalledMemoryEmbedder } from './bob-memory-embedding.ts'
 import { createBobConversationStore, type BobTurnClaim } from './bob-conversation.ts'
@@ -131,6 +131,15 @@ export async function answerWithOpenAi(opts: {
     const { p_generation: _generation, ...stable } = args
     const signal = AbortSignal.timeout(26000)
     return memo('rpc:' + name, stable, () => readWithRetry(name, args, signal), 0, signal)
+  }
+  // Project writes keep their journal stream and recorded { data, error }. A
+  // write the database cancelled at the statement timeout saved nothing, so it
+  // is sent once more inside the same recorded operation.
+  const writeRpc = async (name: string, args: Record<string, unknown>) => {
+    const { p_generation: _generation, ...stable } = args
+    const signal = AbortSignal.timeout(26000)
+    return memo('rpc:' + name, stable, () => withStatementRetry(name, attempt => client.rpc(name, args).abortSignal(attempt), signal,
+      { label: 'Write', slowMs: 3000 }).then(({ data, error }) => ({ data, error })), 0, signal)
   }
   let metrics:ReturnType<typeof createExecutionMetrics>|undefined
   const mediaTransport = createMediaTransport(client, { ...opts, url, key })
@@ -419,7 +428,7 @@ export async function answerWithOpenAi(opts: {
   }
   // Route new bound actions separately; pinned older journals retain their RPC names.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => rpc(payload.kind === 'bound_building_scope' ? 'bob_project_write_v21' : payload.kind === 'bound_plan_link' ? 'bob_project_write_v20' : payload.kind === 'bound_work' ? 'bob_project_write_v19' : ['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'].includes(payload.kind) ? 'bob_project_write_v18' : ['bound_project', 'bound_solution'].includes(payload.kind) ? 'bob_project_write_v17' : 'bob_project_write_v16', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
+    payload => writeRpc(payload.kind === 'bound_building_scope' ? 'bob_project_write_v21' : payload.kind === 'bound_plan_link' ? 'bob_project_write_v20' : payload.kind === 'bound_work' ? 'bob_project_write_v19' : ['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'].includes(payload.kind) ? 'bob_project_write_v18' : ['bound_project', 'bound_solution'].includes(payload.kind) ? 'bob_project_write_v17' : 'bob_project_write_v16', { ...binding, p_payload: payload }),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
     { unlimitedWork, taskWorkDiagnostics: contract.work_completion_version === 1 || contract.work_completion_version === 2 },
