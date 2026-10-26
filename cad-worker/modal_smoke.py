@@ -85,6 +85,19 @@ def main():
         with Image.open(BytesIO(raw)) as image:
             if sum(image.convert('L').histogram()[:200]) < 16:
                 raise RuntimeError("CAD returned an unreadable preview")
+    if manifest['annotations'].get('version') != 1 or 'fasteners' in manifest['annotations']:
+        raise RuntimeError('A drawing without a fastener schedule must keep annotations version 1')
+    # The construction's fastener schedule (2026-10-26) is drawn and echoed as annotations version 2.
+    fasteners = {'rule_version': 'fastener-rules-v1', 'complete': True, 'glue_packages': 0,
+                 'joints': [{'joint_id': 'smoke', 'method': 'screwed_butt', 'source': 'rule', 'kind': 'screw', 'diameter_mm': 5.0,
+                             'length_mm': 120, 'count': 2, 'spacing_mm': 45, 'through_instance_id': 'block.one', 'through_mm': 45,
+                             'embed_mm': 800, 'contact_length_mm': 95, 'contact_width_mm': 45, 'proposal': None, 'gaps': []}],
+                 'totals': [{'kind': 'screw', 'diameter_mm': 5.0, 'length_mm': 120, 'count': 2, 'joint_ids': ['smoke']}]}
+    scheduled = request({'recipe': {**recipe, 'views': ['front']}, 'drawing_source': source, 'fasteners': fasteners}, os.environ['BOB_CAD_TOKEN'])
+    if scheduled['manifest']['annotations'].get('version') != 2 or scheduled['manifest']['annotations'].get('fasteners') != fasteners:
+        raise RuntimeError('Fastener schedule was not echoed as annotations version 2')
+    if b'Fasteners - proposal from rules of thumb' not in base64.b64decode(scheduled['files']['front'], validate=True):
+        raise RuntimeError('Fastener schedule is missing from the drawing sheet')
     # Exercise the old failure boundary and actual sheet pagination in production.
     large={**recipe,'assembly_id':'deployment.paged','views':['front'],
            'definitions':[{'id':'block','primitive':'box','material_ref':None,'x_mm':10,'y_mm':20,'z_mm':30}],
@@ -134,7 +147,7 @@ def main():
         except urllib.error.HTTPError as exc:
             if exc.code!=status: raise RuntimeError('Unexpected wireframe rejection status') from None
         else: raise RuntimeError('Wireframe accepted an unauthorized or invalid request')
-    summary = (f"CAD smoke test passed: STEP + four SVGs + four source-bound PNG previews, native wireframe edges, hashes, dimensions and authorization.\n\n"
+    summary = (f"CAD smoke test passed: STEP + four SVGs + four source-bound PNG previews, fastener schedule (annotations v2), native wireframe edges, hashes, dimensions and authorization.\n\n"
                f"First authenticated request: {elapsed:.2f} seconds.\n\n"
                f"128-part drawing: four full-resolution source-bound sheets in {large_elapsed:.2f} seconds.\n\n"
                f"Set Supabase Edge secret `BOB_CAD_URL` to `{endpoint}`.\n"

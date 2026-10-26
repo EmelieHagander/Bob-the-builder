@@ -8,17 +8,20 @@ import json
 import multiprocessing
 import os
 
-MAX_REQUEST = 256 * 1024
+# A 1,024-joint fastener schedule plus a 512-instance recipe stays below 1 MiB.
+MAX_REQUEST = 1024 * 1024
 MAX_RESPONSE = 6 * 1024 * 1024
 
 def render_to_pipe(recipe, connection):
     try:
         from .worker import render_assembly
-        source=None
-        if isinstance(recipe,dict) and set(recipe)=={'recipe','drawing_source'}:
-            recipe,source=recipe['recipe'],recipe['drawing_source']
+        source=fasteners=None
+        # A bare recipe, {recipe, drawing_source}, or that envelope with the
+        # construction revision's fastener schedule (annotations version 2).
+        if isinstance(recipe,dict) and set(recipe) in ({'recipe','drawing_source'},{'recipe','drawing_source','fasteners'}):
+            recipe,source,fasteners=recipe['recipe'],recipe['drawing_source'],recipe.get('fasteners')
         with TemporaryDirectory() as directory:
-            manifest = render_assembly(recipe, directory, source)
+            manifest = render_assembly(recipe, directory, source, fasteners)
             files = {}
             for key, export in manifest['exports'].items():
                 path = Path(directory) / export['file']

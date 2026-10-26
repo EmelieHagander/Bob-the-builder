@@ -180,10 +180,44 @@ def _checks(req,children,rows):
         motions.append({"id":c["id"],"method":"swept_aabb_translation","status":"potential_obstruction" if hits else "clear_envelope","pairs":hits})
     return {"collisions":{"status":"partial" if skipped else "complete","tested_pairs":tested,"skipped_pairs":skipped,"overlaps":overlaps},"clearances":clearances,"motions":motions}
 
-def render_assembly(raw:Any,output_dir:str|Path,drawing_source=None)->dict[str,Any]:
+FASTENER_JOINT_FIELDS={"joint_id","method","source","kind","diameter_mm","length_mm","count","spacing_mm","through_instance_id","through_mm","embed_mm","contact_length_mm","contact_width_mm","proposal","gaps"}
+def _text(v,limit=200): return isinstance(v,str) and 0<len(v)<=limit
+def _optional(v,name,integer=False):
+    if v is None: return
+    if integer and type(v) is not int: raise CadContractError(name)
+    _num(v,name,True)
+
+def validate_fasteners(raw:Any)->dict[str,Any]:
+    """The fastener schedule the server computed from fixed rules for the pinned
+    construction revision. It is drawn and echoed verbatim, never derived here."""
+    if (not isinstance(raw,dict) or set(raw)!={"rule_version","complete","joints","totals","glue_packages"}
+        or not isinstance(raw["rule_version"],str) or not ID.fullmatch(raw["rule_version"]) or type(raw["complete"]) is not bool
+        or type(raw["glue_packages"]) is not int or raw["glue_packages"] not in (0,1)
+        or not isinstance(raw["joints"],list) or len(raw["joints"])>1024 or not isinstance(raw["totals"],list) or len(raw["totals"])>1024): raise CadContractError("fasteners")
+    ids=set()
+    for j in raw["joints"]:
+        if (not isinstance(j,dict) or set(j)!=FASTENER_JOINT_FIELDS or not _text(j["joint_id"]) or j["joint_id"] in ids
+            or j["source"] not in ("rule","override","no_rule") or j["kind"] not in (None,"screw","nail","bolt","glue","none")
+            or any(j[k] is not None and not _text(j[k]) for k in ("method","through_instance_id"))
+            or (j["proposal"] is not None and not isinstance(j["proposal"],dict))
+            or not isinstance(j["gaps"],list) or len(j["gaps"])>16 or any(not _text(g,80) for g in j["gaps"])): raise CadContractError("fastener_joint")
+        for k in ("diameter_mm","length_mm","spacing_mm","through_mm","embed_mm","contact_length_mm","contact_width_mm"): _optional(j[k],"fastener_joint")
+        _optional(j["count"],"fastener_joint",True)
+        ids.add(j["joint_id"])
+    for t in raw["totals"]:
+        if (not isinstance(t,dict) or set(t)!={"kind","diameter_mm","length_mm","count","joint_ids"} or t["kind"] not in ("screw","nail","bolt")
+            or type(t["count"]) is not int or t["count"]<1 or not isinstance(t["joint_ids"],list) or not t["joint_ids"] or any(i not in ids for i in t["joint_ids"])): raise CadContractError("fastener_total")
+        _num(t["diameter_mm"],"fastener_total",True); _num(t["length_mm"],"fastener_total",True)
+    return raw
+
+def render_assembly(raw:Any,output_dir:str|Path,drawing_source=None,fasteners=None)->dict[str,Any]:
     if drawing_source is not None and (not isinstance(drawing_source,dict) or set(drawing_source)!={'artifact_id','revision'}
         or not isinstance(drawing_source['artifact_id'],str) or not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}',drawing_source['artifact_id'],re.I)
         or type(drawing_source['revision']) is not int or not 1<=drawing_source['revision']<=999999999): raise CadContractError('drawing_source')
+    # A schedule belongs to one exact construction revision; never to a bare recipe.
+    if fasteners is not None:
+        if drawing_source is None: raise CadContractError('fasteners')
+        validate_fasteners(fasteners)
     req=validate_request(raw); defs={d["id"]:_shape(d) for d in req["definitions"]}; children=[]; rows=[]
     for i in req["instances"]:
         p=i["placement"]; located=_location(p)*defs[i["definition_id"]]
@@ -197,7 +231,7 @@ def render_assembly(raw:Any,output_dir:str|Path,drawing_source=None)->dict[str,A
     for view in req["views"]:
         origin,up=_camera(view,center,distance); visible,hidden=assembly.project_to_viewport(origin,viewport_up=up,look_at=center)
         path=out/f"{view}.svg"; svg=ExportSVG(unit=Unit.MM,scale=1,margin=10,precision=6); svg.add_layer("Visible"); svg.add_layer("Hidden",line_type=LineType.ISO_DOT); svg.add_shape(visible,layer="Visible"); svg.add_shape(hidden,layer="Hidden"); svg.write(str(path))
-        annotations[view]=annotate(path,req,rows,{"min":_vec(bb.min),"max":_vec(bb.max),"size":size},view,origin,up,center,drawing_source)
+        annotations[view]=annotate(path,req,rows,{"min":_vec(bb.min),"max":_vec(bb.max),"size":size},view,origin,up,center,drawing_source,fasteners)
         # Rasterize the exact exported SVG, never an independently generated image.
         for page in range(1,math.ceil(len(rows)/PARTS_PER_PAGE)+1):
             key=view if page==1 else f'{view}.sheet{page}'
@@ -208,6 +242,8 @@ def render_assembly(raw:Any,output_dir:str|Path,drawing_source=None)->dict[str,A
         for key in previews:
             if key==view or key.startswith(view+'.sheet'): previews[key]['source_sha256']=exports[view]['sha256']
     manifest={"contract_version":1,"engine":{"name":"build123d","version":"0.13.0","units":"mm"},"assembly_id":req["assembly_id"],"bounding_box_mm":{"min":_vec(bb.min),"max":_vec(bb.max),"size":size},"definitions":req["definitions"],"instances":rows,"exports":exports,"previews":previews,"checks":_checks(req,children,rows),"annotations":{"version":1,"coverage":"complete","views":annotations}}
+    # Version 2 only carries a supplied schedule; without one the manifest stays version 1 exactly.
+    if fasteners is not None: manifest['annotations']={"version":2,"coverage":"complete","views":annotations,"fasteners":fasteners}
     if drawing_source is not None: manifest['drawing_source']=drawing_source
     (out/"manifest.json").write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n",encoding="utf-8")
     return manifest

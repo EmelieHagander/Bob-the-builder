@@ -169,6 +169,34 @@ class CadWorkerTest(unittest.TestCase):
             self.assertIn("ISO-10303-21",Path(tmp,"assembly.step").read_text(encoding="utf-8",errors="ignore"))
             self.assertIn("<svg",Path(tmp,"front.svg").read_text(encoding="utf-8").lower())
 
+    def test_supplied_fastener_schedule_is_drawn_on_every_view_and_echoed_as_annotations_v2(self):
+        import xml.etree.ElementTree as ET, json
+        from test_annotations import schedule
+        source={'artifact_id':'11111111-1111-4111-8111-111111111111','revision':3}
+        fasteners=json.loads(json.dumps(schedule()))
+        with tempfile.TemporaryDirectory() as plain_dir,tempfile.TemporaryDirectory() as tmp:
+            plain=render_assembly(fixture(),plain_dir,source)
+            self.assertEqual(plain['annotations']['version'],1)
+            self.assertNotIn('fasteners',plain['annotations'])
+            result=render_assembly(fixture(),tmp,source,fasteners)
+            self.assertEqual(result['annotations']['version'],2)
+            self.assertEqual(result['annotations']['fasteners'],fasteners,'the schedule is echoed exactly as sent')
+            self.assertEqual(result['annotations']['views'],plain['annotations']['views'],'per-view notes are unchanged')
+            for view in fixture()['views']:
+                svg=Path(tmp,view+'.svg')
+                texts=[e.text for e in ET.parse(svg).getroot().iter() if e.tag.endswith('}text')]
+                self.assertIn('Fasteners - proposal from rules of thumb, no strength calculation',texts,view)
+                self.assertIn('2.8 x 50',texts);self.assertIn('Glue: 1 package for 1 glued joint.',texts)
+                self.assertEqual(hashlib.sha256(svg.read_bytes()).hexdigest(),result['previews'][view]['source_sha256'])
+                with Image.open(Path(tmp,view+'.png')) as image:
+                    self.assertEqual(max(image.size),1024)
+        for bad in [dict(fasteners,extra=1),dict(fasteners,glue_packages=2),dict(fasteners,totals=[dict(fasteners['totals'][0],joint_ids=['invented'])]),
+                    dict(fasteners,joints=[dict(fasteners['joints'][0],count=2.5)])]:
+            with self.subTest(bad=bad),tempfile.TemporaryDirectory() as tmp,self.assertRaisesRegex(CadContractError,'fastener'):
+                render_assembly(fixture(),tmp,source,bad)
+        with tempfile.TemporaryDirectory() as tmp,self.assertRaisesRegex(CadContractError,'fasteners'):
+            render_assembly(fixture(),tmp,None,fasteners)
+
     def test_definition_can_have_multiple_instances(self):
         parsed=validate_request(fixture())
         self.assertEqual(sum(i["definition_id"]=="post" for i in parsed["instances"]),2)
@@ -207,6 +235,16 @@ class CadTransportTest(unittest.TestCase):
                 self.assertEqual(set(packet["files"]), {"step", "front", "right", "top", "isometric"})
                 for key, encoded in packet["files"].items():
                     self.assertEqual(hashlib.sha256(base64.b64decode(encoded)).hexdigest(), packet["manifest"]["exports"][key]["sha256"])
+                # Old two-key and new three-key construction envelopes are both served.
+                from test_annotations import schedule
+                source = {"artifact_id": "11111111-1111-4111-8111-111111111111", "revision": 3}
+                small = {**fixture(), "views": ["front"]}
+                for body, version in (({"recipe": small, "drawing_source": source}, 1), ({"recipe": small, "drawing_source": source, "fasteners": schedule()}, 2)):
+                    request = urllib.request.Request(endpoint, data=json.dumps(body).encode(), method="POST", headers={"Authorization": "Bearer " + os.environ["BOB_CAD_TOKEN"], "Content-Type": "application/json"})
+                    with urllib.request.urlopen(request, timeout=45) as response:
+                        manifest = json.load(response)["manifest"]
+                    self.assertEqual((manifest["annotations"]["version"], manifest["drawing_source"]), (version, source))
+                    self.assertEqual(manifest["annotations"].get("fasteners"), body.get("fasteners"))
             finally:
                 server.shutdown()
                 server.server_close()
