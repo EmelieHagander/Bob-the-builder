@@ -1574,7 +1574,10 @@ tripwire, checks that those views fail on the fixture and that the reader
 returns the same facts. Rollout: apply; nothing reads it until the Bob runtime
 calls it. Rollback: drop both functions.
 
-## FORM concept persistence — source only, 2026-10-26
+<a id="form-concept-persistence--source-only-2026-10-26"></a>
+## FORM concept persistence — installed, 2026-10-26
+
+Technical installation and remaining acceptance: [release evidence](../Docs/foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26).
 
 `20261026210000_solution_concept_model.sql` extends the existing private intent
 validator and `read_design_readiness` in place. No new tables, RLS policies or
@@ -1586,6 +1589,6 @@ expected revisions, target decisions and idempotent receipts. A revision trigger
 preserves component/parameter/view/constraint IDs. A deferred construction trigger
 checks exact concept geometry after the existing instance policy has been saved.
 Pure invoker helpers have explicit grants; triggers expose no executable API.
-The pinned CLI crashed before generating a file, so this additive migration was
-allocated after the known repository migration head; it has been tested only in
-isolated PGlite. Release order is in [Supabase](../supabase/README.md#form-concept-release--source-only-2026-10-26).
+The source identity was allocated after the repository migration head because the
+pinned CLI failed before creating a file. The hosted managed-ledger identity and
+ordinary-caller rollback proof are recorded in the release evidence above. Release order is in [Supabase](../supabase/README.md#form-concept-release--source-only-2026-10-26).
