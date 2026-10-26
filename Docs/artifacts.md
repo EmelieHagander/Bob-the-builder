@@ -1033,3 +1033,17 @@ SQL publication guards reject stale/archived construction, changed catalog/measu
 `derive_construction_lists` consumes the exact current checked K2 revision and creates no geometry or Artifact mutation. Its BOM counts each explicitly classified manufacturing instance once; local blank dimensions come from the already compiled parameter graph. Delbeteckningar retain the same instance-order P-numbering as K3 annotations. Joints keep their saved IDs/methods/endpoints. A separate explicit assembly dependency graph is validated and ordered as a concept proposal, never inferred from the cyclic physical joint graph or promoted to verified access/strength.
 
 Saved blank needs pin this same Artifact/revision through the existing material requirement contract; see [K4 material owner](material-planning.md#k4-construction-blank-needs--2026-10-05). Reading derived lists alone is not a saved delivery. Raw-stock cutting and product/assembly checks remain gaps.
+
+## FORM concept handoff — source only, 2026-10-26
+
+Early geometry belongs to [Solution](solutions.md#early-concept-geometry-form--source-implementation-2026-10-26), not a parallel Artifact type.
+A construction Artifact already pins the exact selected Solution; its existing
+reader and CAD reviewer carry the full `design_intent.model`. The new deferred
+construction trigger and runtime checker require the same active component IDs,
+mm dimensions and placements, with spaces/openings explicitly marked reference.
+Unsupported mappings, missing components, unresolved constraints and changed
+linked measurements block handoff. No concept becomes measured/build-ready or
+passes K2 merely by matching boxes. Existing target-source assessment marks older
+outputs changed when a newer concept is selected; old geometry stays readable.
+CAD view directions and independent review remain unchanged. Principle sections
+in the concept viewer do not add a CAD kernel section operation.

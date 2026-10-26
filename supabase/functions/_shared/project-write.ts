@@ -449,6 +449,7 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
               construction_edit_compilation_mismatch:'The compiled result did not match the requested change. No revision was saved.'}
             if(error.message&&Object.hasOwn(reasons,error.message))return {status:'invalid',message:'No construction changed. '+reasons[error.message]}
           }
+          if (/^concept_(reconciliation_required|part_missing|mapping_unsupported|geometry_changed|identity_required)$/.test(error.message ?? '')) return { status: 'invalid', message: 'No change saved. Read the selected concept and preserve its component identities, dimensions, views and constraints. Missing or unsupported geometry must be reconciled explicitly before construction.', validation: { code: 'field_value', fields: ['design_intent.model'] } }
           if (error.code === '40001' || error.code === 'PT409' || (payload.kind === 'catalog' && error.code === '23505') || error.message?.includes('Record changed')) return { status: 'conflict', message: 'Record changed or an equivalent catalog definition exists. Read the current record and do not overwrite unrelated changes.' }
           if (['22023', '22P02', '22007', '22008', '23502', '23503', '23514', 'P0001'].includes(error.code ?? '')) {
             const taskIssue = options.taskWorkDiagnostics ? taskWorkRejection(payload, error) : null

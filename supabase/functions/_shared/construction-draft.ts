@@ -16,6 +16,7 @@ import { schemaIssues } from './schema-issues.ts'
 import { rethrowContinuation, type BobJournal } from './bob-job-journal.ts'
 import type { ProjectWriter,WritePayload } from './project-write.ts'
 import { parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
+import { conceptConstructionIssues } from './solution-concept.ts'
 
 /** Reconstruct a historical tool check; a new check position still reads live.
  * CAD render/review gates use their independent fresh readers. Old executions
@@ -366,6 +367,11 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    const sources=await opts.readSources(parameterSourcePins(plan))
    const parameters=compileCadParameters(opts.projectId,recipe,plan,sources.project,sources.physical)
    if(!parseCadAssemblyRequest(recipe))return {status:'invalid',message:'Computed dimensions or placement are outside the supported geometry contract.'}
+   if(readiness.design_intent?.model){
+    const policy=constructionInstancePolicy(recipe,v.instance_policy)
+    const issues=conceptConstructionIssues(readiness.design_intent,recipe,new Set(policy.instances.filter(i=>i.role==='reference').map(i=>i.instance_id)))
+    if(issues.length)return {status:'needs_data',issues,message:'No construction saved. Preserve the selected concept component identities, dimensions and relations, or explicitly revise that Solution before handoff.'}
+   }
    if(!await opts.hasAccess())return {status:'denied'}
    const {record_id,expected_revision,request_quote,parameter_plan,...data}=v
    return await opts.writer.commit({kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,joints:storedJoints(data.joints),recipe,parameters}})

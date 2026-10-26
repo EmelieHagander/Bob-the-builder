@@ -1573,3 +1573,19 @@ fields. `tests/project-facts-sql.test.ts` replaces the assessment with a
 tripwire, checks that those views fail on the fixture and that the reader
 returns the same facts. Rollout: apply; nothing reads it until the Bob runtime
 calls it. Rollback: drop both functions.
+
+## FORM concept persistence — source only, 2026-10-26
+
+`20261026210000_solution_concept_model.sql` extends the existing private intent
+validator and `read_design_readiness` in place. No new tables, RLS policies or
+write endpoints. The nullable/absent historical model remains readable. New
+model data is strictly bounded and cannot assert measured input; conflicted or
+unknown concept drafts can be saved but cannot pass construction readiness.
+Existing Solution commands and claimed bound writes enforce project authority,
+expected revisions, target decisions and idempotent receipts. A revision trigger
+preserves component/parameter/view/constraint IDs. A deferred construction trigger
+checks exact concept geometry after the existing instance policy has been saved.
+Pure invoker helpers have explicit grants; triggers expose no executable API.
+The pinned CLI crashed before generating a file, so this additive migration was
+allocated after the known repository migration head; it has been tested only in
+isolated PGlite. Release order is in [Supabase](../supabase/README.md#form-concept-release--source-only-2026-10-26).

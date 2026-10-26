@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
+import { verifyConceptsBrowser } from './solution-concept-browser.mjs'
 
 export function createSolutionsFixture(timestamp, assets, facts) {
   const records = new Map(), histories = new Map(), decisions = []
@@ -231,4 +232,5 @@ export async function verifySolutionsBrowser(page, base, fixture, facts, width) 
   await page.getByRole('button', { name: 'Previous page', exact: true }).click()
   await page.waitForFunction(() => document.querySelectorAll('.solution-list > article').length === 24)
   console.log('Solutions alternatives/advice/choices/reference roles/exact selected version/evidence/revisions/conflict/archive/restore/decisions/reload/paging passed at ' + width + 'px; HTTP fixtures, no AI.')
+  await verifyConceptsBrowser(page, base, fixture, width)
 }

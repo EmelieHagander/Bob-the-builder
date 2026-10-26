@@ -131,3 +131,41 @@ Verify actual SQL/RLS for anonymous/member/outsider/dual-project access, immutab
 history, cross-project references, stale decisions, pinned targets/evidence and
 parent/file cleanup. Drive real production UI at 320/390/1280px using HTTP fixtures;
 separately prove deployed Auth/PostgREST/Storage with disposable data and cleanup.
+
+## Early concept geometry (FORM) — source implementation, 2026-10-26
+
+Decision: the optional `design_intent.model` belongs to the immutable Solution
+revision. It can exist before a selected target. No new table, ProjectPhase,
+approval state, Building or Artifact is created for a sketch. Existing bound
+Solution edits, receipts, selection, access checks and reload/history own its
+lifecycle. Editing an unselected alternative leaves the target pinned; editing
+a selected scope through the existing bound editor advances that scope atomically.
+
+The first slice is an orthogonal concept model: named positive X/Y/Z axes and
+origin, mm parameters, stable named components (solid, space or opening), explicit
+XY/XZ/YZ projections or principle sections, and equality/upper-bound or required-view-plane constraints.
+Parameter expressions reuse the CAD calculator's versioned decimal arithmetic.
+Parameters are design decisions, estimates, unknowns or derived values, never
+measurements. Exact measurement and image evidence stays on the existing Solution.
+Unknown dimensions omit affected geometry and remain visible. Openings are annotated
+volumes, not boolean cuts. Slopes, curves and engineering section cuts are outside
+this slice; unsupported requirements remain explicit gaps. No object-type templates.
+
+Initialize the model once through `edit_project_record`; subsequent edits address
+individual parameters, components, views or constraints and preserve their IDs.
+Components can be deactivated rather than deleted/reidentified. Every derived
+view is rebuilt from this same saved model. Feature and choice links use the
+existing design-intent identities; a missing feature is a reported gap. Model
+validity is separate from alignment, construction checks and physical safety.
+
+Construction handoff retains the selected Solution revision through the existing
+Artifact lineage. This slice admits exact, unrotated box instances with the same
+component IDs; spaces/openings must be reference instances. Subdivision, rotation
+or other geometry needs an explicit future mapping contract and returns unsupported,
+not a fabricated conversion. K2 and independent CAD review still apply. CAD review
+receives the full pinned intent, including the model and its view/constraint data;
+the handoff uses the selected model's named coordinate frame. Changed linked
+measurements block construction readiness until their revisions are reconciled.
+
+Release/acceptance remains in [State](bob-delivery-flow.md#state); this is not a
+hosted or real-model acceptance claim.

@@ -1,8 +1,9 @@
 /** Add the bound-edit adapters without replacing live catalog customizations. */
 import { readFileSync, writeFileSync } from 'node:fs'
-import { PROJECT_EDIT_TOOLS } from '../supabase/functions/_shared/project-edits.ts'
+import { CONCEPT_EDIT_GUIDE, PROJECT_EDIT_TOOLS } from '../supabase/functions/_shared/project-edits.ts'
 const names = PROJECT_EDIT_TOOLS.map(t => t.function.name)
-const contracts = PROJECT_EDIT_TOOLS.map(t => t.function)
+// This immutable publication predates FORM; the later migration adds its guide.
+const contracts = PROJECT_EDIT_TOOLS.map(t => ({ ...t.function, description: t.function.description.replace(CONCEPT_EDIT_GUIDE, '') }))
 const policies = JSON.parse(readFileSync('supabase/functions/_shared/project-tools/catalog-seed.json','utf8')).filter((r: any) => names.includes(r.name))
 const append = [
   { key: 'tools.save_project_solution', text: ' Existing solution edits now use read_project_edit_context and edit_project_record: choose a returned edit_ref and send only the content delta. This legacy tool remains for explicitly new alternatives only. A failed revision never authorizes a create. The bound editor preserves sources, nested choices and original identity; selected context advances the selected revision atomically.' },

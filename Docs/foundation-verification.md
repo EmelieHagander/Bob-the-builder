@@ -1,5 +1,46 @@
 # Foundation verification and rollout
 
+## FORM concept loop — local synthetic verification, 2026-10-26
+
+**Source implementation only; no hosted migration, catalog activation, deploy or
+live model/CAD run.** The [Solution contract](solutions.md#early-concept-geometry-form--source-implementation-2026-10-26)
+owns the model; [State](bob-delivery-flow.md#form-10--tidig-designloop-releasegrindar-2026-10-26)
+owns remaining acceptance and the [backend guide](../supabase/README.md#form-concept-release--source-only-2026-10-26)
+owns release order.
+
+- 96 focused Node/TypeScript tests pass across the concept, SQL, bounded edits,
+  solution actions, construction checks, checked drawing and design-readiness
+  seams. A subsequent 35-test pass covers catalog parity, tool runtime and SQL
+  readiness, including repeated concept SQL tests. The isolated PGlite fixture
+  applies both migration directories. Both current and historical bound-edit
+  catalog builders reproduce their committed publications.
+- The same generic model handles box height/thickness, a bunk-bed ladder
+  correction with unchanged drawers and source features, and three barn rooms
+  along X. The barn's XZ section at Y=1500 omits wall openings/ladders; the wall
+  section includes them. The impossible 4000 mm stack within 3500 mm remains a
+  conflict; pitched roof geometry is an explicit unsupported item. These are
+  synthetic cases, not structural assessments.
+- Canonical SQL saves/readback, immutable history, no implicit target selection,
+  resumed bound edits, receipt replay, concurrent-edit conflict, outsider denial,
+  changed measurement pins, and exact construction mapping are exercised. A
+  newly selected Solution revision leaves the prior construction unchanged and
+  marks its source changed. Missing/unsupported geometry cannot become ready.
+- Frontend production build and focused Deno checks of the changed shared
+  modules pass. The generated catalog matches its builder. Full Edge entrypoint
+  checking is blocked by the environment refusing the existing esm.sh dependency;
+  this is not an Edge entrypoint pass.
+- Browser scenarios are wired into the existing foundations flow at 320/390/1280
+  px: views, named cuts, gaps, zoom/fit, simulated canonical correction followed
+  by reload, and wrong-project rejection/retry. They have **not run here** because
+  Chrome/Chromium is absent; no browser was installed. CI and the full suite were
+  not run under the repository's explicit-owner-request rule.
+- Archie and Vera guidance was followed in a manual source review by the
+  implementing agent. This is not an independent steward or visual acceptance.
+
+Real owner corrections, independent CAD comparison against original images,
+Step/save receipts, member browser readback, and before/after cost/rework metrics
+remain the separate acceptance gate. No measured improvement is claimed.
+
 ## Project facts, exact fasteners and drawings without fasteners — 2026-10-26
 
 **PR #339 (`e3b13e2`) is merged, applied and deployed (13:27–13:30 UTC); not
