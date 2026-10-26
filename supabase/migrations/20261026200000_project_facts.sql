@@ -92,7 +92,8 @@ begin
   where d.project_id=p_project
   group by d.space_id
  )
- select jsonb_build_object('status',case when linked>0 then 'ok' else 'not_linked' end,'linked_buildings',linked,
+ -- 'rooms_only': the project scopes single rooms without a whole Building or Site.
+ select jsonb_build_object('status',case when linked>0 then 'ok' when exists(select 1 from spaces) then 'rooms_only' else 'not_linked' end,'linked_buildings',linked,
   'total',(select count(*) from spaces),'included',count(p.id),'omitted',(select count(*) from spaces)-count(p.id),
   'items',coalesce(jsonb_agg(jsonb_build_object('room_id',p.id,'name',p.name,'building_id',p.building_id,'building',p.building,'marked',p.marked,
     'length_mm',case when d.size#>>'{room_length,status}'='known' then d.size#>'{room_length,millimetres}' end,

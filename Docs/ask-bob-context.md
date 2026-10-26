@@ -54,9 +54,11 @@ packet and places it in the project frame next to the existing orientation.
 Each section reports total, included and omitted counts; nothing is ever
 presented as a complete list when it is not. The packet contains:
 
-- **Rooms** of the explicitly linked building(s), with length × width ×
-  height from `bob.project_room_dimensions` and its truth status. With no
-  link it says `not_linked`, which is distinct from "no rooms".
+- **Rooms** of the explicitly linked building(s) or room-level scope, with
+  length × width × height from `bob.project_room_dimensions` and its truth
+  status. The status is `ok` for a linked building, `rooms_only` when only
+  rooms are scoped, and `not_linked` with neither, which is distinct from
+  "no rooms".
 - **Constructions:**
   - current revision, part, definition and joint counts
   - instance roles known or unknown
@@ -69,7 +71,9 @@ presented as a complete list when it is not. The packet contains:
     live per-revision assessment
   - open drawing requests with their gap counts
 - **Material needs:**
-  - counts by state, including changed or stale needs
+  - `by_state` splits every need by its Shopping route, so the counts sum to
+    the total
+  - changed needs, plus `changed_unknown` where no fresh stored state exists
   - fastener and glue needs
   - what is published to Shopping
 

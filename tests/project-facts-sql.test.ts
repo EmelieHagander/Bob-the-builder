@@ -171,6 +171,15 @@ test('rooms: not linked, linked without rooms, and rooms with their stored dimen
  const empty={total:0,included:0,omitted:0,items:[]}
  assert.deepEqual((await facts(owner,P.E)).rooms,{status:'not_linked',linked_buildings:0,...empty})
  assert.deepEqual((await facts(owner,P.D)).rooms,{status:'ok',linked_buildings:1,...empty})
+ // Room-level scope without a whole Building (the live Barnrum project): listed, never "not linked".
+ const F=(await call(owner,'select bob.create_project($1) r',[JSON.stringify({name:'Facts F'})])).r.id
+ // A legacy room-only row, as live Barnrum has; today's command requires the Building link first.
+ await pg.query("set session_replication_role=replica")
+ await pg.query("insert into bob.project_physical_scope(id,project_id,target_kind,building_id,space_id,created_by) values($1,$2,'space',$3,$4,$5)",[randomUUID(),F,ids.house,ids.barnrum,owner])
+ await pg.query("set session_replication_role=origin")
+ const roomsOnly=(await facts(owner,F)).rooms
+ assert.equal(roomsOnly.status,'rooms_only');assert.equal(roomsOnly.linked_buildings,0)
+ assert.deepEqual(roomsOnly.items.map((r:any)=>[r.name,r.marked]),[['Barnrum',true]])
  const rooms=(await facts(owner,P.A)).rooms
  assert.equal(rooms.status,'ok');assert.equal(rooms.linked_buildings,1)
  assert.deepEqual([rooms.total,rooms.included,rooms.omitted],[2,2,0])

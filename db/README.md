@@ -1517,8 +1517,9 @@ dimensions and fastener migrations are installed, then adds:
   `included`, `omitted` and `items`:
   - **rooms** (24): `project_spaces` rooms with length, width and ceiling height
     from `bob.project_room_dimensions` (status, truth, millimetres, conflicting
-    values), marked rooms first. `not_linked` without a whole-Building or
-    covering Site link, unlike a linked Building without rooms.
+    values), marked rooms first. `ok` with a whole-Building or covering Site
+    link (even without rooms); `rooms_only` when only single rooms are scoped
+    (the legacy room-level link, as live Barnrum has); `not_linked` otherwise.
   - **constructions** (8, newest first): head revision of each current
     construction Artifact; definition, part, joint and open-question counts,
     roles from `artifact_construction_instance_policies` (missing policy: every
