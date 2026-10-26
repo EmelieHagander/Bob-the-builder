@@ -388,6 +388,21 @@ Serverbundna work-record- och planlänkverktyg samt konflikttransporten är nu i
 
 **Kvarstående produktacceptans:** verklig medlemsåterläsning, våningssängens resultat mot mockupen och mätningen av hela modellkedjans kostnad ligger kvar i E. [Artifact](artifacts.md#instance-roles-and-affected-outputs--release-d), [CAD](cad-adapter.md), [material](material-planning.md) och [datagränserna](#kvarstående-datagränser--kodgranskning-2026-10-10) äger de driftsatta ändringskontrakten. Tekniska prov stänger inte modell-/mockupacceptansen.
 
+### FORM 1.0 — designloop före detaljerad CAD (analys, 2026-10-26)
+
+**Föreslaget nästa fristående designarbete, ännu inte implementerat eller releaseverifierat.**
+Den [daterade FORM × Bob-analysen](form-design-loop-review-2026-10-26.md)
+kartlägger glappet mellan illustrerat förslag, snabb deterministisk 2D-överenskommelse,
+vald Solution, sparad konstruktion och korrekt granskad/sparad ritning. Använd den i
+nästa implementations-worksession: fastställ minsta befintliga domänseam för en
+reviderbar skiss före vald target, prova en generell modell med riktade korrigeringar
+och återanvänd exakta versioner i befintliga käll-/CAD-grindar. Testa låda,
+våningssäng och lada utan objektspecifika manus; visa verklig längdsektion separat
+från vanlig CAD-projektion och märk stödgränserna. Förankra schema, API och UI hos
+respektive kanoniska ägare först efter kodgranskning. Detta ändrar inte pågående
+CAD-/runtimeacceptans, aktiv leveransordning eller kravet på ägarens uttryckliga
+tillstånd för betalda/live arbetsflöden.
+
 <a id="bob-task-pr-plan"></a>
 ### PR-plan — sammanhängande uppgiftsarbete och modelluppgradering, 2026-10-17
 
