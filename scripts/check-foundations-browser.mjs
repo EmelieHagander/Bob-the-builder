@@ -495,15 +495,16 @@ try {
     await page.screenshot({animations:'disabled',path:`test-results/drawing-source-warning-${viewport.width}.png`,fullPage:true})
     artifacts.sources.delete(cadId)
     artifacts.rejectPreview=true
-    // Reload the restored source assessment before testing a separate preview transport failure.
-    // Navigating to the same hash can retain the previous unavailable-source overview.
+    // The bounded overview now carries preview bytes and source assessment together.
     await page.reload()
-    // Preview bytes are loaded only when this region enters the viewport.
     await drawings.scrollIntoViewIfNeeded()
-    await drawings.getByText('Preview unavailable. Open the saved drawing.',{exact:true}).first().waitFor()
+    await drawings.getByText('Project drawings could not be loaded.',{exact:true}).waitFor()
+    assert.equal(await drawings.getByRole('img').count(),0,'A failed overview never presents unchecked previews')
+    artifacts.rejectPreview=false
+    await drawings.getByRole('button',{name:'Try again',exact:true}).click()
+    await drawings.getByRole('img',{name:'CAD shelf detail — drawing preview',exact:true}).waitFor()
     await drawings.getByRole('link',{name:'Open drawing: CAD shelf detail · v1',exact:true}).click()
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
-    artifacts.rejectPreview=false
     cadRow.archived=true
     await page.goto(base+'#/project')
     await drawings.getByRole('heading',{name:'Drawings',exact:true}).waitFor()

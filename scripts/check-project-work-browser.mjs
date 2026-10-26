@@ -99,11 +99,14 @@ try{
   assert.equal(await projectDescription.getAttribute('open'),null,'Long saved notes do not push the Plan off the opening screen')
   const planBox=await plan.boundingBox()
   assert(planBox && planBox.y<520,`Plan is easy to reach at ${width}px: ${JSON.stringify(planBox)}`)
+  await page.locator('details.planning-tools > summary').click()
   const shortcuts=page.getByRole('navigation',{name:'Project tools',exact:true})
+  assert.equal(await shortcuts.getByRole('link').count(),4,'All planning shortcuts remain available in Build mode')
   for(const link of await shortcuts.getByRole('link').all()){
    const box=await link.boundingBox()
    assert(box && box.height>=44 && box.x>=0 && box.x+box.width<=width,'Every project shortcut remains touchable and inside the phone')
   }
+  await page.locator('details.planning-tools > summary').click()
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1))
   await page.screenshot({animations:'disabled',path:`test-results/mobile-project-overview-${width}.png`})
   await projectDescription.getByText('Project description',{exact:true}).click()

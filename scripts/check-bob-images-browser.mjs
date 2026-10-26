@@ -1,6 +1,7 @@
 // Real built UI/data seam; HTTP fixtures cover upload/retry/transcript rendering.
 // SQL authority and the actual image-provider payload have separate tests.
 import assert from 'node:assert/strict'
+import { bobHistoryRows } from './bob-history-fixture.mjs'
 import { spawn } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium } from 'playwright-core'
@@ -35,7 +36,15 @@ try{
       if(url.pathname==='/rest/v1/account')return respond({json:{id:'account',name:'Photo fixture',owner_name:'',email:''}})
       if(url.pathname==='/rest/v1/people')return respond({json:[{id:`member${url.searchParams.get('project_id')?.replace('eq.','')??'A'}`,name:'Photo member',initials:'PM',color:'#41513f',role:'Organiser',diet:'',person_skills:[]}]})
       if(url.pathname==='/rest/v1/bob_threads')return respond({json:{id:threads.get(url.searchParams.get('project_id')?.replace('eq.',''))?.id}})
-      if(url.pathname==='/rest/v1/bob_messages')return respond({json:[...threads.values()].find(t=>`eq.${t.id}`===url.searchParams.get('thread_id'))?.messages??[]})
+      if(url.pathname==='/rest/v1/bob_messages'){
+        const project=url.searchParams.get('bob_threads.project_id')?.replace(/^eq\./,'')
+        if(project){
+          assert.equal(url.searchParams.get('bob_threads.owner_user_id'),`eq.${user.id}`)
+          assert.equal(url.searchParams.get('bob_threads.status'),'eq.active')
+        }
+        const thread=project?threads.get(project):[...threads.values()].find(t=>`eq.${t.id}`===url.searchParams.get('thread_id'))
+        return respond({json:thread?bobHistoryRows(thread.messages,url).map(row=>({...row,thread_id:thread.id,bob_threads:{id:thread.id}})):[]})
+      }
       if(url.pathname==='/rest/v1/media_assets'){
         const rows=[...images.values()].filter(m=>(!url.searchParams.get('id')||url.searchParams.get('id')===`eq.${m.id}`)&&(!url.searchParams.get('project_id')||url.searchParams.get('project_id')===`eq.${m.project_id}`))
         return respond({json:req.headers().accept?.includes('vnd.pgrst.object')?rows[0]??null:rows})
