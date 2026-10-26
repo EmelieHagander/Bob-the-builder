@@ -44,7 +44,7 @@ yet exercised by a live Bob turn.** Contracts:
   - `bob-worker` v142 and `ask-bob` v174 are live. Both bundles contain
     `read_project_facts`, `projectFactsVersion`, `constructionTable` and
     `fastener_quantity_exact`, and neither contains `readConstructionFasteners`.
-  - Pages run 382.
+  - Pages run 382 succeeded.
   - The CAD worker was not redeployed and is dormant for version 2.
 - **Not verified here:**
   - Live turn metrics after the release.
