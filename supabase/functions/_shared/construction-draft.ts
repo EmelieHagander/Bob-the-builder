@@ -11,7 +11,7 @@ import {CONSTRUCTION_PARAMETER_CHANGES_SCHEMA,compileConstructionParameterChange
 import { INSTANCE_POLICY_SCHEMA,constructionInstancePolicy } from './construction-instance-policy.ts'
 import { CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL } from './construction-consequences.ts'
 import { humanTextRejection, proseFields } from './human-text.ts'
-import { JOINT_FASTENER_SCHEMA, parseFastenerSchedule, storedJoints, withRuleFasteners } from './construction-fasteners.ts'
+import { JOINT_FASTENER_SCHEMA, parseFastenerSchedule, storedJoints, withRuleFasteners, type FastenerSchedule } from './construction-fasteners.ts'
 import { schemaIssues } from './schema-issues.ts'
 import { rethrowContinuation, type BobJournal } from './bob-job-journal.ts'
 import type { ProjectWriter,WritePayload } from './project-write.ts'
@@ -112,6 +112,17 @@ const CONSTRUCTION_PROSE:Record<string,readonly string[]>={
  continue_construction_change:['change_note','review_note'],
  save_construction_cut_plan:['change_note','candidates.*.note'],
 }
+/** The table's schedule for one exact saved revision. A failed or mismatched
+ * read is shown as unavailable; fasteners are never recomputed here. */
+async function tableFasteners(read:((id:string,revision:number)=>Promise<unknown>)|undefined,id:string,revision:number):Promise<FastenerSchedule|null>{
+ if(!read)return null
+ try{return parseFastenerSchedule(await read(id,revision),id,revision)}
+ catch(error){
+  rethrowContinuation(error)
+  console.error('[Construction table fasteners unavailable]',JSON.stringify({revision,error:(error instanceof Error?error.name+': '+error.message:String(error)).slice(0,300)}))
+  return null
+ }
+}
 export type ConstructionToolsState = { version:1; used:number } | { version:2; used:number; observations:ConstructionObservation[] }
 export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;unlimitedWork?:boolean;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
@@ -120,6 +131,9 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  constructionViews?:boolean;
  /** Page budget for this read; absent keeps the default 2,000-token page. */
  viewPageTokens?:()=>number;
+ /** Owner decision 2026-10-26 (pinned per job): the overview carries the compact
+  * construction table with the server fastener schedule from readFasteners. */
+ constructionTable?:boolean;
  constructionRepeats?:boolean;
  observationTime?:(input:unknown)=>Promise<string>;
  prepareEdit?:(payload:WritePayload)=>Promise<Record<string,any>>;
@@ -272,6 +286,11 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
      if(draft?.projectId!==opts.projectId||!['ok','not_found'].includes(draft.status))return {status:'unavailable'}
      if(draft.status==='not_found')return {status:'not_found',projectId:opts.projectId}
      if(draft.artifact_id!==v.artifact_id||v.revision!==null&&draft.revision!==v.revision)return {status:'unavailable'}
+     if(opts.constructionTable&&v.view==='overview'){
+      const fasteners=await tableFasteners(opts.readFasteners,draft.artifact_id,draft.revision)
+      if(!await opts.hasAccess())return {status:'denied'}
+      return await views.read(draft,v,opts.viewPageTokens?.(),{table:true,fasteners})
+     }
      return await views.read(draft,v,opts.viewPageTokens?.())
     }
     const result=await opts.read(v.artifact_id,v.revision,v.after) as Record<string,any>
