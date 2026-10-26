@@ -1,6 +1,7 @@
 // Production React/data layer, fixture HTTP only. This proves UI consumption,
 // NOT hosted SQL, independent model choices, or a completed drawing/Shopping flow.
 import assert from 'node:assert/strict'
+import { bobHistoryRows } from './bob-history-fixture.mjs'
 import { spawn } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright-core'
@@ -89,8 +90,13 @@ try {
       }
       if(url.pathname==='/rest/v1/bob_messages') {
         const id=url.searchParams.get('thread_id')?.replace(/^eq\./,'')
-        const h=[...histories.values()].find(h=>h.thread===id)
-        return respond({json:h?.messages??[]})
+        const project=url.searchParams.get('bob_threads.project_id')?.replace(/^eq\./,'')
+        if(project){
+          assert.equal(url.searchParams.get('bob_threads.owner_user_id'),`eq.${user.id}`)
+          assert.equal(url.searchParams.get('bob_threads.status'),'eq.active')
+        }
+        const h=project?histories.get(project):[...histories.values()].find(h=>h.thread===id)
+        return respond({json:h?.thread?bobHistoryRows(h.messages,url).map(row=>({...row,thread_id:h.thread,bob_threads:{id:h.thread}})):[]})
       }
       if (url.pathname === '/rest/v1/rpc/bob_job_status') return respond({ json: null })
       if(url.pathname==='/rest/v1/rpc/claim_project_invites') return respond({json:0})

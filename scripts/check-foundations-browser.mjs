@@ -71,7 +71,6 @@ try {
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
       if (method === 'OPTIONS') return respond({ status: 204 })
       if (path === '/rest/v1/rpc/project_plan_read') return respond({json:{record:request.postDataJSON().p_project==='A'?currentPlan:null}})
-      if (new URL(route.request().url()).pathname === '/rest/v1/rpc/read_project_work') return respond({json:{projectId:route.request().postDataJSON().p_project,records:[],truncated:false,next_cursor:null}})
       if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_work_read') return respond({json:{project_id:route.request().postDataJSON().p_project,vocabulary_version:'2026-09-24.1',status:'not_initialized',revision:null,focus_step_id:null,areas:[],steps:(currentPlan?.steps??[]).map(s=>({...s,area_id:null,phase:'build',responsible_kind:'bob',responsible_person_id:null,tasks:s.tasks??[],related_tasks:[],requirements:[]})),unorganised_tasks:[]}})
       if (path === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture-refresh', token_type: 'bearer', expires_in: 3600, expires_at: expiry, user } })
       if (path === '/auth/v1/user') return respond({ json: user })
@@ -101,6 +100,7 @@ try {
       if (await solutions.handle(request, url, respond)) return
       if (await artifacts.handle(request, url, respond)) return
       if (await materialPlanning.handle(request, url, respond)) return
+      if (path === '/rest/v1/rpc/read_project_work') return respond({json:{projectId:request.postDataJSON().p_project,records:[],truncated:false,next_cursor:null}})
       if (path === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
       if (path === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
       if (path === '/rest/v1/projects') return respond({ json: projects })

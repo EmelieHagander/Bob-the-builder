@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { bobHistoryRows } from './bob-history-fixture.mjs'
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 
@@ -14,7 +15,7 @@ export function createRoomLayoutFixture(timestamp, artifacts, solutions) {
       const name=url.pathname.split('/').at(-1),eq=k=>url.searchParams.get(k)?.replace(/^eq\./,'')
       const reply=async json=>{await respond({json});return true}
       if(name==='bob_threads') return reply(eq('project_id')==='A'?{id:thread,next_seq:messages.length+1}:null)
-      if(name==='bob_messages') return reply(eq('thread_id')===thread?messages:[])
+      if(name==='bob_messages') return reply(eq('thread_id')===thread||eq('bob_threads.project_id')==='A'&&eq('bob_threads.status')==='active'?bobHistoryRows(messages,url).map(row=>({...row,thread_id:thread,bob_threads:{id:thread}})):[])
       if(name==='artifact_room_layout_details') {
         const d=layouts.get(`${eq('artifact_id')}:${eq('artifact_revision')}`)
         return reply(d && eq('project_id')==='A' && !fixture.unavailable ? {...d,
