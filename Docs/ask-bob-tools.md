@@ -299,7 +299,7 @@ joint schema and journal sequence.
   invented.
 - **Older pinned calls.** Calls without the field get `fastener: null` before
   schema validation, the same precedent as `instance_policy`.
-- **Exact needs (source only, not yet applied).** Publication
+- **Exact needs (live 2026-10-26, PR #339).** Publication
   `exact-fasteners-v1` (`scripts/build-ai-exact-fasteners-catalog.ts`) adds one
   note to `derive_cad_material_requirement`: fastener and glue needs are exact
   schedule counts, so Bob omits `waste_percent` and recommends any spare in the

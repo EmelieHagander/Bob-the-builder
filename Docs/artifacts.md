@@ -95,7 +95,7 @@ exercised by a live Bob turn.**
   construction lists (`derive_construction_lists`) and the material list
   only. The Edge stops reading and sending the schedule, accepts annotations
   version 1 only, and the drawing view loses its Fasteners table. That
-  withdrawal is source only, not yet deployed. The CAD worker and migration
+  withdrawal is live since PR #339 (2026-10-26). The CAD worker and migration
   `20261026171000` stay as deployed and are
   [dormant](cad-adapter.md#fastener-schedule-on-drawings--annotations-version-2-2026-10-26).
 - [Verification](foundation-verification.md#joint-fasteners--2026-10-26) holds
@@ -278,7 +278,7 @@ the local evidence, catalog compatibility and release order.
 
 ### Compact construction table — owner decision 2026-10-26
 
-**Approved by the owner; source in progress, not deployed.** Construction
+**Live: merged in PR #339, applied and deployed 2026-10-26 ([evidence](foundation-verification.md#project-facts-exact-fasteners-and-drawings-without-fasteners--2026-10-26)); not yet exercised by a live Bob turn.** Construction
 turns averaged 16 `read_construction_draft` pages each. The live bunk bed is
 65,176 characters of raw recipe, parameters, joints and materials. Its
 compact table is about 7,200 characters.
