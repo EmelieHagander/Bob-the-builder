@@ -215,7 +215,8 @@ async function assertPhoneLayout(page, viewport, label) {
 async function assertReachable(locator, label, min = 44) {
   await locator.evaluate(node => node.scrollIntoView({ block: 'center' }))
   const box = await locator.boundingBox()
-  assert(box && box.height >= min, `${label}: touch target is at least ${min}px high (${box?.height})`)
+  // Bounding boxes can lose subpixel precision when subtracting scrolled coordinates.
+  assert(box && box.height + 0.001 >= min, `${label}: touch target is at least ${min}px high (${box?.height})`)
   assert(await locator.evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)) }), `${label}: not covered by fixed controls`)
 }
 
