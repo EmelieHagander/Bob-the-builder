@@ -592,7 +592,9 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
     if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed','checked_construction_unavailable','checked_construction_changed','design_readiness_unavailable','design_readiness_changed'].includes(error.message))throw error
     return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'render_failed'}
    }
-   if(packet.manifest.annotations?.coverage!=='complete'||packet.manifest.annotations?.version!==1)
+   // Version 2 also carries the construction's fastener schedule (2026-10-26);
+   // a journaled version 1 render from before it stays valid.
+   if(packet.manifest.annotations?.coverage!=='complete'||![1,2].includes(packet.manifest.annotations?.version))
     return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'annotations_unavailable',next_action:catalogText("feedback.cad-assistant.next-action.2015f7a2f7e9")}
    const bounds=packet.manifest.bounding_box_mm,expectedBounds=ready.checked.bounds_mm,collisions=packet.manifest.checks?.collisions
    const visibleIds=new Set(recipe.instances.map(i=>i.id)),referenceIds=new Set(ready.checked.reference_instance_ids??[])

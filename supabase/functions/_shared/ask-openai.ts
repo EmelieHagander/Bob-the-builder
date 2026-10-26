@@ -33,7 +33,7 @@ import type { OpenAIServiceOptions } from './openai-service.ts'
 import { createRecordDetailReader } from './project-record-detail.ts'
 import { createProjectImageTools } from './project-image-tools.ts'
 import { createCadAssistant, cadRenderInput } from './cad-assistant.ts'
-import { createCadTransport } from './cad-transport.ts'
+import { createCadTransport, readConstructionFasteners } from './cad-transport.ts'
 import { createMaterialCatalogReader } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
@@ -649,7 +649,9 @@ export async function answerWithOpenAi(opts: {
      if(!source)throw new Error('checked_construction_source_required')
      return memo('cad:render',cadRenderInput(recipe,source),async()=>{
       await beforeDispatch?.()
-      return createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source)
+      // The pinned revision fixes its schedule, so the journal input stays recipe + source.
+      const fasteners=await readConstructionFasteners((name,args)=>client.rpc(name,args).abortSignal(AbortSignal.timeout(10000)),opts.projectId,source)
+      return createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source,fasteners)
      },45000)
     },
     checkConstruction:async(id,revision,fresh)=>{

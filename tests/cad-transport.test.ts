@@ -1,6 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {createCadTransport} from '../supabase/functions/_shared/cad-transport.ts'
+import {createCadTransport,readConstructionFasteners} from '../supabase/functions/_shared/cad-transport.ts'
+import {fastenerSchedule} from './support/fastener-schedule-fixture.ts'
 import {cadPreviewKeys,type CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
 const recipe:CadAssemblyRequest={contract_version:1,units:'mm',assembly_id:'fixture',definitions:[{id:'part',primitive:'box',x_mm:10,y_mm:20,z_mm:30,material_ref:null}],instances:[{id:'one',definition_id:'part',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front']}
 const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jx1sAAAAASUVORK5CYII='
@@ -36,6 +37,35 @@ test('construction envelope preserves recipe and refuses a different source revi
  assert.equal((await render(recipe,source)).manifest.drawing_source.revision,3)
  p.manifest.drawing_source={...source,revision:2}
  await assert.rejects(render(recipe,source),/cad_construction_source_mismatch/)
+})
+test('the construction fastener schedule travels with its source and must come back drawn as annotations version 2',async()=>{
+ const source={artifact_id:'11111111-1111-4111-8111-111111111111',revision:3},schedule=fastenerSchedule()
+ const views={front:{coverage:'complete',dimensions:[{axis:'x',mm:10},{axis:'z',mm:30}],parts:[{number:'P1',instance_id:'one',definition_id:'part',blank_mm:{x_mm:10,y_mm:20,z_mm:30}}]}}
+ const respond=(annotations:unknown)=>(async(_url:any,init:any)=>{
+  assert.deepEqual(JSON.parse(init.body),{recipe,drawing_source:source,fasteners:schedule})
+  const p:any=await packet();p.manifest.drawing_source=source;p.manifest.annotations=annotations;return new Response(JSON.stringify(p))
+ }) as typeof fetch
+ const drawn=await createCadTransport('https://fixture.invalid/render','fixture',respond({version:2,coverage:'complete',views,fasteners:schedule}))(recipe,source,schedule)
+ assert.deepEqual(drawn.manifest.annotations.fasteners,schedule)
+ for(const annotations of [{version:1,coverage:'complete',views},{version:2,coverage:'complete',views,fasteners:{...schedule,complete:true}},undefined])
+  await assert.rejects(createCadTransport('https://fixture.invalid/render','fixture',respond(annotations))(recipe,source,schedule),/invalid_cad_result/)
+ // Without a schedule the old envelope and version 1 are unchanged; a version 2 answer is refused.
+ const old=(annotations:unknown)=>(async(_url:any,init:any)=>{assert.deepEqual(JSON.parse(init.body),{recipe,drawing_source:source});const p:any=await packet();p.manifest.drawing_source=source;p.manifest.annotations=annotations;return new Response(JSON.stringify(p))}) as typeof fetch
+ assert.equal((await createCadTransport('https://fixture.invalid/render','fixture',old({version:1,coverage:'complete',views}))(recipe,source)).manifest.annotations.version,1)
+ await assert.rejects(createCadTransport('https://fixture.invalid/render','fixture',old({version:2,coverage:'complete',views,fasteners:schedule}))(recipe,source),/invalid_cad_result/)
+ await assert.rejects(createCadTransport('https://fixture.invalid/render','fixture',old(undefined))(recipe,undefined,schedule),/cad_fasteners_without_source/)
+})
+test('the schedule is read as the caller for exactly the pinned construction revision',async()=>{
+ const source={artifact_id:'11111111-1111-4111-8111-111111111111',revision:3},schedule=fastenerSchedule()
+ const calls:any[]=[]
+ const reply=(data:unknown,error:{code?:string}|null=null)=>async(name:string,args:Record<string,unknown>)=>{calls.push([name,args]);return {data,error}}
+ const row={status:'ok',project_id:'p1',artifact_id:source.artifact_id,revision:3,...schedule}
+ assert.deepEqual(await readConstructionFasteners(reply(row),'p1',source),schedule)
+ assert.deepEqual(calls[0],['read_construction_fasteners',{p_project:'p1',p_artifact:source.artifact_id,p_revision:3}])
+ for(const bad of [{status:'not_found'},{...row,revision:2},{...row,project_id:'p2'},{...row,artifact_id:'22222222-2222-4222-8222-222222222222'},{...row,totals:'none'},null])
+  await assert.rejects(readConstructionFasteners(reply(bad),'p1',source),/construction_fasteners_unavailable/)
+ await assert.rejects(readConstructionFasteners(reply(null,{code:'42501'}),'p1',source),/project_denied/)
+ await assert.rejects(readConstructionFasteners(reply(null,{code:'PGRST202'}),'p1',source),/construction_fasteners_unavailable/)
 })
 test('every numbered sheet is required, hash checked and retained for independent review',async()=>{
  const r=structuredClone(recipe),p:any=await packet()
