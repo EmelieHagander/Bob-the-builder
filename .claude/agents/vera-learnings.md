@@ -87,3 +87,10 @@ checks pass vacuously.
 recipe path. Depend on `hasErrorCode`, not message text. Browser checks share
 port 4173: an orphaned preview from another run silently serves the wrong
 build, so check `ss -ltnp` or isolate the run before trusting a pass.
+
+## 2026-10-26 — Room size reads typed values, never labels
+
+**Rule:** a size or dimension summary reads only typed backend fields
+(`project_room_dimensions`); it names unknown parts and lists every conflicting
+value instead of picking one. Put a secondary line in its own element so exact
+`getByText` on the primary label still matches.

@@ -88,8 +88,23 @@ the room revision on screen, labels verbatim, value and unit as saved, a truth
 label (a missing value reads **Not measured yet**) and the source on tap. More
 than three collapse behind **Show all N measurements**. One read covers the
 page; a failed read says so once with Retry and is never shown as empty. Labels
-are not interpreted: a length × width × height summary waits for a typed field.
-Covered by the same browser script.
+are not interpreted: measurements that say what they measure (typed field, see
+below) come first, with that shown under the label. Covered by the same browser
+script.
+
+Inside a Project, the same rooms show a **room size** line above the list
+(`RoomDimensions`, source only 2026-10-26): "3970 × 2700 mm · height 1920 mm"
+from `project_room_dimensions` (one read per page), its truth (one chip, or one
+per part when they differ), unknown parts named ("Length unknown, width 2700 mm
+· height unknown") and a conflict note listing every value. Only the room's own
+length, width and ceiling height count; nothing is derived. A failed size read
+says so once with Retry and per room ("Room size not loaded."), never as
+unknown. Account Buildings (no Project) shows the list only. On **Measurements &
+parts** a measurement says what it measures once: **What does it measure?** (with
+optional side and "measured from") when adding, when updating an unclassified
+one, or with **What it measures** on its card, which adds no version. Afterwards
+it is shown, not editable; the hint says to archive and add a new one.
+Backend rules: [building model](building-model.md#room-dimensions--owner-decisions-2026-10-26).
 
 ### Compact Project home and phone conversation
 
@@ -291,6 +306,7 @@ scans `.tsx` files for raw error rendering and the data layer for
 - Modal frame: `src/components/Modal.tsx`
 - Domain editors: `src/components/editors.tsx`
 - Room measurement list and truth labels: `src/components/RoomMeasurements.tsx` + `src/lib/roomMeasurements.ts`
+- Room size line: `src/components/RoomDimensions.tsx` + `src/lib/roomDimensions.ts`; property/side labels in `src/lib/labels.ts`
 - Failure copy and code labels: `src/lib/userErrors.ts`, `src/lib/labels.ts`
 - AI drawer: `src/components/AskBob.tsx`
 - Page focus to Bob: `src/lib/bobSurface.ts` + `src/domain/bobScreen.ts`; [context contract](ask-bob-context.md#implemented-scope-and-remaining-target)

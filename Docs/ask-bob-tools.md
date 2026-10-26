@@ -61,6 +61,21 @@ kind only). When no whole building or site is linked, `read_building_scope` and
 so Bob can find and link the house instead of reporting missing data. Linked
 projects keep on-demand loading.
 
+**Room dimensions dataset — source only 2026-10-26, not applied or deployed.**
+`search_project_data` gains the dataset `room_dimensions`: one record per room in
+this project with its name, building name, revision and typed dimensions (length,
+width, ceiling height, openings; side and reference) from
+`bob.project_room_dimensions`, each `known`, `conflict` (all values) or `unknown`,
+in millimetres, never derived. New jobs pin `roomDimensionsVersion: 1` and read
+through `search_bob_project_data_v9`; journals without the pin keep v8, so a
+resumed job replays unchanged. The generated publication
+`20261026093500_ai_room_dimensions_catalog.sql`
+(`scripts/build-ai-room-dimensions-catalog.ts`) appends the dataset to the enum
+and one sentence to its description; older manifests keep their list. Order:
+core migration, both runtimes, then the publication
+([database](../db/README.md#room-dimensions--2026-10-26)). Bob's writers are
+unchanged.
+
 **Owner decision — 2026-10-22:** do not redesign selective loading, allowed-tool
 restriction or instruction placement for provider caching. The cache work kept is
 a routing hint only ([decision A](ask-bob-conversations.md#pr3--bound-result-payloads-without-an-ai-history-summary)).

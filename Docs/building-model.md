@@ -541,6 +541,39 @@ Space dimensions continue to use the existing `Measurement` seam rather than a s
 
 A later Project can therefore target the same stable Space identity while the provenance of the earlier dimension remains explainable.
 
+### Room dimensions — owner decisions 2026-10-26
+
+**Source only, not applied yet** ([database](../db/README.md#room-dimensions--2026-10-26)).
+Measurements are read directly from the database so a room shows its
+length × width × height, in the app and to Bob. Labels are never interpreted;
+a measurement says what it measures through a typed field.
+
+- **What it measures.** A measurement identity carries an optional `property`
+  (room length, room width, ceiling height, wall length, opening width, opening
+  height, sill height, distance to an opening, other), an optional `side`
+  (N/E/S/W) and an optional `reference` (where it was measured from, up to 120
+  characters). It is set once (create, revise of an unclassified measurement, or
+  the `classify` action) and adds no revision, so drawings pinned to the value
+  stay current. To change it, archive the measurement and record a new one.
+- **Owner definitions.** Room length is the room's longest interior dimension,
+  room width the shortest. Ceiling height is the room's ceiling height and is
+  used only when it holds for the whole room; a local height carries a
+  `reference` and is not the room's height.
+- **Snapshots follow.** Room snapshots mirror the classification, on every
+  revision, so another project that shares the room sees it without reading the
+  donor project's measurements.
+- **One shared view.** `bob.project_room_dimensions` gives, per project room and
+  property/side/reference, the snapshots on the room's accepted revision. The
+  strongest truth wins (measured > specification > estimated); equal values in
+  other units agree; different values at that truth are a `conflict` and all are
+  shown; no value is `unknown`. Length, width and ceiling height are always
+  reported, unknown included. Nothing is derived (no width from an area, no
+  height from a neighbour). The app's **room size** block and Bob's
+  `room_dimensions` dataset read this view.
+- **Carry-forward.** A Space revise or proposal that omits `measurements` keeps
+  the snapshots of the revision it replaces; an explicit list replaces them and
+  an empty list clears them.
+
 ## 11.5 Narrow topology and elements
 
 The first runtime relationship vocabulary is deliberately small: `adjacent_to`, `shares_boundary_with`, `connects_to`, `above`, `below`, `attached_to`. Slice 2C initially records topology between Spaces; BuildingElements carry a stable Building identity and optional Space location. This is enough to prove the children's-room/office shared-wall case without pretending the first migration is a general graph/BIM engine.

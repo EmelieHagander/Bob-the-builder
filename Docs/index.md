@@ -96,6 +96,7 @@ The original product uses `Area` as a project-scoped physical/work zone. The per
 - `Area` — project work-zone container used by current collaboration/runtime flows;
 - `Site` / `Building` / `Space` / `BuildingElement` — implemented persistent physical context that may be reused across projects;
 - Areas may map to rooms of a Building the Project links as a whole (Area **Rooms** panel, live 2026-10-25; [building model](building-model.md#project-rooms-and-area-rooms--owner-decision-2026-10-25)); Area and Space must not be silently conflated.
+- A room's length × width × height comes from typed measurements through one shared view for the app and Bob (**source only 2026-10-26**, not applied; [building model](building-model.md#room-dimensions--owner-decisions-2026-10-26), [database](../db/README.md#room-dimensions--2026-10-26)).
 
 See `Docs/building-model.md` for the owning contract and `Docs/v1-plan.md` for delivery order.
 
