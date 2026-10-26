@@ -273,7 +273,7 @@ test("Bob's room_dimensions dataset returns room and building names with typed d
 })
 
 test('the catalog publishes room_dimensions once; older manifests keep their dataset list', async () => {
-  execFileSync(process.execPath, ['--import', 'tsx', 'scripts/build-ai-room-dimensions-catalog.ts', 'supabase/migrations/20261026093500_ai_room_dimensions_catalog.sql', '--check'])
+  execFileSync(process.execPath, ['--import', 'tsx', 'scripts/build-ai-room-dimensions-catalog.ts', 'supabase/migrations/20261026130500_ai_room_dimensions_catalog.sql', '--check'])
   const catalog = (m: any) => createAiCatalogSession({ rpc: async () => { throw Error('Pinned') } }, { app: 'bob', manifest: m })
   const enumOf = (session: any) => (session.tool('search_project_data').function.parameters as any).properties.dataset.enum
   assert.deepEqual(enumOf(catalog(publishedManifest)), [...DATASETS])
@@ -284,7 +284,7 @@ test('the catalog publishes room_dimensions once; older manifests keep their dat
   assert.deepEqual((await owner("select shared.resolve_ai_catalog('bob',$1) m", [priorManifest.manifest_id]))[0].m, priorManifest)
   const active = async () => (await owner("select active_version_id from shared.ai_prompts where app='bob' and prompt_key='tools.search_project_data'"))[0].active_version_id
   const before = await active()
-  await pg.exec(await readFile(new URL('../supabase/migrations/20261026093500_ai_room_dimensions_catalog.sql', import.meta.url), 'utf8'))
+  await pg.exec(await readFile(new URL('../supabase/migrations/20261026130500_ai_room_dimensions_catalog.sql', import.meta.url), 'utf8'))
   assert.equal(await active(), before, 'Re-running is a no-op')
   const lookup = { dataset: 'room_dimensions', query: null, status: null, area_id: null, record_id: null, after_id: null }
   assert.deepEqual(parseLookup(lookup), lookup)

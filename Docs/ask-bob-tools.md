@@ -69,7 +69,7 @@ width, ceiling height, openings; side and reference) from
 in millimetres, never derived. New jobs pin `roomDimensionsVersion: 1` and read
 through `search_bob_project_data_v9`; journals without the pin keep v8, so a
 resumed job replays unchanged. The generated publication
-`20261026093500_ai_room_dimensions_catalog.sql`
+`20261026130500_ai_room_dimensions_catalog.sql`
 (`scripts/build-ai-room-dimensions-catalog.ts`) appends the dataset to the enum
 and one sentence to its description; older manifests keep their list. Order:
 core migration, both runtimes, then the publication

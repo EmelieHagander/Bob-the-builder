@@ -2,7 +2,7 @@
 --
 -- Says once what each listed measurement of project p_barnrum_vaningssang
 -- measures. Run by the main session, once, after
--- supabase/migrations/20261026093000_room_dimensions.sql is applied; it is not
+-- supabase/migrations/20261026130000_room_dimensions.sql is applied; it is not
 -- a migration. It writes only bob.measurements.property/side/reference plus the
 -- classification audit (classified_by stays null: an operator script, not a
 -- signed-in person) and the mirrored bob.space_measurements columns. No value,
@@ -38,7 +38,7 @@ declare
   classified integer := 0; kept integer := 0; mirrored integer := 0; changed integer;
 begin
   if not exists(select 1 from information_schema.columns where table_schema='bob' and table_name='measurements' and column_name='property') then
-    raise exception 'room_dimensions_migration_missing: apply 20261026093000_room_dimensions.sql first';
+    raise exception 'room_dimensions_migration_missing: apply 20261026130000_room_dimensions.sql first';
   end if;
   if not exists(select 1 from bob.projects where id=project) then raise exception 'barnrum_project_missing: %', project; end if;
   -- Check every subject and value before writing anything.
