@@ -172,3 +172,25 @@ Core, matching backend, frontend and catalog are installed.
 [Verification](foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26)
 records its exact source and hosted readback. Real owner/model acceptance remains
 in [State](bob-delivery-flow.md#state).
+
+<a id="form-refinement"></a>
+### Concept-to-construction refinement — specified next boundary, 2026-10-26
+
+The installed same-ID, unrotated-box handoff above is still the runtime limit.
+The next extension must let one conceptual component map to multiple detailed
+Construction parts, such as a wall becoming studs and panels, while preserving
+the selected Solution revision, component/feature identities and named frame.
+It must express which dimensions, spatial relations, clearances and functions
+the refinement preserves; matching an outer bounding box alone is insufficient.
+Additional detailed parts retain their own identities and traceable purpose.
+
+Solution continues to own intended form and function; Artifact/Construction owns
+parts, placement, joints and the detailed realization. Mapping identity, version
+binding and validation belong at that existing boundary, not in a new parallel
+model store. Missing mappings, unsupported geometry or an unresolved controlling
+requirement remain explicit. A detail that changes intended form/function returns
+to a revised Solution and target decision before affected outputs are regenerated.
+
+This does not implement a conversion or grant construction approval. The
+[whole FORM flow](bob-delivery-flow.md#form-flow) owns the two review stages and
+[State](bob-delivery-flow.md#form-next) owns implementation order and acceptance.

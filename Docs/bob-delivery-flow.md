@@ -4,7 +4,7 @@
 >
 > **Äger:** sambandet mellan datans väg, ansvar, överlämningar, fortsatt arbete och leveransacceptans. **Äger inte:** en ny ordlista, arbetsstruktur, databasmodell, CAD-motor, verktygskatalog eller V1-roadmap. Befintliga domänägare nedan behålls. Kvarstående arbete finns i [State](#state); daterade kontroller och tidigare överlämning hör till [arkivet](archive/bob-delivery-flow-review-2026-09-29.md).
 
-**Fortsätt här:** [State och nästa handling](#state) · [P0:s arbetspass](#p0) · [Prioriteringar](#plan) · [Acceptansfall](#acceptans).
+**Fortsätt här:** [State och nästa handling](#state) · [FORM: hela flödet](#form-flow) · [P0:s arbetspass](#p0) · [Prioriteringar](#plan) · [Acceptansfall](#acceptans).
 
 ## 1. Utfallet vi vill ha
 
@@ -86,6 +86,78 @@ flowchart TD
 ```
 
 Pilarna från projekt, fysisk plats, lösning och medier är **parallella källflöden**. De måste inte alla passera genom Bobs egen text. Granskaren får både kandidaten och en kontrollerbar koppling tillbaka till originalunderlaget. Kompletteringsslingan är villkorad; diagrammet ger inte tillstånd till oändliga modell- eller renderanrop.
+
+<a id="form-flow"></a>
+### FORM — från tidig 2D till byggunderlag, 2026-10-26
+
+**Specificerad fortsättning på den tekniskt installerade första FORM-leveransen.**
+FORM betyder *Från Önskemål till Realiserbar Modell*. Den befintliga
+[Solution-modellen](solutions.md#early-concept-geometry-form--source-implementation-2026-10-26)
+ger redan reviderbar ortogonal konceptgeometri och deterministiska 2D-vyer.
+Det fulla flödet nedan är ännu inte verifierat med verkliga ägar-/modellfall.
+[Releasebeviset](foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26)
+äger installerat nuläge; [State](#form-next) äger nästa arbetspaket.
+
+**Solution äger vad som ska byggas; Construction äger hur det byggs.** En
+beskrivning och dess vyer ska uttrycka samma versionsbundna modell. Varje
+efterföljande leverans får originalkrav, rättelser och relevanta källor parallellt
+med modellen. En serie omskrivna sammanfattningar räcker inte som källkedja.
+
+| Led | Källa och resultat | Ansvar för nästa beslut |
+|---|---|---|
+| Förstå uppdraget | Originalönskemål, tidigare rättelser, plats, mått, bilder och mandat. Krav, val, uppskattningar och okänt behåller sitt ursprung. | Bob identifierar användning, avgränsning och nödvändiga frågor. Befintliga projekt-/mått-/medieägare behåller sanningen. |
+| Tidig 2D och beskrivning | Samma Solution-revision innehåller avsikt, funktioner, val och den lätta modellen. Kod tar fram plan, sida och relevant principsnitt. En kort förklaring gör modellen begriplig. | Bob föreslår och gör riktade ändringar. Betydelsefulla ägarval tas inom befintligt mandat; ett nytt klartecken krävs inte för varje verktyg. |
+| Granskning efter 2D | Exakt konceptrevision, deterministiska kontroller, originalkrav och relevanta originalbilder. | Oberoende bedömning av att modellen uttrycker avsikten före dyr detaljering. Det semantiska granskningssteget återstår att implementera. |
+| Valfri bildmockup | Samma koncept, namngivna vyer och originalreferenser används för att visa utseende, materialkänsla och sammanhang. | Använd när bilden hjälper ett beslut. Nya designval återförs till Solution före detaljering. En illustration tillför inga uppmätta mått; automatisk versionsbunden FORM-överlämning till bildverktyget saknas ännu. |
+| Detaljerad konstruktion | Vald Solution-revision förfinas till Construction med delar, material, fogar, placeringar, parameterursprung och monteringsberoenden. | Bob gör konstruktionsval; kod räknar och kontrollerar. En konceptdel ska kunna motsvara flera byggdelar genom den planerade spårbara förfiningen. |
+| Beskrivning, listor och 3D | Detaljerad förklaring/monteringsanvisning, plock-/kapunderlag och CAD bygger på **samma exakta Construction-revision**. Listor räknas av kod och kompletteras med befintliga lager-, råämnes- och produktuppgifter. CAD renderar den kontrollerade geometrin. | Text förklarar konstruktionen; listor och rendering introducerar inga nya konstruktionsval. En dellista innehåller inte alla placeringar eller fogar och kan därför inte ensam vara 3D-källa. Preliminära längder är inte automatiskt en verifierad kapplan eller inköpslista. |
+| Granskning efter 3D och leverans | Oberoende granskare får exakt kandidat, aktuella originalkällor, vald avsikt, kontrollresultat och renderade vyer. Därefter sparar och länkar Bob rätt Artifact-version och återläser den. | Kandidatgranskning, återstående fysiska kontroller och leveranskvitton är skilda resultat. En passerad granskning betyder inte redan sparat eller konstruktionscertifierat. |
+
+Detaljbeskrivningens versionskoppling och mockupens nya överlämning behöver
+preciseras inom [Artifact](artifacts.md) respektive [medieägaren](media-and-steps.md).
+Ingen separat beskrivnings-, list- eller projektminnesdatabas införs av detta flöde.
+Den ursprungliga [FORM-referensen](form-design-loop-review-2026-10-26.md) bevaras
+som metodunderlag; denna precisering äger relationen mellan leveranserna.
+
+#### Två granskningar med olika frågor
+
+**Efter 2D:** kontrollera funktioner, antal, axlar, sida, relativa placeringar,
+öppningar, fria utrymmen och styrande mått mot originalavsikten. Alla vyer ska
+beskriva samma modell. Markera vad som är okänt eller uttryckligen uppskjutet för
+konceptets syfte. Numeriskt giltig geometri och en länk till ett funktions-ID
+bevisar inte att funktionen finns. En oförändrad kandidat får inte köras om
+upprepade gånger som ersättning för att lösa en konkret avvikelse.
+
+**Efter 3D:** bevara den befintliga oberoende CAD-granskningen och kontrollera
+också att förfiningen bevarat konceptets styrande funktioner och relationer.
+Granskaren ska kunna öppna originalen utan att vara begränsad till designerns
+eller underlagsläsarens urval. Redovisa avvikelse med krav, berörd del/egenskap,
+källa och korrigering. Saknade spar-/Step-kvitton hör till efterföljande leverans,
+inte till påhittade geometrifel. K2, källaktualitet och behörighet kvarstår vid
+respektive servergräns.
+
+Rätta på den nivå där felet uppstod: ändrad funktion eller övergripande form går
+till Solution; ett lokalt konstruktionsfel går till Construction. Räkna om och
+granska berörda beroenden. Ett misslyckat sparande eller en saknad länk repareras
+med befintliga kvitton utan att generera om geometri. Historik och orelaterade
+delar bevaras.
+
+#### Få AI-anrop med ett tydligt arbete
+
+Fyra typer av bedömning kan behöva AI: formulera konceptet, granska avsikten i
+2D, detaljera konstruktionen och granska resultatet. Detta är **ansvar, inte ett
+löfte om fyra API-anrop** eller fyra nya agenter. Beskrivningar tas fram med
+respektive designarbete och återanvänds så länge deras källversion gäller.
+Illustration och djupare källtolkning används när uppgiften behöver dem.
+Hämtning av exakta poster, beroendeuppföljning, matematik, listor, projektioner,
+rendering och kvittokontroll är kodarbete.
+
+Det planerade [underlagspaketet](ask-bob-context.md#task-source-packet) använder
+befintliga läsare och kan minska huvudmodellens upprepade letande. En liten modell
+tolkar vid behov text, med kontrollerbara källor och möjlighet att hämta mer.
+Den väljer inte bort obligatoriska krav och ersätter inte granskaren. Val av
+Nano/Mini avgörs av bibehållna krav och total kostnad/tid per korrekt leverans,
+inte enbart priset per enskilt anrop.
 
 ## 4. Kontrakt per led
 
@@ -292,7 +364,15 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — verklig modell-/ritningsacceptans (2026-10-19):**
+**Aktivt nästa steg — FORM och rätt underlag (2026-10-26):** förbered första
+arbetspaketet i [FORM-ordningen](#form-next): spårbar förfining från konceptdelar
+till byggdelar och granskningskontraktet efter 2D. [Hela flödet](#form-flow) och
+[underlagspaketet](ask-bob-context.md#task-source-packet) är nu dokumenterade;
+utökningarna är ännu inte implementerade. Befintliga acceptanspunkter nedan
+kvarstår. Historiska versionsnummer är releasebevis för respektive datum, inte
+instruktion att installera om äldre runtime.
+
+**Kvarstående modell-/ritningsacceptans från 2026-10-19:**
 [PR #291](https://github.com/EmelieHagander/Bob-the-builder/pull/291) är mergad
 och de äldre #285–289-staplarna stängda. **Teknisk driftsättning är nu installerad:**
 konstruktionsändringar, riktade vyer, selektiv verktygsladdning och smalare
@@ -388,26 +468,39 @@ Serverbundna work-record- och planlänkverktyg samt konflikttransporten är nu i
 
 **Kvarstående produktacceptans:** verklig medlemsåterläsning, våningssängens resultat mot mockupen och mätningen av hela modellkedjans kostnad ligger kvar i E. [Artifact](artifacts.md#instance-roles-and-affected-outputs--release-d), [CAD](cad-adapter.md), [material](material-planning.md) och [datagränserna](#kvarstående-datagränser--kodgranskning-2026-10-10) äger de driftsatta ändringskontrakten. Tekniska prov stänger inte modell-/mockupacceptansen.
 
-### FORM 1.0 — tidig designloop (releasegrindar, 2026-10-26)
+<a id="form-next"></a>
+### FORM 1.0 — nästa arbetspaket och acceptans, 2026-10-26
 
-**Nästa handling:** gå igenom hela flödet med ägaren: 2D, beskrivning, valfri
-mockup, detaljerad konstruktion, plock-/kaplista och 3D. Precisera vad varje
-AI-anrop faktiskt ska avgöra, vad kod kan härleda och vad granskningarna efter
-2D respektive 3D måste kontrollera mot originalkraven. Återanvänd
-[det gemensamma flödet](#3-gemensamt-flöde--datans-och-arbetets-väg) och befintliga
-domänägare. Förfining från en konceptdel till flera byggdelar behöver ett
-spårbart mappningskontrakt; detta är nästa designfråga, inte ny installerad funktion.
+**Nästa handling:** precisera och därefter implementera den minsta förfiningen
+och 2D-granskningen i paket 1. Detta är den dokumenterade arbetsordningen,
+inte ett påstående om att utökningarna redan körs. Första FORM-leveransen är
+tekniskt installerad enligt [releasebeviset](foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26);
+dess SQL, frontend och katalog ska inte publiceras om för att denna plan mergas.
 
-Den tekniska installationen, publiceringen och CI-belägg finns i
-[releasebeviset](foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26).
-[Solution-ägaren](solutions.md#early-concept-geometry-form--source-implementation-2026-10-26)
-äger modellen. Därefter kvarstår låda, våningssäng och lada med riktiga
-ägarkorrigeringar, återöppning och samma valda källrevision till konstruktion/CAD.
-Mät felaktiga vyer, CAD-omtag, falska godkännanden, anrop/kostnad och spar-/Step-kvitto.
-Principsnittet i den tidiga modellen är inte en byggteknisk CAD-kapning.
-Subdivision/rotation från konceptdel till flera konstruktionsdelar saknar fortfarande
-mappningsstöd i denna första avgränsade leverans. Befintlig K2- och CAD-review samt
-pågående leveransacceptans kvarstår.
+| Ordning | Avgränsat arbete | Klart-villkor och ägare |
+|---|---|---|
+| 1. Förfining och 2D-granskning | Definiera hur en konceptdel kan bli flera byggdelar och hur originalkrav följer med. Lägg till oberoende semantisk bedömning av exakt 2D-kandidat. | [Solution-gränsen](solutions.md#form-refinement) och Artifact behåller identiteter, revisioner, koordinatram och krav. Prova en vägg som blir reglar/skivor, bevarad funktion och ett avsiktligt speglat eller saknat krav; okänd/ostödd förfining ska ge en konkret lucka. Giltig 2D får gå vidare utan obligatoriska extrabekräftelser. |
+| 2. Underlag för nästa arbete | Bygg det [avgränsade underlagspaketet](ask-bob-context.md#task-source-packet) på befintliga sök-/detalj-/konstruktionsläsare. Kod väljer strukturerade fakta; liten modell används för faktisk texttolkning. | Källor och revisioner kan öppnas exakt; senaste rättelser, lästäckning, konflikter och osäkerhet följer med. Ett missat urval eller läsfel får en återhämtningsväg. Privat minne förblir privat. Modellvalet behöver jämförande acceptans. |
+| 3. Mockup och sammanhängande leverans | Koppla den valfria bildbeställningen till exakt FORM-revision och relevanta vyer. Bind detaljbeskrivning, listor och 3D till samma Construction. Utöka 3D-review med den nya förfiningen. | [Medier](media-and-steps.md), [Artifact](artifacts.md), [material](material-planning.md) och [CAD](cad-adapter.md) återanvänds. Nya bildval återförs till Solution; mått hämtas inte ur mockupen. Ändring påverkar rätt resultat och kvitton bevarar redan sparad leverans. |
+| 4. Samlad acceptans och release | Kör riktade lokala kontroller och därefter separat godkända verkliga ägar-/modell-/CAD-prov. Följ repots befintliga manuella CI-, säkerhets- och releaseordning. | Samma generella metod klarar fallen nedan. Läs tillbaka exakta versioner och länkar efter omladdning och som behörig medlem; kontrollera även nekad åtkomst. Publicerad kod/katalog eller godkända fixturer räcker inte som modellacceptans. |
+
+**Gemensamma acceptansfall:**
+
+- **Låda:** ändra bredd; kontrollera samma rättade modell i 2D, beskrivning,
+  byggdelar, listor och 3D. Inga objektspecifika specialverktyg eller onödig mockup.
+- **Våningssäng:** flytta stegen utan att ändra lådorna. Bevara originalfunktioner,
+  upptäck spegling och testa en sen rättelse efter sammanfattat samtal.
+- **Lada:** tre rum längs längden, slutna plana tak över djurrum och lodrät stege
+  mot angiven vägg. Kontrollera höjdkedjan och att alla vyer uttrycker samma modell.
+  Taklutning och andra delar utanför första modellens stöd ska visas som luckor;
+  principsnittet är inte en byggteknisk CAD-kapning.
+
+Prova dessutom ändrad källrevision, missad relevant källa, saknat obligatoriskt
+underlag, läsfel och avbrott mellan sparande och länkning. Mät krav som tappas,
+falska godkännanden/stopp, felaktiga vyer, omtag, AI-/verktygsanrop, kostnad och
+hela leveranstiden för jämförbara resultat. [Auditens mätbegränsning](archive/bob-project-context-audit-2026-10-26.md#4-per-model-timing-cannot-currently-support-a-reliable-speed-comparison)
+måste hanteras när bakgrundsanrop tidsmäts. Den befintliga K2-/CAD-granskningen och
+övrig medlemsacceptans kvarstår under arbetet.
 
 <a id="bob-task-pr-plan"></a>
 ### PR-plan — sammanhängande uppgiftsarbete och modelluppgradering, 2026-10-17

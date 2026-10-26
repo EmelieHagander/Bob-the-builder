@@ -124,6 +124,59 @@ Use [the audit](bob-launchpad-migration-audit-2026-10-19.md#tool-payload-audit) 
 the measured gap and implementation order. Payload pagination alone does not
 satisfy this relevance contract.
 
+<a id="task-source-packet"></a>
+### Task-specific source packet — specified next increment, 2026-10-26
+
+The [dated audit](archive/bob-project-context-audit-2026-10-26.md) confirms existing
+startup facts, private memory, exact domain views and model-role configuration.
+The general small reader is still absent. This section refines the small-source
+direction above into one next operation: **collect the evidence needed for the
+next piece of work**. [FORM State](bob-delivery-flow.md#form-next) owns delivery
+order; the [FORM flow](bob-delivery-flow.md#form-flow) owns downstream reviews.
+
+Reuse the current search/detail readers, construction views/dependency traversal,
+image opening, private-history retrieval, versioned AI catalog and durable job
+machinery. Structured selection, calculations and exact source values remain code.
+Only sources needing interpretation go to a bounded small model. This is on-demand
+work, not a continuously running model that receives the whole project every turn.
+It does not require the larger all-category catalog/router architecture below.
+
+| Packet part | Required meaning |
+| --- | --- |
+| Task and scope | Current request, intended next output, explicit project/target/Step scope and caller-authorized sources. Models do not select another project's authority. |
+| Governing evidence | Exact selected Solution/Construction revisions, relevant original requirements, corrections and known dependencies supplied through existing readers. A relevance score cannot discard them. |
+| Selected source content | Exact fields, passages or derived observations with source identity, revision/hash, uncertainty and an exact reopen pointer. Preserve the distinction between original data and model interpretation. |
+| Coverage and conflict | What was searched/opened, remaining pages or omitted content, missing/unavailable/denied sources and conflicting values. An empty search does not establish that the project has no such requirement. |
+| Visual evidence | Original reference identity and relevant actual pixels/model views when interpretation or comparison needs them. A text description does not establish visual fidelity. |
+
+Bob and reviewers must be able to expand the selection and read originals. A
+reader failure leaves an explicit limitation and the ordinary direct readers;
+it neither approves missing evidence nor forces a repeated small-model loop.
+The packet does not write project truth, select a Solution, certify geometry or
+replace the independent 2D/3D review. Preserve the current member/project/private
+thread boundaries. Project-wide reuse must never expose private conversation text.
+
+Reuse the observation for the same source identities/revisions, question and
+scope; recheck current authorization before reuse and refresh when a relevant
+source changes. Reuse the existing operation/result mechanisms where sufficient;
+do not introduce a parallel memory store as a prerequisite. Exact schema, cache
+lifetime and code integration are implementation decisions still to be verified.
+
+Select a small-model profile through the existing catalog only after comparing
+source/requirement coverage and total correct-delivery cost and elapsed time.
+Nano is a candidate class, not a model change made by this document. Existing
+summary/compactor/presentation roles and the disabled `memory-agent` do not by
+themselves implement this operation. Measure actual background submission to
+completion and whole-turn time; the audit explains why response-retrieval timing
+cannot serve as model inference latency.
+
+### Wider architecture sketches and precedence
+
+The following sketches retain the broader historical target. The 2026-10-26
+code-read startup facts replace their automatic turn-start model router, and
+the bounded source packet above is the next reader scope. Do not interpret the
+illustrated router/PLAN/RERANK/SYNTHESIZE/GATE chain as mandatory new model calls.
+
 Bob should receive **exactly the information needed for the current question, when it is needed**.
 
 That means separating five concerns that are easy to conflate:
