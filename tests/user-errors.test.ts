@@ -81,6 +81,8 @@ test('labels name codes for people and never echo a code or UUID', () => {
   assert.equal(categoryLabel('Fasteners & glue'), 'Fasteners & glue', 'People’s own words stay as written'); assert.equal(categoryLabel(''), 'Other')
   assert.equal(materialMethodLabel('stud_wall_net_area'), 'Net wall area from the drawing')
   assert.equal(materialMethodLabel('construction_blank_area'), 'Blank sizes from the construction')
+  assert.equal(materialMethodLabel('construction_fasteners'), 'Fasteners counted from the construction joints')
+  assert.equal(materialMethodLabel('construction_glue'), 'One glue package per construction')
   assert.equal(materialMethodLabel('future_method_v9'), 'Calculated by bob')
   assert.equal(cadParameterLabel('wall_height'), 'Wall height'); assert.equal(cadParameterLabel('wallHeight'), 'Wall height')
   assert.equal(cadPathLabel('definitions/side_panel/x_mm'), 'Side panel · width (x)')
@@ -95,6 +97,10 @@ test('a calculated material basis keeps its arithmetic and certainty but names c
   const blank = `Construction blank role v2: artifact ${uuid} revision 4; definition side_panel; instances 2; local blank 600 x 18 x 400 mm.`
   assert.equal(readableMaterialBasis(blank, 'construction_blank_pieces'), null, 'IDs never reach the screen; a summary is shown instead')
   assert.equal(readableMaterialBasis('Calculated using future_method v2', 'future_method'), null)
+  // Fastener and glue bases are human prose from the server and are shown as written.
+  const screws = 'Counted from the saved construction "Shelf unit": 6 screws of 4 x 45 mm over 2 joints, from the joint fastener schedule. A rule-of-thumb proposal, not a strength calculation; the product, pilot holes and edge distances are still open. 1 other joint has no fastener size or rule yet and is not counted.'
+  assert.equal(readableMaterialBasis(screws, 'construction_fasteners'), screws)
+  assert.equal(readableMaterialBasis('One glue package for the saved construction "bunk_bed", which has 2 glued joints.', 'construction_glue'), null, 'a code-like title falls back to the summary')
   assert.match(readableMaterialBasis('Calculated from Wall A v3 using stud_wall_sheet_layer v1: 4 m². Drawing status: concept. Input certainty: contains explicit estimate. Product input: provided_spec; source: Supplier sheet.', 'stud_wall_sheet_layer') ?? '',
     /using the sheet layer method: 4 m²\. Drawing status: Concept\. Input certainty: contains explicit estimate\. Product input: specification; source: Supplier sheet\./)
 })

@@ -87,6 +87,8 @@ export const drawingRequestStatusLabel = (status: string) => pick(DRAWING_REQUES
 const MATERIAL_METHOD_LABELS: Record<string, string> = {
   stud_wall_net_area: 'Net wall area from the drawing',
   stud_wall_sheet_layer: 'Sheet layers over the net wall area',
+  construction_fasteners: 'Fasteners counted from the construction joints',
+  construction_glue: 'One glue package per construction',
 }
 /**
  * The server-written calculation text of a deterministic requirement, with its
