@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readWithStatementRetry } from '../supabase/functions/_shared/read-retry.ts'
+import { readWithStatementRetry, withStatementRetry } from '../supabase/functions/_shared/read-retry.ts'
 
 const timeout = { data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } }
 
@@ -64,5 +64,50 @@ test('thrown read errors are logged by category and are not silently retried', a
     assert.equal(calls, 1)
     assert.match(logs[0], /"code":"thrown"/)
     assert(!logs[0].includes('private database detail'))
+  } finally { console.error = original }
+})
+
+test('a write cancelled at the statement timeout is sent once more; slow saves are logged without content', async () => {
+  const original = console.error
+  const logs: string[] = []
+  console.error = (...args: unknown[]) => { logs.push(args.map(String).join(' ')) }
+  try {
+    let calls = 0
+    const saved = await withStatementRetry('bob_project_write_v16', async () => {
+      calls++
+      return calls === 1
+        ? { data: null, error: { code: '57014', message: 'private drawing title' } }
+        : { data: { recordId: 'a' }, error: null }
+    }, undefined, { label: 'Write', slowMs: 3000 })
+    assert.equal(calls, 2)
+    assert.deepEqual(saved, { data: { recordId: 'a' }, error: null })
+    assert.match(logs[0], /^\[Write outcome\]/)
+    assert.match(logs[0], /"retry":true/)
+    assert.match(logs[1], /"attempt":2.*"code":"ok"/)
+    assert(!logs.join(' ').includes('private drawing title'))
+
+    // A conflict or a refused write is never resent.
+    calls = 0
+    const conflict = { data: null, error: { code: 'PT409' } }
+    assert.deepEqual(await withStatementRetry('w', async () => { calls++; return conflict }, undefined, { label: 'Write' }), conflict)
+    assert.equal(calls, 1)
+
+    // A fast success is silent; a slow success is logged once.
+    logs.length = 0
+    await withStatementRetry('w', async () => ({ data: 1, error: null }), undefined, { label: 'Write', slowMs: 3000 })
+    assert.equal(logs.length, 0)
+    await withStatementRetry('w', async () => ({ data: 1, error: null }), undefined, { label: 'Write', slowMs: 0 })
+    assert.equal(logs.length, 1)
+    assert.match(logs[0], /"code":"ok","retry":false/)
+  } finally { console.error = original }
+})
+
+test('a write whose response is lost is not resent: its outcome is unknown', async () => {
+  const original = console.error
+  console.error = () => {}
+  try {
+    let calls = 0
+    await assert.rejects(withStatementRetry('w', async () => { calls++; throw Object.assign(new Error('x'), { name: 'TimeoutError' }) }, undefined, { label: 'Write' }))
+    assert.equal(calls, 1)
   } finally { console.error = original }
 })
