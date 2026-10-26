@@ -84,11 +84,13 @@ Generic Artifact revisions and older CAD saves cannot discard the construction c
 
 ### Joint fasteners — owner decisions 2026-10-26
 
-**Status: source on the delivery branch, not yet applied or deployed.**
+**Status: merged in PR #337, applied and deployed 2026-10-26; not yet
+exercised by a live Bob turn.**
 - **B1:** the rule and the reader.
 - **B4:** Bob's override and lists ([tool contract](ask-bob-tools.md#joint-fasteners-in-construction-tools--2026-10-26)).
-- **B2 and B3**, the drawing table and the material list, follow in the same delivery. [Verification](foundation-verification.md#joint-fasteners--2026-10-26)
-separates source from hosted application.
+- **B2:** the drawing table. **B3:** fastener and glue needs on the material list.
+- [Verification](foundation-verification.md#joint-fasteners--2026-10-26) holds
+  the hosted evidence.
 
 Every joint gets a fastener **proposal** from fixed rules, not from a model.
 `bob_private.construction_fastener_schedule(recipe, joints, policy)` (`fastener-rules-v1`)

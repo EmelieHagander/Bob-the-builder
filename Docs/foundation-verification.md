@@ -2,7 +2,51 @@
 
 ## Joint fasteners — 2026-10-26
 
-**B1 source:** migration `20261026170000_construction_fasteners.sql`, not yet applied.
+**PR #337 (`6190984`) is merged, applied and deployed (11:44–11:51 UTC); not
+yet exercised by a live Bob turn or a drawing with a fastener table.**
+
+- **Owner decision, existing parts:** a joint whose two parts both have the
+  role `existing_part` (wall to wall in a room that is already built) gets
+  `source: existing` and no fastener unless Bob sets one. The schedule takes
+  the revision's instance policy through `construction_fastener_schedule_for`.
+- **Local evidence:** construction-fasteners 7/7, construction-fastener-tools
+  20/20, fastener-requirements-sql 4/4, cad-fastener-annotations 2/2,
+  cad-fastener-summary 2/2, cad-adapter 13/13, every `*-catalog` test file, and
+  the full CAD worker suite 26/26 (with build123d and cairosvg).
+- **Hosted application (managed ledger, from `main`):**
+  - `20261026114505_construction_fasteners` (file `20261026170000`, SHA-256
+    `af9a1173e62805a63918b72755735b558d7b5f602b5ffc417b98b99bc6457591`)
+  - `20261026114506_cad_fastener_annotations` (file `20261026171000`,
+    `7463b6469774d2cf4e7ed23ebdb4e16bcfa63cc0ad789ca440e88e84a4daad67`)
+  - `20261026114508_fastener_requirements` (file `20261026172000`,
+    `c3a1c6ab182555fa37bc0f6152a12ec6d3a436f7ad48345cd24ccef52859a590`)
+  - `20261026114942_ai_joint_fasteners_catalog` (file `20261026173000`,
+    `08a49626112e5562a21c9cd8cb39b48e2029b00ca8f2612c457ac8c8b514a64b`)
+- **Readback:**
+  - The drawing validator calls `construction_fastener_schedule_for(source)`.
+  - `bob.material_requirement_fastener_sources` exists.
+  - `anon` cannot execute the reader.
+  - The live bunk bed reads 102 screws of 4 × 45 mm.
+  - No live construction has existing parts yet.
+  - Authenticated `statement_timeout=8s` is unchanged.
+  - Publication `joint-fasteners-v1` is active on five tools:
+    `save_construction_draft` v9, `transition_legacy_drawing` v4,
+    `edit_construction_parts` v2, `derive_construction_lists` v5 and
+    `derive_cad_material_requirement` v4.
+- **Hosted deploys, in this order:**
+  1. CAD worker: Modal run 11 succeeded, including the live version 2 smoke
+     check.
+  2. Read-only checks found no active Bob jobs.
+  3. `bob-worker` v141 and `ask-bob` v173 were deployed. Both bundles contain
+     `read_construction_fasteners` and `parseCadFastenerSchedule`.
+  4. Pages: run 381 succeeded.
+- **Not verified here:**
+  - A live Bob turn that saves a construction with a fastener choice.
+  - A new drawing with the fastener table.
+  - A fastener need sent to Shopping.
+  - The app on a phone.
+
+**B1 source:** migration `20261026170000_construction_fasteners.sql`.
 
 `tests/construction-fasteners.test.ts` covers:
 - The rule table: thickness, standard length, spacing, glue, no rule, and the totals.
