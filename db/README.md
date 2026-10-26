@@ -1459,7 +1459,7 @@ stay (the app reads them only through `database.ts`).
 
 ### Fastener and glue requirements — 2026-10-26
 
-**Source and isolated tests; not applied.** B3 of the
+**Applied 2026-10-26 (PR #337, ledger `20261026114508`).** B3 of the
 [joint fastener decisions](../Docs/artifacts.md#joint-fasteners--owner-decisions-2026-10-26);
 the [material owner](../Docs/material-planning.md#fastener-and-glue-needs--2026-10-26)
 owns the contract. `20261026172000_fastener_requirements.sql`:
@@ -1502,6 +1502,24 @@ pack purchase versus blank guards, and access. Rollout: apply; the app labels
 the new methods either way. Rollback: rename the previous cad body back,
 recreate the manual wrapper from `20261005173845`, reverse the two guarded
 replacements, then drop the table and helpers.
+
+**Exact counts — source and isolated tests; not applied.** Owner decision
+2026-10-26: fastener and glue needs show the exact schedule count, without
+waste ([material owner](../Docs/material-planning.md#exact-counts-without-waste--owner-decision-2026-10-26)).
+`20261026190000_exact_fastener_needs.sql` makes two guarded replaces from the
+installed bodies (a changed body fails loudly):
+
+- `bob_private.material_requirement_fastener_command`: a `waste_percent` that
+  is present and not 0 raises `fastener_quantity_exact` (22023) right after the
+  input check, before the project lock; the payload to the arithmetic writer
+  always carries `waste_percent` 0, so the stored allowance is 0 on create and
+  revise. `purchase_increment` stays allowed.
+- `bob_private.fastener_consequence`: change work sends `waste_percent` 0
+  instead of copying the previous revision's value, so a need saved earlier
+  with an allowance is recalculated exact rather than refused.
+
+New code: `fastener_quantity_exact` (22023). Rollback: the reverse guarded
+replaces of both snippets.
 
 ### Project facts reader — 2026-10-26
 

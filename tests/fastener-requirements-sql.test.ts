@@ -2,6 +2,8 @@
 // B3): one need per schedule group (kind and size), one glue package per
 // construction, buyable through Shopping and pack purchases while blank needs
 // keep their guards. Rule-of-thumb proposals, not a strength calculation.
+// The need is the exact schedule count, without a waste allowance (owner
+// decision 2026-10-26, 20261026190000_exact_fastener_needs.sql).
 import { designIntent } from './support/design-intent-fixture.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -167,12 +169,51 @@ test('fastener needs reach Shopping, stock and pack purchases; blank needs of th
  await assert.rejects(f.call('bob.material_requirement_command', [f.project, 'publish', nailsId, 1, '{}']), /pack_requirement_claimed/)
 })
 
+test('fastener and glue needs are exact: a waste allowance is refused; absent or 0 is stored as 0 on create and revise', async t => {
+ // Owner decision 2026-10-26: show the exact count; Bob may recommend a spare in words.
+ const f = await fixture(t)
+ const screws = randomUUID(), glueId = randomUUID(), nailsId = randomUUID()
+ const stored = async (id: string) => { const n = await f.need(id); return [n.required_quantity, n.waste_percent, n.required_with_waste, n.purchase_quantity].map(Number) }
+ const without = (fields: any) => { const copy = { ...fields }; delete copy.waste_percent; return copy }
+ const exact = (e: any) => e.code === '22023' && /fastener_quantity_exact/.test(e.message)
+ for (const waste_percent of ['10', 5, '0.001', '-2', 'ten', ''])
+  await assert.rejects(f.derive(f.fields({ waste_percent }), 'create', screws), exact, JSON.stringify(waste_percent))
+ await assert.rejects(f.derive(f.glue({ waste_percent: '10' }), 'create', glueId), exact)
+ assert.equal(await f.need(screws), undefined); assert.equal(await f.need(glueId), undefined)
+ // Absent or null is accepted and stored as 0: the need is the schedule count.
+ await f.derive(without(f.fields()), 'create', screws)
+ assert.deepEqual(await stored(screws), [6, 0, 6, 6])
+ await f.derive(f.glue({ waste_percent: null }), 'create', glueId)
+ assert.deepEqual(await stored(glueId), [1, 0, 1, 1])
+ // Revise follows the same rule.
+ await assert.rejects(f.derive(f.fields({ waste_percent: '15' }), 'revise', screws, 1), exact)
+ await assert.rejects(f.derive(f.glue({ waste_percent: 100 }), 'revise', glueId, 1), exact)
+ assert.equal((await f.derive(f.fields({ waste_percent: '0.000' }), 'revise', screws, 1)).revision, 2)
+ assert.equal((await f.derive(without(f.fields()), 'revise', screws, 2)).revision, 3)
+ assert.equal((await f.derive(f.glue({ waste_percent: 0 }), 'revise', glueId, 1)).revision, 2)
+ assert.deepEqual(await stored(screws), [6, 0, 6, 6]); assert.deepEqual(await stored(glueId), [1, 0, 1, 1])
+ // A pack size buys whole packs; it is not waste, and the need stays exact.
+ await f.derive(f.fields({ name: 'Nails 2.8 x 50', fastener_kind: 'nail', diameter_mm: 2.8, length_mm: 50, purchase_increment: '100' }), 'create', nailsId)
+ assert.deepEqual(await stored(nailsId), [3, 0, 3, 100])
+ // Bob's claimed-turn writer surfaces the same specific refusal.
+ await assert.rejects(f.write({ ...f.base, kind: 'operational', data: { resource: 'cad_requirement', action: 'create', fields: f.fields({ name: 'Screws with spare', waste_percent: '10' }) } }), exact)
+ // Blank needs keep their allowance; the rule covers only fastener and glue modes.
+ const blank = { ...f.fields({ name: 'Shelf blank', category: 'Timber', definition_id: 'shelf', quantity_mode: 'pieces', waste_percent: '10' }) }
+ delete blank.fastener_kind; delete blank.diameter_mm; delete blank.length_mm
+ const blankId = randomUUID()
+ await f.derive(blank, 'create', blankId)
+ assert.equal(Number((await f.need(blankId)).waste_percent), 10)
+})
+
 test('a construction change makes fastener needs stale; continuation and re-derive revise the same needs or retire a vanished group', async t => {
  const f = await fixture(t)
  const screws = await f.write({ ...f.base, kind: 'operational', data: { resource: 'cad_requirement', action: 'create', fields: f.fields() } })
  const nailsId = randomUUID(), glueId = randomUUID()
  await f.derive(f.fields({ name: 'Nails 2.8 x 50', fastener_kind: 'nail', diameter_mm: 2.8, length_mm: 50 }), 'create', nailsId)
  await f.derive(f.glue(), 'create', glueId)
+ // A need saved with an allowance before the exact-count rule (2026-10-26):
+ // change work recalculates it exact instead of copying the allowance.
+ await f.pg.query('update bob.material_requirement_revisions set waste_percent=10,required_with_waste=6.6,purchase_quantity=7 where requirement_id=$1 and revision=1', [screws.recordId])
  await f.newTurn()
  // Deeper parts and no nail override: four screws per joint, the nail group disappears.
  await f.write({ ...f.base, kind: 'construction', record_id: f.construction.recordId, expected_revision: 1, data: f.constructionData(450, false, 'construction2') })
@@ -187,13 +228,14 @@ test('a construction change makes fastener needs stale; continuation and re-deri
   data: { key, item_id: item(id).id, action: 'recalculate', review_note: null, output_revision: null, change_note: 'Recalculate after the deeper shelves', computed: null } })
  const prepared = await f.call('bob.prepare_construction_consequence', [...f.binding(), JSON.stringify(continuation(screws.recordId, 'screws'))])
  assert.equal(prepared.status, 'ready'); assert.equal(prepared.kind, 'requirement')
- // The same need, group and decisions at the new construction revision; no quantity input.
- assert.deepEqual(prepared.domain.data.fields, { ...f.fields(), waste_percent: '0.000', purchase_increment: '1.0000', artifact_revision: 2, change_note: 'Recalculate after the deeper shelves' })
+ // The same need, group and decisions at the new construction revision; no quantity input and no allowance.
+ assert.deepEqual(prepared.domain.data.fields, { ...f.fields(), waste_percent: '0', purchase_increment: '1.0000', artifact_revision: 2, change_note: 'Recalculate after the deeper shelves' })
  const saved = await f.write(continuation(screws.recordId, 'screws'))
  assert.equal(saved.recordId, screws.recordId); assert.equal(saved.revision, 2)
  assert.deepEqual(await f.write(continuation(screws.recordId, 'screws')), saved)
  const current = await f.need(screws.recordId)
  assert.equal(Number(current.required_quantity), 12); assert.equal(current.artifact_revision, 2); assert.equal(current.artifact_changed, false)
+ assert.equal(Number(current.waste_percent), 0); assert.equal(Number(current.purchase_quantity), 12)
  assert.match(current.basis, /: 12 screws of 4 x 45 mm over 3 joints, from the joint fastener schedule\./)
  assert.deepEqual((await f.sources(screws.recordId)).map(s => [s.requirement_revision, s.artifact_revision, s.quantity]), [[1, 1, 6], [2, 2, 12]], 'history keeps the old count')
 
