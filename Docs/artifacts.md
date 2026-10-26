@@ -82,6 +82,45 @@ Unknown controlling dimensions stop numeric compilation rather than becoming zer
 
 Generic Artifact revisions and older CAD saves cannot discard the construction checkpoint. A deferred revision guard enforces this across all existing command paths. Archive/restore copy the exact checkpoint without revalidating historical sources. The [K3 checked drawing path](cad-adapter.md#k3-checked-construction-drawings--2026-10-04) preserves and pins this construction through reviewed publication; K1 does not silently publish through the old CAD tool. K2–K5 and real model/participant acceptance remain in [State](bob-delivery-flow.md#state).
 
+### Joint fasteners — owner decisions 2026-10-26
+
+**Status: B1 merged-source preparation**, covering the rule and the reader.
+The drawing table, the material list and Bob's override follow in the same
+delivery. [Verification](foundation-verification.md#joint-fasteners--2026-10-26)
+separates source from hosted application.
+
+Every joint gets a fastener **proposal** from fixed rules, not from a model.
+`bob_private.construction_fastener_schedule(recipe, joints)` (`fastener-rules-v1`)
+reads the saved geometry with the CAD frame convention: uncut boxes at
+right-angle rotations, the same faces as the K2 checker. Nothing is stored, so
+every saved construction, including historical ones, has a schedule.
+
+- **`screwed_butt` → screw.** The part screwed through is the one with the
+  smaller extent along the joint normal (t).
+  - Diameter by t: ≤15 mm → 3.5, ≤22 → 4.0, ≤30 → 4.5, ≤45 → 5.0, ≤70 → 6.0.
+    A thicker part has no rule.
+  - Length: the shortest standard length ≥ 2.5 t that stays 5 mm short of
+    passing through the other part. Without one, the length is shorter and
+    flagged `short_penetration`, or missing (`no_fitting_length`).
+  - Count along the longer side of the contact:
+    max(2, ⌈(L − 2e)/150⌉ + 1), spread evenly, with end distance
+    e = max(15, 5d). A contact shorter than 2e + 30 mm gets one fastener and
+    `short_contact`. A contact narrower than 5d is flagged `narrow_contact`.
+- **`glued_butt` → glue.** One glue package per construction goes to the
+  material list.
+- **`dowel`, `bolted`, `unresolved`** have no rule (`no_rule_for_method`).
+- **Override.** A joint may carry an optional `fastener`
+  `{kind: screw|nail|bolt|glue|none, diameter_mm, length_mm, count, spacing_mm, reason}`,
+  for example nails chosen by Bob. A missing count is spread by the same rule.
+  The rule's own answer stays visible as `proposal`.
+- **Reading it.** `bob.read_construction_fasteners(project, artifact, revision)`
+  serves project members. Totals are grouped by kind, diameter and length.
+  `complete` is false while any joint lacks a rule or a size.
+
+These are rule-of-thumb concept proposals. Strength, edge distances, pilot
+holes, end grain and product approval stay with the K2
+`joint_product_and_capacity_unverified` gaps.
+
 ### Parameter changes before drawing — specified 2026-10-10
 
 **Release B merged, migrated and deployed through [PR #244](https://github.com/EmelieHagander/Bob-the-builder/pull/244); real member/mockup/cost acceptance remains in E.** `change_construction_parameters` reuses the shared construction checkpoint, its parameter graph, claimed-turn receipts and K2 checks. The [K3 drawing path](cad-adapter.md#k3-checked-construction-drawings--2026-10-04) consumes an explicit `construction_revision` and renders that checked checkpoint without geometry-design/research calls. Older drawings require the explicit [release C transition](#legacy-drawing-transition--release-c); a complete numeric graph alone does not attach a construction. [Verification](foundation-verification.md#bounded-construction-changes--release-b) owns B's installation and acceptance evidence.

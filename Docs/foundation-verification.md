@@ -1,8 +1,29 @@
 # Foundation verification and rollout
 
+## Joint fasteners — 2026-10-26
+
+**B1 source:** migration `20261026170000_construction_fasteners.sql`, not yet applied.
+
+`tests/construction-fasteners.test.ts` covers:
+- The rule table: thickness, standard length, spacing, glue, no rule, and the totals.
+- Overrides: nails with a spread count, an explicit `none`, a null override, and the rule proposal shown next to an override.
+- 10 rotations × 4 placements × 36 face pairs, which agree with the K2 checker's face convention.
+- The owner's bunk bed (`tests/fixtures/barnrum-bunk-bed-construction.json`, revision 20): every contact length matches the TS frame.
+- Override validation, and that `check_construction` accepts 5- and 6-key joints.
+- Reader access: members only, and `not_found` for a missing revision.
+
+The existing construction, drawing and writer tests pass: 148 tests.
+
+A rollback-only run of the rule on the hosted bunk bed (revision 20) gave:
+- 102 screws, 4 × 45 mm.
+- 1 glue package, for three glued panels.
+- `complete=true`.
+- Ten edge-to-edge step and shelf contacts flagged `short_contact`.
+- 18 mm edges flagged `narrow_contact`.
+
 ## Drawing save payload and write retry — 2026-10-26
 
-**Merged source; not yet deployed** (needs the `bob-worker` and `ask-bob` Edge deploy).
+**Deployed 2026-10-26** from main `bb5f3a4` (#336): `bob-worker` v140 and `ask-bob` v172. Body readback contains the write retry and the preview drop.
 
 **Symptom.** A reviewed Barnrum drawing (request `e21a2db2…`) failed to save
 twice: on 2026-10-22 at 18:30 (`write_not_saved`) and on 2026-10-26 at 09:06
