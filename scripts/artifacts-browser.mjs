@@ -126,6 +126,7 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
       if(table==='current_drawing_steps') return reply({json:[...records.values()].filter(r=>r.project_id===eq('project_id')&&!r.archived)
         .flatMap(r=>(workLinks.get(r.id)??[]).map(s=>({project_id:r.project_id,artifact_id:r.id,artifact_revision:r.revision,title:r.title,status:r.status,area_id:r.area_id,...sourceStatus(r.id),step_id:s.id,step_title:s.title})))})
       if(table==='current_drawing_overview') {
+        if(fixture.rejectPreview)return reply({status:503,json:{message:'Fixture drawing overview unavailable'}})
         const rows=[...records.values()].filter(r=>r.project_id===eq('project_id')&&!r.archived)
           .sort((a,b)=>b.recorded_at.localeCompare(a.recorded_at)||a.id.localeCompare(b.id))
         if(eq('id')) {
@@ -135,8 +136,11 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
           const c=cad.get(generationKey(row.id,row.revision))
           return reply({json:{preview_svg:c?.files?.isometric??c?.files?.front??null,parametric_recipe:parametric.get(generationKey(row.id,row.revision))?.recipe??null,source_media_id:row.source_media_id}})
         }
-        assert(!url.searchParams.get('select').includes('preview_svg'),'Overview does not fetch geometry or export bytes')
-        return reply({json:rows.slice(0,4).map(r=>({id:r.id,project_id:r.project_id,revision:r.revision,title:r.title,status:r.status,area_id:r.area_id,...sourceStatus(r.id),steps:workLinks.get(r.id)??[]}))})
+        assert.equal(url.searchParams.get('limit'),'4','Overview stays bounded, with previews and source checks in one read')
+        assert(!url.searchParams.get('select').split(',').some(field=>['files','recipe','*'].includes(field)),'Overview never fetches CAD export bytes')
+        return reply({json:rows.slice(0,4).map(r=>({id:r.id,project_id:r.project_id,revision:r.revision,title:r.title,status:r.status,area_id:r.area_id,...sourceStatus(r.id),steps:workLinks.get(r.id)??[],
+          preview_svg:cad.get(generationKey(r.id,r.revision))?.files?.isometric??cad.get(generationKey(r.id,r.revision))?.files?.front??null,
+          parametric_recipe:parametric.get(generationKey(r.id,r.revision))?.recipe??null,source_media_id:r.source_media_id}))})
       }
 
       if (table === 'artifact_cad_revisions') {

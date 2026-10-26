@@ -131,6 +131,7 @@ async function fixture(viewport) {
     if (path.startsWith('/rest/')) assert.equal(request.headers().authorization, 'Bearer ' + token)
     if (path === '/functions/v1/ask-bob') return respond({ json: { ok: true, renewed: 0 } })
     if (path === '/rest/v1/rpc/drawing_work_list') return respond({ json: { items: [], next_cursor: null } })
+    if (path === '/rest/v1/rpc/read_construction_draft') return respond({ json: { status: 'ok', projectId: request.postDataJSON().p_project, items: [], truncated: false, next_cursor: null } })
     if (['/rest/v1/rpc/bob_chat_inbox', '/rest/v1/rpc/bob_mark_chat_read', '/rest/v1/rpc/bob_job_status'].includes(path)) return respond({ json: null })
     if (path === '/rest/v1/rpc/project_plan_read') return respond({ json: { record: null } })
     if (path === '/rest/v1/rpc/project_work_read') return respond({ json: { project_id: request.postDataJSON().p_project, vocabulary_version: '2026-09-24.1', status: 'not_initialized', revision: null, focus_step_id: null, areas: [], steps: [], unorganised_tasks: [] } })
@@ -214,7 +215,8 @@ async function assertPhoneLayout(page, viewport, label) {
 async function assertReachable(locator, label, min = 44) {
   await locator.evaluate(node => node.scrollIntoView({ block: 'center' }))
   const box = await locator.boundingBox()
-  assert(box && box.height >= min, `${label}: touch target is at least ${min}px high (${box?.height})`)
+  // Bounding boxes can lose subpixel precision when subtracting scrolled coordinates.
+  assert(box && box.height + 0.001 >= min, `${label}: touch target is at least ${min}px high (${box?.height})`)
   assert(await locator.evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)) }), `${label}: not covered by fixed controls`)
 }
 

@@ -65,8 +65,9 @@ action, never automatic. While the Project is not yet Build or Complete:
 with an upcoming build day, Project Home leads with a large **Start this build**
 card and starting opens Today; without one, a small header button appears once
 the Project reaches Planning. In Build, Project Home leads with a **Build mode**
-card (next build day on one line, **What needs doing** → Today), drawings and the Plan
-stay visible, and measurements, materials, target and project focus fold under
+card (next build day on one line, **What needs doing** → Today), immediately followed
+by the Plan before project notes and planning tools. Drawings stay visible, and
+measurements, materials, target and project focus fold under
 **Planning tools**. The desktop sidebar moves Today next to Project. Covered by
 `scripts/check-build-start-browser.mjs`.
 
@@ -407,3 +408,16 @@ Overview images have no camera/edit control. Project images offers **Pin as
 thumbnail** / **Unpin thumbnail**; private authorised image reads retain their
 existing permissions. The default building illustration is decorative identity,
 not evidence of the actual building. See `Docs/media-and-steps.md` for persistence.
+
+### Early Solution concept viewer — source only, 2026-10-26
+
+`SolutionConcept` renders the exact model of the opened/selected Solution version
+inside its existing Design & choices panel. It reuses drawing viewport/zoom,
+buttons, tables and semantic warnings. Plan and named principle sections share
+one model; the coordinate plane and cut position are visible. Missing dimensions
+omit affected shapes and explain why; conflicts/unsupported requirements remain
+visible. The model is explicitly conceptual. Editing continues through Bob's
+existing bound Solution tool and reload through `database.ts`. No new route,
+manual CAD editor or build-ready action. `solution-concept-browser.mjs` is included
+in the existing foundations flow; local browser execution remains unverified
+because the implementation environment has no installed Chrome/Chromium.

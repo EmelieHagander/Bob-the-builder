@@ -129,8 +129,14 @@ try {
       }
       if (url.pathname === '/rest/v1/bob_messages') {
         const threadId = url.searchParams.get('thread_id')?.replace(/^eq\./, '') ?? ''
-        const history = [...histories.values()].find(item => item.thread === threadId)
-        return respond({ json: history ? bobHistoryRows(history.messages.filter(row => row.delivery_state === 'completed'), url) : [] })
+        const projectId = url.searchParams.get('bob_threads.project_id')?.replace(/^eq\./, '')
+        if (projectId) {
+          assert.equal(url.searchParams.get('bob_threads.owner_user_id'), `eq.${user.id}`)
+          assert.equal(url.searchParams.get('bob_threads.status'), 'eq.active')
+        }
+        const history = projectId ? histories.get(projectId) : [...histories.values()].find(item => item.thread === threadId)
+        return respond({ json: history?.thread ? bobHistoryRows(history.messages.filter(row => row.delivery_state === 'completed'), url)
+          .map(row => ({ ...row, thread_id: history.thread, bob_threads: { id: history.thread } })) : [] })
       }
       if (url.pathname === '/rest/v1/rpc/bob_job_status') return respond({ json: null })
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })

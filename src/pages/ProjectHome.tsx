@@ -122,6 +122,7 @@ export function ProjectHome() {
     </section>}
 
     {building && <BuildFocus next={next} />}
+    {building && db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
 
     {!building && areas && tasks && !areas.length && !tasks.length && <ProjectStart />}
 
@@ -190,7 +191,7 @@ export function ProjectHome() {
     </section>}
     </PlanningTools>
 
-    {db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
+    {!building && db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
 
     {/* Drawings and open drawing requests stay visible on site. */}
     {db.authEnabled() && <>

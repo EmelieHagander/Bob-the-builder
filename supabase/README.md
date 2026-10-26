@@ -696,3 +696,27 @@ the owner's explicit OK, in this order:
 Rollback: reactivate the previous catalog for new jobs first; a runtime from
 before this change cannot replay a v9 read, so let pinned jobs finish before
 rolling either runtime back.
+
+## FORM concept release — source only, 2026-10-26
+
+Domain owner: [Solutions](../Docs/solutions.md#early-concept-geometry-form--source-implementation-2026-10-26).
+No hosted changes or paid calls are part of the local implementation evidence.
+After review and the owner's direct release request, verify the project is
+`yuobtgoidmmmwfqenkau` and the exact reviewed commit before each step:
+
+1. Run the requested manual CI/browser checks on that commit, including foundations
+   at 320/390 px and desktop. Resolve failures before release.
+2. Apply `20261026210000_solution_concept_model.sql` and check permissions and exact
+   Solution/readiness/Construction readback with an ordinary authorized caller.
+3. Deploy matching `ask-bob` and `bob-worker` plus the frontend from the same commit.
+4. Apply `20261026210100_ai_form_concept_catalog.sql` last. It versions only the
+   existing edit tool manual and on-demand workflow catalog, preserving other
+   customizations and older pinned manifests. Verify activated versions.
+5. Exercise real owner correction → saved Solution → selected revision → checked
+   Construction → CAD/review → save/Step link/readback. Record actual outcomes and
+   cost separately from synthetic fixtures.
+
+Rollback activates the previous two catalog versions first; retain readers and
+validators capable of reading already saved concept revisions and paused jobs.
+Do not delete saved models or weaken construction validation to roll back UI.
+`build-ai-form-concept-catalog.ts --check` verifies publication against source.

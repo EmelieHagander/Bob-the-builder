@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { bobHistoryRows } from './bob-history-fixture.mjs'
 import {randomUUID} from 'node:crypto'
 import {readFile} from 'node:fs/promises'
 // Browser/provider fixtures only. Real SQL and tool orchestration are independently tested.
@@ -12,7 +13,7 @@ export function createMultifloorFixture(timestamp,artifacts,solutions){
   const table=url.pathname.split('/').at(-1),eq=k=>url.searchParams.get(k)?.replace(/^eq\./,'')
   const reply=async json=>{await respond({json});return true}
   if(table==='bob_threads')return reply(eq('project_id')==='A'?{id:thread,next_seq:messages.length+1}:null)
-  if(table==='bob_messages')return reply(eq('thread_id')===thread?messages:[])
+  if(table==='bob_messages')return reply(eq('thread_id')===thread||eq('bob_threads.project_id')==='A'&&eq('bob_threads.status')==='active'?bobHistoryRows(messages,url).map(row=>({...row,thread_id:thread,bob_threads:{id:thread}})):[])
   if(table==='artifact_multifloor_details'){
    const d=details.get(`${eq('artifact_id')}:${eq('artifact_revision')}`)
    return reply(d&&eq('project_id')==='A'&&!fixture.unavailable?{...d,sources_changed:fixture.sourcesChanged}:null)

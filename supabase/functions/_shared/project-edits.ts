@@ -1,5 +1,6 @@
 import { fingerprint, rethrowContinuation } from './bob-job-journal.ts'
 import { parseDesignIntent } from './project-design-intent.ts'
+import { evaluateConcept } from './solution-concept.ts'
 import { SOLUTION_PROSE, type ProjectWriter, type WritePayload, type WriteResult } from './project-write.ts'
 import { humanTextRejection, proseFields, type HumanTextRejection } from './human-text.ts'
 import type { ProjectSource } from '../../../src/data/provenance.ts'
@@ -7,6 +8,7 @@ import type { ProjectSource } from '../../../src/data/provenance.ts'
 const object = (properties: Record<string, unknown>) => ({ type: 'object', additionalProperties: false, properties, required: Object.keys(properties) })
 const text = { type: 'string' }
 const tool = (name: string, description: string, properties: Record<string, unknown>) => ({ type: 'function' as const, function: { name, description, parameters: object(properties) } })
+export const CONCEPT_EDIT_GUIDE = ' Early 2D design uses optional /design_intent/model on this same Solution, before target selection. Initialize once with {version:1,frame:{origin,x,y,z} (plain axis descriptions),nodes,components,views,constraints,unsupported:[]}. Nodes reuse CAD parameters: {id,role:decision|estimate,value,unit:mm|scalar,reason}, {id,role:unknown,unit,reason}, or {id,role:derived,operation:add_v1|subtract_v1|multiply_v1|divide_v1,operands:[id,id],rounding:exact|half_away_6}. No measured/source nodes. Components: {id,label,kind:solid|space|opening,active:true,position:[node,node,node],size:[node,node,node],features:[feature_id],choices:[choice_id]}. Views: {id,label,plane:XY|XZ|YZ,kind:projection|section,at:null|node}; include an XY projection and a profile; section at names the perpendicular coordinate. Constraints: {id,label,relation:equal|at_most,left:node,right:node,feature:null|feature_id}. View requirements use constraints {id,label,relation:view_plane,view:view_id,plane:XY|XZ|YZ,feature:null|feature_id}. Use returned concept_links. IDs are local letters/digits/underscore/hyphen, start with a letter, max 32. Subsequent changes set /design_intent/model/<nodes|components|views|constraints>/<index>/<field>, append at /-, or set frame/unsupported. Node content may be replaced at its index with the SAME id. Components deactivate via active=false; do not replace lists or identities. Unknowns/conflicts stay saved and visible. Every view derives from this model; openings are annotated volumes, not boolean cuts. Unsupported forms belong in unsupported. Saving is not construction or safety approval.'
 export const PROJECT_EDIT_TOOLS = [
   tool('read_project_edit_context', 'Read complete editable project descriptions or solutions. Returns server-bound edit_ref selections and content; never construct a database identity or version. selected_solutions includes each selected scope separately. Use next_ref unchanged for the next page. Re-read after a conflict and reconsider the intended change.', {
     resource: { type: 'string', enum: ['project_description', 'selected_solutions', 'solutions'] },
@@ -18,6 +20,7 @@ export const PROJECT_EDIT_TOOLS = [
     reason: text, request_quote: text,
   }),
 ]
+PROJECT_EDIT_TOOLS[1].function.description += CONCEPT_EDIT_GUIDE
 
 type Resource = 'project_description' | 'selected_solutions' | 'solutions'
 export type EditSnapshot = {
@@ -71,6 +74,32 @@ export async function applyProjectDelta(snapshot: EditSnapshot, changes: unknown
       if (record.design_intent === null && path === '/design_intent/summary' && op === 'set') record.design_intent = { version: 1, purpose: 'concept', summary: value, references: [], features: [], choices: [], alignment: { status: 'draft', basis: reason } }
       const intent = record.design_intent
       if (!intent) throw new Error('Initialize the design summary before changing design details.')
+      if (fields[1] === 'model') {
+        if (op !== 'set') throw new Error('Concept changes use set; deactivate components explicitly.')
+        if (fields.length === 2) {
+          if (intent.model !== undefined) throw new Error('Revise named concept fields; do not replace the model.')
+          intent.model = value
+        } else {
+          const model = intent.model
+          if (!model) throw new Error('Initialize the concept model first.')
+          if (fields.length === 3 && ['frame', 'unsupported'].includes(fields[2])) model[fields[2]] = value
+          else {
+            if (!['nodes', 'components', 'views', 'constraints'].includes(fields[2])) throw new Error('Unsupported concept path.')
+            const list = model[fields[2]]
+            if (fields.length === 4 && fields[3] === '-') {
+              if (!value || typeof value !== 'object' || list.some((item: any) => item.id === value.id)) throw new Error('A new concept item needs a new identity.')
+              list.push(value)
+            } else {
+              if (!/^(0|[1-9][0-9]*)$/.test(fields[3]) || !list[Number(fields[3])]) throw new Error('Use an index from the saved concept read.')
+              const item = list[Number(fields[3])]
+              if (fields.length === 4 && fields[2] === 'nodes' && value?.id === item.id) list[Number(fields[3])] = value
+              else if (fields.length === 5 && fields[4] !== 'id' && Object.hasOwn(item, fields[4])) item[fields[4]] = value
+              else throw new Error('Concept identities and whole components cannot be replaced.')
+            }
+          }
+        }
+        continue
+      }
       if (fields.length === 2 && ['summary', 'purpose', 'alignment'].includes(fields[1])) {
         parent = intent; key = fields[1]
         if (op === 'remove') throw new Error('Required design fields cannot be removed.')
@@ -121,6 +150,8 @@ export function displayEditSnapshot(snapshot: EditSnapshot) {
     title: r.title, description: r.description, assumptions: r.assumptions, tradeoffs: r.tradeoffs, design_intent: intent,
     preserved_sources: { measurements: snapshot.measurements.length, source_image: !!r.source_media_id },
     measurements: snapshot.measurement_evidence ?? [],
+    ...(r.design_intent?.model ? { concept_check: { issues: evaluateConcept(r.design_intent).issues, views: r.design_intent.model.views } } : {}),
+    ...(r.design_intent ? { concept_links: { features: r.design_intent.features.map((f: any) => ({ id: f.id, description: f.description })), choices: r.design_intent.choices.map((c: any) => ({ id: c.id, question: c.question })) } } : {}),
   }
 }
 

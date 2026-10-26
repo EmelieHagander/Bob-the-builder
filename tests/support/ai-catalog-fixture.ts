@@ -24,6 +24,16 @@ let preBuildingScopeRows:any[]|undefined,preBuildingScopeVersions:Map<string,num
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const formWorkflow=source.match(/\$form_workflow\$([\s\S]+?)\$form_workflow\$/)
+ if(formWorkflow){
+  const workflow=JSON.parse(formWorkflow[1]),description=source.match(/\$form_description\$([\s\S]+?)\$form_description\$/)![1]
+  for(const key of ['tools.edit_project_record','bob.workflows']){
+   const row=seed.find(row=>row.key===key),{seed_version,source_revision,...rest}=row.metadata??{}
+   if(key==='bob.workflows')row.definition.workflows.push(workflow)
+   else row.definition.description=description
+   row.metadata={...rest,publication:'form-concept-v1'};versions.set(key,versions.get(key)!+1)
+  }
+ }
  const activation=source.match(/\$complete_request_activation_flags\$([\s\S]+?)\$complete_request_activation_flags\$/)
  if(activation){
   const row=seed.find(row=>row.key==='agent-contract.ask-bob');const{seed_version,source_revision,...rest}=row.metadata??{}

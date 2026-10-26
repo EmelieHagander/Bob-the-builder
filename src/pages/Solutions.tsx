@@ -11,6 +11,7 @@ import { Loading, useAsync } from '../components/ui'
 import { ProjectImages, StoredImage } from '../components/ProjectImages'
 import { formatDateTime } from '../lib/format'
 import { userErrorMessage } from '../lib/userErrors'
+import { SolutionConcept } from '../components/SolutionConcept'
 
 const message = (e: unknown) => userErrorMessage(e, 'Could not save the solution. Try again.')
 function Retry({ error, retry }: { error: Error; retry: () => void }) {
@@ -39,6 +40,7 @@ function DesignChoices({ value }: { value: Solution }) {
     <h4>Design & choices</h4>
     <p><strong>{purposes[intent.purpose]}</strong> · {intent.alignment.status === 'aligned' ? 'Shared direction recorded' : 'Direction needs reconciliation'}</p>
     <p>{intent.summary}</p>
+    <SolutionConcept intent={intent} revision={value.revision} />
     <details className="ui-row-details"><summary tabIndex={0}>Preserved features & references</summary><div className="fact-details">
       {intent.features.length ? intent.features.map(feature => <p key={feature.id}>{feature.description}{feature.basis === 'working_assumption' && <span className="foundation-hint"> · Working assumption</span>}</p>)
         : <p>No specific features recorded.</p>}

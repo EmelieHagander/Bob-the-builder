@@ -6,6 +6,8 @@
 >
 > **Dokumentroll:** FORM beskriver **metoden** och detta dokument visar upptäckta gap, tänkbar integration och acceptans. Normativ produkt-/domänsanning stannar hos [user-stories](user-stories.md), [project-phases](project-phases.md), [solutions](solutions.md), [building-model](building-model.md), [artifacts](artifacts.md), [cad-adapter](cad-adapter.md), [media-and-steps](media-and-steps.md), [bob-delivery-flow](bob-delivery-flow.md) och deras implementerade kod. Nya beslut om data- och verktygskontrakt ska skrivas hos respektive ägare och länkas här, inte tvärtom.
 
+> **Implementation follow-up:** the selected seam and current data contract now live in [Solutions](solutions.md#early-concept-geometry-form--source-implementation-2026-10-26). This dated analysis remains the proposal baseline; [State](bob-delivery-flow.md#state) distinguishes source implementation from remaining release and real-model acceptance.
+
 ## Varför detta finns
 
 I ett verkligt designförsök kunde AI:n beskriva användarens idé om en faluröd djurlada men fortsatte generera felaktiga genomskärningar: tre rum placerades över bredden i stället för efter längden, djurrum öppnades mot loft trots krav på plana slutna tak, stegar lutades ut i rummet trots krav på lodrät väggmontering, och inre höjder passade inte självklart i totalhöjden. Skriftliga rättelser räckte inte för att säkra bildgeometrin. Enkla 2D-principskisser blev det effektiva gemensamma språket.

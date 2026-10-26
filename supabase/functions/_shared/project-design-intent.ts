@@ -1,3 +1,4 @@
+import { parseConceptModel, evaluateConcept, type ConceptModel } from './solution-concept.ts'
 export type DesignPurpose='illustration'|'concept'|'construction'
 export type DesignIntent={
  version:1
@@ -7,6 +8,7 @@ export type DesignIntent={
  features:{id:string;description:string;basis:'user_request'|'project_record'|'working_assumption';source_ref:string|null}[]
  choices:{id:string;question:string;alternatives:string[];recommendation:string;basis:string;consequences:string;geometry_dependency:boolean;status:'open'|'resolved'|'deferred';selected_direction:string|null;decision_authority:'owner'|'bob';decision_basis:string;deferral:{scope:'illustration'|'concept';reason:string}|null}[]
  alignment:{status:'draft'|'aligned';basis:string}
+ model?:ConceptModel
 }
 export type DesignIntentPin={version:1;project_id:string;area_id:string|null;target_revision:number;solution_id:string;solution_revision:number;purpose:DesignPurpose}
 export type DesignReadiness={
@@ -41,7 +43,7 @@ export const DESIGN_INTENT_SCHEMA=object({
  alignment:object({status:{type:'string',enum:['draft','aligned']},basis:text(2000)}),
 })
 /** Free-text design fields people read; ids, enums and source links are typed. */
-export const DESIGN_INTENT_PROSE=['summary','references.*.note','features.*.description','choices.*.question','choices.*.alternatives.*','choices.*.recommendation','choices.*.basis','choices.*.consequences','choices.*.selected_direction','choices.*.decision_basis','choices.*.deferral.reason','alignment.basis']
+export const DESIGN_INTENT_PROSE=['summary','references.*.note','features.*.description','choices.*.question','choices.*.alternatives.*','choices.*.recommendation','choices.*.basis','choices.*.consequences','choices.*.selected_direction','choices.*.decision_basis','choices.*.deferral.reason','alignment.basis','model.frame.*','model.nodes.*.reason','model.components.*.label','model.views.*.label','model.constraints.*.label','model.unsupported.*']
 const exact=(v:any,keys:string[])=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join(',')===keys.slice().sort().join(',')
 const string=(v:unknown,max:number,empty=false):v is string=>typeof v==='string'&&Array.from(v).length<=max&&(empty||!!v.trim())
 const uuid=(v:unknown):v is string=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)
@@ -59,7 +61,7 @@ const jsonbSpaces=(v:unknown):number=>Array.isArray(v)
  * A well-formed draft may retain unanswered advisory questions. */
 export function parseDesignIntent(v:unknown):DesignIntent|null{
  const x=v as DesignIntent
- if(!exact(x,['version','purpose','summary','references','features','choices','alignment'])||x.version!==1||!oneOf(x.purpose,['illustration','concept','construction'])||!string(x.summary,2000)
+ if(!exact(x,['version','purpose','summary','references','features','choices','alignment',...Object.prototype.hasOwnProperty.call(x??{},'model')?['model']:[]])||x.version!==1||!oneOf(x.purpose,['illustration','concept','construction'])||!string(x.summary,2000)
   ||!Array.isArray(x.references)||x.references.length>8||!Array.isArray(x.features)||x.features.length>24||!Array.isArray(x.choices)||x.choices.length>16
   ||!exact(x.alignment,['status','basis'])||!oneOf(x.alignment.status,['draft','aligned'])||!string(x.alignment.basis,2000,true)
   ||x.alignment.status==='aligned'&&!x.alignment.basis.trim())return null
@@ -86,6 +88,7 @@ export function parseDesignIntent(v:unknown):DesignIntent|null{
   }
   choices.add(c.id)
  }
+ if(Object.prototype.hasOwnProperty.call(x,'model')&&!parseConceptModel(x.model))return null
  if(new TextEncoder().encode(JSON.stringify(x)).length+jsonbSpaces(x)>48000)return null
  return structuredClone(x)
 }
@@ -112,6 +115,7 @@ export function parseDesignReadiness(v:unknown):DesignReadiness|null{
    ||intent.choices.some(c=>c.status==='open'||c.status==='deferred'&&(x.purpose==='construction'||c.deferral?.scope!==x.purpose)))return null
   const deferred=intent.choices.filter(c=>c.status==='deferred').map(c=>c.id).sort()
   if(new Set(x.deferred_choice_ids).size!==x.deferred_choice_ids.length||JSON.stringify(deferred)!==JSON.stringify(x.deferred_choice_ids.slice().sort()))return null
+  if(intent.model&&x.purpose==='construction'&&evaluateConcept(intent).issues.length)return null
  }
  return structuredClone({...x,design_intent:intent,pin})
 }
@@ -124,5 +128,7 @@ export function designIntentHandoff<T extends {requirements:{id:string;requireme
  if(requirements.length>24)throw new Error('design_intent_requirement_limit')
  const unresolved=[...new Set([...base.unresolved,...intent.choices.filter(c=>c.status==='deferred').map(c=>c.question+' — '+c.deferral!.reason)])]
  if(unresolved.length>20)throw new Error('design_intent_unresolved_limit')
- return {...structuredClone(base),requirements,unresolved}
+ const frame=intent.model?.frame
+ const coordinates=frame?{origin:frame.origin,positive_x:frame.x,positive_y:frame.y,positive_z:frame.z}:null
+ return {...structuredClone(base),requirements,unresolved,...coordinates&&'coordinates' in base?{coordinates}:{}}
 }
