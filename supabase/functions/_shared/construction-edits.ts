@@ -1,6 +1,7 @@
 import { CAD_RECIPE_SCHEMA } from './cad-schema.ts'
 import { CAD_PARAMETERS_SCHEMA } from './cad-parameters.ts'
 import { INSTANCE_POLICY_ENTRY_SCHEMA } from './construction-instance-policy.ts'
+import { JOINT_FASTENER_SCHEMA } from './construction-fasteners.ts'
 
 const id = { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_.:-]{0,79}$' }
 const obj = (properties: Record<string, unknown>) => ({ type: 'object', additionalProperties: false, properties, required: Object.keys(properties) })
@@ -24,7 +25,7 @@ export const CONSTRUCTION_EDIT_TOOL = { type: 'function' as const, function: {
       materials: delta(obj({ definition_id: id, material_id: uuid, material_revision: revision,
         part_id: { anyOf: [uuid, { type: 'null' }] }, part_revision: { anyOf: [revision, { type: 'null' }] } }), 128),
       joints: delta(obj({ id, method: { type: 'string', enum: ['screwed_butt', 'glued_butt', 'dowel', 'bolted', 'unresolved'] },
-        first: endpoint, second: endpoint, reason: { type: 'string', minLength: 1, maxLength: 2000 } }), 1024),
+        first: endpoint, second: endpoint, reason: { type: 'string', minLength: 1, maxLength: 2000 }, fastener: JOINT_FASTENER_SCHEMA }), 1024),
       roles: delta(INSTANCE_POLICY_ENTRY_SCHEMA, 512),
     } },
   }),

@@ -33,7 +33,7 @@ import type { OpenAIServiceOptions } from './openai-service.ts'
 import { createRecordDetailReader } from './project-record-detail.ts'
 import { createProjectImageTools } from './project-image-tools.ts'
 import { createCadAssistant, cadRenderInput } from './cad-assistant.ts'
-import { createCadTransport } from './cad-transport.ts'
+import { createCadTransport, readConstructionFasteners } from './cad-transport.ts'
 import { createMaterialCatalogReader } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
@@ -547,6 +547,13 @@ export async function answerWithOpenAi(opts: {
       const {data,error}=await readRpc('catalog_read',{p_project:opts.projectId,p_input:{action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}})
       if(error)throw new Error('construction_source_unavailable');return data
     },
+    // Jobs pinned to the joint-fasteners catalog read the server schedule in
+    // derive_construction_lists; earlier manifests keep their journal sequence.
+    ...(aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.derive_construction_lists'&&row.metadata?.joint_fastener_version===1)?{
+      readFasteners:async(id:string,revision:number)=>{
+        const {data,error}=await readRpc('read_construction_fasteners',{p_project:opts.projectId,p_artifact:id,p_revision:revision})
+        return error?null:data
+      }}:{}),
     readSources:async (pins:ReturnType<typeof parameterSourcePins>)=>{
       const project=new Map<string,Record<string,any>>()
       if(pins.project.length){
@@ -642,7 +649,9 @@ export async function answerWithOpenAi(opts: {
      if(!source)throw new Error('checked_construction_source_required')
      return memo('cad:render',cadRenderInput(recipe,source),async()=>{
       await beforeDispatch?.()
-      return createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source)
+      // The pinned revision fixes its schedule, so the journal input stays recipe + source.
+      const fasteners=await readConstructionFasteners((name,args)=>client.rpc(name,args).abortSignal(AbortSignal.timeout(10000)),opts.projectId,source)
+      return createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source,fasteners)
      },45000)
     },
     checkConstruction:async(id,revision,fresh)=>{

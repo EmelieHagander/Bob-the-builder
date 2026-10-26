@@ -2,11 +2,14 @@
  * Raw-stock nesting, reservations and product-dependent hardware are separate
  * evidence. In particular, summed area is never a sheet purchase count. */
 import { constructionInstancePolicy } from './construction-instance-policy.ts'
+import type { FastenerSchedule } from './construction-fasteners.ts'
 export const CONSTRUCTION_LIST_VERSION = 'construction-blanks-role-v1'
 type Row = Record<string, any>
 type Dependency = { joint_id: string; depends_on: string[] }
 
-export function constructionLists(draft: Row, catalog: Map<string, Row>, dependencies: Dependency[]) {
+/** fasteners: undefined keeps the original unverified-hardware list; null means
+ * the server schedule could not be read; otherwise its proposals fill the joints. */
+export function constructionLists(draft: Row, catalog: Map<string, Row>, dependencies: Dependency[], fasteners?: FastenerSchedule | null) {
  const instances: Row[] = draft.recipe.instances
  const policy=constructionInstancePolicy(draft.recipe,draft.instance_policy)
  const unknown=policy.instances.filter(i=>i.role==='unknown')
@@ -55,16 +58,36 @@ export function constructionLists(draft: Row, catalog: Map<string, Row>, depende
   instance_policy:policy, retained_instances:policy.instances.filter(i=>i.role==='existing_part'),
   complete_items:policy.instances.filter(i=>i.role==='prefabricated_part'), reference_instances:policy.instances.filter(i=>i.role==='reference'),
   bom, cuts, joints: joints.map(j => ({ joint_id: j.id, method: j.method, first: j.first, second: j.second,
-   hardware_quantity: null, hardware_product: null, adhesive_quantity: null })),
+   ...(fasteners ? jointFastener(fasteners, j.id) : { hardware_quantity: null, hardware_product: null, adhesive_quantity: null }) })),
+  ...(fasteners ? { fasteners: { rule_version: fasteners.rule_version, complete: fasteners.complete, totals: fasteners.totals,
+   glue_packages: fasteners.glue_packages, basis: 'rule_of_thumb_proposal' } } : {}),
   assembly: { status: dependencies.length ? 'proposed_order' : 'needs_dependencies', provenance: 'design_choice', steps, access_verified: false },
   gaps: [
    ...policy.instances.filter(i=>i.role==='prefabricated_part'||i.role==='existing_part').map(i=>({code:i.role==='existing_part'?'retained_part_condition_unverified':'complete_item_procurement_unverified',
     ids:[i.instance_id],message:i.role==='existing_part'?'This role excludes new manufacturing; condition, availability and any reuse allocation still need their own evidence.':'This is a complete item, not manufactured blanks. Product, procurement/ownership and compatibility remain explicit checks; no duplicate raw material need was inferred.'})),
    { code: 'raw_stock_cutting_unverified', ids: bom.map(row => row.definition_id), message: 'Raw format, saw kerf, grain direction and a feasible stock cutting layout are not verified by this list. Use check_construction_cut_fit for an explicit candidate-sheet layout; that read assessment does not reserve stock or unlock Shopping. These are blank dimensions, not a raw-sheet purchase count.' },
-   { code: 'joint_hardware_unverified', ids: joints.map(j => j.id), message: 'Joint methods do not specify screw/adhesive products, quantities, spacing or capacity. No hardware purchase quantity has been inferred.' },
+   ...(fasteners === undefined
+    ? [{ code: 'joint_hardware_unverified', ids: joints.map(j => j.id), message: 'Joint methods do not specify screw/adhesive products, quantities, spacing or capacity. No hardware purchase quantity has been inferred.' }]
+    : fasteners === null
+     ? [{ code: 'fastener_schedule_unavailable', ids: joints.map(j => j.id), message: 'The server fastener schedule could not be read. No hardware quantity is shown; read the lists again.' }]
+     : [{ code: 'fastener_capacity_unverified', ids: joints.map(j => j.id), message: 'Fasteners are fixed rule-of-thumb proposals from board thickness and contact length (or an explicit joint override). Strength, edge and end distances, pilot holes and the exact product are not verified.' },
+       ...fasteners.joints.filter(j => Array.isArray(j.gaps) && j.gaps.length).map(j => ({ code: 'fastener_rule_gap', ids: [j.joint_id], message: 'Fastener rule notes: ' + j.gaps.join(', ') + '.' }))]),
    { code: 'assembly_access_unverified', ids: joints.map(j => j.id), message: 'Acyclic order is a design proposal; tool access, clamping, machining and stability during assembly still require evidence.' },
    ...(!dependencies.length ? [{ code: 'assembly_dependencies_missing', ids: joints.map(j => j.id), message: 'Supply an explicit dependency entry for every joint to validate a proposed order.' }] : []),
   ], open_questions: draft.open_questions ?? [],
   delivery: { saved: false, material_requirements: 'Use derive_cad_material_requirement with this construction Artifact/revision and each used definition. The server derives blank quantity; preserve existing requirement identities. Shopping and stock allocation remain blocked until raw-stock fit is supported.' },
+ }
+}
+
+function jointFastener(schedule: FastenerSchedule, jointId: string) {
+ const f = schedule.joints.find(j => j.joint_id === jointId)
+ if (!f) return { hardware_quantity: null, hardware_product: null, adhesive_quantity: null, fastener: null }
+ const mechanical = ['screw', 'nail', 'bolt'].includes(f.kind)
+ return {
+  hardware_quantity: mechanical ? f.count ?? null : null,
+  hardware_product: mechanical && f.diameter_mm != null && f.length_mm != null ? { kind: f.kind, diameter_mm: f.diameter_mm, length_mm: f.length_mm } : null,
+  adhesive_quantity: f.kind === 'glue' ? 'shared_package' : null,
+  fastener: { source: f.source, kind: f.kind, diameter_mm: f.diameter_mm, length_mm: f.length_mm, count: f.count, spacing_mm: f.spacing_mm, gaps: f.gaps,
+   ...(f.proposal ? { rule_proposal: f.proposal } : {}) },
  }
 }

@@ -11,6 +11,7 @@ import {CONSTRUCTION_PARAMETER_CHANGES_SCHEMA,compileConstructionParameterChange
 import { INSTANCE_POLICY_SCHEMA,constructionInstancePolicy } from './construction-instance-policy.ts'
 import { CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL } from './construction-consequences.ts'
 import { humanTextRejection, proseFields } from './human-text.ts'
+import { JOINT_FASTENER_SCHEMA, parseFastenerSchedule, storedJoints, withRuleFasteners } from './construction-fasteners.ts'
 import { schemaIssues } from './schema-issues.ts'
 import { rethrowContinuation, type BobJournal } from './bob-job-journal.ts'
 import type { ProjectWriter,WritePayload } from './project-write.ts'
@@ -52,7 +53,7 @@ export const CONSTRUCTION_SAVE_TOOL=tool('save_construction_draft',
  title:{type:'string',minLength:1,maxLength:200},description:{type:'string',minLength:1,maxLength:5500},area_id:{type:['string','null']},target_revision:rev,
  change_note:{type:'string',minLength:1,maxLength:1000},recipe:CAD_RECIPE_SCHEMA,parameter_plan:CAD_PARAMETERS_SCHEMA,instance_policy:INSTANCE_POLICY_SCHEMA,
  materials:{type:'array',minItems:1,maxItems:128,items:obj({definition_id:id,material_id:uuid,material_revision:rev,part_id:nullableUuid,part_revision:nullableRev})},
- joints:{type:'array',maxItems:1024,items:obj({id,method:{type:'string',enum:['screwed_butt','glued_butt','dowel','bolted','unresolved']},first:endpoint,second:endpoint,reason:{type:'string',minLength:1,maxLength:2000}})},
+ joints:{type:'array',maxItems:1024,items:obj({id,method:{type:'string',enum:['screwed_butt','glued_butt','dowel','bolted','unresolved']},first:endpoint,second:endpoint,reason:{type:'string',minLength:1,maxLength:2000},fastener:JOINT_FASTENER_SCHEMA})},
  open_questions:{type:'array',maxItems:40,items:{type:'string',minLength:1,maxLength:1000}},
  request_quote:{type:'string',minLength:1,maxLength:500},
 })
@@ -103,10 +104,10 @@ export const CONSTRUCTION_CUT_SAVE_TOOL=tool('save_construction_cut_plan','Save 
 /** Text people read in construction writes: titles, notes, reasons and open
  * questions (shown on drawings and source maps). Ids, keys and paths are typed. */
 const CONSTRUCTION_PROSE:Record<string,readonly string[]>={
- save_construction_draft:['title','description','change_note','parameter_plan.frames.*.reason','parameter_plan.nodes.*.reason','instance_policy.instances.*.reason','joints.*.reason','open_questions.*'],
- transition_legacy_drawing:['change_note','joints.*.reason','open_questions.*'],
+ save_construction_draft:['title','description','change_note','parameter_plan.frames.*.reason','parameter_plan.nodes.*.reason','instance_policy.instances.*.reason','joints.*.reason','joints.*.fastener.reason','open_questions.*'],
+ transition_legacy_drawing:['change_note','joints.*.reason','joints.*.fastener.reason','open_questions.*'],
  change_construction_parameters:['change_note','changes.*.reason'],
- edit_construction_parts:['change_note','changes.nodes.upsert.*.reason','changes.joints.upsert.*.reason','changes.roles.upsert.*.reason'],
+ edit_construction_parts:['change_note','changes.nodes.upsert.*.reason','changes.joints.upsert.*.reason','changes.joints.upsert.*.fastener.reason','changes.roles.upsert.*.reason'],
  change_construction_roles:['change_note','changes.*.reason'],
  continue_construction_change:['change_note','review_note'],
  save_construction_cut_plan:['change_note','candidates.*.note'],
@@ -129,6 +130,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  readChanges?:(id:string,revision:number,after:string|null)=>Promise<Record<string,any>>;
  readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null)=>Promise<DesignReadiness|unknown>;
  readCatalog?:(id:string,revision:number)=>Promise<Record<string,any>>;now?:()=>Date;
+ /** Server fastener schedule for one saved revision; present only for catalogs with joint fasteners. */
+ readFasteners?:(id:string,revision:number)=>Promise<unknown>;
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
  const views=createConstructionViews(opts.projectId,opts.now)
@@ -146,6 +149,12 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   // An older pinned catalog may omit this new field. Preserve its uncertainty;
   // the database inherits an existing policy rather than erasing it.
   if(name===CONSTRUCTION_SAVE_TOOL.function.name&&raw&&typeof raw==='object'&&!Array.isArray(raw)&&!('instance_policy' in raw))raw={...raw,instance_policy:null}
+  // Older pinned schemas have no joint fastener field: null means "use the rule".
+  if(raw&&typeof raw==='object'&&!Array.isArray(raw)){
+   const r=raw as Record<string,any>
+   if((name===CONSTRUCTION_SAVE_TOOL.function.name||name===CONSTRUCTION_LEGACY_TOOL.function.name)&&Array.isArray(r.joints))raw={...r,joints:withRuleFasteners(r.joints)}
+   if(name===CONSTRUCTION_EDIT_TOOL.function.name&&Array.isArray(r.changes?.joints?.upsert))raw={...r,changes:{...r.changes,joints:{...r.changes.joints,upsert:withRuleFasteners(r.changes.joints.upsert)}}}
+  }
   const issues=schemaIssues(spec.function.parameters,raw)
   if(issues.length)return {status:'invalid',issues}
   const prose=humanTextRejection(proseFields(raw,CONSTRUCTION_PROSE[name]??[]))
@@ -197,7 +206,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(!opts.writer||!opts.prepareLegacyTransition)return {status:'unavailable'}
     if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {status:'invalid',message:'Use an exact quote from the current request.'}
     const {record_id,expected_revision,request_quote,...data}=v
-    const payload:WritePayload={kind:'legacy_construction',record_id,expected_revision,expected_updated_at:null,request_quote,data}
+    const payload:WritePayload={kind:'legacy_construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,joints:storedJoints(data.joints)}}
     const prepared=await opts.prepareLegacyTransition(payload)
     if(!await opts.hasAccess())return {status:'denied'}
     if(!['ready','saved'].includes(prepared.status))return {...prepared,message:prepared.status==='already_prepared'
@@ -209,7 +218,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(!opts.writer||!opts.prepareEdit)return {status:'unavailable'}
     if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {status:'invalid',issues:[{code:'request_quote',path:'request_quote'}]}
     const payload:WritePayload={kind:'construction_edit',record_id:v.record_id,expected_revision:v.expected_revision,expected_updated_at:null,request_quote:v.request_quote,
-     data:{key:v.key,change_note:v.change_note,changes:v.changes,computed:null}}
+     data:{key:v.key,change_note:v.change_note,changes:v.changes?.joints?{...v.changes,joints:{...v.changes.joints,upsert:storedJoints(v.changes.joints.upsert)}}:v.changes,computed:null}}
     const prepared=await opts.prepareEdit(payload)
     if(!await opts.hasAccess())return {status:'denied'}
     if(prepared.status!=='ready'&&prepared.status!=='saved')return prepared
@@ -309,7 +318,9 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
       data:{key:v.key,artifact_id:v.artifact_id,artifact_revision:v.revision,requirements:v.requirements,candidates:v.candidates,blank_grain:v.blank_grain,
        candidate_sources:v.candidate_sources,layout:Object.fromEntries(['placements','cuts','offcuts','used_sheets'].map(k=>[k,(fit as any)[k]])),change_note:v.change_note}})
     }
-    return await present('lists',v.artifact_id,v.revision,{projectId:opts.projectId,...constructionLists(draft,catalog,v.assembly_dependencies),checked},observedAt)
+    // Catalogs with joint fasteners read the server schedule; others keep the unverified gap.
+    const fasteners=opts.readFasteners?parseFastenerSchedule(await opts.readFasteners(v.artifact_id,v.revision),v.artifact_id,v.revision):undefined
+    return await present('lists',v.artifact_id,v.revision,{projectId:opts.projectId,...constructionLists(draft,catalog,v.assembly_dependencies,fasteners),checked},observedAt)
    }
    if(!opts.writer)return {status:'denied'}
    if(!opts.message.includes(v.request_quote)||!v.request_quote.trim()||(v.record_id===null?v.expected_revision!==0:v.expected_revision<1))return {status:'invalid',message:'Use the current request and exact expected revision.'}
@@ -338,7 +349,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(!parseCadAssemblyRequest(recipe))return {status:'invalid',message:'Computed dimensions or placement are outside the supported geometry contract.'}
    if(!await opts.hasAccess())return {status:'denied'}
    const {record_id,expected_revision,request_quote,parameter_plan,...data}=v
-   return await opts.writer.commit({kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,recipe,parameters}})
+   return await opts.writer.commit({kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,joints:storedJoints(data.joints),recipe,parameters}})
   }catch(error){
    rethrowContinuation(error)
    if(error instanceof CadParameterGap)return {status:'needs_data',reason:'unknown_required_parameters',gaps:error.gaps,message:'No construction changed. Resolve these controlling values in the same request; no zero or invented value was saved.'}

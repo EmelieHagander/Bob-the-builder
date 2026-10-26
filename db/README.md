@@ -1456,3 +1456,49 @@ the Barnrum script. Rollout: apply the core migration, deploy `ask-bob` and
 aborts on any subject or value mismatch, idempotent, prints a summary).
 Rollback: reactivate the previous catalog; the columns, view and functions can
 stay (the app reads them only through `database.ts`).
+
+### Fastener and glue requirements — 2026-10-26
+
+**Source and isolated tests; not applied.** B3 of the
+[joint fastener decisions](../Docs/artifacts.md#joint-fasteners--owner-decisions-2026-10-26);
+the [material owner](../Docs/material-planning.md#fastener-and-glue-needs--2026-10-26)
+owns the contract. `20261026172000_fastener_requirements.sql`:
+
+- `bob.material_requirement_fastener_sources`: provenance beneath existing
+  requirement revisions (sibling of the construction blank table): construction
+  artifact/revision, `rule_version`, `kind` (`screw|nail|bolt|glue`),
+  `diameter_mm`/`length_mm` (null for glue), `quantity`, `joint_ids` and
+  `schedule_complete`. Project RLS, authenticated SELECT only; rows cascade with
+  the requirement and the construction revision.
+- `bob_private.material_requirement_cad_command` becomes a dispatcher:
+  `quantity_mode` `fasteners`/`glue` goes to
+  `material_requirement_fastener_command`; everything else to the previous body,
+  renamed `material_requirement_cad_before_fasteners` (no client grant). The
+  fastener command reads `construction_fastener_schedule` under the project lock
+  and source assessment, then calls the arithmetic writer
+  `material_requirement_before_construction_fit` directly, so the blank-only
+  allocation guard does not apply. Same CAS, receipts and caller authority; no
+  new writer version, tool schema or catalog publication.
+- `bob_private.material_requirement_command` (manual wrapper from
+  `20261005173845`) is recreated unchanged apart from fastener provenance:
+  manual revise is refused (`construction_derive_required`), restore is fenced
+  (`fastener_requirement_exists`), archive/restore carry the row.
+- `bob_private.material_requirement_publish` (guarded replace): fastener needs
+  skip the blank guard but need a current construction
+  (`construction_source_changed`, PT409). Pack purchases already block only
+  blank needs.
+- `bob.prepare_construction_consequence` (guarded replace of one statement):
+  fastener needs go to `bob_private.fastener_consequence`, which revises the
+  same group or archives a vanished one, instead of `needs_requirement_model`.
+  The constraint trigger `complete_fastener_requirement` completes saved change
+  items, as the blank table's trigger does.
+- Helpers `fastener_requirement_taken`, `fastener_consequence` and
+  `complete_fastener_change_output` have no client grant.
+
+New codes: `fastener_construction_required`, `fastener_group_not_in_schedule`
+(22023), `fastener_requirement_exists` (PT409). `tests/fastener-requirements-sql.test.ts`
+covers derivation, duplicates, staleness and continuation, Shopping, stock and
+pack purchase versus blank guards, and access. Rollout: apply; the app labels
+the new methods either way. Rollback: rename the previous cad body back,
+recreate the manual wrapper from `20261005173845`, reverse the two guarded
+replacements, then drop the table and helpers.

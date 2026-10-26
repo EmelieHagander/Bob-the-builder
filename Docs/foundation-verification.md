@@ -1,8 +1,45 @@
 # Foundation verification and rollout
 
+## Joint fasteners — 2026-10-26
+
+**B1 source:** migration `20261026170000_construction_fasteners.sql`, not yet applied.
+
+`tests/construction-fasteners.test.ts` covers:
+- The rule table: thickness, standard length, spacing, glue, no rule, and the totals.
+- Overrides: nails with a spread count, an explicit `none`, a null override, and the rule proposal shown next to an override.
+- 10 rotations × 4 placements × 36 face pairs, which agree with the K2 checker's face convention.
+- The owner's bunk bed (`tests/fixtures/barnrum-bunk-bed-construction.json`, revision 20): every contact length matches the TS frame.
+- Override validation, and that `check_construction` accepts 5- and 6-key joints.
+- Reader access: members only, and `not_found` for a missing revision.
+
+The existing construction, drawing and writer tests pass: 148 tests.
+
+**B4 source:** Bob's override and lists, plus publication `20261026173000_ai_joint_fasteners_catalog.sql`.
+`tests/construction-fastener-tools.test.ts` covers:
+- Lists filled from the SQL schedule. An unreadable schedule is a gap. Without a reader the list is byte-identical to before.
+- The real edit tool: an old call without the field stores a five-key joint, and an explicit nail choice is kept.
+- Invalid kinds and codes in the reason are rejected.
+- The latest catalog carries the field and the rule notes.
+
+Earlier publications are rebuilt from current specs through
+`withoutJointFasteners`, and their builders and tests verify. 89 tests in the 18
+files that touch these tool schemas pass, and so do 532 tests in the 68 files
+that use the catalog fixtures.
+
+A rollback-only run of the publication against the hosted catalog gave:
+- `tools.save_construction_draft` v9, `tools.transition_legacy_drawing` v4 and `tools.edit_construction_parts` v2, each with exactly one joint schema carrying `fastener`.
+- `tools.derive_construction_lists` v5.
+
+A rollback-only run of the rule on the hosted bunk bed (revision 20) gave:
+- 102 screws, 4 × 45 mm.
+- 1 glue package, for three glued panels.
+- `complete=true`.
+- Ten edge-to-edge step and shelf contacts flagged `short_contact`.
+- 18 mm edges flagged `narrow_contact`.
+
 ## Drawing save payload and write retry — 2026-10-26
 
-**Merged source; not yet deployed** (needs the `bob-worker` and `ask-bob` Edge deploy).
+**Deployed 2026-10-26** from main `bb5f3a4` (#336): `bob-worker` v140 and `ask-bob` v172. Body readback contains the write retry and the preview drop.
 
 **Symptom.** A reviewed Barnrum drawing (request `e21a2db2…`) failed to save
 twice: on 2026-10-22 at 18:30 (`write_not_saved`) and on 2026-10-26 at 09:06

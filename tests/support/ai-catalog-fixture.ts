@@ -116,6 +116,21 @@ for(const migration of migrations){
    const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'room-dimensions-v1'};versions.set(row.key,versions.get(row.key)!+1)
   }
  }
+ const jointFasteners=source.match(/\$joint_fasteners_spec\$([\s\S]+?)\$joint_fasteners_spec\$/)
+ if(jointFasteners){
+  const spec=JSON.parse(jointFasteners[1]),before=JSON.stringify(spec.before)
+  // Same walk as the SQL publication: object key order is irrelevant there.
+  const canonical=(v:any):string=>Array.isArray(v)?'['+v.map(canonical).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonical(v[k])).join(',')+'}':JSON.stringify(v)
+  const target=canonical(JSON.parse(before))
+  const walk=(v:any):any=>canonical(v)===target?structuredClone(spec.after):Array.isArray(v)?v.map(walk):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,walk(x)])):v
+  for(const patch of spec.patches){
+   const row=seed.find(row=>row.key===patch.key)
+   if(row.metadata?.joint_fastener_version===1)continue
+   row.definition=walk(row.definition)
+   row.definition.additional_description=(row.definition.additional_description??'')+patch.note
+   const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'joint-fasteners-v1',joint_fastener_version:1};versions.set(row.key,versions.get(row.key)!+1)
+  }
+ }
  const memoryPointers=source.match(/\$memory_pointer_instructions\$([\s\S]+?)\$memory_pointer_instructions\$/)
  if(memoryPointers){
   for(const key of ['context-summary.contract','schema.bob_conversation_brief_v2']){

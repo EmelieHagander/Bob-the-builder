@@ -2,8 +2,9 @@
  * Preserve every unrelated immutable definition, model, role and price. */
 import {readFileSync,writeFileSync} from 'node:fs'
 import {CONSTRUCTION_LEGACY_TOOL} from '../supabase/functions/_shared/construction-draft.ts'
+import {withoutJointFasteners} from '../supabase/functions/_shared/construction-fasteners.ts'
 
-const contract=CONSTRUCTION_LEGACY_TOOL.function
+const contract=withoutJointFasteners(CONSTRUCTION_LEGACY_TOOL.function)
 const policy=JSON.parse(readFileSync('supabase/functions/_shared/project-tools/catalog-seed.json','utf8')).find((row:any)=>row.name===contract.name)
 const manuals=[
  {key:'tools.read_cad_artifact',text:' construction_transition identifies the exact saved checkpoint prepared from this legacy revision; it is provenance, not a drawing delivery. Read its current construction before changes. Keep the original drawing Artifact ID for checked publication.'},

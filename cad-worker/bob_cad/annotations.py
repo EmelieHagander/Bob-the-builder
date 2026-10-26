@@ -8,8 +8,36 @@ def _dot(a,b): return sum(x*y for x,y in zip(a,b))
 def _cross(a,b): return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]
 def _unit(a): return [x/math.sqrt(_dot(a,a)) for x in a]
 def _number(n): return f'{n:.6f}'.rstrip('0').rstrip('.')
+# Diameters read like the rule table (3.5, 4.0 ... 6.0); other values stay exact.
+def _diameter(d): return f'{d:.1f}' if abs(d*10-round(d*10))<1e-9 else _number(d)
+def _plural(n,one,many): return f'{n} {one if n==1 else many}'
 
-def annotate(path, req, rows, bounds, view, camera, up, center, source=None):
+FASTENER_TOP = 715
+FASTENER_LINE = 18
+FASTENER_KINDS = {'screw':'Screw','nail':'Nail','bolt':'Bolt'}
+MECHANICAL = ('screw','nail','bolt')
+
+def fastener_lines(fasteners):
+    """Sheet 1's compact band: grouped rows F1, F2... in the saved totals order,
+    glue packages and what the rules could not size. The schedule is a
+    rule-of-thumb proposal from the saved geometry, never a strength result."""
+    basis={j['joint_id']:j['source'] for j in fasteners['joints']}
+    lines=[('title','Fasteners - proposal from rules of thumb, no strength calculation'),
+           ('header',('No.','Fastener','d x L (mm)','Qty','Basis'))]
+    for index,total in enumerate(fasteners['totals'],1):
+        sources={basis.get(i) for i in total['joint_ids']}
+        lines.append(('row',(f'F{index}',FASTENER_KINDS[total['kind']],f"{_diameter(total['diameter_mm'])} x {_number(total['length_mm'])}",
+                             str(total['count']),'rule' if sources=={'rule'} else 'override' if sources=={'override'} else 'rule and override')))
+    if not fasteners['totals']: lines.append(('note','No screws, nails or bolts in the saved joints.'))
+    glued=sum(j['kind']=='glue' for j in fasteners['joints'])
+    if fasteners['glue_packages']: lines.append(('note',f"Glue: {_plural(fasteners['glue_packages'],'package','packages')} for {_plural(glued,'glued joint','glued joints')}."))
+    unsized={j['joint_id'] for j in fasteners['joints'] if j['source']=='no_rule' or j['kind'] in MECHANICAL and None in (j['diameter_mm'],j['length_mm'],j['count'])}
+    if unsized: lines.append(('note',f"No fastener rule or size yet for {_plural(len(unsized),'joint','joints')}."))
+    flagged=sum(1 for j in fasteners['joints'] if j['gaps'] and j['joint_id'] not in unsized)
+    if flagged: lines.append(('note',f"Rule warnings (short or narrow contact, short screw) on {_plural(flagged,'joint','joints')} - check before building."))
+    return lines
+
+def annotate(path, req, rows, bounds, view, camera, up, center, source=None, fasteners=None):
     tree=ET.parse(path); root=tree.getroot()
     left,top,width,height=map(float,root.attrib['viewBox'].split())
     scale=min(610/width,550/height)
@@ -21,7 +49,9 @@ def annotate(path, req, rows, bounds, view, camera, up, center, source=None):
     for child in list(root): root.remove(child);model.append(child)
     ET.SubElement(root,f'{{{NS}}}defs').append(model)
     page_count=math.ceil(len(rows)/PARTS_PER_PAGE)
-    page_height=max(750,170+min(len(rows),PARTS_PER_PAGE)*32)
+    band=fastener_lines(fasteners) if fasteners is not None else []
+    # Sheet 1 grows to hold the band below the geometry; every sheet keeps one height.
+    page_height=max(750,170+min(len(rows),PARTS_PER_PAGE)*32,FASTENER_TOP+len(band)*FASTENER_LINE+60 if band else 0)
     root.attrib.update(width='1000px',height=f'{page_count*page_height}px',viewBox=f'0 0 1000 {page_count*page_height}',
                        **{'data-page-height':str(page_height),'data-page-count':str(page_count)})
     layer=None
@@ -67,6 +97,12 @@ def annotate(path, req, rows, bounds, view, camera, up, center, source=None):
             else:
                 text(75,685,'Overall XYZ: '+' x '.join(_number(n) for n in bounds['size'])+' mm')
             text(740,96,'Part / instance / local blank (mm)',14)
+            if page==0:
+                for line_index,(kind,value) in enumerate(band):
+                    y=FASTENER_TOP+line_index*FASTENER_LINE
+                    if kind in ('header','row'):
+                        for x,cell in zip((30,80,180,310,370),value): text(x,y,cell,12 if kind=='header' else 13)
+                    else: text(30,y,value,14 if kind=='title' else 13)
             if source: text(30,page_height-48,f'Construction {source["artifact_id"]} / revision {source["revision"]}',13)
             text(30,page_height-25,'Blank dimensions exclude machining allowances. Labels identify saved instances; no fabrication approval.',13)
         number=f'P{index}';definition=definitions[row['definition_id']]

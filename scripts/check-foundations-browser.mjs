@@ -318,7 +318,13 @@ try {
     const cadId=randomUUID(), cadOriginal=[...artifacts.records.values()].find(r=>r.project_id==='A')
     const cadRow={...cadOriginal,id:cadId,artifact_id:cadId,title:'CAD shelf detail',revision:1,kind:'detail',status:'concept',generator:null,generator_version:null,parametric_recipe:null,has_room_layout:false,has_stair_study:false,has_multifloor_plan:false,area_id:null,archived:false,measurements:[],recorded_at:timestamp()}
     artifacts.records.set(cadId,cadRow);artifacts.histories.set(cadId,[cadRow])
-    artifacts.cad.set(`${cadId}:1`,{project_id:'A',artifact_id:cadId,artifact_revision:1,recipe:sourceGraph.recipe,manifest:{...sourceGraph.manifest,checks:{collisions:{status:'complete',tested_pairs:0,skipped_pairs:0,overlaps:[]},clearances:[],motions:[]}},files:{front:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><rect x="5" y="5" width="790" height="90" fill="none" stroke="black"/></svg>').toString('base64'),step:Buffer.from('ISO-10303-21;').toString('base64')},step_id:null,source_artifact_id:null,source_revision:null})
+    // Annotations v2 carry the construction's rule-of-thumb fastener schedule (2026-10-26).
+    const fastenerJoint=(joint_id,method,source,kind,size,gaps)=>({joint_id,method,source,kind,diameter_mm:size?.[0]??null,length_mm:size?.[1]??null,count:size?.[2]??null,spacing_mm:size?130:null,
+     through_instance_id:'panel',through_mm:18,embed_mm:300,contact_length_mm:980,contact_width_mm:18,proposal:null,gaps})
+    const cadFasteners={rule_version:'fastener-rules-v1',complete:false,glue_packages:1,
+     joints:[fastenerJoint('panel_wall','screwed_butt','rule','screw',[4,45,6],['narrow_contact']),fastenerJoint('panel_glue','glued_butt','rule','glue',null,[]),fastenerJoint('panel_dowel','dowel','no_rule',null,null,['no_rule_for_method'])],
+     totals:[{kind:'screw',diameter_mm:4,length_mm:45,count:6,joint_ids:['panel_wall']}]}
+    artifacts.cad.set(`${cadId}:1`,{project_id:'A',artifact_id:cadId,artifact_revision:1,recipe:sourceGraph.recipe,manifest:{...sourceGraph.manifest,annotations:{version:2,coverage:'complete',views:{},fasteners:cadFasteners},checks:{collisions:{status:'complete',tested_pairs:0,skipped_pairs:0,overlaps:[]},clearances:[],motions:[]}},files:{front:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><rect x="5" y="5" width="790" height="90" fill="none" stroke="black"/></svg>').toString('base64'),step:Buffer.from('ISO-10303-21;').toString('base64')},step_id:null,source_artifact_id:null,source_revision:null})
     await page.goto(base+`#/artifacts?drawing=${cadId}&revision=1`)
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
     await page.getByRole('link',{name:'Download 3D model',exact:true}).focus()
@@ -329,8 +335,24 @@ try {
     assert.equal(await page.getByRole('link',{name:'Download cut list',exact:true}).count(),1)
     await page.getByText('Geometry checks',{exact:true}).click()
     await page.getByText('Overlap check: complete.',{exact:false}).waitFor()
+    const fastenerSummary=page.locator('summary').filter({hasText:/^Fasteners$/})
+    await fastenerSummary.click()
+    const fastenerDetails=page.locator('details').filter({has:fastenerSummary})
+    for(const cell of ['F1','Screw Ø 4.0 × 45','6','Rule of thumb'])await fastenerDetails.getByRole('cell',{name:cell,exact:true}).waitFor()
+    await fastenerDetails.getByText('Proposal from rules of thumb, not a strength calculation.',{exact:false}).waitFor()
+    await fastenerDetails.getByText('Glue: 1 package for 1 glued joint.',{exact:true}).waitFor()
+    await fastenerDetails.getByText('No fastener rule or size yet for 1 joint.',{exact:true}).waitFor()
+    await fastenerDetails.getByText('Narrow contact surface: 1 joint',{exact:true}).waitFor()
+    assert.doesNotMatch(await fastenerDetails.innerText(),/_|fastener-rules|panel/,'Fastener schedule names codes for people, never IDs')
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Fastener table must fit the viewport')
+    await page.screenshot({animations:'disabled',path:`test-results/cad-fasteners-${viewport.width}.png`,fullPage:true})
+    // A version saved before fastener schedules says so instead of implying none are needed.
+    artifacts.cad.get(`${cadId}:1`).manifest.annotations={version:1,coverage:'complete',views:{}}
     await page.reload()
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    await fastenerSummary.click()
+    await fastenerDetails.getByText('No fastener schedule was recorded for this drawing version.',{exact:true}).waitFor()
+    assert.equal(await fastenerDetails.getByRole('table').count(),0)
     assert.equal(await page.getByRole('link',{name:'Download 3D model',exact:true}).count(),1)
     await page.getByText('Parameter sources and changes',{exact:true}).click()
     const sourceMap = page.locator('.cad-source-map')

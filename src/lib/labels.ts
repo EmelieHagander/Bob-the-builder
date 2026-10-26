@@ -87,6 +87,8 @@ export const drawingRequestStatusLabel = (status: string) => pick(DRAWING_REQUES
 const MATERIAL_METHOD_LABELS: Record<string, string> = {
   stud_wall_net_area: 'Net wall area from the drawing',
   stud_wall_sheet_layer: 'Sheet layers over the net wall area',
+  construction_fasteners: 'Fasteners counted from the construction joints',
+  construction_glue: 'One glue package per construction',
 }
 /**
  * The server-written calculation text of a deterministic requirement, with its
@@ -149,3 +151,16 @@ export function cadFrameSourceLabel(sourceRef: string): string {
   return 'Recorded source'
 }
 export const cadFrameKindLabel = (kind: string) => kind === 'image' ? 'Photo' : kind === 'room' ? 'Room' : 'Reference'
+
+/* ── Joint fasteners (rule-of-thumb proposal, owner decisions 2026-10-26) ── */
+export const FASTENER_KIND_LABELS: Record<string, string> = { screw: 'Screw', nail: 'Nail', bolt: 'Bolt', glue: 'Glue', none: 'No fastener' }
+export const fastenerKindLabel = (kind: string | null | undefined) => pick(FASTENER_KIND_LABELS, kind, 'Fastener')
+/** Why a joint's rule answer needs a look before building. */
+export const FASTENER_NOTE_LABELS: Record<string, string> = {
+  narrow_contact: 'Narrow contact surface', short_contact: 'Short contact, one fastener only',
+  short_penetration: 'Shorter than the rule wants', no_fitting_length: 'No standard length fits',
+  thickness_outside_rule: 'Part too thick for the rule', count_unknown: 'Number not worked out',
+  no_rule_for_method: 'No rule for this joint type', geometry_unsupported: 'Joint shape the rules cannot read',
+  faces_do_not_meet: 'Joined faces do not meet in the saved geometry',
+}
+export const fastenerNoteLabel = (code: string) => pick(FASTENER_NOTE_LABELS, code, 'Other rule note')

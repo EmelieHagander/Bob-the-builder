@@ -1,0 +1,117 @@
+// Bob's side of joint fasteners (owner decisions 2026-10-26): lists show the
+// server schedule, write tools carry an optional override (null = rule), and
+// only manifests from the joint-fasteners publication see any of it.
+import {test} from 'node:test'
+import assert from 'node:assert/strict'
+import {readFile} from 'node:fs/promises'
+import {createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
+import {constructionLists} from '../supabase/functions/_shared/construction-lists.ts'
+import {parseFastenerSchedule,storedJoints,withRuleFasteners,withoutJointFasteners} from '../supabase/functions/_shared/construction-fasteners.ts'
+import {CONSTRUCTION_EDIT_TOOL} from '../supabase/functions/_shared/construction-edits.ts'
+import {projectSchema} from './support/project-schema.ts'
+import {catalogFixture} from './support/ai-catalog-fixture.ts'
+import {listFixture} from './construction-lists.test.ts'
+
+const artifact='11111111-1111-4111-8111-111111111111'
+async function serverSchedule(draft:any){
+ const pg=await projectSchema()
+ try{
+  const s=(await pg.query('select bob_private.construction_fastener_schedule($1::jsonb,$2::jsonb) s',[JSON.stringify(draft.recipe),JSON.stringify(draft.joints)])).rows[0].s as any
+  return {status:'ok',artifact_id:draft.artifact_id,revision:draft.revision,...s}
+ }finally{await pg.close()}
+}
+
+test('lists carry the server schedule; an unreadable schedule is a gap; older manifests keep the original list',async()=>{
+ const {draft,catalog}=listFixture()
+ const schedule=await serverSchedule(draft)
+ const original=constructionLists(draft,catalog,[])
+ const filled=constructionLists(draft,catalog,[],parseFastenerSchedule(schedule,artifact,4)) as any
+ // 21 mm sides screwed into 21 mm shelf edges: 4.0 x 55 (>= 52.5), 300 mm contact -> 3 each, six joints.
+ assert.deepEqual(filled.joints[0].hardware_product,{kind:'screw',diameter_mm:4,length_mm:55})
+ assert.equal(filled.joints[0].hardware_quantity,3)
+ assert.equal(filled.joints[0].fastener.source,'rule')
+ assert.deepEqual(filled.fasteners.totals.map((t:any)=>[t.kind,t.diameter_mm,t.length_mm,t.count]),[['screw',4,55,18]])
+ assert.equal(filled.fasteners.glue_packages,0);assert.equal(filled.fasteners.basis,'rule_of_thumb_proposal')
+ assert(filled.gaps.some((g:any)=>g.code==='fastener_capacity_unverified'))
+ assert(!filled.gaps.some((g:any)=>g.code==='joint_hardware_unverified'))
+ const unavailable=constructionLists(draft,catalog,[],null) as any
+ assert(unavailable.gaps.some((g:any)=>g.code==='fastener_schedule_unavailable'))
+ assert(unavailable.joints.every((j:any)=>j.hardware_quantity===null))
+ // No schedule reader: byte-identical to the original list.
+ assert.deepEqual(constructionLists(draft,catalog,[],undefined),original)
+ assert(!('fasteners' in original))
+ // A schedule for another revision is not used.
+ assert.equal(parseFastenerSchedule(schedule,artifact,5),null)
+})
+
+test('derive_construction_lists reads the schedule only when the tool session has a reader',async()=>{
+ const {draft,catalog}=listFixture()
+ const schedule=await serverSchedule(draft)
+ let fastenerReads=0
+ const base={projectId:'p_fixture',message:'Lists please',hasAccess:async()=>true,read:async()=>draft,
+  readCatalog:async()=>({projectId:draft.projectId,status:'ok',record:[...catalog.values()][0]}),
+  readSources:async()=>({project:new Map(),physical:new Map()}),now:()=>new Date('2026-10-05')}
+ const input={artifact_id:artifact,revision:4,assembly_dependencies:[]}
+ const old=await createConstructionTools(base as any).execute('derive_construction_lists',input)
+ assert(old.joints.every((j:any)=>!('fastener' in j)))
+ const pinned=await createConstructionTools({...base,readFasteners:async(id:string,revision:number)=>{fastenerReads++;assert.equal(id,artifact);assert.equal(revision,4);return schedule}} as any)
+  .execute('derive_construction_lists',input)
+ assert.equal(fastenerReads,1)
+ assert.equal(pinned.fasteners.totals[0].count,18)
+})
+
+test('write tools treat a missing or null fastener as the rule and store only explicit choices',async()=>{
+ const joint={id:'j',method:'screwed_butt',first:{instance_id:'a',face:'x_max'},second:{instance_id:'b',face:'x_min'},reason:'Screwed'}
+ const nail={kind:'nail',diameter_mm:2.8,length_mm:50,count:null,spacing_mm:null,reason:'Owner prefers nails'}
+ assert.deepEqual(withRuleFasteners([joint]),[{...joint,fastener:null}])
+ assert.deepEqual(storedJoints([{...joint,fastener:null},{...joint,id:'k',fastener:nail}]),[joint,{...joint,id:'k',fastener:nail}])
+ assert.equal(storedJoints(null),null)
+
+ // The real edit tool: an old pinned call without the field passes the schema
+ // and reaches the database as a five-key joint; an explicit choice is kept.
+ const payloads:any[]=[]
+ const tools=createConstructionTools({projectId:'p_fixture',message:'Use nails on the shelf',hasAccess:async()=>true,read:async()=>null,
+  readSources:async()=>({project:new Map(),physical:new Map()}),
+  writer:{commit:async(p:any)=>{payloads.push(p);return {status:'saved',receipt:{}}}} as any,
+  prepareEdit:async()=>({status:'saved'})} as any)
+ const edit=(upsert:unknown[])=>tools.execute('edit_construction_parts',{key:'shelf_nails',record_id:artifact,expected_revision:4,change_note:'Nails on the shelf',
+  request_quote:'Use nails on the shelf',changes:{joints:{upsert,remove:[]}}})
+ assert.equal((await edit([joint])).status,'saved')
+ assert.equal((await edit([{...joint,fastener:nail}])).status,'saved')
+ assert.deepEqual(payloads[0].data.changes.joints.upsert,[joint])
+ assert.deepEqual(payloads[1].data.changes.joints.upsert,[{...joint,fastener:nail}])
+ const prose=await edit([{...joint,fastener:{...nail,reason:'bob_project_write_v16'}}])
+ assert.equal(prose.status,'invalid');assert.equal(payloads.length,2)
+ const wrong=await edit([{...joint,fastener:{...nail,kind:'staple'}}])
+ assert.equal(wrong.status,'invalid');assert.equal(payloads.length,2)
+})
+
+test('the latest catalog publishes the field and the rule note; the publication is reproducible',async()=>{
+ const latest=catalogFixture()
+ for(const key of ['tools.save_construction_draft','tools.transition_legacy_drawing','tools.edit_construction_parts','tools.derive_construction_lists']){
+  assert.equal(latest.definition(key).metadata.joint_fastener_version,1,key)
+  assert.equal(latest.definition(key).metadata.publication,'joint-fasteners-v1',key)
+ }
+ assert.deepEqual(latest.tool('edit_construction_parts').function.parameters,CONSTRUCTION_EDIT_TOOL.function.parameters)
+ assert.match(latest.definition('tools.save_construction_draft').definition.additional_description,/Joint fastener: null applies the fixed rule/)
+ assert.match(latest.definition('tools.derive_construction_lists').definition.additional_description,/server fastener schedule/)
+ assert.deepEqual(withoutJointFasteners(CONSTRUCTION_EDIT_TOOL.function.parameters).properties.changes.properties.joints.properties.upsert.items.required,
+  ['id','method','first','second','reason'])
+ const sql=await readFile(new URL('../supabase/migrations/20261026173000_ai_joint_fasteners_catalog.sql',import.meta.url),'utf8')
+ assert.match(sql,/joint_fasteners_schema_changed/)
+ const source=await readFile(new URL('../supabase/functions/_shared/ask-openai.ts',import.meta.url),'utf8')
+ assert.match(source,/prompt_key==='tools\.derive_construction_lists'&&row\.metadata\?\.joint_fastener_version===1/)
+ assert.match(source,/readRpc\('read_construction_fasteners'/)
+})
+
+test('fastener requirement refusals reach Bob as specific, answerable messages',async()=>{
+ const {createProjectWriter}=await import('../supabase/functions/_shared/project-write.ts')
+ const message='Add the screws to the list'
+ for(const [code,status,pattern] of [['fastener_group_not_in_schedule','invalid',/totals row of derive_construction_lists/],['fastener_requirement_exists','conflict',/revise that existing requirement/],
+  ['fastener_construction_required','invalid',/exact current saved construction revision/],['construction_derive_required','invalid',/blank, fastener or glue/]] as const){
+  const writer=createProjectWriter('p_fixture',message,async()=>({data:null,error:{code:code==='fastener_requirement_exists'?'PT409':'22023',message:code}}),
+   async()=>({data:[],error:null}),async()=>({data:{generation:1,receipts:[]},error:null}),{})
+  const r:any=await writer.commit({kind:'operational',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{resource:'cad_requirement',action:'create',fields:{quantity_mode:'fasteners'}}})
+  assert.equal(r.status,status,code);assert.match(r.message,pattern)
+ }
+})

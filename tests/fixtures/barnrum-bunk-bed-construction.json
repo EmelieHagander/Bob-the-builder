@@ -1,0 +1,1243 @@
+{
+  "joints": [
+    {
+      "id": "j_lower_front_left",
+      "first": {
+        "face": "x_max",
+        "instance_id": "left_front_post"
+      },
+      "method": "screwed_butt",
+      "reason": "Nedre frontregel bärs mellan vänster främre stolpe och höger gavel.",
+      "second": {
+        "face": "x_min",
+        "instance_id": "lower_front_rail"
+      }
+    },
+    {
+      "id": "j_lower_front_right",
+      "first": {
+        "face": "x_max",
+        "instance_id": "lower_front_rail"
+      },
+      "method": "screwed_butt",
+      "reason": "Nedre frontregel ansluter till höger gavelpanel.",
+      "second": {
+        "face": "x_min",
+        "instance_id": "right_gable"
+      }
+    },
+    {
+      "id": "j_lower_back_left",
+      "first": {
+        "face": "x_max",
+        "instance_id": "left_back_post"
+      },
+      "method": "screwed_butt",
+      "reason": "Nedre bakregel bärs mellan vänster bakre stolpe och höger gavel.",
+      "second": {
+        "face": "x_min",
+        "instance_id": "lower_back_rail"
+      }
+    },
+    {
+      "id": "j_lower_back_right",
+      "first": {
+        "face": "x_max",
+        "instance_id": "lower_back_rail"
+      },
+      "method": "screwed_butt",
+      "reason": "Nedre bakregel ansluter till höger gavelpanel.",
+      "second": {
+        "face": "x_min",
+        "instance_id": "right_gable"
+      }
+    },
+    {
+      "id": "j_upper_front_left",
+      "first": {
+        "face": "x_max",
+        "instance_id": "left_front_post"
+      },
+      "method": "screwed_butt",
+      "reason": "Övre frontsarg ansluter till vänster främre stolpe och bär även den övre främre bärlisten i kärnmodellen.",
+      "second": {
+        "face": "x_min",
+        "instance_id": "upper_front_rail"
+      }
+    },
+    {
+      "id": "j_upper_front_right",
+      "first": {
+        "face": "x_max",
+        "instance_id": "upper_front_rail"
+      },
+      "method": "screwed_butt",
+      "reason": "Övre frontsarg ansluter till höger gavelpanel.",
+      "second": {
+        "face": "x_min",
+        "instance_id": "right_gable"
+      }
+    },
+    {
+      "id": "j_upper_back_left",
+      "first": {
+        "face": "x_max",
+        "instance_id": "left_back_post"
+      },
+      "method": "screwed_butt",
+      "reason": "Övre baksarg ansluter till vänster bakre stolpe och bär även den övre bakre bärlisten i kärnmodellen.",
+      "second": {
+        "face": "x_min",
+        "instance_id": "upper_back_rail"
+      }
+    },
+    {
+      "id": "j_upper_back_right",
+      "first": {
+        "face": "x_max",
+        "instance_id": "upper_back_rail"
+      },
+      "method": "screwed_butt",
+      "reason": "Övre baksarg ansluter till höger gavelpanel.",
+      "second": {
+        "face": "x_min",
+        "instance_id": "right_gable"
+      }
+    },
+    {
+      "id": "j_book_shelf_1_front",
+      "first": {
+        "face": "y_max",
+        "instance_id": "left_front_post"
+      },
+      "method": "screwed_butt",
+      "reason": "Nedre bokhyllplan fångas mellan främre stolpe och bok/steg-delaren.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "book_shelf_1"
+      }
+    },
+    {
+      "id": "j_book_shelf_1_div",
+      "first": {
+        "face": "y_max",
+        "instance_id": "book_shelf_1"
+      },
+      "method": "screwed_butt",
+      "reason": "Nedre bokhyllplan fångas mellan främre stolpe och bok/steg-delaren.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "left_divider_post"
+      }
+    },
+    {
+      "id": "j_book_shelf_1_rail",
+      "first": {
+        "face": "y_max",
+        "instance_id": "lower_front_rail"
+      },
+      "method": "screwed_butt",
+      "reason": "Nedre bokhyllplanet möter den nedre frontregeln i samma möbelpaket.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "book_shelf_1"
+      }
+    },
+    {
+      "id": "j_book_shelf_2_front",
+      "first": {
+        "face": "y_max",
+        "instance_id": "left_front_post"
+      },
+      "method": "screwed_butt",
+      "reason": "Mellanhylla i bokdelen hålls mellan stolparna.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "book_shelf_2"
+      }
+    },
+    {
+      "id": "j_book_shelf_2_div",
+      "first": {
+        "face": "y_max",
+        "instance_id": "book_shelf_2"
+      },
+      "method": "screwed_butt",
+      "reason": "Mellanhylla i bokdelen hålls mellan stolparna.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "left_divider_post"
+      }
+    },
+    {
+      "id": "j_book_top_front",
+      "first": {
+        "face": "y_max",
+        "instance_id": "left_front_post"
+      },
+      "method": "screwed_butt",
+      "reason": "Översta hyllplanet i bokdelen hålls mellan stolparna.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "book_shelf_top"
+      }
+    },
+    {
+      "id": "j_book_top_div",
+      "first": {
+        "face": "y_max",
+        "instance_id": "book_shelf_top"
+      },
+      "method": "screwed_butt",
+      "reason": "Översta hyllplanet i bokdelen hålls mellan stolparna.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "left_divider_post"
+      }
+    },
+    {
+      "id": "j_book_panel_1",
+      "first": {
+        "face": "x_max",
+        "instance_id": "book_shelf_1"
+      },
+      "method": "glued_butt",
+      "reason": "Ryggpanelen ligger bakom bokhyllplanet som lugn bakgrund i bokdelen.",
+      "second": {
+        "face": "x_min",
+        "instance_id": "book_back_panel"
+      }
+    },
+    {
+      "id": "j_book_panel_2",
+      "first": {
+        "face": "x_max",
+        "instance_id": "book_shelf_2"
+      },
+      "method": "glued_butt",
+      "reason": "Ryggpanelen binds även mot mellanplanet.",
+      "second": {
+        "face": "x_min",
+        "instance_id": "book_back_panel"
+      }
+    },
+    {
+      "id": "j_book_panel_4",
+      "first": {
+        "face": "x_max",
+        "instance_id": "book_shelf_top"
+      },
+      "method": "glued_butt",
+      "reason": "Ryggpanelen stannar i bokdelen och avslutas vid översta hyllnivån.",
+      "second": {
+        "face": "x_min",
+        "instance_id": "book_back_panel"
+      }
+    },
+    {
+      "id": "j_step_1_div",
+      "first": {
+        "face": "y_max",
+        "instance_id": "left_divider_post"
+      },
+      "method": "screwed_butt",
+      "reason": "Första steget fångas mellan bok/steg-delaren och stegens bakre sidlinje.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "step_1"
+      }
+    },
+    {
+      "id": "j_step_1_rear",
+      "first": {
+        "face": "y_max",
+        "instance_id": "step_1"
+      },
+      "method": "screwed_butt",
+      "reason": "Första steget fångas mellan bok/steg-delaren och stegens bakre sidlinje.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "left_ladder_rear_post"
+      }
+    },
+    {
+      "id": "j_step_2_div",
+      "first": {
+        "face": "y_max",
+        "instance_id": "left_divider_post"
+      },
+      "method": "screwed_butt",
+      "reason": "Andra steget fångas mellan sidlinjerna.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "step_2"
+      }
+    },
+    {
+      "id": "j_step_2_rear",
+      "first": {
+        "face": "y_max",
+        "instance_id": "step_2"
+      },
+      "method": "screwed_butt",
+      "reason": "Andra steget fångas mellan sidlinjerna.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "left_ladder_rear_post"
+      }
+    },
+    {
+      "id": "j_step_3_div",
+      "first": {
+        "face": "y_max",
+        "instance_id": "left_divider_post"
+      },
+      "method": "screwed_butt",
+      "reason": "Tredje steget fångas mellan sidlinjerna.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "step_3"
+      }
+    },
+    {
+      "id": "j_step_3_rear",
+      "first": {
+        "face": "y_max",
+        "instance_id": "step_3"
+      },
+      "method": "screwed_butt",
+      "reason": "Tredje steget fångas mellan sidlinjerna.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "left_ladder_rear_post"
+      }
+    },
+    {
+      "id": "j_book_guard_front",
+      "first": {
+        "face": "y_max",
+        "instance_id": "left_front_post"
+      },
+      "method": "screwed_butt",
+      "reason": "Övre vänstra bokzonsarg ligger mellan främre stolpe och delaren.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "book_guard"
+      }
+    },
+    {
+      "id": "j_book_guard_div",
+      "first": {
+        "face": "y_max",
+        "instance_id": "book_guard"
+      },
+      "method": "screwed_butt",
+      "reason": "Övre vänstra bokzonsarg ligger mellan främre stolpe och delaren.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "left_divider_post"
+      }
+    },
+    {
+      "id": "j_rear_guard_rearpost",
+      "first": {
+        "face": "y_max",
+        "instance_id": "left_ladder_rear_post"
+      },
+      "method": "screwed_butt",
+      "reason": "Bakre vänstra sargsegmentet ligger mellan stegens bakre sidlinje och bakre stolpe.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "rear_guard"
+      }
+    },
+    {
+      "id": "j_rear_guard_backpost",
+      "first": {
+        "face": "y_max",
+        "instance_id": "rear_guard"
+      },
+      "method": "screwed_butt",
+      "reason": "Bakre vänstra sargsegmentet ligger mellan stegens bakre sidlinje och bakre stolpe.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "left_back_post"
+      }
+    },
+    {
+      "id": "j_lower_front_batten",
+      "first": {
+        "face": "y_max",
+        "instance_id": "lower_front_rail"
+      },
+      "method": "screwed_butt",
+      "reason": "Främre nedre bärlist skruvas mot invändig frontregel.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "lower_front_batten"
+      }
+    },
+    {
+      "id": "j_lower_back_batten",
+      "first": {
+        "face": "y_max",
+        "instance_id": "lower_back_batten"
+      },
+      "method": "screwed_butt",
+      "reason": "Bakre nedre bärlist skruvas mot invändig bakregel.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "lower_back_rail"
+      }
+    },
+    {
+      "id": "j_upper_front_batten",
+      "first": {
+        "face": "y_max",
+        "instance_id": "upper_front_rail"
+      },
+      "method": "screwed_butt",
+      "reason": "Främre övre bärlist skruvas mot den fördjupade övre frontsargen i kärnmodellen.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "upper_front_batten"
+      }
+    },
+    {
+      "id": "j_upper_back_batten",
+      "first": {
+        "face": "y_max",
+        "instance_id": "upper_back_batten"
+      },
+      "method": "screwed_butt",
+      "reason": "Bakre övre bärlist skruvas mot den fördjupade övre baksargen i kärnmodellen.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "upper_back_rail"
+      }
+    },
+    {
+      "id": "j_step_4_div",
+      "first": {
+        "face": "y_max",
+        "instance_id": "left_divider_post"
+      },
+      "method": "screwed_butt",
+      "reason": "Fjärde steget fångas mellan sidlinjerna i samma mönster som övriga steg.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "step_4"
+      }
+    },
+    {
+      "id": "j_step_4_rear",
+      "first": {
+        "face": "y_max",
+        "instance_id": "step_4"
+      },
+      "method": "screwed_butt",
+      "reason": "Fjärde steget fångas mellan sidlinjerna i samma mönster som övriga steg.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "left_ladder_rear_post"
+      }
+    },
+    {
+      "id": "j_step_5_div",
+      "first": {
+        "face": "y_max",
+        "instance_id": "left_divider_post"
+      },
+      "method": "screwed_butt",
+      "reason": "Femte steget fångas mellan sidlinjerna i samma mönster som övriga steg.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "step_5"
+      }
+    },
+    {
+      "id": "j_step_5_rear",
+      "first": {
+        "face": "y_max",
+        "instance_id": "step_5"
+      },
+      "method": "screwed_butt",
+      "reason": "Femte steget fångas mellan sidlinjerna i samma mönster som övriga steg.",
+      "second": {
+        "face": "y_min",
+        "instance_id": "left_ladder_rear_post"
+      }
+    }
+  ],
+  "recipe": {
+    "instances": [
+      {
+        "id": "right_gable",
+        "placement": {
+          "x": 1852,
+          "y": 0,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_right_gable"
+      },
+      {
+        "id": "left_front_post",
+        "placement": {
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_post"
+      },
+      {
+        "id": "left_divider_post",
+        "placement": {
+          "x": 0,
+          "y": 282,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_post"
+      },
+      {
+        "id": "left_ladder_rear_post",
+        "placement": {
+          "x": 0,
+          "y": 672,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_post"
+      },
+      {
+        "id": "left_back_post",
+        "placement": {
+          "x": 0,
+          "y": 882,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_post"
+      },
+      {
+        "id": "lower_front_rail",
+        "placement": {
+          "x": 18,
+          "y": 0,
+          "z": 250,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_lower_rail"
+      },
+      {
+        "id": "lower_back_rail",
+        "placement": {
+          "x": 18,
+          "y": 882,
+          "z": 250,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_lower_rail"
+      },
+      {
+        "id": "upper_front_rail",
+        "placement": {
+          "x": 18,
+          "y": 0,
+          "z": 1035,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_upper_rail"
+      },
+      {
+        "id": "upper_back_rail",
+        "placement": {
+          "x": 18,
+          "y": 882,
+          "z": 1035,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_upper_rail"
+      },
+      {
+        "id": "book_shelf_1",
+        "placement": {
+          "x": 0,
+          "y": 18,
+          "z": 250,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_book_shelf"
+      },
+      {
+        "id": "book_shelf_2",
+        "placement": {
+          "x": 0,
+          "y": 18,
+          "z": 570,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_book_shelf"
+      },
+      {
+        "id": "book_shelf_top",
+        "placement": {
+          "x": 0,
+          "y": 18,
+          "z": 882,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_book_shelf"
+      },
+      {
+        "id": "book_back_panel",
+        "placement": {
+          "x": 101,
+          "y": 19,
+          "z": 250,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_book_panel"
+      },
+      {
+        "id": "step_1",
+        "placement": {
+          "x": 0,
+          "y": 300,
+          "z": 282,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_step"
+      },
+      {
+        "id": "step_2",
+        "placement": {
+          "x": 0,
+          "y": 300,
+          "z": 462,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_step"
+      },
+      {
+        "id": "step_3",
+        "placement": {
+          "x": 0,
+          "y": 300,
+          "z": 642,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_step"
+      },
+      {
+        "id": "book_guard",
+        "placement": {
+          "x": 0,
+          "y": 18,
+          "z": 1035,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_book_guard"
+      },
+      {
+        "id": "rear_guard",
+        "placement": {
+          "x": 0,
+          "y": 690,
+          "z": 1035,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_rear_guard"
+      },
+      {
+        "id": "lower_front_batten",
+        "placement": {
+          "x": 111,
+          "y": 18,
+          "z": 339,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_batten"
+      },
+      {
+        "id": "lower_back_batten",
+        "placement": {
+          "x": 111,
+          "y": 837,
+          "z": 339,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_batten"
+      },
+      {
+        "id": "upper_front_batten",
+        "placement": {
+          "x": 111,
+          "y": 18,
+          "z": 1059,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_batten"
+      },
+      {
+        "id": "upper_back_batten",
+        "placement": {
+          "x": 111,
+          "y": 837,
+          "z": 1059,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_batten"
+      },
+      {
+        "id": "lower_slat_base",
+        "placement": {
+          "x": 111,
+          "y": 50,
+          "z": 360,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_slat"
+      },
+      {
+        "id": "upper_slat_base",
+        "placement": {
+          "x": 111,
+          "y": 50,
+          "z": 1080,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_slat"
+      },
+      {
+        "id": "drawer1_wheel_left_front",
+        "placement": {
+          "x": 176,
+          "y": 84,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_wheel_proxy"
+      },
+      {
+        "id": "drawer1_wheel_right_front",
+        "placement": {
+          "x": 620,
+          "y": 84,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_wheel_proxy"
+      },
+      {
+        "id": "drawer1_wheel_left_back",
+        "placement": {
+          "x": 176,
+          "y": 750,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_wheel_proxy"
+      },
+      {
+        "id": "drawer1_wheel_right_back",
+        "placement": {
+          "x": 620,
+          "y": 750,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_wheel_proxy"
+      },
+      {
+        "id": "drawer2_wheel_left_front",
+        "placement": {
+          "x": 741,
+          "y": 84,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_wheel_proxy"
+      },
+      {
+        "id": "drawer2_wheel_right_front",
+        "placement": {
+          "x": 1185,
+          "y": 84,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_wheel_proxy"
+      },
+      {
+        "id": "drawer2_wheel_left_back",
+        "placement": {
+          "x": 741,
+          "y": 750,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_wheel_proxy"
+      },
+      {
+        "id": "drawer2_wheel_right_back",
+        "placement": {
+          "x": 1185,
+          "y": 750,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_wheel_proxy"
+      },
+      {
+        "id": "drawer3_wheel_left_front",
+        "placement": {
+          "x": 1306,
+          "y": 84,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_wheel_proxy"
+      },
+      {
+        "id": "drawer3_wheel_right_front",
+        "placement": {
+          "x": 1750,
+          "y": 84,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_wheel_proxy"
+      },
+      {
+        "id": "drawer3_wheel_left_back",
+        "placement": {
+          "x": 1306,
+          "y": 750,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_wheel_proxy"
+      },
+      {
+        "id": "drawer3_wheel_right_back",
+        "placement": {
+          "x": 1750,
+          "y": 750,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_wheel_proxy"
+      },
+      {
+        "id": "step_4",
+        "placement": {
+          "x": 0,
+          "y": 300,
+          "z": 822,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_step"
+      },
+      {
+        "id": "step_5",
+        "placement": {
+          "x": 0,
+          "y": 300,
+          "z": 1002,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_step"
+      },
+      {
+        "id": "drawer1_front",
+        "placement": {
+          "x": 140,
+          "y": 48,
+          "z": 45,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_drawer_front"
+      },
+      {
+        "id": "drawer1_left",
+        "placement": {
+          "x": 140,
+          "y": 66,
+          "z": 45,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_drawer_side"
+      },
+      {
+        "id": "drawer1_right",
+        "placement": {
+          "x": 677,
+          "y": 66,
+          "z": 45,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_drawer_side"
+      },
+      {
+        "id": "drawer1_back",
+        "placement": {
+          "x": 149,
+          "y": 807,
+          "z": 45,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_drawer_back"
+      },
+      {
+        "id": "drawer1_bottom",
+        "placement": {
+          "x": 149,
+          "y": 66,
+          "z": 45,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_drawer_bottom"
+      },
+      {
+        "id": "drawer2_front",
+        "placement": {
+          "x": 705,
+          "y": 48,
+          "z": 45,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_drawer_front"
+      },
+      {
+        "id": "drawer2_left",
+        "placement": {
+          "x": 705,
+          "y": 66,
+          "z": 45,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_drawer_side"
+      },
+      {
+        "id": "drawer2_right",
+        "placement": {
+          "x": 1242,
+          "y": 66,
+          "z": 45,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_drawer_side"
+      },
+      {
+        "id": "drawer2_back",
+        "placement": {
+          "x": 714,
+          "y": 807,
+          "z": 45,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_drawer_back"
+      },
+      {
+        "id": "drawer2_bottom",
+        "placement": {
+          "x": 714,
+          "y": 66,
+          "z": 45,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_drawer_bottom"
+      },
+      {
+        "id": "drawer3_front",
+        "placement": {
+          "x": 1270,
+          "y": 48,
+          "z": 45,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_drawer_front"
+      },
+      {
+        "id": "drawer3_left",
+        "placement": {
+          "x": 1270,
+          "y": 66,
+          "z": 45,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_drawer_side"
+      },
+      {
+        "id": "drawer3_right",
+        "placement": {
+          "x": 1807,
+          "y": 66,
+          "z": 45,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_drawer_side"
+      },
+      {
+        "id": "drawer3_back",
+        "placement": {
+          "x": 1279,
+          "y": 807,
+          "z": 45,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_drawer_back"
+      },
+      {
+        "id": "drawer3_bottom",
+        "placement": {
+          "x": 1279,
+          "y": 66,
+          "z": 45,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        },
+        "definition_id": "d_drawer_bottom"
+      }
+    ],
+    "definitions": [
+      {
+        "id": "d_right_gable",
+        "x_mm": 18,
+        "y_mm": 900,
+        "z_mm": 1430,
+        "primitive": "box",
+        "material_ref": null
+      },
+      {
+        "id": "d_post",
+        "x_mm": 18,
+        "y_mm": 18,
+        "z_mm": 1430,
+        "primitive": "box",
+        "material_ref": null
+      },
+      {
+        "id": "d_lower_rail",
+        "x_mm": 1834,
+        "y_mm": 18,
+        "z_mm": 250,
+        "primitive": "box",
+        "material_ref": null
+      },
+      {
+        "id": "d_upper_rail",
+        "x_mm": 1834,
+        "y_mm": 18,
+        "z_mm": 250,
+        "primitive": "box",
+        "material_ref": null
+      },
+      {
+        "id": "d_book_shelf",
+        "x_mm": 101,
+        "y_mm": 264,
+        "z_mm": 18,
+        "primitive": "box",
+        "material_ref": null
+      },
+      {
+        "id": "d_book_panel",
+        "x_mm": 9,
+        "y_mm": 264,
+        "z_mm": 650,
+        "primitive": "box",
+        "material_ref": null
+      },
+      {
+        "id": "d_step",
+        "x_mm": 130,
+        "y_mm": 372,
+        "z_mm": 18,
+        "primitive": "box",
+        "material_ref": null
+      },
+      {
+        "id": "d_book_guard",
+        "x_mm": 18,
+        "y_mm": 264,
+        "z_mm": 250,
+        "primitive": "box",
+        "material_ref": null
+      },
+      {
+        "id": "d_rear_guard",
+        "x_mm": 18,
+        "y_mm": 192,
+        "z_mm": 250,
+        "primitive": "box",
+        "material_ref": null
+      },
+      {
+        "id": "d_batten",
+        "x_mm": 1650,
+        "y_mm": 45,
+        "z_mm": 21,
+        "primitive": "box",
+        "material_ref": null
+      },
+      {
+        "id": "d_slat",
+        "x_mm": 1650,
+        "y_mm": 800,
+        "z_mm": 20,
+        "primitive": "box",
+        "material_ref": null
+      },
+      {
+        "id": "d_wheel_proxy",
+        "x_mm": 30,
+        "y_mm": 30,
+        "z_mm": 45,
+        "primitive": "box",
+        "material_ref": null
+      },
+      {
+        "id": "d_drawer_front",
+        "x_mm": 546,
+        "y_mm": 18,
+        "z_mm": 240,
+        "primitive": "box",
+        "material_ref": null
+      },
+      {
+        "id": "d_drawer_side",
+        "x_mm": 9,
+        "y_mm": 750,
+        "z_mm": 222,
+        "primitive": "box",
+        "material_ref": null
+      },
+      {
+        "id": "d_drawer_back",
+        "x_mm": 528,
+        "y_mm": 9,
+        "z_mm": 222,
+        "primitive": "box",
+        "material_ref": null
+      },
+      {
+        "id": "d_drawer_bottom",
+        "x_mm": 528,
+        "y_mm": 741,
+        "z_mm": 9,
+        "primitive": "box",
+        "material_ref": null
+      }
+    ]
+  },
+  "source": "Barnrum bunk bed construction, revision 20 (owner project, exported 2026-10-26 for fastener rule tests)"
+}
