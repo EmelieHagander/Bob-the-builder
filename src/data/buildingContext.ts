@@ -4,6 +4,9 @@ import {
   chunks, currentRoomMeasurements, measuredRooms, roomRevisionFilter,
   type MeasuredRoom, type RoomMeasurementMap,
 } from '../lib/roomMeasurements'
+import { roomDimensionsByRoom, type RoomDimension, type RoomDimensionMap } from '../lib/roomDimensions'
+import { classification, type MeasurementClassification } from './projectFacts'
+import { toDataError } from '../lib/userErrors'
 
 /** Rooms per measurement read keeps the exact-revision filter a short URL. */
 const MEASUREMENT_ROOMS_PER_READ = 40
@@ -102,7 +105,7 @@ export interface PhysicalRelationship extends Audit {
 export interface RelationshipProposal extends Omit<PhysicalRelationship, 'latestRevision' | 'hasProposal'> {
   acceptedRevision: number | null
 }
-export interface SpaceMeasurementSnapshot {
+export interface SpaceMeasurementSnapshot extends MeasurementClassification {
   id: string
   spaceId: string
   buildingId: string
@@ -308,7 +311,37 @@ export function createBuildingContext(
         sourceProjectId: row.source_project_id ?? null, measurementId: row.measurement_id,
         measurementRevision: row.measurement_revision, subject: row.subject,
         value: row.value === null || row.value === undefined ? null : String(row.value), unit: row.unit ?? '',
-        truth: row.truth, source: row.source ?? '',
+        truth: row.truth, source: row.source ?? '', ...classification(row),
+      })))
+    },
+    /**
+     * Length, width, ceiling height and other typed dimensions of exactly the
+     * room revisions given, from `project_room_dimensions` (one read per page of
+     * rooms). Rooms outside this project's scope have no entry.
+     */
+    async dimensions(projectId: string, rooms: MeasuredRoom[]): Promise<RoomDimensionMap> {
+      const { db, guard } = connection(projectId)
+      const rows: Row[] = []
+      for (const batch of chunks(measuredRooms(rooms), MEASUREMENT_ROOMS_PER_READ)) {
+        for (let from = 0; ; from += MEASUREMENT_PAGE) {
+          const result = await db.from('project_room_dimensions').select('*').eq('project_id', projectId).or(roomRevisionFilter(batch))
+            .order('space_id').order('property').order('side', { nullsFirst: true }).order('reference', { nullsFirst: true })
+            .range(from, from + MEASUREMENT_PAGE - 1)
+          if (result.error) throw toDataError(result.error)
+          guard()
+          const page = (result.data ?? []) as Row[]
+          rows.push(...scoped(page, projectId))
+          if (page.length < MEASUREMENT_PAGE) break
+        }
+      }
+      return roomDimensionsByRoom(rooms, rows.map((row): RoomDimension => ({
+        spaceId: row.space_id, spaceRevision: row.space_revision, property: row.property, side: row.side ?? null,
+        reference: row.reference ?? null, status: row.status, truth: row.truth ?? null, millimetres: row.millimetres ?? null,
+        measurements: (Array.isArray(row.measurements) ? row.measurements : []).map((item: Row) => ({
+          snapshotId: item.snapshot_id, measurementId: item.measurement_id, measurementRevision: item.measurement_revision,
+          subject: item.subject, value: item.value ?? null, unit: item.unit ?? '', millimetres: item.millimetres ?? null,
+          truth: item.truth, source: item.source ?? '',
+        })),
       })))
     },
     async history(projectId: string, kind: Exclude<PhysicalNodeKind, 'level'>, id: string): Promise<PhysicalHistoryVersion[]> {

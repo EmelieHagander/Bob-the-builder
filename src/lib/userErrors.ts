@@ -82,6 +82,11 @@ const CODE_COPY: Record<string, string> = {
   over_email_send_rate_limit: 'Too many sign-in emails were sent. Wait a few minutes and try again.',
   already_invited: 'That person is already invited.',
   project_mismatch: 'These records do not belong to the open project. Reload to continue.',
+  measurement_already_classified: 'This measurement already says what it measures. To change that, archive it and add a new measurement.',
+  measurement_property_required: 'Choose what the measurement measures before adding a side or a reference.',
+  invalid_measurement_property: 'Choose what the measurement measures from the list.',
+  invalid_measurement_side: 'Choose north, east, south or west, or no side.',
+  invalid_measurement_reference: 'Keep the reference to 120 characters or fewer.',
 }
 
 /*
@@ -175,7 +180,7 @@ const KIND_BY_CODE: Record<string, ErrorKind> = {
   signup_disabled: 'not_configured', not_configured: 'not_configured',
   over_email_send_rate_limit: 'rate_limited', over_request_rate_limit: 'rate_limited', rate_limited: 'rate_limited',
   not_found: 'not_found', no_data: 'not_found', in_use: 'in_use',
-  conflict: 'conflict', project_mismatch: 'conflict', record_changed: 'conflict', revision_conflict: 'conflict', turn_in_flight: 'conflict',
+  conflict: 'conflict', project_mismatch: 'conflict', record_changed: 'conflict', measurement_already_classified: 'conflict', revision_conflict: 'conflict', turn_in_flight: 'conflict',
   network: 'network', timeout: 'timeout',
 }
 

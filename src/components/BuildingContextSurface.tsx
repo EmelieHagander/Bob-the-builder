@@ -14,7 +14,9 @@ import type {
 import { scopeErrorMessage, unlinkResult } from '../lib/physicalScope'
 import { userErrorMessage } from '../lib/userErrors'
 import { physicalTruthLabel, type MeasuredRoom, type RoomMeasurementMap } from '../lib/roomMeasurements'
+import type { RoomDimensionMap } from '../lib/roomDimensions'
 import { BuildingContextEditor } from './BuildingContextEditor'
+import { useRoomDimensions } from './RoomDimensions'
 import { useRoomMeasurements } from './RoomMeasurements'
 import { BuildingSharingCard } from './SharingCards'
 import { inputStyle } from './form'
@@ -35,6 +37,7 @@ type BuildingContextGateway = {
   relationships(projectId: string, buildingId: string): Promise<PhysicalRelationship[]>
   proposals(projectId: string, buildingId: string): Promise<Proposals>
   measurements(projectId: string, rooms: MeasuredRoom[]): Promise<RoomMeasurementMap>
+  dimensions(projectId: string, rooms: MeasuredRoom[]): Promise<RoomDimensionMap>
   canDirectEdit(projectId: string, buildingId: string): Promise<boolean>
   editSite(projectId: string, action: 'create', id: string, expected: number, data: Record<string, unknown>): Promise<unknown>
   editBuilding(projectId: string, action: 'create', id: string, expected: number, data: Record<string, unknown>): Promise<unknown>
@@ -148,6 +151,9 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
   const listedRooms = useMemo(() => detail.spaces.filter(space => !space.archived), [detail.spaces])
   const readMeasurements = useCallback((id: string, rooms: MeasuredRoom[]) => context.measurements(id, rooms), [context])
   const roomMeasurements = useRoomMeasurements(projectId, listedRooms, readMeasurements)
+  // Room sizes are project dimensions: one read per Building, only inside a Project.
+  const readDimensions = useCallback((id: string, rooms: MeasuredRoom[]) => context.dimensions(id, rooms), [context])
+  const roomDimensions = useRoomDimensions(projectId, listedRooms, projectId ? readDimensions : null)
 
   if (loading && buildings.length === 0) return <Loading label="Loading building context…" />
 
@@ -214,6 +220,8 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
       canDirectEdit={detail.canDirectEdit}
       roomMeasurements={roomMeasurements.load}
       onRetryMeasurements={roomMeasurements.retry}
+      roomDimensions={projectId ? roomDimensions.load : undefined}
+      onRetryDimensions={roomDimensions.retry}
       onSelectBuilding={setSelectedBuildingId}
       onCreateSite={async (id, data) => { await context.editSite(projectId, 'create', id, 0, data) }}
       onCreateBuilding={async (id, data) => {

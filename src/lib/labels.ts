@@ -5,7 +5,7 @@
  * gets a neutral label (or a plain-word rendering of the code), not the code.
  */
 import { DOMAIN_TERMS } from '../domain/vocabulary'
-import { TRUTH_LABELS } from '../data/projectFacts'
+import { TRUTH_LABELS, type MeasurementClassification, type MeasurementProperty, type MeasurementSide } from '../data/projectFacts'
 import type { TruthState } from '../data/provenance'
 
 /** "sheet_goods" → "Sheet goods"; "wood.plywood" → "Plywood". Never returns the code itself. */
@@ -23,6 +23,20 @@ const pick = <T extends string>(table: Partial<Record<T, string>>, code: string 
 export const TRUTH_STATE_LABELS: Record<TruthState, string> = { ...TRUTH_LABELS, ai_assessment: 'Bob’s assessment' }
 export const truthLabel = (truth: string | null | undefined) => pick(TRUTH_STATE_LABELS, truth, 'Unknown')
 
+/* ── What a measurement measures ── */
+export const MEASUREMENT_PROPERTY_LABELS: Record<MeasurementProperty, string> = {
+  room_length: 'Room length', room_width: 'Room width', ceiling_height: 'Ceiling height', wall_length: 'Wall length',
+  opening_width: 'Opening width', opening_height: 'Opening height', sill_height: 'Sill height',
+  opening_offset: 'Distance to opening', other: 'Other',
+}
+export const MEASUREMENT_SIDE_LABELS: Record<MeasurementSide, string> = { N: 'North side', E: 'East side', S: 'South side', W: 'West side' }
+/** "Opening width · North side · foder till foder"; null when nothing is said yet. */
+export function measurementPropertyLabel(item: MeasurementClassification): string | null {
+  if (!item.property) return null
+  return [pick(MEASUREMENT_PROPERTY_LABELS, item.property, 'Other'), item.side ? pick(MEASUREMENT_SIDE_LABELS, item.side, '') : '', item.reference?.trim() ?? '']
+    .filter(Boolean).join(' · ')
+}
+
 /* ── Project record types (Bob's evidence and saved changes) ── */
 export const RECORD_TYPE_LABELS: Record<string, string> = {
   project: DOMAIN_TERMS.project.en, areas: DOMAIN_TERMS.area.en, tasks: DOMAIN_TERMS.task.en, plan: DOMAIN_TERMS.plan.en,
@@ -31,7 +45,7 @@ export const RECORD_TYPE_LABELS: Record<string, string> = {
   artifacts: 'Drawing', drawing: 'Drawing', requirements: DOMAIN_TERMS.material_requirement.en,
   physical_buildings: 'Building', building_context: 'Building', physical_levels: 'Floor', physical_spaces: DOMAIN_TERMS.space.en,
   physical_elements: 'Building part', physical_relationships: 'Space connection', physical_proposals: 'Proposed building change',
-  physical_space_measurements: 'Space measurement', catalog: 'Catalog item', media: 'Image', image_pixels: 'Image',
+  physical_space_measurements: 'Space measurement', room_dimensions: 'Room size', catalog: 'Catalog item', media: 'Image', image_pixels: 'Image',
   stock: 'Material stock', cut_plans: 'Cut plan',
 }
 export const recordTypeLabel = (dataset: string | null | undefined) => pick(RECORD_TYPE_LABELS, dataset, 'Project record')

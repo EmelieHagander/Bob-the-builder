@@ -1,33 +1,37 @@
 /*
  * A room's saved measurements, read from the snapshots of the room revision
  * on screen. Labels stay verbatim and each truth class stays visible; the
- * source is one tap away. Callers read once per list (`useRoomMeasurements`),
- * never once per room.
+ * source is one tap away. Measurements that say what they measure come first,
+ * with that shown under their label. Callers read once per list
+ * (`useRoomMeasurements`), never once per room.
  */
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import type { SpaceMeasurementSnapshot } from '../data/buildingContext'
+import { measurementPropertyLabel } from '../lib/labels'
 import {
   MEASUREMENT_PREVIEW, measuredRooms, measurementKey, measurementValue, physicalTruthLabel,
   type MeasuredRoom, type RoomMeasurementMap,
 } from '../lib/roomMeasurements'
 import { Icon } from './ui'
 
-export type RoomMeasurementsLoad =
+/** One list-level read for every room on screen. */
+export type RoomReadLoad<T> =
   | { status: 'loading' }
   | { status: 'failed' }
-  | { status: 'ready'; byRoom: RoomMeasurementMap }
+  | { status: 'ready'; byRoom: T }
+export type RoomMeasurementsLoad = RoomReadLoad<RoomMeasurementMap>
 
-type Read = (projectId: string, rooms: MeasuredRoom[]) => Promise<RoomMeasurementMap>
+type Read<T> = (projectId: string, rooms: MeasuredRoom[]) => Promise<T>
 
 /** One read for every listed room; re-reads only when a room or its revision changes. */
-export function useRoomMeasurements(projectId: string, rooms: MeasuredRoom[], read: Read | null) {
+export function useRoomRead<T>(projectId: string, rooms: MeasuredRoom[], read: Read<T> | null, empty: () => T) {
   const wanted = measuredRooms(rooms)
   const key = wanted.map(measurementKey).sort().join('|')
   const [version, setVersion] = useState(0)
-  const [load, setLoad] = useState<RoomMeasurementsLoad>({ status: 'loading' })
+  const [load, setLoad] = useState<RoomReadLoad<T>>({ status: 'loading' })
   useEffect(() => {
     let alive = true
-    if (!read || !wanted.length) { setLoad({ status: 'ready', byRoom: new Map() }); return () => { alive = false } }
+    if (!read || !wanted.length) { setLoad({ status: 'ready', byRoom: empty() }); return () => { alive = false } }
     setLoad({ status: 'loading' })
     read(projectId, wanted)
       .then(byRoom => { if (alive) setLoad({ status: 'ready', byRoom }) })
@@ -39,10 +43,13 @@ export function useRoomMeasurements(projectId: string, rooms: MeasuredRoom[], re
   return { load, retry: () => setVersion(value => value + 1) }
 }
 
-/** The list-level read failed: say so once, keep the rooms, offer a retry. */
-export function RoomMeasurementsFailed({ onRetry }: { onRetry: () => void }) {
+export const useRoomMeasurements = (projectId: string, rooms: MeasuredRoom[], read: Read<RoomMeasurementMap> | null) =>
+  useRoomRead(projectId, rooms, read, () => new Map())
+
+/** A list-level read failed: say so once, keep the rooms, offer a retry. */
+export function RoomMeasurementsFailed({ onRetry, message = 'Room measurements could not be loaded. Rooms are listed without them.' }: { onRetry: () => void; message?: string }) {
   return <div className="ui-form-error room-measurements-failed" role="alert">
-    <span>Room measurements could not be loaded. Rooms are listed without them.</span>
+    <span>{message}</span>
     <button type="button" className="btn" onClick={onRetry}><Icon name="arrow-clockwise" size={15} /> Retry</button>
   </div>
 }
@@ -72,9 +79,10 @@ export function RoomMeasurements({ room, roomName, load }: { room: MeasuredRoom;
 }
 
 function MeasurementRow({ item }: { item: SpaceMeasurementSnapshot }) {
+  const measures = measurementPropertyLabel(item)
   return <details className="room-measurement">
     <summary>
-      <span className="room-measurement-subject">{item.subject}</span>
+      <span className="room-measurement-subject"><span>{item.subject}</span>{measures && <span className="room-measurement-property">{measures}</span>}</span>
       <span className="room-measurement-value">{measurementValue(item)}</span>
       <span className="room-measurement-truth">{physicalTruthLabel(item.truth)}</span>
     </summary>
