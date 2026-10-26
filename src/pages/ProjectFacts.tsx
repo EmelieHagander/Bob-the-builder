@@ -98,7 +98,7 @@ function FactSummary({ record }: { record: ProjectFact }) {
       <strong>{describeMeasurement(record)}</strong>
       <span className="image-purpose">{TRUTH_LABELS[record.truth]}</span>
       {measures && <span className="image-purpose">{measures}</span>}
-      {record.required && <span className="image-purpose">Required</span>}
+      {record.required && <span className="image-purpose">Required for planning</span>}
     </> : <>
       <strong>{record.quantity === null ? 'Count unknown' : record.quantity + ' item' + (record.quantity === 1 ? '' : 's')}</strong>
       <span className="image-purpose">{INTENT_LABELS[record.intent]}</span>
@@ -319,6 +319,7 @@ export function ProjectFacts() {
       <button className="btn btn-primary" style={compactPrimary} disabled={!db.authEnabled() || Boolean(areasError) || !areas || Boolean(componentId && (partLoading || !component || component.archived))}
         onClick={() => setModal({ mode: 'create' })}>Add {kind === 'measurement' ? 'measurement' : 'existing part'}</button>
     </div>
+    <p className="foundation-hint">These are saved facts, not a to-do list. Only unknown or estimated required measures need attention. <Link to="/build-lists">Open cut list &amp; purchasing preparation</Link>.</p>
     {!db.authEnabled() && <p className="card fact-card">This demo does not save measurements or existing parts. Open a connected project to use them.</p>}
     <div className="foundation-actions fact-tabs" role="group" aria-label="Project fact type" style={{ gap: 8 }}>
       <button className={'btn' + (kind === 'measurement' ? ' btn-primary' : '')} style={compactPrimary} aria-pressed={kind === 'measurement'} onClick={() => navigateFilter('measurement', areaId, '', status)}>Measurements</button>
@@ -342,19 +343,19 @@ export function ProjectFacts() {
       {!data?.items.length && <p className="card fact-card">
         {status === 'archived' ? 'No archived records in this selection.' : status === 'missing' ? 'Nothing is waiting to be measured in this selection.' : kind === 'measurement' ? 'No measurements in this selection. Add a known length or an unknown one to collect later.' : 'No existing parts in this selection. Record what you already have.'}
       </p>}
-      <div className="fact-list">{data?.items.map(record => <article key={record.id} className="card fact-card" aria-label={name(record)} style={{ padding: 'var(--panel-padding)' }}>
+      <div className="fact-list">{data?.items.map(record => <article key={record.id} className="card fact-card" aria-label={name(record)} style={{ padding: '12px 14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--layout-gap)', alignItems: 'flex-start' }}>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <h3 style={{ margin: 0, lineHeight: 1.18 }}>{name(record)}</h3>
+            <h3 style={{ margin: 0, lineHeight: 1.25, fontSize: '1rem' }}>{name(record)}</h3>
             <FactSummary record={record} />
           </div>
-          {record.kind === 'measurement' && record.required && <Icon name="warning-circle" size={18} color="var(--clay)" />}
+          {record.kind === 'measurement' && record.required && (record.truth === 'unknown' || record.truth === 'estimated') && <Icon name="warning-circle" size={18} color="var(--clay)" />}
         </div>
-        <p className="foundation-hint" style={{ margin: '5px 0 8px' }}>{areas?.find(a => a.id === record.areaId)?.name ?? 'Project as a whole'} · Version {record.revision}
+        <p className="foundation-hint" style={{ margin: '2px 0 7px' }}>{areas?.find(a => a.id === record.areaId)?.name ?? 'Project as a whole'}
           {record.kind === 'measurement' && record.componentId ? ' · Linked to an existing part' : ''}</p>
-        {record.kind === 'measurement' && record.source && <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '0 0 8px', lineHeight: 1.35 }}><strong>Source:</strong> {record.source}</p>}
-        {record.kind === 'component' && record.condition && <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '0 0 8px', lineHeight: 1.35 }}><strong>Condition:</strong> {record.condition}</p>}
-        <details><summary style={{ fontSize: 13.5, fontWeight: 700 }}>Source and notes</summary><FactDetails record={record} /></details>
+        <details><summary style={{ fontSize: 13, fontWeight: 600 }}>Source, notes &amp; version</summary>
+          <p className="foundation-hint">Version {record.revision}</p><FactDetails record={record} />
+        </details>
         <div className="foundation-actions" style={{ marginTop: 8, gap: 4, alignItems: 'center' }}>
           {!record.archived && record.kind === 'measurement' && <button className="btn btn-primary" style={compactPrimary} onClick={() => setModal({ mode: 'edit', record })}>Update</button>}
           {!record.archived && record.kind === 'measurement' && !record.property && db.authEnabled() && <button className="btn" style={compactSecondary}
