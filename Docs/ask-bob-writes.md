@@ -2,6 +2,64 @@
 
 This document owns the source/runtime contract for bounded project writes. Hosted release evidence belongs in the merged release PR and [foundation verification](foundation-verification.md). Dated extension sections below retain their original rollout context; current tool availability comes from the live catalog and handlers.
 
+## Human text holds only prose — owner decision 2026-10-26
+
+**Source only; not applied or deployed.** Owner decision: human text holds only
+human prose; references are typed relations, never IDs or codes in free text.
+A read-only audit (2026-10-25) found snake_case codes in 24 of 78 Bob replies,
+full UUIDs in 12 and "rev N" in 18, and the same fragments in saved notes,
+change notes and server-written text. The prompt rule alone did not hold.
+
+`_shared/human-text.ts` `humanTextIssues(text)` is a pure check that returns the
+offending fragments by kind: database IDs (UUIDs with or without `@N`, long
+hexadecimal runs), internal codes (snake_case tokens, camelCase field names),
+tool names, revision numbers (`rev N`, `revision N`) and app links or paths
+(app routes, the app's own address, Markdown links to records). External web
+addresses, e-mail addresses, file names, camera file stems and ordinary
+Swedish/English prose pass, including measurements and the Swedish verb *rev*.
+
+**Writers reject; Bob rewrites in the same turn.** A writer checks only its
+human prose fields. Typed fields (IDs, refs, keys, enums, numbers, dates) and
+quotes of the owner (`request_quote`, `source_quote`) are not checked. A
+violation returns the ordinary `invalid` result with
+`validation: {code: 'human_text', fields}` and a short message naming the
+fields, fragment kinds and fragments; nothing is written and no model call is
+added. It stays a rejected write until corrected, like other field validation.
+Bound edits check only text the call supplies (`set`/`append_text` values and a
+reason that is saved), so existing saved text never blocks an unrelated edit;
+no existing row is rewritten.
+
+| Writer | Prose fields checked |
+| --- | --- |
+| `project-write.ts` tools (`WRITE_TOOL_PROSE`), including Building intake | Project description; Area/Task names, descriptions and instructions; measurement subject, source, notes and change note; build-day text; readiness labels and notes; stock, requirement and supplier-product text; solution content and design-intent prose; phase and target reasons; catalog names, aliases and notes; plan summary, reason, Step and requirement text; drawing, stair, building-plan, room-layout and shell titles, descriptions, assumptions, sources and notes; Building, level, space and element names, kinds, notes and descriptions |
+| `project-work-records.ts` | Changed `/name /description /instructions /subject /source /notes /title /day /time /place /food /label`, readiness `note`, and `reason` where it becomes a measurement change note or phase reason |
+| `project-edits.ts`, `project-solution-actions.ts` | Changed title, description, assumptions, tradeoffs and design-intent prose; `reason`; design-reference `note` |
+| `construction-draft.ts` (all write tools) | Titles, descriptions, change notes, parameter/frame/role/joint reasons, open questions, cutting-candidate notes and review notes |
+| `project-image-tools.ts` | Generated image `title`, before any generation |
+
+Not checked: plan-link reasons (not saved), building scope (no prose), a plan
+compiled by the plan colleague and a reviewed CAD candidate (Bob cannot
+rewrite colleague text in that call), and Bob's chat answer.
+
+**Server-written text.** Drawing-event replies no longer show the outcome code
+or the catalog `next_action` guidance; that guidance stays in model-facing
+results. `drawingNotice` maps the outcome to the existing owner meanings:
+service failures to `drawing_unavailable`, target and design-readiness
+prerequisites to `drawing_prerequisite`, everything else to
+`drawing_incomplete`. Gap details carrying codes or IDs are left out. Without a
+prepared phrase (budget stop, known CAD-engine failure, language call down) the
+language-neutral mark stands alone. A source or write receipt for a record
+without a name is labelled by its kind (*Stock item*, *Image*), never its ID.
+New construction-blank requirements get a human basis
+([database](../db/README.md#human-construction-blank-basis--2026-10-26)).
+English default change notes stay.
+
+**Release:** apply the migration, then deploy `ask-bob` and `bob-worker` from
+the same source while no Bob job is active: the check is runtime code, not
+pinned per job. No catalog publication or prompt change: the rejection message
+carries the guidance. `tests/human-text.test.ts` covers the check and every
+writer family; notices are in `tests/drawing-resume-reply.test.ts`.
+
 ## Server-bound edits and canonical data reuse — owner decision 2026-10-14
 
 **Status: specified architecture principle; implementation remains incomplete.**
