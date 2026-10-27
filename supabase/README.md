@@ -832,3 +832,20 @@ Rollback activates the previous two catalog versions first; retain readers and
 validators capable of reading already saved concept revisions and paused jobs.
 Do not delete saved models or weaken construction validation to roll back UI.
 `build-ai-form-concept-catalog.ts --check` verifies publication against source.
+
+<a id="form-delivery-readback-release"></a>
+## Construction delivery reader — prepared release, 2026-10-27
+
+Apply `20261027162750_construction_delivery_readback.sql`, deploy matching
+`ask-bob` and `bob-worker`, then activate
+`20261027162751_ai_construction_delivery_catalog.sql`. The publication adds only
+`tools.read_construction_delivery` and its entry in `bob.tools`; prior manifests,
+other definitions, model choices and shared settings are preserved. Old jobs
+keep their previous toolbox and journal sequence. The caller-JWT `readRpc`
+performs the new read only when that tool exists in the job's pinned manifest.
+
+No release is claimed here. Verify the exact deployed source and SQL, ordinary
+caller read/denial and migration/catalog readback before marking it installed.
+The [Artifact owner](../Docs/artifacts.md#construction-delivery-discovery) owns
+scope; [local evidence](../Docs/foundation-verification.md#form-delivery-readback-2026-10-27)
+distinguishes fixture recovery from real model/CAD and browser acceptance.

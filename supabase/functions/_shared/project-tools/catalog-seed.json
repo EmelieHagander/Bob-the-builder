@@ -984,5 +984,14 @@
     "always_load": false,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "read_construction_delivery",
+    "description": "Find saved outputs for one exact construction version.",
+    "how_to": "Follow every page for drawings, requirements and cut_plans. Reopen the returned exact records through their owners; preserve existing identities and repair only missing work links. This index is not final delivery or fabrication approval.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
   }
 ]

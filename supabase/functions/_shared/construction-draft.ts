@@ -2,6 +2,7 @@ import { CONSTRUCTION_EDIT_TOOL, constructionEditIssues } from './construction-e
 import { CONSTRUCTION_VIEW_TOOL, CONSTRUCTION_EVIDENCE_VIEW_TOOL, createConstructionViews, type ConstructionObservation } from './construction-views.ts'
 import { checkConstruction } from './construction-checks.ts'
 import { constructionLists } from './construction-lists.ts'
+import { CONSTRUCTION_DELIVERY_TOOL, validConstructionDelivery, type ConstructionDeliveryResource } from './construction-delivery.ts'
 import { constructionCutFit } from './construction-cut-fit.ts'
 import { CAD_RECIPE_SCHEMA } from './cad-schema.ts'
 import { CAD_ARRAYS_SCHEMA, expandCadArrays } from './cad-arrays.ts'
@@ -159,6 +160,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  prepareRoleChange?:(payload:WritePayload)=>Promise<Record<string,any>>;
  prepareConsequence?:(payload:WritePayload)=>Promise<Record<string,any>>;
  readChanges?:(id:string,revision:number,after:string|null)=>Promise<Record<string,any>>;
+ readDelivery?:(id:string,revision:number,resource:ConstructionDeliveryResource,after:string|null)=>Promise<Record<string,any>>;
  readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null)=>Promise<DesignReadiness|unknown>;
  readCatalog?:(id:string,revision:number)=>Promise<Record<string,any>>;now?:()=>Date;
  /** Server fastener schedule for one saved revision; present only for catalogs with joint fasteners. */
@@ -186,10 +188,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  return {
  exportState():ConstructionToolsState{return opts.constructionViews?{version:2,used,observations:views.exportState()}:{version:1,used}},
  restoreState(state:ConstructionToolsState){if(state?.version!==(opts.constructionViews?2:1)||!Number.isSafeInteger(state.used)||state.used<0)throw new Error('construction_tools_checkpoint_invalid');if(state.version===2)views.restoreState(state.observations);used=state.used},
- tools:[readTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.writer?[saveTool,CONSTRUCTION_EDIT_TOOL,CONSTRUCTION_PARAMETER_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
+ tools:[readTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.readDelivery?[CONSTRUCTION_DELIVERY_TOOL]:[]),...(opts.writer?[saveTool,CONSTRUCTION_EDIT_TOOL,CONSTRUCTION_PARAMETER_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
  async execute(name:string,raw:unknown):Promise<Record<string,any>>{
   if(++used>12&&!opts.unlimitedWork)return {status:'budget_exhausted'}
-  const spec=[CONSTRUCTION_EDIT_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_PARAMETER_TOOL,readTool,saveTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CUT_SAVE_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL].find(s=>s.function.name===name)
+  const spec=[CONSTRUCTION_EDIT_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_PARAMETER_TOOL,readTool,saveTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CUT_SAVE_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL,...(opts.readDelivery?[CONSTRUCTION_DELIVERY_TOOL]:[])].find(s=>s.function.name===name)
   if(!spec)return {status:'invalid'}
   // An older pinned catalog may omit this new field. Preserve its uncertainty;
   // the database inherits an existing policy rather than erasing it.
@@ -207,6 +209,11 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   const v=raw as any
   if(!await opts.hasAccess())return {status:'denied'}
   try{
+   if(name===CONSTRUCTION_DELIVERY_TOOL.function.name){
+    const result=await opts.readDelivery!(v.artifact_id,v.revision,v.resource,v.after)
+    if(!await opts.hasAccess())return {status:'denied'}
+    return validConstructionDelivery(result,opts.projectId,v.artifact_id,v.revision,v.resource)?result:{status:'unavailable'}
+   }
    if(name===CONSTRUCTION_CHANGES_TOOL.function.name){
     if(!opts.readChanges)return {status:'unavailable'}
     const result=await opts.readChanges(v.artifact_id,v.revision,v.after)
