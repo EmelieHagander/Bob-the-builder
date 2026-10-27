@@ -47,6 +47,7 @@ export function createConstructionModelFixture(timestamp, artifacts) {
 
 export async function verifyConstructionModelBrowser(page,base,fixture,artifacts,solutions,turns,width) {
   const id=randomUUID(),solution=randomUUID(),material=randomUUID(),intent=conceptFixture('box')
+  const targetRevision=solutions.decisions.length+1
   // Add both end panels to the same canonical model, then derive the saved
   // recipe once. Browser camera changes never generate another recipe.
   intent.model.nodes.push({id:'inside_width',role:'decision',unit:'mm',value:364,reason:'Synthetic only'},
@@ -59,11 +60,13 @@ export async function verifyConstructionModelBrowser(page,base,fixture,artifacts
     definitions:boxes.map(b=>({id:b.id,primitive:'box',material_ref:null,x_mm:b.size_mm[0],y_mm:b.size_mm[1],z_mm:b.size_mm[2]})),
     instances:boxes.map(b=>({id:b.id,definition_id:b.id,placement:{x:b.min[0],y:b.min[1],z:b.min[2],rx:0,ry:0,rz:0}}))}
   const row={id,artifact_id:id,project_id:'A',area_id:null,revision:1,title:'Saved box construction',description:'Five saved panels; joinery remains unverified.',
-    kind:'detail',status:'concept',assumptions:'Synthetic design values',target_revision:1,solution_id:solution,solution_revision:1,solution_title:'Box concept',
+    kind:'detail',status:'concept',assumptions:'Synthetic design values',target_revision:targetRevision,solution_id:solution,solution_revision:1,solution_title:'Box concept',
     archived:false,actor_label:'Fixture member',recorded_at:new Date().toISOString(),change_note:'Saved checkpoint',measurements:[],source_media_id:null,
     source_media_title:'',generator:null,generator_version:null,has_room_layout:false,has_stair_study:false,has_multifloor_plan:false}
   artifacts.records.set(id,row);artifacts.histories.set(id,[structuredClone(row)])
   solutions.records.set(solution,{id:solution,project_id:'A',revision:1,title:'Box concept',design_intent:intent,area_id:null,archived:false})
+  solutions.histories.set(solution,[structuredClone(solutions.records.get(solution))])
+  solutions.decisions.push({project_id:'A',revision:targetRevision,solution_id:solution,solution_revision:1,reason:'Synthetic construction source',actor_label:'Fixture member',recorded_at:timestamp(),area_id:null,scope_key:'project'})
   const source={status:'ok',projectId:'A',artifact_id:id,revision:1,current_revision:1,area_id:null,title:row.title,archived:false,source_state:'current',
     solution_id:solution,solution_revision:1,design_intent:intent,recipe,materials:boxes.map(b=>({definition_id:b.id,material_id:material,material_revision:2})),
     joints:[],open_questions:['Joint strength and fastening details remain unverified.'],instance_policy:{version:1,instances:boxes.map(b=>({instance_id:b.id,role:'build_part',quantity_policy:'manufacture',reason:'Saved panel'}))}}
@@ -83,7 +86,7 @@ export async function verifyConstructionModelBrowser(page,base,fixture,artifacts
   await go(1);await drawn()
   assert.equal(fixture.feedback.length,0)
   await model.getByText(/Pinned plywood · material version 2/).waitFor()
-  await model.getByText('Neutral display finish; actual appearance unspecified.',{exact:true}).waitFor()
+  await model.getByRole('list',{name:'Saved materials',exact:true}).getByText(/Neutral display finish; actual appearance unspecified\./).waitFor()
   const first=[...fixture.presentations.values()].find(p=>p.artifact_id===id)
   const sourceReads=fixture.sourceCalls.filter(c=>c.p_artifact===id).length,recipeBefore=JSON.stringify(recipe)
   for(const view of ['front','right','top','overview']){
@@ -122,7 +125,8 @@ export async function verifyConstructionModelBrowser(page,base,fixture,artifacts
   assert.equal(await model.getByRole('button',{name:'Discuss this model with Bob',exact:true}).count(),0)
   assert.equal(await model.getByRole('img').count(),0)
   await page.goto(base+'#/project')
-  artifacts.records.delete(id);artifacts.histories.delete(id);solutions.records.delete(solution)
+  artifacts.records.delete(id);artifacts.histories.delete(id);solutions.records.delete(solution);solutions.histories.delete(solution)
+  assert.equal(solutions.decisions.at(-1).solution_id,solution);solutions.decisions.pop()
   fixture.sources.clear();fixture.catalog.clear();fixture.presentations.clear();fixture.feedback.length=0
   console.log(`FORM construction 3D: exact saved solids/materials, named views, frozen reply, history/reload, source denial and unsupported-shape recovery at ${width}px; WebGL rendered, HTTP fixtures only.`)
 }
