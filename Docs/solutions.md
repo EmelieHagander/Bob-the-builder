@@ -255,10 +255,15 @@ This does not implement detailed 3D, final conversion or replacement of CAD revi
 
 `solution_presentations` and `solution_model_feedback` are subordinate evidence
 and decisions on existing immutable Solution revisions, not new model geometry.
-The representation contract reserves an exact Artifact revision for detailed 3D;
-only `concept_2d` has a producer and a consuming source guard in this increment.
-A construction-3D row cannot authorize work until its package 4a producer and
-freshness checks exist. [Local evidence](foundation-verification.md#form-feedback-2026-10-27)
+Package 4a adds a source-only `construction_3d` producer for exact saved box
+solids. Its Artifact/revision, material pins, named camera and realized component
+scope are derived by the server; its source guard reuses Artifact freshness.
+The shared history is scoped to that exact Construction revision. A whole-model
+response expands only the shown components, including a partial refinement;
+it cannot accept missing components or replace the concept readiness decision.
+Current negative 3D feedback remains a readiness gap until a later covering
+response on the same sources. [3D evidence](foundation-verification.md#form-construction-preview-2026-10-27)
+and [2D evidence](foundation-verification.md#form-feedback-2026-10-27)
 distinguishes source implementation from browser, hosted and model acceptance.
 
 The Solutions page calls `record_solution_presentation` after a nonempty rendered

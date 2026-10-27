@@ -27,6 +27,8 @@ export interface ConstructionDraftSnapshot {
   title: string
   archived: boolean
   source_state: 'current' | 'changed' | 'unavailable'
+  solution_id: string
+  solution_revision: number
   recipe: { definitions: Row[]; instances: Array<Row & { id: string; definition_id: string }> }
   materials: Row[]
   joints: Row[]

@@ -1,5 +1,6 @@
 import { CadDrawingView } from '../components/CadDrawingView'
 import { CadShellView } from '../components/CadShellView'
+import { ConstructionModelView } from '../components/ConstructionModelView'
 import { openBobForCurrentSurface, useBobSurface } from '../lib/bobSurface'
 import { DrawingSourceNotice } from '../components/DrawingSourceNotice'
 import { StairStudyDrawing } from '../components/StairStudyDrawing'
@@ -118,6 +119,7 @@ function VersionDetails({ value, target, details = false, onShellChanged, onShel
       <GeneratedDetails value={value} />
       <Evidence items={value.measurements} />
     </> : <>
+    {value.isConstruction && <ConstructionModelView key={`${value.projectId}:${value.id}:${value.revision}`} value={value} />}
     {value.cad && <CadDrawingView value={value.cad} title={value.title} sourceStatus={value.sourceStatus} projectId={value.projectId} artifactId={value.id} revision={value.revision} />}
     {value.shell && <CadShellView value={value.shell} projectId={value.projectId} canEdit={!!onShellChanged} onChanged={onShellChanged} onReload={onShellReload} />}
     {value.parametricRecipe && <StorageBoxDrawing recipe={value.parametricRecipe} stamp={{ title: value.title,
@@ -138,7 +140,7 @@ function VersionDetails({ value, target, details = false, onShellChanged, onShel
       <StoredImage projectId={value.projectId} image={{ id: value.imageId, title: value.imageTitle || value.title }} original />
       <figcaption>Saved drawing image · version {value.revision}</figcaption>
     </figure> : value.imageTitle && <p>Drawing image removed: {value.imageTitle}</p>}
-    {!value.cad && !value.shell && !value.parametricRecipe && !value.hasRoomLayout && !value.hasMultifloorPlan && !value.hasStairStudy && !value.generation && !value.imageId && <p>No viewable drawing is saved for this version. Its description and recorded evidence remain available in Details.</p>}
+    {!value.isConstruction && !value.cad && !value.shell && !value.parametricRecipe && !value.hasRoomLayout && !value.hasMultifloorPlan && !value.hasStairStudy && !value.generation && !value.imageId && <p>No viewable drawing is saved for this version. Its description and recorded evidence remain available in Details.</p>}
     {value.description && <p>{value.description}</p>}
     </>}
   </div>
@@ -292,14 +294,15 @@ function VersionDialog({ projectId, id, revision, edit, areas, target, returnLab
   }
   if (data?.parametricRecipe && !loading && !error && edit) return <StorageBoxEditor projectId={projectId} areaId={data.areaId ?? ''}
     target={target} value={data} onClose={onClose} onSaved={onSaved} />
-  if (data && !data.cad && !data.shell && !loading && !error && edit) return <Editor projectId={projectId} value={data} areas={areas} initialArea={data.areaId ?? ''} target={target} onClose={onClose} onSaved={onSaved} />
+  if (data && !data.isConstruction && !data.cad && !data.shell && !loading && !error && edit) return <Editor projectId={projectId} value={data} areas={areas} initialArea={data.areaId ?? ''} target={target} onClose={onClose} onSaved={onSaved} />
   return <Modal title={data ? `${data.title} · Version ${data.revision}` : 'Drawing version'} wide onClose={fresh ? onSaved : onClose}>
     {data?.cad && edit && <p>Ask Bob to revise this drawing. Include its title and the changes you want so the CAD assistant can update the construction and its views together.</p>}
+    {data?.isConstruction && edit && <p>Discuss this saved model with Bob to revise its parts, materials or details.</p>}
     {data?.shell && edit && <p>Drag a piece in the plan, or choose Move in the list, to place it yourself. Ask Bob to add or remove pieces. To change a piece itself, open it from the list below.</p>}
     {returnLabel && <button className="btn drawing-return" onClick={fresh ? onSaved : onClose}>← {returnLabel}</button>}
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && <>
       <div className="drawing-reader-tabs" role="group" aria-label="Drawing sections">
-        {(['drawing', 'details', 'history'] as const).map(value => <button key={value} className="btn" aria-pressed={section === value} onClick={() => setSection(value)}>{value === 'drawing' ? 'Drawing' : value === 'details' ? 'Details' : 'History'}</button>)}
+        {(['drawing', 'details', 'history'] as const).map(value => <button key={value} className="btn" aria-pressed={section === value} onClick={() => setSection(value)}>{value === 'drawing' ? data.isConstruction ? 'Model' : 'Drawing' : value === 'details' ? 'Details' : 'History'}</button>)}
         <button className="btn" aria-label="Ask Bob about this version" onClick={openBobForCurrentSurface}>Ask Bob</button>
       </div>
       {section === 'history' ? <History projectId={projectId} record={data} target={target} onVersion={(id, revision) => { setSection('drawing'); onVersion(id, revision) }} />

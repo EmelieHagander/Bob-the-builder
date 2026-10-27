@@ -1,5 +1,37 @@
 # Foundation verification and rollout
 
+<a id="form-construction-preview-2026-10-27"></a>
+## FORM exact construction preview — source verification, 2026-10-27
+
+Package 4a adds the first exact box-solid 3D producer to the existing Construction
+reader. [Media](media-and-steps.md#form-visual-preview), [CAD](cad-adapter.md#form-preview-and-export)
+and [Solution feedback](solutions.md#form-shown-feedback) own behavior;
+[release order](../supabase/README.md#form-construction-preview-release) requires
+its core before its frontend. This increment is not deployed.
+
+Focused checks cover intrinsic XYZ placement and exact bounds, every saved
+instance, pinned materials, explicit unknown appearance/reference volumes and
+refusal of unsupported cuts/curves. Full-schema SQL tests drive ordinary caller
+presentation/feedback RPCs, realized component scope, per-Construction history
+and cursor isolation, forged source/presenter rejection, stale/archived heads,
+idempotent receipts and the frontend project guard. A positive partial 3D answer
+neither accepts the pending drawer nor blocks independently ready refinement;
+current corrections remain a readiness gap. Existing 2D feedback and artifact
+tests pass in the focused run (31 cases before the additional reference-role test).
+Production build, data-read regression check and whitespace checks pass.
+
+The default foundations browser script now includes actual WebGL rendering at
+320/390/1280 px, exact material labels, named views without geometry rereads,
+frozen draft source across a new revision, history/reload and source/shape
+failure recovery. Browser execution and screenshot inspection are pending CI
+because this workspace has no installed Chrome. No browser pass is claimed here.
+
+Prior #307, #308 and #130 boundaries are retained: bounded metadata reads,
+unchanged ordinary authority/receipts, no new AI call, source-bound recovery and
+no claim that saving feedback delivers CAD, lists or Shopping. Existing Rita and
+technical gates remain. Package 4b, real-owner/model acceptance and final export
+coverage remain open.
+
 <a id="form-feedback-2026-10-27"></a>
 ## FORM shown-model feedback — source and local verification, 2026-10-27
 
