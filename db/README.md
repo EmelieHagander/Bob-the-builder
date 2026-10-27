@@ -1606,7 +1606,7 @@ The source identity was allocated after the repository migration head because th
 pinned CLI failed before creating a file. The hosted managed-ledger identity and
 ordinary-caller rollback proof are recorded in the release evidence above. Release order is in [Supabase](../supabase/README.md#form-concept-release--source-only-2026-10-26).
 
-## Construction delivery readback — source only, 2026-10-27
+## Construction delivery readback — installed, 2026-10-27
 
 `20261027162750_construction_delivery_readback.sql` adds the authenticated
 security-invoker `bob.read_construction_delivery`. It filters exact project,
@@ -1615,5 +1615,6 @@ relations. It creates no tables, policies or write authority. Public, anonymous
 and service-role execution are revoked; normal project access and table RLS
 remain required. [Artifact](../Docs/artifacts.md#construction-delivery-discovery)
 owns the index/readback distinction and recovery behavior. The migration is
-prepared, not applied; [local evidence](../Docs/foundation-verification.md#form-delivery-readback-2026-10-27)
-is separate from hosted verification.
+applied; [hosted verification](../Docs/foundation-verification.md#form-delivery-release-2026-10-27)
+records its managed version, exact function readback and rollback-only caller
+probe. This does not close browser or ordinary model/CAD acceptance.

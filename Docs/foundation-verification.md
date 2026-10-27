@@ -1,12 +1,78 @@
 # Foundation verification and rollout
 
+<a id="form-delivery-release-2026-10-27"></a>
+## FORM delivery discovery — hosted release, 2026-10-27
+
+[PR #357](https://github.com/EmelieHagander/Bob-the-builder/pull/357) is merged
+at `b3e7274955aa4e313511df9b8e162c8d21ea885d`. Its tree
+`f856e8b22ca3ade72bb807975877d3b63ae165dc` exactly matches the locally checked
+head `c4e4c450e5185baf78672ac49ee12d873c1aa86b`.
+The [68 focused tests and final eight-test delivery pass](#form-delivery-readback-2026-10-27)
+remain the source verification; full CI was deliberately not run for this
+release under the owner's focused-check instruction. Review was performed
+directly against the domain owners and Archie's guidance, not by a separate agent.
+
+Installation in `yuobtgoidmmmwfqenkau` followed core → both compatible runtimes →
+catalog. [Artifact](artifacts.md#construction-delivery-discovery) owns the
+behavior and [Supabase](../supabase/README.md#form-delivery-readback-release)
+owns release/rollback ordering.
+
+| Source | Installed identity |
+|---|---|
+| `20261027162750_construction_delivery_readback.sql` | managed `20261027172407`, `construction_delivery_readback` |
+| `ask-bob` | ACTIVE **177**, JWT verification retained |
+| `bob-worker` | ACTIVE **145**, existing private worker authentication retained |
+| `20261027162751_ai_construction_delivery_catalog.sql` | managed `20261027172849`, `ai_construction_delivery_catalog` |
+| `tools.read_construction_delivery` | v1, `b7cb405c-a8b0-44cb-bc41-2ea7d82dad2e` |
+| `bob.tools` | v19, `79f12f45-7c44-48d5-a817-fd984491f147` |
+| Resolved runtime manifest | `0a3d5922-9e78-4b5b-99dd-0aa75b6aacf0`, 297 reachable definitions |
+
+Source migration SHA-256 values are
+`6c1497ae5ed874d0a0c87ee3683abf23db26c6a3083111f6c7bd160703574210`
+(core) and `d6128579b92e125c6248f8472b7988042be24739eab267a45f0a034ede14b7dc`
+(catalog). The deployed function body MD5 is
+`0938a03b7a2a6fecd3cd06946eb74524`, matching source exactly; it is stable,
+security invoker, with empty search path and authenticated-only execution.
+All 13 joined source tables retain RLS.
+
+Deployed executable sources match the release. Bundler omissions were limited
+to type-only dependencies/exports (`provenance.ts`, worker `bob-request.ts`,
+and `cad-intake.ts`). EZBR SHA-256:
+`ask-bob` `1a1df13890660ad4f2b6b0b21d7e06e8ccb97942e6aed224c3ee397f7de52cc8`;
+`bob-worker` `2ceac64da8299e59febe9cd1ec4dc09e5f51bbe69ebd1c3ad70ea18fafbc902d`.
+
+The active catalog now has 324 definitions: one new tool and one changed
+toolbox, with the other 322 unchanged. The new contract matches executable
+parameters/description exactly. Removing its new card, contract key and shelf
+entry reproduces the previous toolbox. All 41 shared settings and 12 model
+rows match their pre-release hashes. Security-advisor findings are unchanged
+from the pre-release baseline; this is not a claim that unrelated findings
+are resolved.
+
+A rollback-only five-panel-box probe passed locally and against hosted SQL
+(SHA-256 `9a8b5b6f6a4961d3660d18ea6b7b710eba9dd099bba4ca10161efcc7234236ab`).
+It exercised the ordinary-caller writers and all three discovery resources,
+exact saved description/source pins, a failed turn followed by a new turn,
+missing Step-link repair and exact replay, reopening the saved CAD recipe and
+hypothetical cut layout, five total pieces, no Shopping entry and no extra
+content revisions. Archiving the construction kept its outputs discoverable
+with changed-source status. Another authorized project, an outsider and an
+anonymous caller could not read the source. All probe changes rolled back;
+the final fixture-user count was zero. The packet was synthetic: no real CAD
+render or model call was made.
+
+This closes the technical publication of the first 4b increment. Full browser
+reload and ordinary owner/model/CAD acceptance of the whole box flow remain in
+[State](bob-delivery-flow.md#state). There was no Pages publication, model
+change, paid acceptance call or replacement of Rita in this release.
 
 <a id="form-delivery-readback-2026-10-27"></a>
 ## FORM delivery discovery and recovery — local verification, 2026-10-27
 
 Source branch `codex/form-delivery-readback-20261027` prepares the
 [exact-version delivery reader](artifacts.md#construction-delivery-discovery).
-It does not claim full 4b acceptance or hosted deployment. The five-panel box
+This local-stage record does not claim full 4b acceptance; the subsequent
+[hosted release](#form-delivery-release-2026-10-27) is recorded above. The five-panel box
 fixture saves canonical construction, drawing/description, three piece needs
 and a feasible hypothetical sheet layout. A new claimed turn and new readers
 find these exact outputs, repair only a missing Step link, and reopen geometry,
@@ -29,7 +95,7 @@ the existing local import map for the exact `supabase-js@2.49.8` declarations
 and installed tokenizer. The unmodified network check could not reach esm.sh;
 this is not a claim that the hosted build or CI ran. The Supabase CLI's bundled
 Bun aborted even on help/migration creation; the additive SQL files were created
-locally and applied by the full-schema isolated test harness. No live migration,
+locally and applied by the full-schema isolated test harness. During this local stage no live migration,
 Edge deployment, catalog activation, model/settings change or Pages publication
 was performed. No frontend behavior changed; browser reload and ordinary
 owner/model delivery remain the next acceptance gates in [State](bob-delivery-flow.md#state).
