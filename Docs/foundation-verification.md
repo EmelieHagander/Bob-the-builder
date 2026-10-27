@@ -1,5 +1,50 @@
 # Foundation verification and rollout
 
+<a id="form-plan-audit-2026-10-27"></a>
+## FORM plan audit and focused retest — 2026-10-27
+
+**Local evidence for a documentation-only plan correction.** Audited source:
+`62e98d4785409c062695c172d2669d23de2976ee`, the merged
+[PR #349](https://github.com/EmelieHagander/Bob-the-builder/pull/349).
+The [implementation plan](bob-delivery-flow.md#form-next) owns remaining work;
+this record does not implement or close those capabilities.
+
+Three isolated probes reproduced the current boundaries using
+[`conceptFixture`](../tests/support/solution-concept-fixtures.ts) and, for SQL,
+[`projectSchema`](../tests/support/project-schema.ts) with disposable in-memory
+Auth/project records:
+
+- **Global readiness:** select the valid box fixture for `construction`, then
+  add an open `later_finish` choice with `geometry_dependency: false` to a new
+  selected revision. The concept has no issues, but `read_design_readiness`
+  changes from `ready` to `needs_data` / `design_choice_open`.
+- **Partial handoff:** exact box geometry passes `conceptConstructionIssues`;
+  removing the `back` instance returns `concept_part_missing`. Current saving
+  has no explicit remaining-scope contract to distinguish this from an omission.
+- **Feature label without function:** in the bed fixture, set the `drawer`
+  component inactive and add its `drawer_storage` feature to `lower_deck`.
+  `evaluateConcept` returns no issues although no drawer box remains. This proves
+  the limitation of feature-link validation, not a pass through final CAD review.
+
+Code inspection separately confirmed the missing shown-version decision contract,
+turn-local construction observations (same-job checkpoint restore is supported),
+and the remaining exact-model 3D/delivery integration. These were not live-model
+or browser observations. Existing code gates remain enforced.
+
+After updating the plan, reran the same focused command as the initial audit:
+
+```bash
+node --no-wasm-code-gc --import tsx --test tests/solution-concept.test.ts tests/solution-concept-sql.test.ts tests/construction-checks.test.ts tests/construction-edits.test.ts tests/construction-views.test.ts tests/checked-construction-required.test.ts tests/cad-review.test.ts
+```
+
+**Result: 67 tests passed, 0 failed, 0 skipped.** This is current-mechanics
+regression evidence, not acceptance of the planned extensions. `git diff --check`
+and all 17 added/changed internal links and anchors passed validation; the stale
+FORM State link in the earlier release record now points to the current plan.
+Archie guidance
+was followed manually; no independent agent review, full suite, CI, hosted
+mutation, paid model/CAD call, profile activation or deployment was performed.
+
 <a id="form-concept-loop--local-synthetic-verification-2026-10-26"></a>
 ## FORM concept loop — technically installed, 2026-10-26
 
@@ -7,7 +52,7 @@
 and technically installed: core, backend, frontend and catalog**
 from `8b7eef15b49ee10b8a429246286ea7a6e28c7912`. The merged tree matches
 the final reviewed tree. The [Solution contract](solutions.md#early-concept-geometry-form--source-implementation-2026-10-26)
-owns the model; [State](bob-delivery-flow.md#form-10--tidig-designloop-releasegrindar-2026-10-26)
+owns the model; [State](bob-delivery-flow.md#form-next)
 owns remaining acceptance and the [backend guide](../supabase/README.md#form-concept-release--source-only-2026-10-26)
 owns release order and rollback.
 
