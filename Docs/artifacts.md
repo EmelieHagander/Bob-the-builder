@@ -1089,12 +1089,25 @@ the last local operation. A scope may not omit a dependency to obtain a pass.
 Checks apply to supported geometry and available evidence; they never imply
 fabrication or physical verification beyond that support.
 
+Requirement coverage must bind each registered requirement to the relevant
+modeled property and its check evidence or explicit gap. A feature ID attached
+to an arbitrary part is not proof of its function: removing a drawer and moving
+its feature label onto a sleeping platform cannot satisfy drawer storage.
+Check supported predicates in code; interpretation still needs original evidence
+and the appropriate assessment. Unknown or unsupported verification remains a
+gap, never a pass. Requirements omitted from Bob's own list also need independent
+acceptance cases against the original request.
+
 Reuse existing check/result references, source freshness and affected-output work.
 A relevant input or checker change requires new evidence; historical results stay
 readable but cannot authorize a current output. Exact Construction revision pins
 still require affected outputs to be refreshed even when some geometry is preserved.
 Any reuse across turns needs durable evidence and a fresh authorization/source
 check: current turn-local result references alone do not provide that capability.
+Keep the saved construction and check observations reopenable in a genuinely new
+turn, not only after restoring the same job's checkpoint. Reuse requires the
+same inputs, scope, purpose and checker contract, plus current source/access
+validation. Historical readback and permission to deliver remain distinct.
 No parallel geometry store, universal rule engine or new per-part approval UI is
 introduced. [Code-check priorities](bob-delivery-flow.md#form-code-checks) define
 the proposed increments; K2 and the current CAD reviewer stay enforced meanwhile.

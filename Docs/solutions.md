@@ -202,6 +202,16 @@ belong to Artifact; existing construction-readiness rules remain until the new
 versioned save/check contract is implemented. This is not permission to bypass
 unresolved controlling choices or to fabricate placeholder geometry.
 
+Scoped readiness must distinguish prerequisites of the current work from
+independent later choices. The current `read_design_readiness` blocks every open
+choice and construction-purpose deferral; its contract must change together with
+the Construction write boundary, not only the downstream checker. Preserve all
+whole-design choices and requirements, and establish which inputs control the
+saved scope and its interfaces. A caller's `geometry_dependency: false` or an
+omitted requirement alone cannot establish independence. An unrelated later
+choice stays open without blocking an independent part; a controlling unknown
+still blocks the affected work. Whole-output readiness remains a separate check.
+
 The [2026-10-27 FORM decision](bob-delivery-flow.md#form-flow) makes the user the
 reviewer of intended form/function in 2D and of the detailed model's appearance
 and function in 3D. Reuse existing Solution decisions and explicit delegation;
@@ -219,6 +229,11 @@ actor and exact shown revision through existing decisions/receipts without
 publishing private chat. Corrections, ambiguous feedback and silence cannot be
 turned into blanket acceptance. [Technical checks](bob-delivery-flow.md#form-technical-checks)
 remain separate responsibilities and cannot be approved by a visual response.
+Use one decision contract for 2D and detailed 3D: server-bound actor, presented
+evidence identity, exact revisions and scoped response/delegation basis. A reply
+to an older presentation cannot authorize a newer head. Preserve that link across
+reload and private chat reset within its authorization boundary; it must not
+depend solely on the latest chat summary or model-authored `alignment.basis`.
 
 This does not implement conversion, preview acceptance or a new runtime gate. The
 [whole FORM flow](bob-delivery-flow.md#form-flow) owns review responsibility and
