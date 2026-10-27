@@ -1,14 +1,77 @@
 # Foundation verification and rollout
 
 <a id="form-feedback-2026-10-27"></a>
-## FORM shown-model feedback — source and local verification, 2026-10-27
+<a id="form-hosted-release-2026-10-27"></a>
+## FORM checkpoints, checks and shown-model feedback — hosted release, 2026-10-27
 
-Package 2c is based on package 2b [PR #352](https://github.com/EmelieHagander/Bob-the-builder/pull/352)
-head `a4a797bca01ffe5d68aa6a93a849cca5d37dbd6e`. At publication preparation #352
-was still open; this increment is stacked on its branch. The
+Packages 2a/2b/2c are installed from main
+`670bc96169db35c8cc3fc5d995de5fac9efe36ed`, after merging
+[PR #352](https://github.com/EmelieHagander/Bob-the-builder/pull/352) and
+[PR #353](https://github.com/EmelieHagander/Bob-the-builder/pull/353).
+Its tree exactly matches tested head `dbdd5d6bf697eca7d6d7db66218711966cede387`.
+The
 [Solution owner](solutions.md#form-shown-feedback) defines source-bound ordinary
 feedback, shared typed history, explicit mandates and unchanged technical gates.
-[Release order](../supabase/README.md#form-feedback-release) remains source-only.
+This release evidence supersedes the source-only/browser-blocked status in the
+dated 2a/2b/2c preparation notes. [Release order](../supabase/README.md#form-feedback-release)
+was core → both Bob runtimes → catalogs → frontend.
+
+**Full [CI #773](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/40518796024)
+passed: 1,904 tests, 0 failures, 0 skipped**, plus all build, Edge, PWA and browser
+checks. The earlier full run exposed nine distinct catalog/contract assertions;
+historical publication boundaries and the test catalog metadata were corrected,
+without editing published migrations. All 90 affected cases passed before the
+full rerun. History refresh also exposed and fixed a real collapsed-disclosure
+regression. Shown-model feedback passes at 320/390/1280 px, including visible
+registration, no automatic send, correction history/reload, frozen replies,
+late responses and retry. Screenshot artifact `12743021619` has SHA-256
+`a77908fc0b8763e6d96f5402bdc2ab5adb6fc6e9e113328ea8ee68c4ec599632`.
+
+The managed migration ledger records the exact source SQL under these versions:
+
+| Source migration | Hosted ledger version |
+|---|---|
+| `20261027090942_construction_form_refinement.sql` | `20261027144954` |
+| `20261027101807_construction_observations.sql` | `20261027145000` |
+| `20261027115811_solution_model_feedback.sql` | `20261027145006` |
+| `20261027091553_ai_form_refinement_catalog.sql` | `20261027145229` |
+| `20261027101808_ai_construction_evidence_catalog.sql` | `20261027145236` |
+| `20261027115812_ai_model_feedback_catalog.sql` | `20261027145242` |
+
+`ask-bob` **v176** retains JWT verification; `bob-worker` **v144** retains its
+existing private worker authentication and JWT setting. Downloaded executable
+sources match the merged tree: 119/117 returned files. Deno erases the type-only
+`cad-intake.ts` body and `provenance.ts`; the worker only imports the type from
+`bob-request.ts`, so that handler is absent there. Bundle hashes are respectively
+`06954195f9a2bf0124c4c547b647d7d499ef2d5cdae6b4e25e177dfe322204d9` and
+`ead2bf09faf4159a6206d37de817e3e486e1b18cb97875993a5acc0a79875b51`.
+All **23 added/changed SQL function bodies, execution settings and ACLs** match
+the same fully migrated local schema. All seven affected catalog definitions
+match; the other 316 prior definitions and active versions are unchanged.
+All 41 shared AI setting rows and 12 model rows, including prices, are unchanged.
+
+Two hosted rollback-only probes used fresh synthetic users/projects and ordinary
+caller roles. They covered partial frame refinement with a pending drawer,
+readiness separation, service-only observation writes, exact replay/readback,
+private reset with retained observations, nonaccepting view registration, scoped
+correction receipts, feedback privacy, stale-head `PT409`, outsider RPC/RLS denial
+and immediate constraint checks. Both passed and rolled back; the final query
+found **0** fixture users. These are deterministic boundary probes, not AI
+interpretation or fabrication evidence. No queued/running Bob job was present
+before runtime replacement, and no model/CAD turn was dispatched.
+
+The advisor delta is the intentionally closed private observation table (RLS,
+no policies/direct grants) and three authenticated SECURITY DEFINER RPC notices
+for the guarded presentation, feedback and private-cache readers/writer. Their
+ordinary-caller denial paths were exercised above; no new ERROR or anonymous
+execution finding appeared. Existing unrelated advisor findings remain.
+
+[Pages release #385](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/40525674059)
+built and deployed the same main commit. The public frontend is
+[Bob](https://emeliehagander.github.io/Bob-the-builder/).
+Rollback keeps the compatible core and saved history, and restores prior catalog
+activation before any older frontend/runtime; the previous tools/workflows were
+v17/v7, check/read/save construction contracts v5/v4/v9.
 
 Prior learnings were used as concrete verification boundaries:
 
@@ -37,7 +100,7 @@ changes preserve the original presentation and exactly one response. Area deleti
 retains historical scope identity; project deletion removes subordinate metadata.
 The TypeScript draft/data cases reject late evidence and project-switched callbacks.
 
-**149 focused cases covered across the run and targeted final rerun.** The focused
+**Earlier source verification: 149 focused cases covered across the run and targeted final rerun.** The focused
 run passed 147/149 (one failed assertion plus its parent): the new catalog workflow
 patch produced a null member through SQL JSON-operator precedence. Explicit
 parentheses fixed the publication; the regression now compares the complete
@@ -59,23 +122,12 @@ catalog builders reproduce their publications; changed-document links and
 manually, including existing UI/data seams, honest recovery and canonical owner
 placement. No separate agent review is claimed.
 
-**Browser proof remains blocked, not passed.** The built-UI HTTP fixture covers
-320/390/1280 px, rendered view registration, no automatic send, history/reload,
-reply freezing across a new view/head, late callbacks and failed-link retry. The
-local invocation stopped before opening a page because the configured Chromium
-executable does not exist, and no other installed Chrome/Chromium was found:
-
-```bash
-VITE_SUPABASE_URL=https://pwa-proof.invalid VITE_SUPABASE_ANON_KEY=installation-test-only npm run build
-FOUNDATION_FOCUS=model-feedback CHROME_PATH=/path/to/installed/chrome node --import tsx scripts/check-foundations-browser.mjs
-```
-
-The [verification skill](../.claude/skills/verify/SKILL.md) prohibits
-`playwright install`; no CI/workflow was started to substitute for the missing
-local browser. No screenshot, pixel/accessibility/browser pass, hosted migration,
-catalog activation, frontend/runtime deployment or paid model/CAD run is claimed.
-Natural-language classification (including real “yes, but” behavior), hosted named
-member acceptance, detailed 3D and final delivery remain open. The common
+Local Chromium was absent; the explicitly requested CI used its installed Chrome
+under the [verification rules](../.claude/skills/verify/SKILL.md). No browser was
+downloaded and no paid model/CAD run was made. Natural-language interpretation
+(including real “yes, but” behavior), named-member product acceptance and final
+delivery remain open. Detailed Construction 3D continues in
+[PR #354](https://github.com/EmelieHagander/Bob-the-builder/pull/354). The common
 presentation shape reserves 3D fields; 4a must implement its actual producer and
 fresh source/evidence checks before those fields can authorize work.
 
