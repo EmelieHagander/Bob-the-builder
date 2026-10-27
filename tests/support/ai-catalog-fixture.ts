@@ -247,21 +247,27 @@ for(const migration of migrations){
   const policy=JSON.parse(source.match(/\$context_strategy_history_policy\$([\s\S]+?)\$context_strategy_history_policy\$/)![1]),box=seed.find(row=>row.key==='bob.tools');publish(box)
   box.definition.catalog.push(policy);box.definition.contract_keys.push('tools.read_conversation_message');box.definition.shelves.find((s:any)=>s.label==='Project records and memory').tools.push(policy.name)
  }
- const boundEditContracts=source.match(/\$bound_edit_contracts\$([\s\S]+?)\$bound_edit_contracts\$/)
+ const boundEditContracts=source.match(/\$bound_edit_contracts\$([\s\S]+?)\$bound_edit_contracts\$/)??source.match(/\$model_feedback_contracts\$([\s\S]+?)\$model_feedback_contracts\$/)
  if(boundEditContracts){
-  const policies=JSON.parse(source.match(/\$bound_edit_policies\$([\s\S]+?)\$bound_edit_policies\$/)![1])
+  const policies=JSON.parse((source.match(/\$bound_edit_policies\$([\s\S]+?)\$bound_edit_policies\$/)??source.match(/\$model_feedback_policies\$([\s\S]+?)\$model_feedback_policies\$/))![1])
   for(const patch of JSON.parse(boundEditContracts[1])){
    const row=structuredClone(seed.find(row=>row.key==='tools.save_project_description'));row.key='tools.'+patch.name
    row.definition={...row.definition,...patch,handler:patch.name,required_parameters:patch.parameters.required,optional_parameters:[],additional_description:policies.find((p:any)=>p.name===patch.name).how_to}
    row.definition.envelope.schema_version=1
+   if(source.includes('$model_feedback_contracts$'))row.definition.card_description=policies.find((p:any)=>p.name===patch.name).description
    row.metadata={publication:'server-bound-edits',server_fields:patch.parameters.required.includes('request_quote')?['request_quote']:[]}
    seed.push(row);versions.set(row.key,1)
   }
-  for(const patch of JSON.parse(source.match(/\$bound_edit_append\$([\s\S]+?)\$bound_edit_append\$/)![1])){
+  for(const patch of JSON.parse(source.match(/\$bound_edit_append\$([\s\S]+?)\$bound_edit_append\$/)?.[1]??'[]')){
    const row=seed.find(row=>row.key===patch.key);row.definition.additional_description=(row.definition.additional_description??'')+patch.text;versions.set(row.key,versions.get(row.key)!+1)
   }
   const box=seed.find(row=>row.key==='bob.tools');versions.set(box.key,versions.get(box.key)!+1)
   for(const policy of policies){box.definition.catalog.push(policy);box.definition.contract_keys.push('tools.'+policy.name);box.definition.shelves.find((s:any)=>s.label===(source.includes("='Living plan'")?'Living plan':'Project records and memory')).tools.push(policy.name)}
+ }
+ const modelFeedbackWorkflow=source.match(/\$model_feedback_workflow\$([\s\S]+?)\$model_feedback_workflow\$/)
+ if(modelFeedbackWorkflow){
+  const patch=JSON.parse(modelFeedbackWorkflow[1]),row=seed.find(row=>row.key==='bob.workflows'),workflow=row.definition.workflows.find((w:any)=>w.name===patch.name)
+  workflow.tools.push(...patch.tools);workflow.method+=patch.method;versions.set(row.key,versions.get(row.key)!+1)
  }
  const taskTexts=source.match(/\$task_budget_texts\$([\s\S]+?)\$task_budget_texts\$/)
  if(taskTexts){

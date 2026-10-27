@@ -218,8 +218,8 @@ requires the entire conceptual geometry to be resolved and supported; even share
 zero nodes count as dependencies. More precise independent unknown geometry and
 functional/interface evidence remain future work. Refinement checkpoints cannot
 authorize CAD publication, manufacturing quantities or cut plans at either the
-tool or database boundary. Their [technical evidence](artifacts.md#form-scoped-checks)
-is the next extension, not implied by an envelope match.
+tool or database boundary. Their [technical evidence](artifacts.md#form-scoped-checks) has a first source
+implementation; it is not implied by an envelope match.
 
 The [2026-10-27 FORM decision](bob-delivery-flow.md#form-flow) makes the user the
 reviewer of intended form/function in 2D and of the detailed model's appearance
@@ -228,8 +228,9 @@ selection/alignment alone does not prove that a particular preview was shown or
 accepted. The detailed 3D decision must also identify its exact Construction
 revision and presented evidence. Changed controlling inputs require reassessment
 within that decision's scope. This acceptance does not assert technical safety.
-Its precise persistence contract remains to be implemented with Artifact's
-existing revision/receipt owners.
+The source-only [shown-model feedback contract](#form-shown-feedback) below
+connects the first 2D producer. Detailed 3D production and its Artifact evidence
+binding remain package 4a.
 
 The [conversational alignment contract](bob-delivery-flow.md#form-dialogue)
 captures the user's ordinary feedback on the shown model; no FORM approval
@@ -244,6 +245,71 @@ to an older presentation cannot authorize a newer head. Preserve that link acros
 reload and private chat reset within its authorization boundary; it must not
 depend solely on the latest chat summary or model-authored `alignment.basis`.
 
-This does not implement conversion, preview acceptance or a new runtime gate. The
+This does not implement detailed 3D, final conversion or replacement of CAD review. The
 [whole FORM flow](bob-delivery-flow.md#form-flow) owns review responsibility and
 [State](bob-delivery-flow.md#form-next) owns implementation order and acceptance.
+
+
+<a id="form-shown-feedback"></a>
+## Shown model and conversational feedback — source implementation, 2026-10-27
+
+`solution_presentations` and `solution_model_feedback` are subordinate evidence
+and decisions on existing immutable Solution revisions, not new model geometry.
+The representation contract reserves an exact Artifact revision for detailed 3D;
+only `concept_2d` has a producer and a consuming source guard in this increment.
+A construction-3D row cannot authorize work until its package 4a producer and
+freshness checks exist. [Local evidence](foundation-verification.md#form-feedback-2026-10-27)
+distinguishes source implementation from browser, hosted and model acceptance.
+
+The Solutions page calls `record_solution_presentation` after a nonempty rendered
+concept viewport intersects the visible page. Covered parent views stop publishing
+focus. The server derives actor, exact Solution revision, view, renderer contract,
+Project/Area target scope and bounded source identities (head, target revision,
+measurement pins/heads and image versions). Reopening the same evidence is
+idempotent. This is a browser presentation record, not proof of gaze or
+comprehension, and it creates no acceptance. Link failure retains the drawing and
+offers retry. Existing ordinary discussion controls carry the pointer.
+
+A draft started on this presentation freezes its identity. A late presentation
+callback cannot attach evidence to an already unbound draft, and a new head or
+view cannot retarget a started reply. The logical turn keeps this identity through
+send, retries and worker recovery. `read_model_feedback` reads only its bound
+presentation, active component identities and ten responses at a time; its cursor
+can reopen older decisions without loading construction geometry. The UI's feedback
+history uses the same caller-authorized reader and survives reload/private reset.
+
+Bob interprets the **whole ordinary response** in the normal conversation.
+`record_model_feedback` accepts a typed outcome (`accepted`, `change_requested`,
+`unclear`, `delegated`), whole-model or exact active-component scope, and separate
+correction/uncertainty flags. The backend rejects inconsistent acceptance, binds
+the entire original turn rather than a model-selected quote, and derives the
+actor and shown source from private turn capture. It never lets a model choose a
+different presentation, actor or source revision. Language interpretation remains
+model judgment; flag consistency is not proof that any arbitrary natural-language
+response was correctly classified. There is no extra classifier call or approval
+button. Only typed metadata is shared; chat text and the normal provenance quote
+remain private and are removed by private conversation reset.
+
+An explicit `delegated` response is a mandate, not acceptance. Bob may record a
+separate acceptance under that exact current mandate in the **same turn**, without
+a second owner confirmation. Its scope must be covered by the mandate, and later
+corrections/uncertainty prevent reuse. User and Bob records have separate immutable
+receipts. Exact retries recover the original receipt; changed payloads/sources
+return a conflict for acceptance/mandate and cannot transfer old feedback to a
+new head. A late correction or unclear response can still be recorded against
+its historical presentation; it does not invalidate a later decision on different
+exact sources. Membership,
+claim generation, presenter, source revision and target/source freshness are
+checked at the actual caller-JWT write boundary. Shared metadata remains after a
+private reset; project deletion removes its subordinate metadata, while removed
+Areas retain their historical scope identities.
+
+`read_design_readiness` can use current whole-model acceptance as the shared
+alignment basis without rewriting the immutable intent. Once visual feedback
+exists, a limited, unclear, corrective or historical response cannot be bypassed
+with model-written `alignment.basis` or a new Solution head. A later whole-model
+response can settle that exact current model. Purpose, open design choices,
+geometry/measurement checks, K2 and CAD/manufacturing restrictions remain in force.
+Untouched legacy alignment keeps its prior design-readiness behavior and is **not**
+backfilled as shown or accepted evidence. Full FORM delivery and 3D/export review
+remain separate work in [State](bob-delivery-flow.md#state).

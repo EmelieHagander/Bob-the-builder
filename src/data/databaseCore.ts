@@ -195,6 +195,8 @@ export const volunteers = createVolunteers(db, volunteerClient, captureAccountCo
   SUPABASE_URL && SUPABASE_ANON_KEY ? createVolunteerMediaTransport(SUPABASE_URL, SUPABASE_ANON_KEY) : undefined)
 export const getSolutions = solutions.list
 export const getSolutionVersion = solutions.version
+export const recordSolutionPresentation = solutions.present
+export const readSolutionPresentation = solutions.presentation
 export const getSolutionHistory = solutions.history
 export const getSelectedTarget = solutions.target
 export const getTargetHistory = solutions.decisions

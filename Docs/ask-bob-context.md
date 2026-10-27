@@ -15,9 +15,16 @@ from a relevance score or an old summary.
 
 ## Implemented scope and remaining target
 
-**P3 deployed; named-member acceptance remains open.** [Release evidence](foundation-verification.md#p3-hosted-technical-release--2026-09-30) distinguishes CI/browser fixtures, hosted SQL roles and ordinary guest Auth/model consumption. `src/domain/bobScreen.ts` owns the actual strict pointer and Current View types; `src/lib/bobSurface.ts` owns route/project-scoped publication. Pages publish navigation ids, Ask bob captures them at send time, and the server hydrates only fixed caller-JWT projections. Surface fields and wire names below illustrate the wider design; use those source types rather than the illustrative schema when implementing current clients.
+**P3 deployed; named-member acceptance remains open.** [Release evidence](foundation-verification.md#p3-hosted-technical-release--2026-09-30) distinguishes CI/browser fixtures, hosted SQL roles and ordinary guest Auth/model consumption. `src/domain/bobScreen.ts` owns the actual strict pointer and Current View types; `src/lib/bobSurface.ts` owns route/project-scoped publication. Pages publish navigation ids, Ask bob captures them at send time (a shown-model draft freezes its presentation when the reply starts), and the server hydrates only fixed caller-JWT projections. Surface fields and wire names below illustrate the wider design; use those source types rather than the illustrative schema when implementing current clients.
 
 Current View contains project/viewer, Area, Task, current Plan Step, selected task instruction, exact Solution/Artifact revision or Event where supported. Safe names, task instructions, status and responsibility come from server reads; browser labels are display-only. Foreign, stale and mismatched relations discard the projection. Errors are distinct from missing focus. Historical drawing/solution selections do not become the latest or selected target.
+
+The source-only [FORM feedback increment](solutions.md#form-shown-feedback) adds
+an optional `presentationId` paired with an exact Solution/Artifact pointer.
+`read_model_feedback` resolves the presentation on demand through the caller and
+claimed turn; it does not put geometry into always-loaded Current View. An old
+client's omission keeps its prior behavior. The server binds writes to its saved
+presenter, version and scope, never to browser-supplied labels or approval flags.
 
 The original pointer is privately pinned to a logical turn and retained by background recovery and retry, including omission by older clients. Its model input is journalled for replay. Caller access and the hydrated projection are checked afresh before provider work, tool execution and final settlement. A change stops further use of stale context; only a complete verified own-write readback can explain supported project/Area/Task/Event/Plan changes. Unsupported or incomplete receipts fail closed. Committed receipts survive recovery while a stale-context reply is withheld. Neither the pointer nor catalog counts are evidence; accepted server reads may appear in private answer evidence after reload.
 

@@ -3,13 +3,42 @@ import { randomUUID } from 'node:crypto'
 import { verifyConceptsBrowser } from './solution-concept-browser.mjs'
 
 export function createSolutionsFixture(timestamp, assets, facts) {
-  const records = new Map(), histories = new Map(), decisions = []
-  const fixture = { records, histories, decisions, rejectNext: false, wrongVersionProjectOnce: false,
+  const records = new Map(), histories = new Map(), decisions = [], presentations = new Map()
+  const fixture = { records, histories, decisions, presentations, presentationCalls: [], modelFeedback: [], rejectPresentationOnce: false, holdPresentation: null, rejectNext: false, wrongVersionProjectOnce: false,
     async handle(request, url, respond) {
       const table = url.pathname.split('/').at(-1)
-      if (!['current_solutions','solution_revisions','solution_measurement_details','current_target','target_revisions','solution_command'].includes(table)) return false
+      if (!['current_solutions','solution_revisions','solution_measurement_details','current_target','target_revisions','solution_command','record_solution_presentation','read_solution_presentation'].includes(table)) return false
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
       const fail = async message => { await respond({ status: 409, json: { message } }); return true }
+      if (table === 'read_solution_presentation') {
+        const { p_project,p_presentation,p_before } = request.postDataJSON()
+        const p = [...presentations.values()].find(p=>p.id===p_presentation&&p.project_id===p_project)
+        assert(p)
+        const all = fixture.modelFeedback.filter(f=>f.solution_id===p.solution_id&&f.solution_revision===p.solution_revision).reverse()
+        const start = all.findIndex(f=>f.id===p_before)+1, rows = all.slice(start,start+10)
+        await respond({ json:{ ...p,feedback:rows.map(({ solution_id,solution_revision,...f })=>f),next_feedback_id:all.length>start+10?rows.at(-1).id:null } }); return true
+      }
+      if (table === 'record_solution_presentation') {
+        const args = request.postDataJSON(), { p_project, p_solution, p_revision, p_view, p_area } = args
+        fixture.presentationCalls.push(args)
+        if (fixture.rejectPresentationOnce) { fixture.rejectPresentationOnce = false; return fail('Presentation fixture temporarily unavailable') }
+        const row = histories.get(p_solution)?.find(r => r.revision === p_revision), head = records.get(p_solution)
+        assert(row && row.project_id === p_project && row.design_intent.model.views.some(v => v.id === p_view))
+        const key = [p_project,p_solution,p_revision,p_view,p_area,head.revision].join(':')
+        let p = presentations.get(key)
+        if (!p) {
+          p = { id: randomUUID(), project_id:p_project, solution_id:p_solution, solution_revision:p_revision, area_id:p_area, scope_label:p_area??'Project',
+            artifact_id:null,artifact_revision:null,representation:'concept_2d',view_id:p_view,renderer_version:'solution-concept-v1',
+            components:row.design_intent.model.components.filter(c=>c.active).map(c=>({ id:c.id,label:c.label })),shown_by:'Fixture member',shown_at:timestamp(),source_current:head.revision===p_revision,can_respond:true,feedback:[],next_feedback_id:null }
+          presentations.set(key,p)
+        }
+        const allFeedback = fixture.modelFeedback.filter(f=>f.solution_id===p_solution&&f.solution_revision===p_revision)
+        const packet = { ...p, next_feedback_id:allFeedback.length>10?allFeedback.at(-10).id:null, feedback: fixture.modelFeedback.filter(f => f.solution_id===p_solution && f.solution_revision===p_revision)
+          .map(({ solution_id, solution_revision, ...f }) => ({ ...f, source_current:head.revision===p_revision })).slice(-10).reverse() }
+        const hold = fixture.holdPresentation
+        if (hold) { fixture.holdPresentation = null; hold.started?.(); await hold.promise }
+        await respond({ json:packet }); return true
+      }
       if (table === 'solution_command') {
         const { p_project, p_action: action, p_solution: id, p_expected: expected, p_data: data } = request.postDataJSON()
         assert.equal(p_project, 'A')

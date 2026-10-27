@@ -1,3 +1,4 @@
+import { parseSolutionPresentation } from '../domain/modelFeedback'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MeasurementTruth } from './projectFacts'
 import { parseDesignIntent, type DesignIntent } from '../../supabase/functions/_shared/project-design-intent.ts'
@@ -97,6 +98,25 @@ export function createSolutions(client: SupabaseClient<any, any, any> | null, ca
     return { decision: d, solution: s, requestedAreaId, inherited }
   }
   return {
+    async presentation(projectId: string, id: string, before: string) {
+      const { db, guard } = connection(projectId)
+      const result = checked(await db.rpc('read_solution_presentation', { p_project: projectId, p_presentation: id, p_before: before }))
+      guard()
+      const presentation = parseSolutionPresentation(result, projectId)
+      if (!presentation || presentation.id !== id) throw new UserError('Model feedback could not be read. Try again.')
+      return presentation
+    },
+    async present(projectId: string, id: string, revision: number, viewId: string, areaId: string | null) {
+      const { db, guard } = connection(projectId)
+      const result = checked(await db.rpc('record_solution_presentation', { p_project: projectId, p_solution: id, p_revision: revision, p_view: viewId, p_area: areaId }))
+      guard()
+      const presentation = parseSolutionPresentation(result, projectId)
+      if (!presentation || presentation.solution_id !== id || presentation.solution_revision !== revision || presentation.view_id !== viewId
+        || presentation.area_id !== areaId || presentation.representation !== 'concept_2d' || presentation.renderer_version !== 'solution-concept-v1' || !presentation.can_respond) {
+        throw new UserError('The shown model could not be linked to this version. Reload and try again.')
+      }
+      return presentation
+    },
     version, target,
     async list(projectId: string, areaId = '', archived = false, offset = 0) {
       const { db, guard } = connection(projectId)

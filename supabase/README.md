@@ -749,6 +749,36 @@ To suspend new evidence checks, reactivate the previous check/read definitions
 together; keep compatible readers, history and fresh delivery guards. No cached
 check replaces Rita or permits an unverified refinement through CAD/quantity SQL.
 
+<a id="form-feedback-release"></a>
+## FORM shown-model feedback release — source only, 2026-10-27
+
+Package 2c extends [Solution decisions](../Docs/solutions.md#form-shown-feedback)
+and the existing private turn screen/receipt machinery. Install
+`20261027115811_solution_model_feedback.sql`, deploy compatible **both** `ask-bob`
+and `bob-worker`, activate `20261027115812_ai_model_feedback_catalog.sql`, then
+release the matching frontend. The new client pointer requires the updated server
+screen validator and both runtimes. When combining 2a/2b/2c, install all cores
+before deploying the runtimes and activating their catalogs. Existing catalogs,
+models/settings and paid-work policy remain unchanged outside these additive
+contracts and the on-demand FORM method. Older pinned manifests have no new tools
+or extra read operations; old screen omission remains valid.
+
+The new presentation command and feedback read/write RPCs use ordinary caller
+JWTs. Only the existing internal capture creates a private turn pointer. The
+feedback writer requires that claim, the actual presenter and fresh exact source;
+service-role direct mutation is not granted. A normal private write receipt keeps
+the request quote; shared metadata contains no chat text. The source timestamp was
+recorded in UTC because the installed local Supabase CLI aborted before
+`migration new`; no hosted ledger entry is claimed.
+
+Rollback is to reactivate the prior `bob.tools`/`bob.workflows` manifests (and, if
+needed, the prior frontend), preserving compatible core/readers, existing history
+and freshness guards. Do not drop decisions or treat older `alignment.basis` as
+visual acceptance. Detailed 3D production/consumption and CAD-review replacement
+are not activated here. [Verification](../Docs/foundation-verification.md#form-feedback-2026-10-27)
+records the missing local browser, pending hosted/model acceptance and exact
+focused checks. No migration, runtime, catalog or frontend deployment ran.
+
 ## FORM concept release — technically installed, 2026-10-26
 
 Technical installation and remaining acceptance: [release evidence](../Docs/foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26).

@@ -28,7 +28,7 @@ function Evidence({ items }: { items: SolutionMeasurement[] }) {
     </div>)}
   </div>
 }
-function DesignChoices({ value }: { value: Solution }) {
+function DesignChoices({ value, contextActive, contextAreaId }: { value: Solution; contextActive: boolean; contextAreaId: string | null }) {
   const [image, setImage] = useState<{ id: string; title: string } | null>(null)
   const intent = value.designIntent
   if (!intent) return <p className="foundation-hint">{value.designIntentState === 'invalid'
@@ -40,7 +40,7 @@ function DesignChoices({ value }: { value: Solution }) {
     <h4>Design & choices</h4>
     <p><strong>{purposes[intent.purpose]}</strong> · {intent.alignment.status === 'aligned' ? 'Shared direction recorded' : 'Direction needs reconciliation'}</p>
     <p>{intent.summary}</p>
-    <SolutionConcept intent={intent} revision={value.revision} />
+    <SolutionConcept intent={intent} revision={value.revision} projectId={value.projectId} solutionId={value.id} contextActive={contextActive && !image} areaId={contextAreaId} />
     <details className="ui-row-details"><summary tabIndex={0}>Preserved features & references</summary><div className="fact-details">
       {intent.features.length ? intent.features.map(feature => <p key={feature.id}>{feature.description}{feature.basis === 'working_assumption' && <span className="foundation-hint"> · Working assumption</span>}</p>)
         : <p>No specific features recorded.</p>}
@@ -69,12 +69,12 @@ function DesignChoices({ value }: { value: Solution }) {
     </Modal>}
   </section>
 }
-function VersionDetails({ value }: { value: SolutionVersion }) {
+function VersionDetails({ value, contextActive = true, contextAreaId = null }: { value: SolutionVersion; contextActive?: boolean; contextAreaId?: string | null }) {
   const [image, setImage] = useState(false)
   return <div className="fact-details">
     <p>{value.description}</p><p><strong>Assumptions:</strong> {value.assumptions || 'Not recorded'}</p>
     <p><strong>Trade-offs:</strong> {value.tradeoffs || 'Not recorded'}</p>
-    <DesignChoices key={value.id + ':' + value.revision} value={value} />
+    <DesignChoices key={value.id + ':' + value.revision} value={value} contextActive={contextActive && !image} contextAreaId={contextAreaId} />
     <p className="foundation-hint">{value.actor} · {formatDateTime(value.recordedAt)} · {value.reason}</p>
     <Evidence items={value.measurements} />
     {value.imageId ? <button className="btn" onClick={() => setImage(true)}>View reference image</button>
@@ -160,14 +160,14 @@ function Editor({ projectId, value, areas, initialArea, onClose, onSaved }: {
       onPick={m => { setRefs(rs => [...rs.filter(r => r.id !== m.id), m]); setPicker(null) }} />}
   </Modal>
 }
-function VersionDialog({ projectId, id, revision, edit, areas, onClose, onSaved }: {
-  projectId: string; id: string; revision: number; edit?: boolean; areas: Area[]; onClose: () => void; onSaved: () => void
+function VersionDialog({ projectId, id, revision, edit, areas, contextAreaId, onClose, onSaved }: {
+  projectId: string; id: string; revision: number; edit?: boolean; areas: Area[]; contextAreaId: string | null; onClose: () => void; onSaved: () => void
 }) {
   const [attempt, setAttempt] = useState(0)
   const { data, loading, error } = useAsync(() => db.getSolutionVersion(projectId, id, revision), [projectId, id, revision, attempt])
   if (data && !loading && !error && edit) return <Editor projectId={projectId} value={data} areas={areas} initialArea="" onClose={onClose} onSaved={onSaved} />
   return <Modal title={data ? data.title + ' · Version ' + data.revision : 'Solution version'} onClose={onClose}>
-    {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(n => n + 1)} /> : data && <><button className="btn" onClick={openBobForCurrentSurface}>Ask Bob about this version</button><VersionDetails value={data} /></>}
+    {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(n => n + 1)} /> : data && <><button className="btn" onClick={openBobForCurrentSurface}>Ask Bob about this version</button><VersionDetails value={data} contextAreaId={contextAreaId} /></>}
   </Modal>
 }
 function History({ projectId, record, areaId, onClose, onVersion }: {
@@ -245,7 +245,7 @@ function ConnectedSolutions({ projectId }: { projectId: string }) {
         {target?.solution ? <><h3>{target.solution.title} · Version {target.solution.revision}</h3>
           {area && target.inherited && <p className="solution-attention">This Area currently inherits the Project target. Selecting an Area target here will create an independent decision for {areaName} without changing sibling Areas.</p>}
           <p>{target.decision.reason}</p><p className="foundation-hint">Selected by {target.decision.actor} · {target.decision.recordedAt ? formatDateTime(target.decision.recordedAt) : 'time not recorded'}</p>
-          <VersionDetails value={target.solution} />
+          <VersionDetails value={target.solution} contextActive={!dialog} contextAreaId={area || null} />
           {(!area || !target.inherited) && <button className="btn" onClick={() => setDialog({ kind: 'clear' })}>Clear {area ? 'Area ' : ''}target</button>}
         </> : <p>No target selected for {area ? areaName : 'the Project'}. Add alternatives, then choose one version for this scope.</p>}
         <p className="foundation-hint">{area ? 'Changing this Area target does not replace another Area target.' : 'The Project target is the fallback for Areas that have not made an independent target decision.'}</p>
@@ -274,7 +274,7 @@ function ConnectedSolutions({ projectId }: { projectId: string }) {
     {dialog?.kind === 'create' && <Editor projectId={projectId} areas={areas} initialArea={area} onClose={close} onSaved={saved} />}
     {(dialog?.kind === 'edit' || dialog?.kind === 'view' || dialog?.kind === 'version') && <VersionDialog projectId={projectId}
       id={dialog.kind === 'version' ? dialog.id : dialog.record.id} revision={dialog.kind === 'version' ? dialog.revision : dialog.record.revision}
-      edit={dialog.kind === 'edit'} areas={areas} onClose={close} onSaved={saved} />}
+      edit={dialog.kind === 'edit'} areas={areas} contextAreaId={area || null} onClose={close} onSaved={saved} />}
     {(dialog?.kind === 'history' || dialog?.kind === 'decisions') && <History projectId={projectId} areaId={area}
       record={dialog.kind === 'history' ? dialog.record : undefined} onClose={close} onVersion={(id, revision) => setDialog({ kind: 'version', id, revision })} />}
     {(dialog?.kind === 'select' || dialog?.kind === 'clear' || dialog?.kind === 'archive') && <DecisionDialog projectId={projectId}

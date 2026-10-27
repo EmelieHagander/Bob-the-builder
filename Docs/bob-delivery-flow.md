@@ -557,9 +557,13 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 ## 12. State — nästa arbete
 
 **Aktivt nästa steg — självständig FORM med mer kodkontroll (2026-10-27):**
-granska och merga paket 2b:s första [kontrollbevis](foundation-verification.md#form-evidence-2026-10-27),
-fortsätt sedan med paket 2c i [genomförandeordningen](#form-next): bind ett svar
-till exakt visat 2D-underlag och återanvänd samma beslutskontrakt för 3D.
+granska och merga paket 2b:s [kontrollbevis](foundation-verification.md#form-evidence-2026-10-27)
+och paket 2c:s [versionsbundna samtalsåterkoppling](solutions.md#form-shown-feedback).
+Slutför 2c:s browserprov i en miljö med Chrome enligt
+[verifieringsposten](foundation-verification.md#form-feedback-2026-10-27).
+Fortsätt därefter med en avgränsad 4a/4b för lådan i
+[genomförandeordningen](#form-next): detaljerad 3D från exakt Construction,
+samma beslutskontrakt och faktisk slutleverans.
 Behåll kvarvarande kravtolkning och stöd utanför de tre geometriska kontrollerna
 som explicita luckor; delkontrollerna öppnar ännu ingen slutleverans. Utöka 2a/2b
 när nya delar behöver andra geometrier eller gränssnitt. Behåll kontrollfallen i
