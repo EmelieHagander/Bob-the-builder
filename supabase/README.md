@@ -704,16 +704,18 @@ rolling either runtime back.
 
 <a id="form-concept-release--source-only-2026-10-26"></a>
 <a id="form-checkpoint-release"></a>
-## FORM checkpoint release — source only, 2026-10-27
+## FORM checkpoint release — installed, 2026-10-27
 
 The [Solution refinement contract](../Docs/solutions.md#form-refinement) and
 [Artifact evidence contract](../Docs/artifacts.md#form-scoped-checks) own this
 checkpoint slice and the next scoped-evidence slice. Local evidence for
 [checkpoints](../Docs/foundation-verification.md#form-checkpoints-2026-10-27) and
 [observations](../Docs/foundation-verification.md#form-evidence-2026-10-27) does not
-establish hosted deployment or model acceptance.
+establish hosted deployment or model acceptance. The later
+[combined hosted release](../Docs/foundation-verification.md#form-hosted-release-2026-10-27)
+records installation of both slices; real-model acceptance remains separate.
 
-On a separately authorized release, apply core
+The required sequence is: apply core
 `20261027090942_construction_form_refinement.sql`, deploy `ask-bob` and
 `bob-worker` from the same reviewed source, then apply
 `20261027091553_ai_form_refinement_catalog.sql`. The catalog publication adds
@@ -750,7 +752,14 @@ together; keep compatible readers, history and fresh delivery guards. No cached
 check replaces Rita or permits an unverified refinement through CAD/quantity SQL.
 
 <a id="form-feedback-release"></a>
-## FORM shown-model feedback release — source only, 2026-10-27
+## FORM shown-model feedback release — installed, 2026-10-27
+
+Packages 2a/2b/2c are installed from main `670bc96169db35c8cc3fc5d995de5fac9efe36ed`:
+ask-bob v176, bob-worker v144 and the matching Pages frontend. The
+[release evidence](../Docs/foundation-verification.md#form-hosted-release-2026-10-27)
+owns managed migration versions, source/catalog readback, caller-role probes,
+browser/full-CI results and remaining acceptance limits. The order below remains
+the release/rollback contract; earlier source-only notes are superseded.
 
 Package 2c extends [Solution decisions](../Docs/solutions.md#form-shown-feedback)
 and the existing private turn screen/receipt machinery. Install
@@ -769,7 +778,7 @@ feedback writer requires that claim, the actual presenter and fresh exact source
 service-role direct mutation is not granted. A normal private write receipt keeps
 the request quote; shared metadata contains no chat text. The source timestamp was
 recorded in UTC because the installed local Supabase CLI aborted before
-`migration new`; no hosted ledger entry is claimed.
+`migration new`; the managed hosted ledger mapping is in the release evidence.
 
 Rollback is to reactivate the prior `bob.tools`/`bob.workflows` manifests (and, if
 needed, the prior frontend), preserving compatible core/readers, existing history

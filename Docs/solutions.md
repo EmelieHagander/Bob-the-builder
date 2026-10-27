@@ -228,7 +228,7 @@ selection/alignment alone does not prove that a particular preview was shown or
 accepted. The detailed 3D decision must also identify its exact Construction
 revision and presented evidence. Changed controlling inputs require reassessment
 within that decision's scope. This acceptance does not assert technical safety.
-The source-only [shown-model feedback contract](#form-shown-feedback) below
+The installed [shown-model feedback contract](#form-shown-feedback) below
 connects the first 2D producer. Detailed 3D production and its Artifact evidence
 binding remain package 4a.
 
@@ -245,13 +245,13 @@ to an older presentation cannot authorize a newer head. Preserve that link acros
 reload and private chat reset within its authorization boundary; it must not
 depend solely on the latest chat summary or model-authored `alignment.basis`.
 
-This does not implement detailed 3D, final conversion or replacement of CAD review. The
+Final conversion and replacement of CAD review remain separate from these previews. The
 [whole FORM flow](bob-delivery-flow.md#form-flow) owns review responsibility and
 [State](bob-delivery-flow.md#form-next) owns implementation order and acceptance.
 
 
 <a id="form-shown-feedback"></a>
-## Shown model and conversational feedback — source implementation, 2026-10-27
+## Shown model and conversational feedback — technically installed, 2026-10-27
 
 `solution_presentations` and `solution_model_feedback` are subordinate evidence
 and decisions on existing immutable Solution revisions, not new model geometry.
@@ -263,8 +263,10 @@ response expands only the shown components, including a partial refinement;
 it cannot accept missing components or replace the concept readiness decision.
 Current negative 3D feedback remains a readiness gap until a later covering
 response on the same sources. [3D evidence](foundation-verification.md#form-construction-preview-2026-10-27)
-and [2D evidence](foundation-verification.md#form-feedback-2026-10-27)
-distinguishes source implementation from browser, hosted and model acceptance.
+distinguishes its source implementation from browser and hosted acceptance.
+[2D release evidence](foundation-verification.md#form-hosted-release-2026-10-27)
+records full CI, browser and hosted boundary verification for 2a/2b/2c;
+real-model and final delivery acceptance remain separate.
 
 The Solutions page calls `record_solution_presentation` after a nonempty rendered
 concept viewport intersects the visible page. Covered parent views stop publishing

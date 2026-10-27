@@ -557,18 +557,19 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 ## 12. State — nästa arbete
 
 **Aktivt nästa steg — självständig FORM med mer kodkontroll (2026-10-27):**
-granska och merga paket 2b:s [kontrollbevis](foundation-verification.md#form-evidence-2026-10-27)
-och paket 2c:s [versionsbundna samtalsåterkoppling](solutions.md#form-shown-feedback).
-Slutför 2c:s browserprov i en miljö med Chrome enligt
-[verifieringsposten](foundation-verification.md#form-feedback-2026-10-27).
-Fortsätt därefter med en avgränsad 4a/4b för lådan i
+paket 2a/2b/2c är mergade och tekniskt driftsatta med
+[1 904 gröna tester, browserprov och hosted återläsning](foundation-verification.md#form-hosted-release-2026-10-27).
+Fortsätt med 4a:s exakta konstruktionsvy i
+[PR #354](https://github.com/EmelieHagander/Bob-the-builder/pull/354), inklusive
+browseracceptans och dess separata databas-/frontendrelease.
+Fortsätt därefter med 4b för lådan i
 [genomförandeordningen](#form-next): detaljerad 3D från exakt Construction,
 samma beslutskontrakt och faktisk slutleverans.
 Behåll kvarvarande kravtolkning och stöd utanför de tre geometriska kontrollerna
 som explicita luckor; delkontrollerna öppnar ännu ingen slutleverans. Utöka 2a/2b
 när nya delar behöver andra geometrier eller gränssnitt. Behåll kontrollfallen i
-paket 0 och plan-/måttkopplingen i paket 1; jämförande modellbaslinje och separat
-godkänd driftsättning återstår.
+paket 0 och plan-/måttkopplingen i paket 1; jämförande modellbaslinje och verklig
+sammanhängande produktacceptans återstår.
 [Arbete i delar](#form-work-pieces), [kodkontroller](#form-code-checks),
 [AI-användning](#form-ai-use) och [samtalsavstämning](#form-dialogue) är
 specificerade; den sammanhängande leveranskedjan återstår.

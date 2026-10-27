@@ -203,8 +203,9 @@ async function verifySingleWireframe(page,base,fixture,width,template) {
 async function verifyShell3D(page, view, fixture, width) {
   const webgl = await page.evaluate(() => !!document.createElement('canvas').getContext('webgl2'))
   const reads = fixture.recipeReads ?? 0, calls = fixture.viewerCalls.length
-  const scripts = () => page.evaluate(() => performance.getEntriesByType('resource').filter(e => /CadShell3D/.test(e.name)).length)
-  assert.equal(await scripts(), 0, 'three.js chunk stays lazy')
+  // The shared viewport stylesheet is eager; only the shell renderer's JavaScript must stay lazy.
+  const scripts = () => page.evaluate(() => performance.getEntriesByType('resource').filter(e => /\/CadShell3D-[^/]+\.js$/.test(new URL(e.name).pathname)).length)
+  assert.equal(await scripts(), 0, 'shell 3D renderer stays lazy')
   if (webgl) {
     await view.getByRole('button', { name: '3D view', exact: true }).click()
     const image = view.getByRole('img', { name: '3D line view of Cabin bedroom', exact: true })
