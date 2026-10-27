@@ -565,8 +565,8 @@ installerade med [browser- och hosted bevis](foundation-verification.md#form-con
 eventuella fynd och publicera UI-delen; verifiera därefter det sammanhängande
 lådflödet med verklig modell/CAD inom ett separat beställt prov.**
 [UI-ändringen och verifieringsgränsen](foundation-verification.md#form-saved-delivery-ui-2026-10-27)
-har ett separat manuellt workflow för tre skärmbredder; full CI behövs inte för
-denna kontroll. 4b:s versionsbundna
+har ett fokuserat manuellt läge (`scope=saved-delivery`) i CI-workflowet för tre
+skärmbredder; hela CI-jobbet körs endast med `scope=full`. 4b:s versionsbundna
 [leveransläsning](artifacts.md#construction-delivery-discovery) är tekniskt
 installerad med [release- och återhämtningsbevis](foundation-verification.md#form-delivery-release-2026-10-27).
 Sammanhängande acceptans återstår enligt [genomförandeordningen](#form-next): samma Construction-revision

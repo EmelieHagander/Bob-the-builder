@@ -20,9 +20,11 @@ The production app build and browser-script syntax checks pass.
 **Not yet verified:** rendered navigation/reload, retry/denial, historical/empty
 states and responsive composition. The prepared `FOUNDATION_FOCUS=saved-delivery`
 browser scenario covers these at 320/390/1280 pixels. Local Chrome is absent;
-the separate browser cannot reach the local preview. The manual-only
-**Saved delivery UI** workflow runs this scenario and uploads screenshots without
-the full CI suite. It has not been dispatched. No new Pages release, hosted
+the separate browser cannot reach the local preview. The manual-only CI workflow
+defaults to `scope=saved-delivery`, which runs this scenario and uploads
+screenshots; the full CI job runs only with `scope=full`. The focused mode uses
+the existing registered workflow so it can run on the review branch before
+merge. It has not been dispatched. No new Pages release, hosted
 migration, AI-model call or CAD job was run. Merge/publication and browser proof
 remain open; the existing hosted delivery reader is unchanged.
 
