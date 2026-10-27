@@ -255,19 +255,21 @@ for(const migration of migrations){
    row.definition={...row.definition,...patch,handler:patch.name,required_parameters:patch.parameters.required,optional_parameters:[],additional_description:policies.find((p:any)=>p.name===patch.name).how_to}
    row.definition.envelope.schema_version=1
    if(source.includes('$model_feedback_contracts$'))row.definition.card_description=policies.find((p:any)=>p.name===patch.name).description
-   row.metadata={publication:'server-bound-edits',server_fields:patch.parameters.required.includes('request_quote')?['request_quote']:[]}
+   row.metadata={publication:source.includes('$model_feedback_contracts$')?'model-feedback-v1':'server-bound-edits',server_fields:patch.parameters.required.includes('request_quote')?['request_quote']:[]}
    seed.push(row);versions.set(row.key,1)
   }
   for(const patch of JSON.parse(source.match(/\$bound_edit_append\$([\s\S]+?)\$bound_edit_append\$/)?.[1]??'[]')){
    const row=seed.find(row=>row.key===patch.key);row.definition.additional_description=(row.definition.additional_description??'')+patch.text;versions.set(row.key,versions.get(row.key)!+1)
   }
   const box=seed.find(row=>row.key==='bob.tools');versions.set(box.key,versions.get(box.key)!+1)
+  if(source.includes('$model_feedback_contracts$')){const{seed_version,source_revision,...rest}=box.metadata??{};box.metadata={...rest,publication:'model-feedback-v1'}}
   for(const policy of policies){box.definition.catalog.push(policy);box.definition.contract_keys.push('tools.'+policy.name);box.definition.shelves.find((s:any)=>s.label===(source.includes("='Living plan'")?'Living plan':'Project records and memory')).tools.push(policy.name)}
  }
  const modelFeedbackWorkflow=source.match(/\$model_feedback_workflow\$([\s\S]+?)\$model_feedback_workflow\$/)
  if(modelFeedbackWorkflow){
   const patch=JSON.parse(modelFeedbackWorkflow[1]),row=seed.find(row=>row.key==='bob.workflows'),workflow=row.definition.workflows.find((w:any)=>w.name===patch.name)
   workflow.tools.push(...patch.tools);workflow.method+=patch.method;versions.set(row.key,versions.get(row.key)!+1)
+  const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'model-feedback-v1'}
  }
  const taskTexts=source.match(/\$task_budget_texts\$([\s\S]+?)\$task_budget_texts\$/)
  if(taskTexts){
