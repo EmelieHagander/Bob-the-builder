@@ -1,6 +1,20 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { validConstructionDelivery, type ConstructionDeliveryResource } from '../../supabase/functions/_shared/construction-delivery'
 
 type Row = Record<string, any>
+
+export interface ConstructionDeliveryPage {
+  artifact_id: string
+  revision: number
+  current_revision: number
+  source_state: 'current' | 'changed' | 'unavailable'
+  description: string
+  resource: ConstructionDeliveryResource
+  records: { id: string; revision: number; current_revision: number; title?: string; name?: string; archived?: boolean;
+    step_links?: { step_id: string; in_current_plan: boolean }[] }[]
+  truncated: boolean
+  next_after: string | null
+}
 
 export interface ConstructionHead {
   id: string
@@ -85,6 +99,25 @@ export function createBuildPreparation(client: SupabaseClient<any, any, any> | n
   }
 
   return {
+    async delivery(projectId: string, artifactId: string, revision: number, resource: ConstructionDeliveryResource, after: string | null = null): Promise<ConstructionDeliveryPage> {
+      const { db, guard } = connection(projectId)
+      const value = checked(await db.rpc('read_construction_delivery', {
+        p_project: projectId, p_artifact: artifactId, p_revision: revision, p_resource: resource, p_after: after,
+      })) as Row
+      guard()
+      if (!validConstructionDelivery(value, projectId, artifactId, revision, resource)
+        || typeof value.description !== 'string' || !['current', 'changed', 'unavailable'].includes(value.source_state)
+        || value.records.some((r: Row) => !Number.isSafeInteger(r.current_revision) || r.current_revision < r.revision
+          || r.title !== undefined && typeof r.title !== 'string' || r.name !== undefined && typeof r.name !== 'string'
+          || r.archived !== undefined && typeof r.archived !== 'boolean'
+          || r.step_links !== undefined && (!Array.isArray(r.step_links)
+            || r.step_links.some((link: Row) => typeof link?.step_id !== 'string' || typeof link.in_current_plan !== 'boolean')))
+        || value.truncated && (!value.records.length || value.next_after !== value.records.at(-1).id || value.next_after === after)) {
+        throw new Error('The saved output references could not be read.')
+      }
+      return value as ConstructionDeliveryPage
+    },
+
     async targets(projectId: string): Promise<ProjectTargetScope[]> {
       if (!client) return []
       const { db, guard } = connection(projectId)

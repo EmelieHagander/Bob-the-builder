@@ -295,7 +295,7 @@ export function createMaterialPlanning(
     const row = checked(await db.from('material_requirement_revisions').select('*')
       .eq('project_id', projectId).eq('requirement_id', id).eq('revision', revision).single()) as Row
     guard()
-    if (!row) throw new UserError('Material requirement version unavailable. Reload to check access.')
+    if (!row || (row.requirement_id ?? row.id) !== id || row.revision !== revision) throw new UserError('Material requirement version unavailable. Reload to check access.')
     scoped([row], projectId)
     const [stockRows, componentRows] = await Promise.all([
       db.from('material_requirement_stock_details').select('*')

@@ -17,6 +17,7 @@ import { Icon, Loading, useAsync } from '../components/ui'
 import { SheetLayerFields, SheetLayerPurchaseSummary, SheetLayerSummary } from '../components/SheetLayerFields'
 import { SHEET_LAYER_METHOD, sheetLayerForm, sheetLayerInput } from '../data/sheetLayers'
 import { formatDateTime } from '../lib/format'
+import { savedOutputPointer, savedOutputSourcePointer } from '../lib/savedOutputNavigation'
 import { materialMethodLabel, readableMaterialBasis } from '../lib/labels'
 import { userErrorMessage } from '../lib/userErrors'
 
@@ -321,18 +322,19 @@ function DeterministicRequirementEditor({ projectId, target, scopeArea, value, a
   </Modal>
 }
 
-function RequirementVersionDialog({ projectId, id, revision, scopeArea, edit, areas, tasks, artifacts, stock, components, onClose, onSaved }: {
-  projectId: string; id: string; revision: number; scopeArea: string; edit?: boolean; areas: Area[]; tasks: Task[]; artifacts: ProjectArtifact[]; stock: StockItem[]; components: ExistingComponent[]; onClose: () => void; onSaved: () => void
+function RequirementVersionDialog({ projectId, id, revision, scopeArea, edit, expectedSource, areas, tasks, artifacts, stock, components, onClose, onSaved }: {
+  projectId: string; id: string; revision: number; scopeArea: string; edit?: boolean; expectedSource?: { id: string; revision: number } | null; areas: Area[]; tasks: Task[]; artifacts: ProjectArtifact[]; stock: StockItem[]; components: ExistingComponent[]; onClose: () => void; onSaved: () => void
 }) {
   const [attempt, setAttempt] = useState(0)
   const { data, loading, error } = useAsync(async () => {
     const [record, target] = await Promise.all([
       db.getMaterialRequirementVersion(projectId, id, revision),
-      db.getSelectedTarget(projectId, scopeArea),
+      edit ? db.getSelectedTarget(projectId, scopeArea) : Promise.resolve(null),
     ])
+    if (expectedSource && (record.artifactId !== expectedSource.id || record.artifactRevision !== expectedSource.revision)) throw new Error('Saved source mismatch.')
     return { record, target }
-  }, [projectId, id, revision, scopeArea, attempt])
-  const record = data?.record
+  }, [projectId, id, revision, scopeArea, edit, expectedSource?.id, expectedSource?.revision, attempt])
+  const record = !loading && !error && data?.record.id === id && data.record.revision === revision ? data.record : null
   const target = data?.target
   if (record && target && !loading && !error && edit) {
     const scopedArtifacts = artifacts.filter(item => (item.areaId ?? '') === scopeArea && item.targetRevision === target.decision.revision)
@@ -398,16 +400,26 @@ function StockSection({ projectId, areas, version, bump }: { projectId: string; 
 export function MaterialPlan() {
   const projectId = db.getActiveProjectId() ?? ''
   const [params, setParams] = useSearchParams()
-  const initialArea = params.get('area') ?? ''
+  const areaFilter = params.get('area') ?? ''
   const [version, setVersion] = useState(0)
   const [attempt, setAttempt] = useState(0)
   const [offset, setOffset] = useState(0)
   const [archived, setArchived] = useState(false)
-  const [areaFilter, setAreaFilter] = useState(initialArea)
   useBobSurface(projectId, { surface: 'material-plan', ...(areaFilter ? { areaId: areaFilter } : {}) }, 'Material plan')
   const [editor, setEditor] = useState<'new' | { id: string; revision: number } | null>(null)
   const [calculator, setCalculator] = useState(false)
   const [detail, setDetail] = useState<{ id: string; revision: number; areaId: string; edit?: boolean } | null>(null)
+  const routeDetail = savedOutputPointer(params, 'requirement')
+  const routeSource = savedOutputSourcePointer(params)
+  const invalidLink = params.has('requirement') && (!routeDetail || ((params.has('construction') || params.has('source_revision')) && !routeSource))
+  const closeDetail = () => {
+    setDetail(null)
+    if (params.has('requirement')) {
+      const next = new URLSearchParams(params)
+      for (const key of ['requirement', 'revision', 'construction', 'source_revision']) next.delete(key)
+      setParams(next, { replace: true })
+    }
+  }
   const [history, setHistory] = useState<MaterialRequirement | null>(null)
   const [archive, setArchive] = useState<MaterialRequirement | null>(null)
   const [publish, setPublish] = useState<MaterialRequirement | null>(null)
@@ -442,7 +454,7 @@ export function MaterialPlan() {
       <StockSection projectId={projectId} areas={data.areas} version={version} bump={bump} />
 
       <section style={{ marginTop: 'var(--section-gap)' }}><div className="page-head"><div><h2 style={{ margin: 0 }}>Material requirements</h2><p className="foundation-hint">Base quantity can be manual or calculated from a supported saved drawing. Allowance, allocation and purchase rounding remain deterministic.</p>{selected && !generatedArtifacts.length && <p className="foundation-hint">Need a supported wall calculation? <Link to={`/artifacts${scopeQuery}`}>Generate a wall elevation in Drawings</Link> first.</p>}</div></div>
-        <div className="fact-filters"><Field label="Filter by area"><select style={inputStyle} value={areaFilter} onChange={event => { const next = event.target.value; setAreaFilter(next); setOffset(0); setParams(next ? { area: next } : {}, { replace: true }) }}><option value="">All areas</option>{data.areas.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field><Field label="Show requirements"><select style={inputStyle} value={archived ? 'archived' : 'active'} onChange={event => { setArchived(event.target.value === 'archived'); setOffset(0) }}><option value="active">Active</option><option value="archived">Archived</option></select></Field></div>
+        <div className="fact-filters"><Field label="Filter by area"><select style={inputStyle} value={areaFilter} onChange={event => { const next = event.target.value; setOffset(0); setParams(next ? { area: next } : {}, { replace: true }) }}><option value="">All areas</option>{data.areas.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field><Field label="Show requirements"><select style={inputStyle} value={archived ? 'archived' : 'active'} onChange={event => { setArchived(event.target.value === 'archived'); setOffset(0) }}><option value="active">Active</option><option value="archived">Archived</option></select></Field></div>
         {!data.requirements.items.length ? <div className="card" style={{ padding: 'var(--panel-padding)' }}><p>No {archived ? 'archived' : 'active'} material requirements in this selection.</p></div> : <div className="fact-list">{data.requirements.items.map(item => {
           const sync = shoppingByRequirement.get(item.id)
           const stale = item.targetChanged || item.artifactChanged || item.stockChanged || item.componentChanged
@@ -453,7 +465,13 @@ export function MaterialPlan() {
     </>}
     {data && editor === 'new' && selected && <RequirementEditor projectId={projectId} target={data.target} scopeArea={areaFilter} areas={data.areas} tasks={data.tasks} artifacts={scopeArtifacts} stock={data.stock} components={data.components} onClose={() => setEditor(null)} onSaved={() => { setEditor(null); bump() }} />}
     {data && calculator && selected && generatedArtifacts.length > 0 && <DeterministicRequirementEditor projectId={projectId} target={data.target} scopeArea={areaFilter} areas={data.areas} tasks={data.tasks} artifacts={generatedArtifacts} stock={data.stock} onClose={() => setCalculator(false)} onSaved={() => { setCalculator(false); bump() }} />}
-    {data && detail && <RequirementVersionDialog projectId={projectId} id={detail.id} revision={detail.revision} scopeArea={detail.areaId} edit={detail.edit} areas={data.areas} tasks={data.tasks} artifacts={data.artifacts} stock={data.stock} components={data.components} onClose={() => setDetail(null)} onSaved={() => { setDetail(null); bump() }} />}
+    {invalidLink && <Modal title="Material requirement unavailable" onClose={closeDetail}><p>This link does not identify an exact saved version. Open the saved outputs from the construction again.</p></Modal>}
+    {!invalidLink && (routeDetail || data && detail) && <RequirementVersionDialog
+      key={`${projectId}:${routeDetail?.id ?? detail!.id}:${routeDetail?.revision ?? detail!.revision}:${routeSource?.id}:${routeSource?.revision}`}
+      projectId={projectId} id={routeDetail?.id ?? detail!.id} revision={routeDetail?.revision ?? detail!.revision}
+      scopeArea={routeDetail ? areaFilter : detail!.areaId} edit={routeDetail ? false : detail!.edit} expectedSource={routeDetail ? routeSource : null}
+      areas={data?.areas ?? []} tasks={data?.tasks ?? []} artifacts={data?.artifacts ?? []} stock={data?.stock ?? []} components={data?.components ?? []}
+      onClose={closeDetail} onSaved={() => { closeDetail(); bump() }} />}
     {data && history && <History projectId={projectId} record={history} onClose={() => setHistory(null)} onVersion={revision => { setHistory(null); setDetail({ id: history.id, revision, areaId: history.areaId ?? '' }) }} />}
     {archive && <ArchiveDialog projectId={projectId} record={archive} onClose={() => setArchive(null)} onSaved={() => { setArchive(null); bump() }} />}
     {publish && <PublishDialog projectId={projectId} record={publish} state={shoppingByRequirement.get(publish.id)} onClose={() => setPublish(null)} onSaved={() => { setPublish(null); bump() }} />}

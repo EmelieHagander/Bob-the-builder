@@ -1,6 +1,7 @@
 import { CadDrawingView } from '../components/CadDrawingView'
 import { CadShellView } from '../components/CadShellView'
 import { ConstructionModelView } from '../components/ConstructionModelView'
+import { ConstructionDelivery } from '../components/ConstructionDelivery'
 import { openBobForCurrentSurface, useBobSurface } from '../lib/bobSurface'
 import { DrawingSourceNotice } from '../components/DrawingSourceNotice'
 import { StairStudyDrawing } from '../components/StairStudyDrawing'
@@ -279,7 +280,7 @@ function VersionDialog({ projectId, id, revision, edit, areas, target, returnLab
 }) {
   const [attempt, setAttempt] = useState(0)
   const [fresh, setFresh] = useState<ArtifactVersion | null>(null)
-  const [section, setSection] = useState<'drawing' | 'details' | 'history'>('drawing')
+  const [section, setSection] = useState<'drawing' | 'details' | 'history' | 'outputs'>('drawing')
   const loaded = useAsync(
     () => db.getProjectArtifactVersion(projectId, id, revision),
     [projectId, id, revision, attempt],
@@ -303,9 +304,11 @@ function VersionDialog({ projectId, id, revision, edit, areas, target, returnLab
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && <>
       <div className="drawing-reader-tabs" role="group" aria-label="Drawing sections">
         {(['drawing', 'details', 'history'] as const).map(value => <button key={value} className="btn" aria-pressed={section === value} onClick={() => setSection(value)}>{value === 'drawing' ? data.isConstruction ? 'Model' : 'Drawing' : value === 'details' ? 'Details' : 'History'}</button>)}
+        {data.isConstruction && <button className="btn" aria-pressed={section === 'outputs'} onClick={() => setSection('outputs')}>Saved outputs</button>}
         <button className="btn" aria-label="Ask Bob about this version" onClick={openBobForCurrentSurface}>Ask Bob</button>
       </div>
       {section === 'history' ? <History projectId={projectId} record={data} target={target} onVersion={(id, revision) => { setSection('drawing'); onVersion(id, revision) }} />
+        : section === 'outputs' && data.isConstruction ? <ConstructionDelivery key={`${projectId}:${id}:${revision}`} value={data} />
         : <VersionDetails value={data} target={target} details={section === 'details'} onShellChanged={setFresh} onShellReload={reloadShell} />}
     </>}
   </Modal>
