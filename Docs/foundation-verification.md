@@ -1,5 +1,39 @@
 # Foundation verification and rollout
 
+
+<a id="form-delivery-readback-2026-10-27"></a>
+## FORM delivery discovery and recovery — local verification, 2026-10-27
+
+Source branch `codex/form-delivery-readback-20261027` prepares the
+[exact-version delivery reader](artifacts.md#construction-delivery-discovery).
+It does not claim full 4b acceptance or hosted deployment. The five-panel box
+fixture saves canonical construction, drawing/description, three piece needs
+and a feasible hypothetical sheet layout. A new claimed turn and new readers
+find these exact outputs, repair only a missing Step link, and reopen geometry,
+source pins and layouts without another content revision. A later construction
+revision leaves prior outputs historical and does not relabel them as new.
+
+Focused command: `node --import tsx --test --test-concurrency=2
+ tests/construction-delivery.test.ts tests/construction-cut-plans.test.ts
+ tests/checked-construction-drawing.test.ts tests/construction-lists.test.ts
+ tests/ai-readiness-catalog.test.ts tests/bob-context-strategy-catalog.test.ts`.
+**68 tests passed, zero failed/skipped.** The final delivery test then passed all **8 tests** after its extra
+catalog-preservation and cross-project assertions. Coverage includes
+source/resource mismatch, revoked access, ordinary-caller/RLS boundaries,
+complete pagination with fastener needs, latest matching output revisions,
+unchanged historical tool publications, exact saved cut geometry and the
+existing CAD restart/review/freshness guards. No paid model/render call occurs.
+
+Deno checked the Construction module directly and both Edge entry points using
+the existing local import map for the exact `supabase-js@2.49.8` declarations
+and installed tokenizer. The unmodified network check could not reach esm.sh;
+this is not a claim that the hosted build or CI ran. The Supabase CLI's bundled
+Bun aborted even on help/migration creation; the additive SQL files were created
+locally and applied by the full-schema isolated test harness. No live migration,
+Edge deployment, catalog activation, model/settings change or Pages publication
+was performed. No frontend behavior changed; browser reload and ordinary
+owner/model delivery remain the next acceptance gates in [State](bob-delivery-flow.md#state).
+
 <a id="form-construction-preview-2026-10-27"></a>
 ## FORM exact construction preview — hosted release, 2026-10-27
 

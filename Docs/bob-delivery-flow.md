@@ -561,9 +561,13 @@ paket 2a/2b/2c är mergade och tekniskt driftsatta med
 [1 904 gröna tester, browserprov och hosted återläsning](foundation-verification.md#form-hosted-release-2026-10-27).
 Även första 4a:s exakta boxmodell och gemensamma återkoppling är tekniskt
 installerade med [browser- och hosted bevis](foundation-verification.md#form-construction-preview-2026-10-27).
-**Nästa: 4b för lådan** i [genomförandeordningen](#form-next): använd samma
-Construction-revision för ritning, beskrivning och listor, reparera bara saknad
-länk/leverans efter avbrott och återöppna varje utlovat resultat efter omladdning.
+**Nästa: granska och publicera 4b:s versionsbundna leveransläsning** enligt
+[Artifact-ägaren](artifacts.md#construction-delivery-discovery). Den är förberedd
+i källkod med [lokala tester](foundation-verification.md#form-delivery-readback-2026-10-27),
+inte driftsatt. Därefter återstår sammanhängande browser-/modellacceptans för
+lådan enligt [genomförandeordningen](#form-next): samma Construction-revision
+för ritning, beskrivning och listor, endast saknad länk/leverans reparerad efter
+avbrott och varje utlovat resultat återöppnat efter omladdning.
 Preliminära listor och positiv återkoppling på modellen ersätter inte slutleveransens
 tekniska gränser. Utöka 4a separat när exakt stöd för andra geometrier behövs.
 Behåll kvarvarande kravtolkning och stöd utanför de tre geometriska kontrollerna

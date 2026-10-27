@@ -572,6 +572,13 @@ export async function answerWithOpenAi(opts: {
       const {data,error}=await readRpc('read_construction_draft',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_after:after})
       if(error)throw new Error('construction_read_unavailable');return data
     },
+    // New manifests alone add this read; old checkpoint/journal sequences and
+    // tool contracts remain unchanged. No speculative whole-project scan.
+    ...(aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_delivery')?{
+      readDelivery:async(id:string,revision:number,resource:import('./construction-delivery.ts').ConstructionDeliveryResource,after:string|null)=>{
+        const {data,error}=await readRpc('read_construction_delivery',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_resource:resource,p_after:after})
+        if(error)throw new Error('construction_delivery_unavailable');return data as Record<string,any>
+      }}:{}),
     readCatalog:async(id:string,revision:number)=>{
       const {data,error}=await readRpc('catalog_read',{p_project:opts.projectId,p_input:{action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}})
       if(error)throw new Error('construction_source_unavailable');return data
