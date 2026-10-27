@@ -66,7 +66,7 @@ export async function verifyConstructionModelBrowser(page,base,fixture,artifacts
   artifacts.records.set(id,row);artifacts.histories.set(id,[structuredClone(row)])
   solutions.records.set(solution,{id:solution,project_id:'A',revision:1,title:'Box concept',design_intent:intent,area_id:null,archived:false})
   solutions.histories.set(solution,[structuredClone(solutions.records.get(solution))])
-  solutions.decisions.push({project_id:'A',revision:targetRevision,solution_id:solution,solution_revision:1,reason:'Synthetic construction source',actor_label:'Fixture member',recorded_at:timestamp(),area_id:null,scope_key:'project'})
+  solutions.decisions.push({project_id:'A',revision:targetRevision,solution_id:solution,solution_revision:1,reason:'Synthetic construction source',actor_label:'Fixture member',recorded_at:new Date().toISOString(),area_id:null,scope_key:'project'})
   const source={status:'ok',projectId:'A',artifact_id:id,revision:1,current_revision:1,area_id:null,title:row.title,archived:false,source_state:'current',
     solution_id:solution,solution_revision:1,design_intent:intent,recipe,materials:boxes.map(b=>({definition_id:b.id,material_id:material,material_revision:2})),
     joints:[],open_questions:['Joint strength and fastening details remain unverified.'],instance_policy:{version:1,instances:boxes.map(b=>({instance_id:b.id,role:'build_part',quantity_policy:'manufacture',reason:'Saved panel'}))}}
