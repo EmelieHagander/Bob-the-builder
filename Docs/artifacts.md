@@ -1066,3 +1066,35 @@ passes K2 merely by matching boxes. Existing target-source assessment marks olde
 outputs changed when a newer concept is selected; old geometry stays readable.
 CAD view directions and independent review remain unchanged. Principle sections
 in the concept viewer do not add a CAD kernel section operation.
+
+<a id="form-scoped-checks"></a>
+### Scoped FORM progress and technical evidence — specified 2026-10-27
+
+[The implementation plan](bob-delivery-flow.md#form-next) extends this boundary
+for incremental design. A coherent construction may grow through existing part
+edits, with [Solution refinement](solutions.md#form-refinement) preserving the
+whole intent. A saved partial result must identify its intended output, realized
+scope, required interfaces and remaining work. Exact storage and migration belong
+to the existing Construction/Artifact revision contract. Current all-component
+FORM validation and K2 readiness are unchanged until that contract is implemented;
+simply suppressing missing-component or connectivity errors is not an implementation.
+
+Check evidence must identify exact input revisions, checker version, purpose,
+parts/requirements covered, relevant neighbor/interface coverage and remaining
+gaps. Distinguish passed, failed, unknown, unsupported and not-yet-checked outcomes;
+these are required meanings, not a new deployed status enum. Passing a declared
+local scope does not set whole-model readiness. Final delivery needs the required
+whole-model and cross-piece checks, including registered requirements outside
+the last local operation. A scope may not omit a dependency to obtain a pass.
+Checks apply to supported geometry and available evidence; they never imply
+fabrication or physical verification beyond that support.
+
+Reuse existing check/result references, source freshness and affected-output work.
+A relevant input or checker change requires new evidence; historical results stay
+readable but cannot authorize a current output. Exact Construction revision pins
+still require affected outputs to be refreshed even when some geometry is preserved.
+Any reuse across turns needs durable evidence and a fresh authorization/source
+check: current turn-local result references alone do not provide that capability.
+No parallel geometry store, universal rule engine or new per-part approval UI is
+introduced. [Code-check priorities](bob-delivery-flow.md#form-code-checks) define
+the proposed increments; K2 and the current CAD reviewer stay enforced meanwhile.

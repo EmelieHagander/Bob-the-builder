@@ -25,6 +25,33 @@ Related owners:
 
 ---
 
+<a id="form-planning"></a>
+## FORM planning and measurement needs — specified 2026-10-27
+
+The [FORM method](bob-delivery-flow.md#form-work-pieces) makes Bob responsible
+for choosing the plan, required observations and useful work boundaries from
+the owner's outcome. Reuse this plan's Steps, Tasks, completion requirements,
+focus and evidence; a design work item does not introduce another hierarchy.
+Bob may detail the current work while later work stays coarse, preserving the
+whole design's requirements and the interfaces needed by later parts.
+
+The existing plan/compiler, focused edits, work-record and readiness tools are
+the implementation starting point. Bob distinguishes physical observations,
+delegated design choices and derived values. Missing observations use existing
+unknown measurements or information needs, with purpose and understandable
+measurement instructions. Reuse known current evidence; an unavailable read is
+not proof that a measurement is absent. Only dependent work waits for a needed
+observation. Plan approval and delegation retain their existing authority;
+natural FORM feedback does not silently approve a different plan proposal.
+
+Acceptance must show Bob creating and revising the sequence from an open request,
+retaining completed results, selecting the next useful action and resuming after
+interruption without a prewritten object-specific plan. Construction scope and
+technical check evidence stay with [Artifact](artifacts.md#form-scoped-checks).
+Tools and prompt guidance already exist; this combined model behavior is not yet
+proven. [The implementation plan](bob-delivery-flow.md#form-next) owns the next
+increments and comparison, not a replacement for the existing plan system.
+
 ## 1. Product thesis
 
 A build plan is **not a fixed checklist written once at project start**.
