@@ -17,6 +17,7 @@ import { rethrowContinuation, type BobJournal } from './bob-job-journal.ts'
 import type { ProjectWriter,WritePayload } from './project-write.ts'
 import { parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
 import { conceptConstructionIssues } from './solution-concept.ts'
+import { FORM_REFINEMENT_SCHEMA, constructionFormReadiness, constructionFormIssues, type FormRefinement } from './construction-form.ts'
 
 /** Reconstruct a historical tool check; a new check position still reads live.
  * CAD render/review gates use their independent fresh readers. Old executions
@@ -67,6 +68,11 @@ export const CONSTRUCTION_REPEAT_SAVE_TOOL={...CONSTRUCTION_SAVE_TOOL,function:{
  parameters:{...CONSTRUCTION_SAVE_TOOL.function.parameters,properties:{...CONSTRUCTION_SAVE_TOOL.function.parameters.properties,
   recipe:{...CAD_RECIPE_SCHEMA,required:[...CAD_RECIPE_SCHEMA.required,'arrays'],properties:{...CAD_RECIPE_SCHEMA.properties,
    arrays:CAD_ARRAYS_SCHEMA,instances:{...(CAD_RECIPE_SCHEMA.properties.instances as Record<string,unknown>),minItems:0}}}}}}}
+export const FORM_REFINEMENT_NOTE=' form_refinement:null uses the complete concept handoff. For an independent checkpoint, map selected concept component_ids to all actual instance_ids exactly once; one component may have several uncut, unrotated box parts within its exact envelope. Canonical component, parameter, feature, constraint and contacting-envelope dependencies determine whether unresolved choices affect this scope. All conceptual geometry still needs resolved supported values. Remaining components and choices stay visible on readback. An envelope is not proof of function: refinements remain unverified and cannot authorize drawings or purchases. Small edits inherit the saved mapping; use a complete save to change the mapping.'
+export function withFormRefinement<T extends typeof CONSTRUCTION_SAVE_TOOL>(spec:T){return {...spec,function:{...spec.function,
+ description:spec.function.description+FORM_REFINEMENT_NOTE,
+ parameters:{...spec.function.parameters,required:[...spec.function.parameters.required,'form_refinement'],properties:{...spec.function.parameters.properties,form_refinement:FORM_REFINEMENT_SCHEMA}},
+}}}
 export const CONSTRUCTION_LEGACY_TOOL=tool('transition_legacy_drawing','Prepare a saved older drawing for construction-driven correction. Read its exact Artifact ID/revision and current selected solution first. The SERVER copies its geometry and parameter graph; never recreate dimensions or IDs. With construction_id:null supply explicit current catalog materials, typed joint choices and open questions. null means evidence is missing and returns all gaps without saving; never infer catalog pins or joints from appearance. A saved graph is required to create; if absent establish a matching construction through the ordinary construction tools and reuse its exact ID/revision with materials/joints/open_questions:null. Reuse requires identical geometry, stable IDs and existing parameter/source pins. Already prepared returns that existing checkpoint without a duplicate. Check the receipt/readback; then change its parameter IDs, check_construction_draft and pass the ORIGINAL drawing Artifact ID and exact construction_revision to design_project_cad. This operation prepares a construction only, preserves drawing history and does not render or deliver a drawing.',{
  key:{type:'string',pattern:'^[A-Za-z0-9_-]{1,80}$'},record_id:uuid,expected_revision:rev,target_revision:rev,
  construction_id:nullableUuid,construction_revision:nullableRev,
@@ -136,6 +142,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   * construction table with the server fastener schedule from readFasteners. */
  constructionTable?:boolean;
  constructionRepeats?:boolean;
+ formRefinement?:boolean;
+ readConstructionReadiness?:(targetRevision:number,areaId:string|null,refinement:FormRefinement)=>Promise<unknown>;
  observationTime?:(input:unknown)=>Promise<string>;
  prepareEdit?:(payload:WritePayload)=>Promise<Record<string,any>>;
  prepareParameterChange?:(payload:WritePayload)=>Promise<Record<string,any>>;
@@ -151,7 +159,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  let used=0
  const views=createConstructionViews(opts.projectId,opts.now)
  const readTool=opts.constructionViews?CONSTRUCTION_VIEW_TOOL:CONSTRUCTION_READ_TOOL
- const saveTool=opts.constructionRepeats?CONSTRUCTION_REPEAT_SAVE_TOOL:CONSTRUCTION_SAVE_TOOL
+ const baseSaveTool=opts.constructionRepeats?CONSTRUCTION_REPEAT_SAVE_TOOL:CONSTRUCTION_SAVE_TOOL
+ const saveTool=opts.formRefinement?withFormRefinement(baseSaveTool):baseSaveTool
  const present=(kind:string,id:string,revision:number,output:Record<string,any>,observedAt?:string)=>opts.constructionViews?views.observe(kind,id,revision,output,observedAt):output
  return {
  exportState():ConstructionToolsState{return opts.constructionViews?{version:2,used,observations:views.exportState()}:{version:1,used}},
@@ -344,12 +353,16 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    }
    if(!opts.writer)return {status:'denied'}
    if(!opts.message.includes(v.request_quote)||!v.request_quote.trim()||(v.record_id===null?v.expected_revision!==0:v.expected_revision<1))return {status:'invalid',message:'Use the current request and exact expected revision.'}
-   if(!opts.readDesignReadiness)return {status:'unavailable',message:'Could not read the selected solution and expert advice. Recover that read before fixing construction geometry.'}
-   const readiness=parseDesignReadiness(await opts.readDesignReadiness(v.target_revision,'construction',v.area_id))
+   if(v.form_refinement?!opts.readConstructionReadiness:!opts.readDesignReadiness)return {status:'unavailable',message:'Could not read the selected solution and expert advice. Recover that read before fixing construction geometry.'}
+   const read=v.form_refinement
+    ? (await opts.readConstructionReadiness!(v.target_revision,v.area_id,v.form_refinement) as Record<string,unknown>|null)?.design_readiness
+    : await opts.readDesignReadiness!(v.target_revision,'construction',v.area_id)
+   const readiness=parseDesignReadiness(read)
    if(!await opts.hasAccess())return {status:'denied'}
    if(!readiness||readiness.project_id!==opts.projectId||readiness.area_id!==v.area_id
      ||readiness.purpose!=='construction')return {status:'unavailable',message:'Could not verify advice for this exact selected solution and construction purpose. Read the current target and solution again.'}
-   if(readiness.status!=='ready')return {status:readiness.status,readiness,issues:readiness.issues,
+   const checkpoint=v.form_refinement?constructionFormReadiness(readiness,v.form_refinement):readiness
+   if(checkpoint.status!=='ready')return {status:checkpoint.status,readiness:checkpoint,issues:checkpoint.issues,
      message:'No construction saved. Resolve the listed evidence and design choices before fixing their geometry: investigate relevant sources, explain alternatives and recommend a supported direction. Reuse prior choices or decide within the existing mandate, then save and select that solution revision.'}
    if(readiness.target_revision!==v.target_revision)return {status:'conflict',message:'The selected target changed. Read its exact current revision and shared advice before fixing construction geometry.'}
    const expanded=opts.constructionRepeats?expandCadArrays(v.recipe,parseParameterPlan(v.parameter_plan)):{recipe:v.recipe,plan:v.parameter_plan}
@@ -369,7 +382,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(!parseCadAssemblyRequest(recipe))return {status:'invalid',message:'Computed dimensions or placement are outside the supported geometry contract.'}
    if(readiness.design_intent?.model){
     const policy=constructionInstancePolicy(recipe,v.instance_policy)
-    const issues=conceptConstructionIssues(readiness.design_intent,recipe,new Set(policy.instances.filter(i=>i.role==='reference').map(i=>i.instance_id)))
+    const references=new Set(policy.instances.filter(i=>i.role==='reference').map(i=>i.instance_id))
+    const issues=v.form_refinement?constructionFormIssues(readiness.design_intent,recipe,references,v.form_refinement,true):conceptConstructionIssues(readiness.design_intent,recipe,references)
     if(issues.length)return {status:'needs_data',issues,message:'No construction saved. Preserve the selected concept component identities, dimensions and relations, or explicitly revise that Solution before handoff.'}
    }
    if(!await opts.hasAccess())return {status:'denied'}
@@ -384,7 +398,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(opts.constructionRepeats&&message.startsWith('parameter_gaps:'))return {status:'invalid',reason:'array_binding_missing',message:'Bind all six arrays/<id>/start placement paths and arrays/<id>/spacing_mm. No construction saved.'}
    if(opts.constructionViews&&message==='construction_view_cursor_invalid')return {status:'invalid',message:'Use next_read from this exact revision, view and selection. A cursor cannot be reused for another selection.'}
    if(opts.constructionViews&&message==='construction_view_header_too_large')return {status:'invalid',message:'Use fewer named IDs or one result section to keep the page envelope small. No data was omitted as complete.'}
-   const known=/^(invalid_instance_policy|invalid_parameter_[a-z_]+|parameter_[a-z_]+|unknown_required_parameters|coordinate_[a-z_]+)$/
+   const known=/^(invalid_form_refinement|invalid_instance_policy|invalid_parameter_[a-z_]+|parameter_[a-z_]+|unknown_required_parameters|coordinate_[a-z_]+)$/
    if(known.test(message))return {status:'invalid',message}
    // The owner-facing text stays generic; the cause must still reach the logs.
    console.error('[Construction tool unavailable]',JSON.stringify({tool:name,error:(error instanceof Error?error.name+': '+message:String(error)).slice(0,300)}))

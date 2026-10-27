@@ -59,7 +59,9 @@ export function constructionViewItems(draft:Row,view:string,ids:string[]):{items
  else if(view==='joints')out=items('joints',joints.filter(j=>match(j.id)||wanted.has(j.first.instance_id)||wanted.has(j.second.instance_id)))
  else if(view==='materials')out=items('materials',materials.filter(m=>match(m.definition_id)),'definition_id')
  else if(view==='roles')out=items('roles',roles.filter(r=>match(r.instance_id)),'instance_id')
- else if(view==='notes')out=[{collection:'description',id:'description',value:draft.description??''},...items('open_questions',arr(draft.open_questions))]
+ else if(view==='notes')out=[{collection:'description',id:'description',value:draft.description??''},...items('open_questions',arr(draft.open_questions)),
+  ...(draft.form_refinement?[...items('form_mappings',arr(draft.form_refinement.mappings),'component_id'),{collection:'form_scope',id:'form_scope',value:draft.form_scope},
+   ...items('form_features',arr(draft.design_intent?.features)),...items('form_choices',arr(draft.design_intent?.choices))]:[])]
  else if(view==='dependencies'){
   const partIds=new Set(instances.filter(i=>match(i.id)||wanted.has(i.definition_id)).map(i=>i.id))
   const definitionIds=new Set(definitions.filter(d=>match(d.id)).map(d=>d.id))
@@ -247,6 +249,7 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
    const recent=[...observations].reverse().filter(o=>o.artifact_id===draft.artifact_id&&o.revision===draft.revision)
    const kinds=new Set<string>(),refs=recent.filter(o=>{if(kinds.has(o.kind))return false;kinds.add(o.kind);return true}).map(reference)
    const overview={...header,title:draft.title,area_id:draft.area_id,target_revision:draft.target_revision,construction_status:'draft',rendered:false,reviewed:false,
+    ...(draft.form_refinement?{form:{verification:'unverified',solution_id:draft.solution_id,solution_revision:draft.solution_revision,mapped_components:arr(draft.form_scope?.component_ids).length,pending_components:arr(draft.form_scope?.pending_component_ids).length,pending_choices:arr(draft.form_scope?.pending_choice_ids).length,details_view:'notes'}}:{}),
     counts:{definitions:arr(draft.recipe?.definitions).length,instances:arr(draft.recipe?.instances).length,nodes:arr(draft.parameters?.nodes).length,
      bindings:arr(draft.parameters?.bindings).length,joints:arr(draft.joints).length,materials:arr(draft.materials).length,
      unknown_roles:draft.instance_policy==null?arr(draft.recipe?.instances).length:arr(draft.instance_policy.instances).filter(r=>r.role==='unknown').length,roles_recorded:draft.instance_policy!=null,open_questions:arr(draft.open_questions).length},

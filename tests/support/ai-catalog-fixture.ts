@@ -24,6 +24,15 @@ let preBuildingScopeRows:any[]|undefined,preBuildingScopeVersions:Map<string,num
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const formRefinement=source.match(/\$form_refinement_spec\$([\s\S]+?)\$form_refinement_spec\$/)
+ if(formRefinement){
+  const spec=JSON.parse(formRefinement[1]),row=seed.find(row=>row.key==='tools.save_construction_draft')
+  row.definition.parameters.properties.form_refinement=spec.schema
+  row.definition.parameters.required.push('form_refinement');row.definition.required_parameters=[...row.definition.parameters.required]
+  row.definition.description+=spec.note
+  const {seed_version,source_revision,...rest}=row.metadata??{}
+  row.metadata={...rest,publication:'form-refinement-v1',form_refinement_version:1};versions.set(row.key,versions.get(row.key)!+1)
+ }
  const formWorkflow=source.match(/\$form_workflow\$([\s\S]+?)\$form_workflow\$/)
  if(formWorkflow){
   const workflow=JSON.parse(formWorkflow[1]),description=source.match(/\$form_description\$([\s\S]+?)\$form_description\$/)![1]

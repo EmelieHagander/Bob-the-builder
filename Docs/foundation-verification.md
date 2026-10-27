@@ -1,5 +1,49 @@
 # Foundation verification and rollout
 
+<a id="form-checkpoints-2026-10-27"></a>
+## FORM scoped checkpoints — source and local verification, 2026-10-27
+
+The first 2a slice implements [versioned refinements](solutions.md#form-refinement)
+on the existing Construction/Artifact. A synthetic independent frame maps one
+concept component to two actual parts while a separate later drawer choice stays
+open. This is a checkpoint acceptance case, not proof of a functional bed/frame.
+It saves through the real tool and ordinary claimed SQL writer, reopens in a new
+reader instance, accepts a precise edit on the same Artifact, retains original
+source/history through archive/restore, and becomes stale after target reselection.
+
+`tests/construction-form.test.ts` verifies matching SQL/TypeScript dependency
+closure and readiness, whole-design readiness remaining blocked, controlling
+unknowns/choices, malformed/omitted mappings, geometry/role drift, idempotent
+receipts, outsider denial and RLS. The read view preserves mappings, remaining
+component/choice IDs and original feature/choice records. Direct CAD insertion
+with a forged successful check and direct manufacturing/requirement calls are
+rejected as `form_refinement_unverified`. Catalog publication matches the fixture,
+changes only the save contract and preserves older pinned manifests. A missing
+scoped readiness read cannot silently fall back to whole-design advice.
+
+**197 focused tests passed, 0 failed, 0 skipped**, using:
+
+```bash
+node --no-wasm-code-gc --import tsx --test --test-concurrency=3 tests/construction-form.test.ts tests/solution-concept.test.ts tests/solution-concept-sql.test.ts tests/construction-draft.test.ts tests/construction-checks.test.ts tests/construction-edits.test.ts tests/construction-views.test.ts tests/construction-table.test.ts tests/construction-parameters.test.ts tests/construction-repeats.test.ts tests/checked-construction-required.test.ts tests/checked-construction-drawing.test.ts tests/solution-design-readiness-sql.test.ts tests/project-design-readiness-tools.test.ts tests/construction-change-work.test.ts tests/construction-requirements.test.ts tests/construction-cut-plans.test.ts tests/fastener-requirements-sql.test.ts tests/cad-review.test.ts
+```
+
+The 9 scoped-checkpoint tests were also rerun after tightening missing-read
+handling. Both Bob Edge entrypoints passed Deno type checking. The CDN import
+was unavailable locally, so an ephemeral import map used the exact same
+`@supabase/supabase-js@2.49.8` npm type declarations; no repository dependency
+or production import was changed. Catalog generation is reproducible and
+`git diff --check` passed. SQL uses disposable full-schema PGlite fixtures only.
+
+Limits remain explicit: all conceptual geometry must currently be resolved;
+shared nodes/features/constraints and touching envelopes are conservative
+dependencies. An envelope match is not functional evidence. Requirement/property
+checks, durable cross-turn check observations, shown-version 2D/3D decisions,
+exact-model 3D and complete delivery remain in the [plan](bob-delivery-flow.md#form-next).
+No independent agent review, full suite, CI, UI/browser acceptance, hosted
+migration, deployment, paid model/CAD call or catalog activation was performed.
+The [backend release guide](../supabase/README.md#form-checkpoint-release) owns
+ordered activation and rollback; this record is not deployed-runtime evidence.
+
 <a id="form-plan-audit-2026-10-27"></a>
 ## FORM plan audit and focused retest — 2026-10-27
 

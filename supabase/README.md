@@ -62,6 +62,7 @@ The semantic owner is [domain-dictionary.md](../Docs/domain-dictionary.md), incl
 | `_shared/ask-openai.ts` | Caller-JWT client, membership checks, shared AI service adapter. |
 | `_shared/ai-catalog.ts` | Request-pinned definition manifest, role/profile/tier resolution, catalog prompt/tool/output contracts and compatibility checks. |
 | `_shared/construction-draft.ts` | K1 shared construction checkpoint tools, using the CAD parameter evaluator and caller-authorised v14 writes; [Artifact contract](../Docs/artifacts.md#k1-construction-checkpoints). |
+| `_shared/construction-form.ts` | Versioned concept-to-part mapping, conservative scope dependencies and checkpoint-only readiness; [Solution contract](../Docs/solutions.md#form-refinement). |
 | `_shared/project-answer.ts` | Briefing and bounded tool loop, server-only continuation, truth rules. |
 | `_shared/current-view.ts`, `current-view-guard.ts` | Fixed caller-JWT screen hydration and freshness/verified-own-write checks; [context owner](../Docs/ask-bob-context.md#implemented-scope-and-remaining-target). P3 deployed; named-member acceptance remains open. |
 | `_shared/project-lookup.ts` | Fixed tool arguments, budgets, result states and provenance. |
@@ -698,6 +699,32 @@ before this change cannot replay a v9 read, so let pinned jobs finish before
 rolling either runtime back.
 
 <a id="form-concept-release--source-only-2026-10-26"></a>
+<a id="form-checkpoint-release"></a>
+## FORM checkpoint release — source only, 2026-10-27
+
+The [Solution refinement contract](../Docs/solutions.md#form-refinement) and
+[Artifact evidence contract](../Docs/artifacts.md#form-scoped-checks) own this
+first slice. [Focused local evidence](../Docs/foundation-verification.md#form-checkpoints-2026-10-27)
+does not establish hosted deployment or model acceptance.
+
+On a separately authorized release, apply core
+`20261027090942_construction_form_refinement.sql`, deploy `ask-bob` and
+`bob-worker` from the same reviewed source, then apply
+`20261027091553_ai_form_refinement_catalog.sql`. The catalog publication adds
+only `form_refinement` and its tool documentation, preserving model/settings and
+older pinned manifests. Its `form_refinement_version=1` activates the compatible
+save/readiness path. The shared reader/checker still recognizes saved refinements
+regardless of the caller's pinned authoring schema.
+
+Core adds subordinate immutable revision rows with project RLS and no direct
+member writes; source-scoped readiness runs inside the existing project lock,
+claim, receipt and media-lock boundary. Older writes and precise edits inherit
+the prior mapping. SQL also rejects unverified refinements as CAD or manufacturing
+sources, so a forged check packet cannot activate delivery. No existing records
+are backfilled or rewritten. To suspend authoring, reactivate the prior save-tool
+catalog version; retain compatible runtime/core readers and guards for already
+saved refinements. Do not drop their history or roll back those guards.
+
 ## FORM concept release — technically installed, 2026-10-26
 
 Technical installation and remaining acceptance: [release evidence](../Docs/foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26).
