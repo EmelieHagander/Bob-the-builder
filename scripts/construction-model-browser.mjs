@@ -16,7 +16,11 @@ export function createConstructionModelFixture(timestamp, artifacts) {
         if(eq('artifact_id')) return reply({json:rows.filter(r=>r.artifact_id===eq('artifact_id')&&r.artifact_revision===Number(eq('artifact_revision')))})
         return reply({json:rows})
       }
-      if(table==='catalog_item_revisions'&&catalog.size&&url.searchParams.get('in')===null&&url.searchParams.get('item_id')?.includes([...catalog.keys()][0])) return reply({json:[...catalog.values()]})
+      if(table==='catalog_item_revisions'&&catalog.size&&url.searchParams.get('or')?.includes([...catalog.keys()][0])) {
+        assert.match(url.searchParams.get('or'),/revision\.eq\.2/)
+        assert.equal(url.searchParams.get('limit'),'1')
+        return reply({json:[...catalog.values()]})
+      }
       if(table==='read_construction_draft') {
         const b=request.postDataJSON();fixture.sourceCalls.push(b)
         if(!b.p_artifact)return reply({json:{status:'ok',projectId:b.p_project,items:[...sources.values()].map(s=>({id:s.artifact_id,title:s.title,revision:s.revision})),truncated:false,next_cursor:null}})
