@@ -201,6 +201,14 @@ within that decision's scope. This acceptance does not assert technical safety.
 Its precise persistence contract remains to be implemented with Artifact's
 existing revision/receipt owners.
 
+The [conversational alignment contract](bob-delivery-flow.md#form-dialogue)
+captures the user's ordinary feedback on the shown model; no FORM approval
+button or second formal confirmation is required. Preserve the response's scope,
+actor and exact shown revision through existing decisions/receipts without
+publishing private chat. Corrections, ambiguous feedback and silence cannot be
+turned into blanket acceptance. [Technical checks](bob-delivery-flow.md#form-technical-checks)
+remain separate responsibilities and cannot be approved by a visual response.
+
 This does not implement conversion, preview acceptance or a new runtime gate. The
 [whole FORM flow](bob-delivery-flow.md#form-flow) owns review responsibility and
 [State](bob-delivery-flow.md#form-next) owns implementation order and acceptance.

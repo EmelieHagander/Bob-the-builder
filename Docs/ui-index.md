@@ -411,6 +411,12 @@ not evidence of the actual building. See `Docs/media-and-steps.md` for persisten
 
 ### Early Solution concept viewer — source only, 2026-10-26
 
+**Specified continuation, 2026-10-27:** [FORM's conversational alignment](bob-delivery-flow.md#form-dialogue)
+owns the next 2D/3D interaction: normal feedback in Bob, no dedicated approval
+button or "approve to continue" gate. [Technical checks](bob-delivery-flow.md#form-technical-checks)
+remain outside the user's design confirmation. This is not implemented by the
+viewer described below.
+
 `SolutionConcept` renders the exact model of the opened/selected Solution version
 inside its existing Design & choices panel. It reuses drawing viewport/zoom,
 buttons, tables and semantic warnings. Plan and named principle sections share

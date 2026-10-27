@@ -95,7 +95,9 @@ FORM betyder *Från Önskemål till Realiserbar Modell*. Den befintliga
 [Solution-modellen](solutions.md#early-concept-geometry-form--source-implementation-2026-10-26)
 ger redan reviderbar ortogonal konceptgeometri och deterministiska 2D-vyer.
 **Beslutet ersätter 2026-10-26-planens två obligatoriska AI-granskningar:**
-användaren granskar form och funktion i 2D och i en detaljerad 3D-förhandsvisning.
+användaren stämmer av form och funktion med Bob i 2D och i en detaljerad
+3D-förhandsvisning. Avstämningen sker i samtalet utan godkännandeknapp;
+användaren ansvarar inte för de tekniska detaljerna.
 Bob ansvarar för konstruktionsarbetet, kod för beräkningar och maskinella kontroller;
 AI-granskning används för konkreta osäkerheter eller avvikelser.
 Detta ändrar målflödet. Dagens obligatoriska Rita-granskning är fortfarande
@@ -116,7 +118,7 @@ med modellen. En serie omskrivna sammanfattningar räcker inte som källkedja.
 | Tidig visuell mockup vid behov | Konceptets exakta revision, namngivna vyer och originalreferenser ger underlag för utseende, materialkänsla och sammanhang. | Bilden hjälper användaren välja uttryck. Nya designval återförs till Solution. En AI-genererad illustration är fortfarande ett förslag även om prompten innehåller alla detaljer; den bekräftar inte geometri eller dolda förband. |
 | Detaljerad konstruktion och beskrivning | Vald Solution-revision förfinas till Construction med delar, material, fogar, placeringar, parameterursprung och monteringsberoenden. Beskrivningen förklarar denna exakta revision. | Bob gör konstruktionsval; kod räknar och kontrollerar. En konceptdel kan genom den planerade spårbara förfiningen bli flera byggdelar. Detaljering görs före den slutliga 3D-granskningen. |
 | Detaljerad visuell 3D-förhandsvisning | **Samma exakta Construction-geometri som slutritningarna** renderas med material/färg, ljus och valbara vyer som gör helhet och relevanta detaljer begripliga. | Användaren granskar den faktiska modellens form, utseende och funktioner. Modellens detaljer visas där de finns; text om en fog skapar inte automatiskt modellerade skruvar. Omodellerade eller olösta detaljer anges. Denna presentation och beslutskoppling återstår att bygga. |
-| Versionsbundet användarbeslut | Visad modell/presentation, Solution-/target- och Construction-revision, avgränsning samt kvarstående frågor följer med beslutet. | Användaren godkänner det visade för avsett syfte. Tidigare uttrycklig delegation kan användas inom sin omfattning och registreras som ett delegerat beslut, aldrig som påhittat användargodkännande. |
+| Avstämd riktning i samtalet | Bob visar modellen och frågar naturligt om den motsvarar önskemålet. Svarets innebörd kopplas till visat underlag, exakta Solution-/target-/Construction-revisioner och berörd avsikt. | Bob tar hand om versionskoppling och fortsatt arbete utan separat godkännandeknapp. Återkopplingen gäller form, användning och uttryck, aldrig teknisk korrekthet. Tidigare uttrycklig delegation används inom sin omfattning och registreras som ett delegerat beslut. |
 | Slutliga ritningar, listor och leverans | CAD, detaljbeskrivning/monteringsanvisning och plock-/kapunderlag härleds från **den godkända Construction-revisionen**. Bob sparar, länkar och återläser rätt Artifact-version. | Exporten inför inga nya konstruktionsval. Kod kontrollerar versionslikhet, källaktualitet, geometri och leveranskvitton. Befintliga material-/lager-/produktägare kompletterar listorna; preliminära längder är inte en godkänd kapplan eller inköpslista. |
 
 En dellista saknar delar av placeringarna och förbanden och kan inte ensam vara
@@ -132,7 +134,34 @@ Ingen separat beskrivnings-, list- eller projektminnesdatabas införs av detta f
 Den ursprungliga [FORM-referensen](form-design-loop-review-2026-10-26.md) bevaras
 som metodunderlag; denna precisering äger relationen mellan leveranserna.
 
-#### Användarens granskning och Bobs tekniska ansvar
+<a id="form-dialogue"></a>
+#### Avstämning i samtalet — ägarbeslut 2026-10-27
+
+Bob visar förslaget och bjuder in till vanlig återkoppling, exempelvis:
+
+> Här är 2D-modellen. Stämmer den med vad du hade tänkt dig?
+
+Samma princip gäller den detaljerade 3D-förhandsvisningen. Ingen särskild
+godkännandeknapp, signering eller text som ”godkänn för att gå vidare” införs
+för FORM. Användaren behöver inte känna till faser, versionsnummer eller interna
+grindar. Bob beskriver vid behov den avstämda riktningen och fortsätter inom
+mandatet. Han förklarar verkliga tekniska hinder och olösta frågor begripligt.
+
+Bob tolkar återkopplingen i sitt vanliga arbete och sparar dess avgränsade
+innebörd genom befintliga beslut och kvitton. Ett tydligt svar på den visade
+modellen räcker; det kräver ingen andra bekräftelse eller obligatorisk extra
+klassificeringsmodell. En korrigering blir en riktad ändring. Ett svar som
+”ja, men flytta stegen” får inte registreras som att den oförändrade modellen
+är accepterad. Tystnad, enbart visning eller ett oklart svar skapar inget
+godkännande. Bob klargör bara en tvetydighet som påverkar nästa arbete;
+befintliga beslut och uttrycklig delegation återanvänds.
+
+Den interna spårningen bevarar vad som visades, vilken avsikt svaret avsåg,
+vem som svarade och vilka revisioner det gällde. Beslutsunderlaget ska gå att
+återläsa inom rätt behörighet; privat chatt kopieras inte till gemensamma
+projektdata. Denna samtalskoppling är specificerad, ännu inte implementerad.
+
+#### Vad användaren stämmer av
 
 **Efter 2D:** användaren bedömer om förslaget motsvarar önskemålet. Visa funktioner,
 antal, axlar, sida, relativa placeringar, öppningar, fria utrymmen och styrande
@@ -150,6 +179,27 @@ Bob ansvarar fortsatt för förfining, tekniska val och olösta frågor. Använd
 behöver inte intyga hållfasthet, dolda förband eller produktlämplighet genom att
 godkänna utseendet; sådana kontroller behåller sina befintliga ägare och gränser.
 
+<a id="form-technical-checks"></a>
+#### Teknisk kontroll på system- och specialistnivå
+
+Bob driver den tekniska kontrollen oberoende av användarens visuella svar.
+Användaren bidrar med önskemål, val och nödvändiga observationer på plats;
+en nybörjare ska inte behöva avgöra om konstruktionslösningen är korrekt.
+
+| Kontroll | Ansvar |
+|---|---|
+| Uttryckbara villkor: mått, beroenden, fogkontakt, kollisioner, versioner och källaktualitet inom verifierat stöd | Befintliga deterministiska konstruktions-/CAD-kontroller. Ostödda fall anges som luckor. |
+| Kravuppfyllelse och konstruktionsfrågor som behöver tolkning | Bob samlar originalunderlaget och ordnar riktad, separat AI-/specialistbedömning där den behövs. Granskningen ska lämna evidens och konkreta avvikelser, inte bara tilltro till modellen. |
+| Fysisk verifiering eller fackmässig bedömning utanför systemets stöd | Rätt sakkunnig eller fysisk kontroll inom befintligt arbetsflöde. Bob anger vad som återstår och driver den del som kan fortsätta; han ber inte användaren godkänna bort en teknisk lucka. |
+
+Varje bindande krav för nästa leverans ska ha spårbar täckning och en relevant
+kontroll eller en explicit kvarstående lucka. Ett användarval kan styrka önskad
+placering eller färg men kan inte styrka ett tekniskt villkor. Saknad täckning,
+motstridiga källor och ostödd förfining måste upptäckas även när Bob uttrycker
+säkerhet. Återanvänd krav-, revisions- och kontrollsystemen; täckningskontrollen
+innebär inte ett extra modellanrop för varje krav. Blockera bara den leverans
+vars nödvändiga tekniska underlag saknas och bevara konceptets ärliga status.
+
 **Beslut och ändringar:** servern binder beslutet till behörig aktör, syfte,
 exakta modell-/källrevisioner och det visade underlaget. Återanvänd Solution-,
 Artifact- och kvittosystemen. Vald target eller `alignment` är inte ensamt bevis
@@ -157,8 +207,8 @@ på att användaren sett en viss 3D-presentation. En relevant ändring av form,
 funktion, material eller styrande källa gör tidigare acceptans otillräcklig för
 den berörda delen: visa ändringen, räkna om och inhämta nytt beslut där mandatet
 kräver det. En extra vy eller återförsök av samma export kräver inget nytt
-designgodkännande. Dessa är två meningsfulla designbeslut, inga klartecken per
-verktyg eller vanliga konstruktionsdetaljer. Väntande beslut visas ärligt och
+designgodkännande. Dessa är två meningsfulla avstämningar i samtalet, inga
+formella godkännandesteg eller klartecken per verktyg. Väntande frågor visas ärligt och
 pausar endast beroende arbete.
 
 Rätta på den nivå där felet uppstod: ändrad funktion eller övergripande form går
@@ -403,9 +453,10 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — FORM och användargranskning (2026-10-27):** förbered första
+**Aktivt nästa steg — FORM och samtalsavstämning (2026-10-27):** förbered första
 arbetspaketet i [FORM-ordningen](#form-next): spårbar förfining från konceptdelar
-till byggdelar och versionsbundet användarbeslut efter 2D. Planera därefter den
+till byggdelar och versionsbunden återkoppling efter 2D enligt
+[samtalskontraktet](#form-dialogue), med [separat teknisk kontroll](#form-technical-checks). Planera därefter den
 modellbundna visuella 3D-förhandsvisningen före slutexport. [Hela flödet](#form-flow) och
 [underlagspaketet](ask-bob-context.md#task-source-packet) är nu dokumenterade;
 utökningarna är ännu inte implementerade. Befintliga acceptanspunkter nedan
@@ -512,14 +563,14 @@ Serverbundna work-record- och planlänkverktyg samt konflikttransporten är nu i
 ### FORM 1.0 — nästa arbetspaket och acceptans, uppdaterat 2026-10-27
 
 **Nästa handling:** precisera och därefter implementera den minsta förfiningen
-och användarens 2D-beslut i paket 1. Detta är den dokumenterade arbetsordningen,
+och samtalsbaserad avstämning av 2D i paket 1. Detta är den dokumenterade arbetsordningen,
 inte ett påstående om att utökningarna redan körs. Första FORM-leveransen är
 tekniskt installerad enligt [releasebeviset](foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26);
 dess SQL, frontend och katalog ska inte publiceras om för att denna plan mergas.
 
 | Ordning | Avgränsat arbete | Klart-villkor och ägare |
 |---|---|---|
-| 1. Förfining och användarens 2D-beslut | Definiera hur en konceptdel blir flera byggdelar och hur originalkrav följer med. Visa rätt 2D-version och återanvänd befintliga Solution-beslut/mandat; precisera vilket underlag beslutet gäller. | [Solution-gränsen](solutions.md#form-refinement) och Artifact behåller identiteter, revisioner, koordinatram och krav. Prova vägg → reglar/skivor, bevarad funktion, spegling och saknat krav. Okänd/ostödd förfining ger en konkret lucka. Ett giltigt beslut eller uttryckligt delegerat val återanvänds utan klartecken per verktyg; tekniska fel blir inte användarfrågor. |
+| 1. Förfining och avstämning av 2D i samtalet | Definiera hur en konceptdel blir flera byggdelar och hur originalkrav följer med. Visa rätt 2D-version, ta emot vanlig återkoppling och återanvänd befintliga Solution-beslut/mandat. Precisera svarets innebörd och revisionskoppling utan ny godkännandeknapp. | [Solution-gränsen](solutions.md#form-refinement) och Artifact behåller identiteter, revisioner, koordinatram och krav. Prova vägg → reglar/skivor, bevarad funktion, spegling och saknat krav. Okänd/ostödd förfining ger en konkret teknisk lucka. [Samtalsavstämning](#form-dialogue) och [kravkontroll](#form-technical-checks) har skilda bevis; ett giltigt beslut eller delegerat val återanvänds utan extra klartecken. |
 | 2. Underlag för nästa arbete | Bygg det [avgränsade underlagspaketet](ask-bob-context.md#task-source-packet) på befintliga sök-/detalj-/konstruktionsläsare. Kod väljer strukturerade fakta; liten modell används för faktisk texttolkning. | Källor och revisioner kan öppnas exakt; senaste rättelser, lästäckning, konflikter och osäkerhet följer med. Ett missat urval eller läsfel får en återhämtningsväg. Privat minne förblir privat. Modellvalet behöver jämförande acceptans. |
 | 3. Visuell 3D, användarbeslut och slutleverans | Knyt tidig inspirationsbild till FORM-revisionen när den behövs. Bygg därefter detaljerad 3D-förhandsvisning från exakt Construction med material/färg, ljus och relevanta detaljvyer. Bind användarbeslut till visad modell; härled slutritningar, beskrivning och listor från samma version. | [Medier](media-and-steps.md#form-visual-preview), [Artifact](artifacts.md), [material](material-planning.md) och [CAD](cad-adapter.md#form-preview-and-export) återanvänds. Precisera lagring av presentation/beslut och bevisa versionslikhet, ändringshantering och återläsning. Ersätt först därefter obligatorisk full Rita-granskning med kodkontroller och riktad AI-bedömning vid behov; ta bort den ersatta vägen i den verifierade releasen. |
 | 4. Samlad acceptans och release | Kör riktade lokala kontroller och därefter separat godkända verkliga ägar-/modell-/CAD-prov. Följ repots befintliga manuella CI-, säkerhets- och releaseordning. | Samma generella metod klarar fallen nedan. Läs tillbaka exakta versioner och länkar efter omladdning och som behörig medlem; kontrollera även nekad åtkomst. Publicerad kod/katalog eller godkända fixturer räcker inte som modellacceptans. |
@@ -546,6 +597,14 @@ inte ge giltig acceptans. Ett delegerat val får inte visas som användarens ege
 godkännande. En extra kameravy och återförsök av samma export ska återanvända
 giltigt beslut utan ny designrunda. Användarens visuella godkännande får inte
 kringgå ett tekniskt fel eller saknad nödvändig evidens.
+
+Prova samtalsåterkoppling på både 2D och 3D: entydigt medhåll, korrigering,
+blandat ”ja, men”, tvetydigt svar, tystnad och svar på en äldre visad version.
+Rätt avsikt/revision sparas utan separat knapp, formaliserad godkännandefras
+eller upprepad bekräftelse. Användaren får aldrig rollen att intyga teknisk
+korrekthet. Ett visuellt positivt svar får inte stänga ett tekniskt fel, ett
+saknat krav eller en nödvändig sakkunnig kontroll; rätt ansvarig och fortsatt
+oberoende arbete ska framgå.
 
 Prova missad relevant källa, saknat obligatoriskt underlag, läsfel och avbrott
 mellan sparande och länkning. Mät krav som tappas,
