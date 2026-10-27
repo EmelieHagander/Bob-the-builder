@@ -228,7 +228,7 @@ selection/alignment alone does not prove that a particular preview was shown or
 accepted. The detailed 3D decision must also identify its exact Construction
 revision and presented evidence. Changed controlling inputs require reassessment
 within that decision's scope. This acceptance does not assert technical safety.
-The source-only [shown-model feedback contract](#form-shown-feedback) below
+The installed [shown-model feedback contract](#form-shown-feedback) below
 connects the first 2D producer. Detailed 3D production and its Artifact evidence
 binding remain package 4a.
 
@@ -251,15 +251,16 @@ This does not implement detailed 3D, final conversion or replacement of CAD revi
 
 
 <a id="form-shown-feedback"></a>
-## Shown model and conversational feedback — source implementation, 2026-10-27
+## Shown model and conversational feedback — technically installed, 2026-10-27
 
 `solution_presentations` and `solution_model_feedback` are subordinate evidence
 and decisions on existing immutable Solution revisions, not new model geometry.
 The representation contract reserves an exact Artifact revision for detailed 3D;
 only `concept_2d` has a producer and a consuming source guard in this increment.
 A construction-3D row cannot authorize work until its package 4a producer and
-freshness checks exist. [Local evidence](foundation-verification.md#form-feedback-2026-10-27)
-distinguishes source implementation from browser, hosted and model acceptance.
+freshness checks exist. [Release evidence](foundation-verification.md#form-hosted-release-2026-10-27)
+records full CI, browser and hosted boundary verification; real-model and final
+delivery acceptance remain separate.
 
 The Solutions page calls `record_solution_presentation` after a nonempty rendered
 concept viewport intersects the visible page. Covered parent views stop publishing

@@ -1068,7 +1068,7 @@ CAD view directions and independent review remain unchanged. Principle sections
 in the concept viewer do not add a CAD kernel section operation.
 
 <a id="form-scoped-checks"></a>
-### Scoped FORM progress and technical evidence — source implementation, 2026-10-27
+### Scoped FORM progress and technical evidence — technically installed, 2026-10-27
 
 [The implementation plan](bob-delivery-flow.md#form-next) extends this boundary
 for incremental design. A coherent construction may grow through existing part
@@ -1084,8 +1084,9 @@ K2 reports `form_components_pending` where applicable and always reports
 `form_refinement_unverified` for this first explicit refinement contract. Existing
 joint/connectivity checks continue; semantic functional proof is not implemented.
 CAD, manufacturing quantity and cut-plan SQL paths also reject an unverified
-refinement, including a caller-forged successful check. No database migration,
-catalog activation or runtime deployment is implied by this source implementation.
+refinement, including a caller-forged successful check. The
+[combined release evidence](foundation-verification.md#form-hosted-release-2026-10-27)
+records migration, catalog/runtime installation and ordinary-caller verification.
 
 The first 2b source increment extends the existing check tool with an explicit
 component scope and bounded requirement probes. Probes bind registered feature
@@ -1108,7 +1109,8 @@ check. Supported predicates are deliberately narrow:
 Unknown roles or dimensions remain unknown; unsupported shapes/methods remain
 unsupported. All registered features appear as `not_checked`, `unknown`,
 `unsupported`, `failed` or `properties_passed`, with `functional_fidelity` always
-`unverified`. These statuses are source behavior, not a deployed capability claim.
+`unverified`. Technical installation does not establish natural-language
+interpretation or whole-delivery acceptance.
 
 Computed check observations use the existing result references and paged reader.
 A private immutable cache is subordinate to the exact Construction revision,
