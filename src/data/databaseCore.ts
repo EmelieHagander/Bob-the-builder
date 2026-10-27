@@ -196,6 +196,7 @@ export const volunteers = createVolunteers(db, volunteerClient, captureAccountCo
 export const getSolutions = solutions.list
 export const getSolutionVersion = solutions.version
 export const recordSolutionPresentation = solutions.present
+export const recordConstructionPresentation = solutions.presentConstruction
 export const readSolutionPresentation = solutions.presentation
 export const getSolutionHistory = solutions.history
 export const getSelectedTarget = solutions.target

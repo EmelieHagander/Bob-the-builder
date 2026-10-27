@@ -23,6 +23,12 @@ joint choices and parameter dependencies remain in Construction; the worker does
 not solve placements from a list of joints. Existing STEP and SVG/PNG output is
 not yet the specified material/light presentation with user acceptance.
 
+The source-only 4a [box preview](media-and-steps.md#form-visual-preview) now reuses
+the exact saved recipe, the same millimetre axes and intrinsic XYZ placement
+matrices. It refuses unsupported cuts/curves rather than approximating export
+geometry. Material/light presentation and revision-bound discussion use existing
+Construction and feedback owners; export gates below remain unchanged.
+
 The target removes routine full AI re-review of an unchanged accepted model's
 final export. Deterministic checks, exact source/geometry identity, authorization
 and receipt-safe save/link/readback remain; concrete unresolved questions can

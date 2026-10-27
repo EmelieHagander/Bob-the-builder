@@ -890,7 +890,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           {hasOlder && <div><button type="button" className="btn" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? 'Loading older messages…' : 'Show older messages'}</button></div>}
           {olderError && <p role="alert">{olderError}</p>}
           <details className="bob-context" aria-label="Bob page context">
-            <summary>{recovering || retry ? 'Continuing the original request' : (draft && draftBinding.current.read(project.id, surface?.pointer ?? null)?.presentationId ? `Shown model · v${draftBinding.current.read(project.id, surface?.pointer ?? null)?.solutionRevision}` : surface?.label) ?? 'Project context'}</summary>
+            <summary>{recovering || retry ? 'Continuing the original request' : (draft && draftBinding.current.read(project.id, surface?.pointer ?? null)?.presentationId ? `Shown model · v${draftBinding.current.read(project.id, surface?.pointer ?? null)?.artifactRevision ?? draftBinding.current.read(project.id, surface?.pointer ?? null)?.solutionRevision}` : surface?.label) ?? 'Project context'}</summary>
             <p>{recovering || retry ? 'Its saved page context stays with this request.' : 'Page focus only. Bob checks the saved project records when you send.'}</p>
           </details>
           {historyReady && !extra.length && !working && <Bubble projectId={project.id} msg={{ from: 'bob', text: `Ask me about ${project.name}, send a photo for a mockup, work out a build detail or request a saved update.` }} />}

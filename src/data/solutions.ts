@@ -98,6 +98,17 @@ export function createSolutions(client: SupabaseClient<any, any, any> | null, ca
     return { decision: d, solution: s, requestedAreaId, inherited }
   }
   return {
+    async presentConstruction(projectId: string, id: string, revision: number, viewId: string) {
+      const { db, guard } = connection(projectId)
+      const result = checked(await db.rpc('record_construction_presentation', { p_project: projectId, p_artifact: id, p_revision: revision, p_view: viewId }))
+      guard()
+      const presentation = parseSolutionPresentation(result, projectId)
+      if (!presentation || presentation.artifact_id !== id || presentation.artifact_revision !== revision || presentation.view_id !== viewId
+        || presentation.representation !== 'construction_3d' || presentation.renderer_version !== 'construction-boxes-v1' || !presentation.can_respond) {
+        throw new UserError('The shown construction could not be linked to this version. Reload and try again.')
+      }
+      return presentation
+    },
     async presentation(projectId: string, id: string, before: string) {
       const { db, guard } = connection(projectId)
       const result = checked(await db.rpc('read_solution_presentation', { p_project: projectId, p_presentation: id, p_before: before }))

@@ -155,12 +155,22 @@ must remain distinguishable from pinned material specifications. A generatively
 restyled rendering remains an illustration, not the exact model preview used
 for geometric acceptance.
 
-Reuse Media for illustrative assets and Artifact/Construction for the detailed
-model, derived presentation and source revisions. The presentation metadata,
-renderer and persistent link to the user's decision still need implementation;
-do not create a second editable geometry store. Existing source authorization,
-private storage, receipts and Step links apply. Today's image generation and
-CAD SVG/PNG previews do not establish this full presentation/acceptance flow.
+The source-only 4a increment adds a lazy Three.js view in the Construction reader.
+It renders every saved box instance with the CAD coordinate/rotation contract,
+exact material revisions, specified colour when available, lighting and six
+named views. Reference volumes are outlines; unknown roles, neutral appearance
+and unmodeled joints/hardware remain explicit. Cuts and curved solids refuse the
+entire preview until an exact renderer exists. Camera/zoom changes make no design
+or backend write. Visible rendering can register presentation metadata through
+the [shared feedback contract](solutions.md#form-shown-feedback); opening a view
+never accepts it. Source denial, WebGL failure and unavailable geometry have
+distinct recoverable states. [Verification](foundation-verification.md#form-construction-preview-2026-10-27)
+separates synthetic browser evidence from hosted/model acceptance.
+
+Reuse Media for illustrative assets and Artifact/Construction for geometry and
+source revisions. No second editable geometry store is introduced. Existing
+source authorization, private storage, receipts and Step links apply. This first
+renderer does not establish the final drawing/list delivery or replace Rita.
 
 ## Manual task detail and steps
 

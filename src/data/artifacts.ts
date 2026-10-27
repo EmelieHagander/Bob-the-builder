@@ -208,7 +208,7 @@ export function createArtifacts(
       query(db.from(table).select('*').eq('project_id', projectId).eq('artifact_id', id).eq('artifact_revision', revision))
     // Independent reads run together: one round trip instead of one per table.
     // Every read still goes through RLS; nothing here is cached.
-    const [details, headRead, statusRead, refsRead, parametric, cadRead] = await Promise.all([
+    const [details, headRead, statusRead, refsRead, parametric, cadRead, constructionRead] = await Promise.all([
       db.from('artifact_revision_details').select('*').eq('project_id', projectId).eq('artifact_id', id).eq('revision', revision).single(),
       db.from('artifacts').select('current_revision').eq('project_id', projectId).eq('id', id).maybeSingle(),
       db.from('artifact_source_status').select('source_state,source_reasons')
@@ -218,6 +218,7 @@ export function createArtifacts(
         .order('measurement_id').limit(20),
       recipes(projectId, [{ id, revision }]),
       exact('artifact_cad_revisions', q => q.maybeSingle()),
+      db.from('artifact_construction_revisions').select('artifact_id').eq('project_id', projectId).eq('artifact_id', id).eq('artifact_revision', revision).maybeSingle(),
     ])
     guard()
     const r = checked(details) as Row
@@ -227,6 +228,7 @@ export function createArtifacts(
     let sourceStatus = checked(statusRead) as DrawingSourceStatus | null
     const refs = checked(refsRead) as Row[]
     const cad = checked(cadRead as { data: CadDrawing | null; error: { message: string } | null })
+    const isConstruction = Boolean(checked(constructionRead))
     // Second round: reads that depend on what the first round returned.
     const [delta, generated, layout, study, plan, parent, shellRead] = await Promise.all([
       sourceStatus && sourceStatus.source_state !== 'current'
@@ -265,6 +267,7 @@ export function createArtifacts(
       multifloorPlan,
       stairStudy,
       ...artifact({ ...r, parametric_recipe: parametric[0]?.recipe ?? null }),
+      isConstruction,
       measurements: scoped(refs, projectId).map(measurement),
       generation: generated,
       roomLayout,

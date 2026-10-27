@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 const machined = JSON.parse(readFileSync(new URL('../tests/fixtures/cad-wireframes.json',import.meta.url),'utf8')).machined
+const buildManifest = JSON.parse(readFileSync(new URL('../dist/.vite/manifest.json', import.meta.url), 'utf8'))
+const shell3DEntry = buildManifest['src/components/CadShell3D.tsx']?.file
+assert.equal(typeof shell3DEntry, 'string', 'Build manifest identifies the lazy shell renderer')
 
 const place = (x = 0, y = 0, z = 0, rz = 0) => ({ x, y, z, rx: 0, ry: 0, rz })
 const recipe = (id, definitions, instances) => ({ contract_version: 1, units: 'mm', assembly_id: id, definitions, instances, views: ['isometric'] })
@@ -203,8 +206,9 @@ async function verifySingleWireframe(page,base,fixture,width,template) {
 async function verifyShell3D(page, view, fixture, width) {
   const webgl = await page.evaluate(() => !!document.createElement('canvas').getContext('webgl2'))
   const reads = fixture.recipeReads ?? 0, calls = fixture.viewerCalls.length
-  const scripts = () => page.evaluate(() => performance.getEntriesByType('resource').filter(e => /CadShell3D/.test(e.name)).length)
-  assert.equal(await scripts(), 0, 'three.js chunk stays lazy')
+  // Shared CSS and geometry math may have the same chunk name. Check the exact renderer entry.
+  const scripts = () => page.evaluate(entry => performance.getEntriesByType('resource').filter(e => new URL(e.name).pathname.endsWith('/' + entry)).length, shell3DEntry)
+  assert.equal(await scripts(), 0, 'shell 3D renderer stays lazy')
   if (webgl) {
     await view.getByRole('button', { name: '3D view', exact: true }).click()
     const image = view.getByRole('img', { name: '3D line view of Cabin bedroom', exact: true })

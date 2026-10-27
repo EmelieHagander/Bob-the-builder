@@ -788,6 +788,24 @@ are not activated here. [Verification](../Docs/foundation-verification.md#form-f
 records the missing local browser, pending hosted/model acceptance and exact
 focused checks. No migration, runtime, catalog or frontend deployment ran.
 
+<a id="form-construction-preview-release"></a>
+## FORM construction preview — source only, 2026-10-27
+
+After the 2a–2c core/runtime/catalog release, apply
+`20261027133050_construction_presentations.sql` before publishing its matching
+frontend. This adds the caller-JWT `record_construction_presentation` producer
+and extends the existing presentation reader, claimed-turn feedback writer and
+source guards. No model/settings/catalog or Edge release is needed for 4a.
+The exact Construction FK and server-derived component snapshot prevent a
+partial view from accepting missing parts. History cursors cannot cross source
+Artifacts/revisions. Current negative feedback remains a readiness gap; positive
+3D feedback does not grant concept or technical approval. The actual renderer
+registers evidence only after WebGL draws and the viewport is visible.
+
+Rollback may restore the earlier frontend while keeping compatible readers and
+history. Do not delete decisions or relax source guards. [Verification](../Docs/foundation-verification.md#form-construction-preview-2026-10-27)
+records source/test status; final delivery and real-model acceptance remain open.
+
 ## FORM concept release — technically installed, 2026-10-26
 
 Technical installation and remaining acceptance: [release evidence](../Docs/foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26).

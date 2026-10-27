@@ -27,6 +27,8 @@ export interface ConstructionDraftSnapshot {
   title: string
   archived: boolean
   source_state: 'current' | 'changed' | 'unavailable'
+  solution_id: string
+  solution_revision: number
   recipe: { definitions: Row[]; instances: Array<Row & { id: string; definition_id: string }> }
   materials: Row[]
   joints: Row[]
@@ -153,13 +155,26 @@ export function createBuildPreparation(client: SupabaseClient<any, any, any> | n
         throw new Error('The exact saved construction version is unavailable. Reload before using its lists.')
       }
 
-      const materialIds = [...new Set((draft.materials as Row[]).map(row => String(row.material_id)))]
+      if (draft.materials.length > 128 || draft.materials.some((row: Row) =>
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.material_id)
+        || !Number.isSafeInteger(row.material_revision) || row.material_revision < 1)) {
+        throw new Error('The saved construction has unavailable material versions.')
+      }
+      const pins = [...new Map((draft.materials as Row[]).map(row =>
+        [row.material_id + '@' + row.material_revision, { id: row.material_id, revision: row.material_revision }])).values()]
       const catalog = new Map<string, Row>()
-      if (materialIds.length) {
+      // Exact pairs in bounded requests: unrelated history must not consume
+      // the PostgREST row limit or substitute a newer material revision.
+      for (let offset = 0; offset < pins.length; offset += 32) {
+        const selected = pins.slice(offset, offset + 32)
         const records = checked(await db.from('catalog_item_revisions').select('item_id,revision,name,properties')
-          .in('item_id', materialIds)) as Row[]
+          .or(selected.map(pin => `and(item_id.eq.${pin.id},revision.eq.${pin.revision})`).join(','))
+          .limit(selected.length)) as Row[]
         guard()
-        for (const item of records) catalog.set(String(item.item_id) + '@' + String(item.revision), item)
+        for (const item of records) {
+          if (!selected.some(pin => pin.id === item.item_id && pin.revision === item.revision)) throw new Error('The material read returned an unexpected version.')
+          catalog.set(String(item.item_id) + '@' + String(item.revision), item)
+        }
       }
       return { draft: draft as ConstructionDraftSnapshot, catalog }
     },

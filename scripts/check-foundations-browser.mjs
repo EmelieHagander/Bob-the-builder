@@ -1,3 +1,4 @@
+import { createConstructionModelFixture, verifyConstructionModelBrowser } from './construction-model-browser.mjs'
 import { verifyModelFeedbackBrowser } from './model-feedback-browser.mjs'
 import { verifyConceptsBrowser } from './solution-concept-browser.mjs'
 import { createStairFixture, verifyStairBrowser } from './stair-study-browser.mjs'
@@ -50,6 +51,7 @@ try {
     const facts = createFactsFixture(timestamp, assets)
     const solutions = createSolutionsFixture(timestamp, assets, facts)
     const artifacts = createArtifactsFixture(timestamp, assets, facts, solutions)
+    const constructionModel = createConstructionModelFixture(timestamp, artifacts)
     const multifloor = createMultifloorFixture(timestamp, artifacts, solutions)
     const stair = createStairFixture(timestamp, artifacts, multifloor)
     const roomLayout = createRoomLayoutFixture(timestamp, artifacts, solutions)
@@ -60,7 +62,6 @@ try {
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
     await context.route(api + '/**', async route => {
       const inboxPath = new URL(route.request().url()).pathname
-      if (inboxPath === '/rest/v1/rpc/read_construction_draft') return route.fulfill({status:200,json:{status:'ok',projectId:route.request().postDataJSON().p_project,items:[],truncated:false,next_cursor:null},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
       if (inboxPath === '/rest/v1/rpc/drawing_work_list') return route.fulfill({status:200,json:{items:[],next_cursor:null},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
       if (inboxPath === '/functions/v1/ask-bob' && route.request().method()==='POST' && route.request().postDataJSON()?.action==='renew_requests') return route.fulfill({status:200,json:{ok:true,renewed:0},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
 
@@ -72,6 +73,7 @@ try {
       const fail = message => respond({ status: 409, json: { message } })
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
       if (method === 'OPTIONS') return respond({ status: 204 })
+      if (await constructionModel.handle(request, url, respond)) return
       if (path === '/rest/v1/rpc/project_plan_read') return respond({json:{record:request.postDataJSON().p_project==='A'?currentPlan:null}})
       if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_work_read') return respond({json:{project_id:route.request().postDataJSON().p_project,vocabulary_version:'2026-09-24.1',status:'not_initialized',revision:null,focus_step_id:null,areas:[],steps:(currentPlan?.steps??[]).map(s=>({...s,area_id:null,phase:'build',responsible_kind:'bob',responsible_person_id:null,tasks:s.tasks??[],related_tasks:[],requirements:[]})),unorganised_tasks:[]}})
       if (path === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture-refresh', token_type: 'bearer', expires_in: 3600, expires_at: expiry, user } })
@@ -211,7 +213,8 @@ try {
     await page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     await page.locator('.account-project-row').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open project Porch A', exact: true }).click()
     await verifyModelFeedbackBrowser(page, base, solutions, focusedTurns, viewport.width)
-    if (process.env.FOUNDATION_FOCUS === 'model-feedback') {
+    await verifyConstructionModelBrowser(page, base, constructionModel, artifacts, solutions, focusedTurns, viewport.width)
+    if (['model-feedback', 'construction-model'].includes(process.env.FOUNDATION_FOCUS)) {
       await verifyConceptsBrowser(page, base, solutions, viewport.width)
       assert.deepEqual(errors, [])
       await context.close()

@@ -59,6 +59,10 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://pwa-proof.invalid
           VITE_SUPABASE_ANON_KEY: installation-test-only
+      # Exercise changed model producers before the longer conversation flows.
+      - name: Verify images, steps, measurements, parts, solutions and drawings
+        if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
+        run: CHROME_PATH="$(command -v google-chrome)" npm run verify:foundations
       - name: Verify Project and Area phase UI
         if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
         run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-project-phases-browser.mjs
@@ -83,9 +87,6 @@ jobs:
       - name: Verify Ask bob project isolation and mobile source disclosure
         if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:project
-      - name: Verify images, steps, measurements, parts, solutions and drawings
-        if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
-        run: CHROME_PATH="$(command -v google-chrome)" npm run verify:foundations
       - name: Verify persistent building context UI
         if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:building
