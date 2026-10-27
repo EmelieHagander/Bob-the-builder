@@ -4,7 +4,7 @@ import {execFileSync} from 'node:child_process'
 import {projectSchema} from './support/project-schema.ts'
 import {withLegacyCadViews} from '../supabase/functions/_shared/cad-adapter.ts'
 import {createAiCatalogSession,type AiCatalogManifest} from '../supabase/functions/_shared/ai-catalog.ts'
-import {CONSTRUCTION_SAVE_TOOL,CONSTRUCTION_REPEAT_SAVE_TOOL,createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
+import {CONSTRUCTION_SAVE_TOOL,CONSTRUCTION_REPEAT_SAVE_TOOL,withFormRefinement,createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
 import {withoutJointFasteners} from '../supabase/functions/_shared/construction-fasteners.ts'
 import {CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL} from '../supabase/functions/_shared/construction-consequences.ts'
 import {createProjectWriter} from '../supabase/functions/_shared/project-write.ts'
@@ -37,7 +37,7 @@ test('D publishes only role/work and affected manuals; old catalogs and all mode
  assert.deepEqual(saveAtD,withLegacyCadViews(withoutJointFasteners(CONSTRUCTION_SAVE_TOOL.function.parameters)),'the pinned D release matches its pre-arrays save contract')
  assert(!Object.hasOwn(saveAtD.properties.recipe.properties,'arrays'),'D predates compact arrays')
  const saveLatest:any=catalogFixture().tool(CONSTRUCTION_SAVE_TOOL.function.name).function.parameters
- assert.deepEqual(saveLatest,CONSTRUCTION_REPEAT_SAVE_TOOL.function.parameters,'the final catalog matches the current canonical compiler')
+ assert.deepEqual(saveLatest,withFormRefinement(CONSTRUCTION_REPEAT_SAVE_TOOL).function.parameters,'the final catalog matches the current canonical compiler')
  assert(Object.hasOwn(saveLatest.properties.recipe.properties,'arrays'),'the later release adds compact arrays')
  for(const tool of tools){assert.throws(()=>before.tool(tool.function.name),/ai_contract_missing/);const parameters:any=now.tool(tool.function.name,{server_quote:true}).function.parameters;assert(!parameters.properties.request_quote);for(const field of ['recipe','dimensions','quantity','computed','layout'])assert(!parameters.properties[field])}
  assert(!Object.hasOwn(before.tool('save_construction_draft').function.parameters.properties,'instance_policy'))
