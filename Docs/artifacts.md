@@ -1068,16 +1068,24 @@ CAD view directions and independent review remain unchanged. Principle sections
 in the concept viewer do not add a CAD kernel section operation.
 
 <a id="form-scoped-checks"></a>
-### Scoped FORM progress and technical evidence — specified 2026-10-27
+### Scoped FORM progress and technical evidence — checkpoint source, 2026-10-27
 
 [The implementation plan](bob-delivery-flow.md#form-next) extends this boundary
 for incremental design. A coherent construction may grow through existing part
 edits, with [Solution refinement](solutions.md#form-refinement) preserving the
-whole intent. A saved partial result must identify its intended output, realized
-scope, required interfaces and remaining work. Exact storage and migration belong
-to the existing Construction/Artifact revision contract. Current all-component
-FORM validation and K2 readiness are unchanged until that contract is implemented;
-simply suppressing missing-component or connectivity errors is not an implementation.
+whole intent. A saved partial result identifies its intended output, mapped scope
+and remaining work. Source migration `20261027090942` adds immutable, project-RLS
+`artifact_construction_refinements` subordinate to the exact Construction revision;
+it does not create another model identity. Its source pins remain the existing
+Artifact/Solution/target pins. The [refinement contract](solutions.md#form-refinement)
+owns mapping, conservative dependency closure and save readiness. Historical
+revisions reopen unchanged, including after ordinary edits and archive/restore.
+K2 reports `form_components_pending` where applicable and always reports
+`form_refinement_unverified` for this first explicit refinement contract. Existing
+joint/connectivity checks continue; local functional proof is not implemented.
+CAD, manufacturing quantity and cut-plan SQL paths also reject an unverified
+refinement, including a caller-forged successful check. No database migration,
+catalog activation or runtime deployment is implied by this source implementation.
 
 Check evidence must identify exact input revisions, checker version, purpose,
 parts/requirements covered, relevant neighbor/interface coverage and remaining

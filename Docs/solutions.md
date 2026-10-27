@@ -174,15 +174,19 @@ records its exact source and hosted readback. Real owner/model acceptance remain
 in [State](bob-delivery-flow.md#state).
 
 <a id="form-refinement"></a>
-### Concept-to-construction refinement — specified next boundary, updated 2026-10-27
+### Concept-to-construction refinement — checkpoint source implementation, 2026-10-27
 
-The installed same-ID, unrotated-box handoff above is still the runtime limit.
-The next extension must let one conceptual component map to multiple detailed
-Construction parts, such as a wall becoming studs and panels, while preserving
-the selected Solution revision, component/feature identities and named frame.
-It must express which dimensions, spatial relations, clearances and functions
-the refinement preserves; matching an outer bounding box alone is insufficient.
-Additional detailed parts retain their own identities and traceable purpose.
+The installed handoff above remains available. The first scoped extension is
+implemented in source, with [local evidence](foundation-verification.md#form-checkpoints-2026-10-27)
+and [release order](../supabase/README.md#form-checkpoint-release).
+`form_refinement: {version: 1, mappings: [{component_id, instance_ids}]}` belongs
+to an exact Construction revision and its existing selected Solution/target pins.
+Each active concept component may map to several detailed parts; every actual
+instance must appear exactly once. Parts retain their own identities. The first
+checker accepts uncut, unrotated boxes and requires each mapping's aggregate
+envelope and physical/reference roles to match the selected component exactly.
+This bounds a checkpoint; it does **not** prove preserved function, clearances,
+joinery or structural adequacy. Every explicit refinement remains `unverified`.
 
 Solution continues to own intended form and function; Artifact/Construction owns
 parts, placement, joints and the detailed realization. Mapping identity, version
@@ -191,26 +195,31 @@ model store. Missing mappings, unsupported geometry or an unresolved controlling
 requirement remain explicit. A detail that changes intended form/function returns
 to a revised Solution and target decision before affected outputs are regenerated.
 
-Refinement must support [progress in coherent parts](bob-delivery-flow.md#form-work-pieces).
-Each saved scope identifies the conceptual components/features realized by its
-Construction parts and what remains unrefined. The whole Solution keeps those
-remaining requirements visible; omission is not removal or satisfaction. Shared
-coordinates, reserved spaces and interfaces constrain later work and are checked
-again when relevant inputs change. A local check cannot establish completion of
-the entire selected Solution. Its [scope and technical evidence](artifacts.md#form-scoped-checks)
-belong to Artifact; existing construction-readiness rules remain until the new
-versioned save/check contract is implemented. This is not permission to bypass
-unresolved controlling choices or to fabricate placeholder geometry.
+Refinement supports [progress in coherent parts](bob-delivery-flow.md#form-work-pieces).
+The server derives mapped and pending component IDs and independent pending
+choice IDs from the exact selected Solution. Construction overview/notes reopen
+the mapping, source revision, original features/choices and remaining work.
+Ordinary part, parameter and role edits inherit the mapping; removing a mapped
+instance fails unless a complete save explicitly replaces that mapping. Explicit
+`null` requests the original complete same-ID handoff and its whole-design gates;
+omission on an older writer inherits the prior revision. Archive/restore preserves
+the original scope. No requirement is removed or satisfied by omission.
 
-Scoped readiness must distinguish prerequisites of the current work from
-independent later choices. The current `read_design_readiness` blocks every open
-choice and construction-purpose deferral; its contract must change together with
-the Construction write boundary, not only the downstream checker. Preserve all
-whole-design choices and requirements, and establish which inputs control the
-saved scope and its interfaces. A caller's `geometry_dependency: false` or an
-omitted requirement alone cannot establish independence. An unrelated later
-choice stays open without blocking an independent part; a controlling unknown
-still blocks the affected work. Whole-output readiness remains a separate check.
+`read_construction_readiness` and the SQL write boundary share scoped permission
+to save. `read_design_readiness` retains whole-output readiness and its original
+pin: a scoped ready result cannot produce a whole-design pin. A choice is pending
+only if it is explicitly linked to active unmapped components outside the current
+dependency closure. Shared parameter inputs/derived values, numeric constraints,
+shared features and touching/overlapping component envelopes connect that closure
+transitively. Unlinked choices still block; `geometry_dependency: false` alone
+cannot establish independence. Source access, purpose, alignment, exact target
+and measurement freshness checks remain mandatory. The first slice conservatively
+requires the entire conceptual geometry to be resolved and supported; even shared
+zero nodes count as dependencies. More precise independent unknown geometry and
+functional/interface evidence remain future work. Refinement checkpoints cannot
+authorize CAD publication, manufacturing quantities or cut plans at either the
+tool or database boundary. Their [technical evidence](artifacts.md#form-scoped-checks)
+is the next extension, not implied by an envelope match.
 
 The [2026-10-27 FORM decision](bob-delivery-flow.md#form-flow) makes the user the
 reviewer of intended form/function in 2D and of the detailed model's appearance

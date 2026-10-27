@@ -557,16 +557,16 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 ## 12. State — nästa arbete
 
 **Aktivt nästa steg — självständig FORM med mer kodkontroll (2026-10-27):**
-precisera och implementera det versionsbundna delresultatet i paket 2a i
-[genomförandeordningen](#form-next), med kontrollfallen i paket 0 och minsta
-nödvändiga plan-/måttkoppling i paket 1. Första utfallet: en oberoende stomme
-kan sparas och återupptas medan ett senare lådval är öppet, utan att hela sängen
-blir leveransklar. Bevara styrande beroenden och helhetskrav. Den
-[daterade auditen](foundation-verification.md#form-plan-audit-2026-10-27)
-äger lokal evidens och begränsningar; jämförande modellbaslinje återstår.
+bygg vidare från det versionsbundna delresultatet i paket 2a till paket 2b i
+[genomförandeordningen](#form-next): bind krav till kontrollerbara egenskaper och
+evidens, med lokala kontroller, helhetskontroll och hållbar återläsning mellan turer.
+Utöka först 2a där kontrollerna kräver mer precis hantering av okänd geometri eller
+gränssnitt. Behåll kontrollfallen i paket 0 och plan-/måttkopplingen i paket 1.
+Den [lokala checkpoint-verifieringen](foundation-verification.md#form-checkpoints-2026-10-27)
+äger första utfallet och dess begränsningar; jämförande modellbaslinje återstår.
 [Arbete i delar](#form-work-pieces), [kodkontroller](#form-code-checks),
 [AI-användning](#form-ai-use) och [samtalsavstämning](#form-dialogue) är
-specificerade; den sammanhängande utökningen är ännu inte implementerad.
+specificerade; den sammanhängande leveranskedjan återstår.
 Befintliga acceptanspunkter nedan kvarstår.
 Historiska versionsnummer är releasebevis för respektive datum, inte
 instruktion att installera om äldre runtime.

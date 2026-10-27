@@ -500,6 +500,12 @@ export async function answerWithOpenAi(opts: {
     ...(execution.constructionPageVersion === 1 ? { viewPageTokens: () => constructionViewBudget(constructionReadsInStep) } : {}),
     ...(execution.projectFactsVersion === 1 ? { constructionTable: true } : {}),
     readDesignReadiness,
+    formRefinement:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.form_refinement_version===1),
+    readConstructionReadiness:async(targetRevision:number,areaId:string|null,refinement:import('./construction-form.ts').FormRefinement)=>{
+      const {data,error}=await rpc('read_construction_readiness',{p_project:opts.projectId,p_area:areaId,p_target_revision:targetRevision,p_form_refinement:refinement},AbortSignal.timeout(12000))
+      if(error)throw new Error('construction_readiness_unavailable')
+      return data
+    },
     ...constructionChangeReaders({
     prepareRoleChange:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await client.rpc('prepare_construction_role_change',{...binding,p_payload:payload}).abortSignal(AbortSignal.timeout(12000))

@@ -7,6 +7,7 @@ import { constructionInstancePolicy } from './construction-instance-policy.ts'
  * Only uncut boxes at right-angle rotations are admitted. Unsupported geometry
  * never receives a bounding-box approximation masquerading as an exact result. */
 import { conceptConstructionIssues } from './solution-concept.ts'
+import { constructionFormIssues } from './construction-form.ts'
 export const CONSTRUCTION_CHECK_VERSION = 'orthogonal-butt-v1'
 export const CONSTRUCTION_ROLE_CHECK_VERSION = 'orthogonal-butt-role-v1'
 type RecordData = Record<string, any>
@@ -46,7 +47,9 @@ export function checkConstruction(draft: RecordData, catalog: Map<string, Record
   if(policy.instances.some(i=>i.role==='unknown'))gap('instance_roles_unknown',policy.instances.filter(i=>i.role==='unknown').map(i=>i.instance_id),
    'Historical roles are unknown. No manufacturing quantities or cutting plan can be derived until the exact instance roles are classified.')
  }catch{add('invalid_instance_policy',[],'Use the canonical policy for every saved instance.');return result()}
- if (draft.design_intent?.model) issues.push(...conceptConstructionIssues(draft.design_intent, recipe, referenceIds))
+ if (draft.design_intent?.model) issues.push(...(draft.form_refinement
+  ? constructionFormIssues(draft.design_intent, recipe, referenceIds, draft.form_refinement)
+  : conceptConstructionIssues(draft.design_intent, recipe, referenceIds)))
  if (recipe.clearances?.length || recipe.motions?.length) add('unsupported_checks', [], 'Motion and clearance checks need the CAD kernel; this checker cannot approve them.')
  const definitions = new Map(recipe.definitions.map(d => [d.id, d]))
  for (const d of recipe.definitions) {
