@@ -134,6 +134,54 @@ Ingen separat beskrivnings-, list- eller projektminnesdatabas införs av detta f
 Den ursprungliga [FORM-referensen](form-design-loop-review-2026-10-26.md) bevaras
 som metodunderlag; denna precisering äger relationen mellan leveranserna.
 
+<a id="form-work-pieces"></a>
+#### Bob planerar och förfinar i delar — specificerat 2026-10-27
+
+Bob skapar själv arbetsplanen, identifierar nödvändigt underlag och väljer
+konstruktionslösning inom uppdraget. Användaren behöver ingen byggkunskap.
+Planen förändras när nya mått, önskemål eller kontrollresultat kommer in.
+Stomme, ribbor, stege, hyllor och lådor är exempel på en möjlig uppdelning av
+en säng; varken ordningen, antalet delar eller ett uppskattat antal AI-rundor
+ska kodas som arbetsflöde. En enkel låda kan hanteras som en enhet.
+
+[Den levande planen](living-project-plan.md#form-planning) behåller mål, Step,
+Tasks, färdigvillkor och ansvar. Solution behåller helhetens form/funktion;
+Construction behåller detaljkonstruktionen. Ett arbetsstycke är en avgränsning
+av detta befintliga arbete, ingen ny projekthierarki eller parallell sanningskälla.
+Varje verktygsanrop behöver inte en egen Task eller en egen godkännanderunda.
+
+Bob skiljer mellan fysiska mått som behöver observeras, konstruktionsmått han
+själv får välja och värden som kod kan beräkna. Han läser befintliga uppgifter
+först och anger vad ett saknat mått behövs till och hur det kan tas.
+En mätfråga aktualiseras när svaret behövs för nästa leverans; oberoende arbete
+fortsätter. Ett känt värde efter en tidigare rättelse ska inte efterfrågas igen.
+
+Helhetsmodellen reserverar tidigt utrymme och anslutningar för senare funktioner.
+Inför varje arbetsstycke behöver Bob dess mål, berörda krav och delar, gemensamma
+mått/anslutningar, exakta källversioner, kvarstående frågor och klart-villkor.
+Han sparar en begränsad ändring, läser kontrollresultatet och rättar berörda
+delar innan han fortsätter. Upprepade delar använder befintlig repetition.
+En sammanhängande möbel kan växa inom samma Construction; separata
+Construction-poster används när de har en naturlig självständig livscykel.
+Dagens `plan_cad_pieces` köar redan färdiga konstruktionsunderlag och ersätter
+inte detta designarbete eller kontrollen av anslutningar mellan delarna.
+
+[Stegvis förfining](solutions.md#form-refinement) måste kunna uttrycka både
+realiserade delar och återstående konceptfunktioner. En
+[avgränsad kontroll](artifacts.md#form-scoped-checks) får visa att ett delresultat
+är konsekvent inom sitt syfte utan att kalla hela konstruktionen färdig.
+Delarnas egna kontroller kompletteras av kontroll av helheten och deras
+anslutningar. Projekteringsordning, fysisk foggraf och monteringsordning är
+olika saker; den ena får inte antas bevisa den andra.
+
+Ändrade styrande uppgifter följs till berörda delar och leveranser. Bevara
+övrig geometri och tidigare kvitton; en ny revision kräver fortfarande de
+färskhetskontroller och nya versionskopplingar som domänägarna föreskriver.
+Bob återupptar från sparade resultat efter avbrott. Vid upprepade fel undersöker
+han källa, arbetsavgränsning eller verktygsstöd före ett nytt oförändrat försök.
+Inga nya fasta arbets-/anropstak införs. Naturlig återkoppling till användaren
+gör framsteg och verkliga hinder begripliga utan att flytta tekniskt ansvar.
+
 <a id="form-dialogue"></a>
 #### Avstämning i samtalet — ägarbeslut 2026-10-27
 
@@ -200,6 +248,30 @@ säkerhet. Återanvänd krav-, revisions- och kontrollsystemen; täckningskontro
 innebär inte ett extra modellanrop för varje krav. Blockera bara den leverans
 vars nödvändiga tekniska underlag saknas och bevara konceptets ärliga status.
 
+<a id="form-code-checks"></a>
+##### Mer kontroll i kod — införandeplan
+
+Utöka befintliga kontroller där samma underlag ger ett entydigt svar. Återanvänd
+parameterutvärderaren, K2, CAD-kärnan och domänskrivarnas spärrar; bygg ingen
+parallell generell regelmotor. Tabellen skiljer befintlig grund från nästa arbete.
+
+| Område | Befintlig grund | Nästa avgränsade kodkontroll |
+|---|---|---|
+| Mått och parametrar | Enheter, ursprung, aritmetik, okända värden och parameterberoenden. | För nästa arbetsstycke: vilka styrande värden är kända, valda, beräknade, motstridiga eller saknas? En uppskattning blir inte uppmätt. |
+| Koncept → byggdelar | FORM:s exakta koppling av samma box-ID. | Spårbar en-till-flera-förfining, bevarade funktioner/relationer och explicit återstående omfattning. Samma yttermått räcker inte som funktionsbevis. |
+| Delar och anslutningar | K2:s begränsade geometri-, material-, kontakt-, fog- och sammanhängandekontroller. | Avgränsad kontroll plus berörda grannar och gemensamma anslutningar; slutlig helhetskontroll. Rörelse/frigång använder verifierat CAD-stöd, annars rapporteras att stöd saknas. |
+| Kravtäckning | Solution-funktioner, planens färdigvillkor och CAD-handoffens krav. | Spårning från varje känt bindande krav till berörd modell/egenskap och giltigt kontrollbevis eller öppen lucka. Kontroller får inte bli gröna för att ett krav saknas i granskarens urval. |
+| Aktualitet och återförsök | Exakta versioner, källaktualitet, behörighet, kvitton och följdarbete. | Kontrollbevis knyts även till omfattning och kontrollversion; ändrade beroenden gör beviset otillräckligt. Återanvänd giltiga resultat med färsk behörighetskontroll. |
+| Leverans | Konstruktionens ritningskoppling, rollstyrda mängder och separat kap-/inköpslogik. | Samma källversion i förhandsvisning, ritningar, beskrivning och listor; alla utlovade filer/länkar återlästa. Preliminära ämnen får inte presenteras som godkänd kapplan. |
+
+Kod kan bevisa att ett **registrerat** krav har behandlats, men inte att alla
+önskemål i fri text förståtts korrekt. Originalönskemål och senare rättelser
+behöver fortsatt tolkning och jämförelse; självständiga acceptansfall provar
+vad Bob missar. Giltig geometri bevisar inte hållfasthet, produktlämplighet eller
+fysisk passning. Saknat stöd lämnar en teknisk lucka även efter positiv AI-bedömning.
+Kontrollresultatets exakta kontrakt hör hemma hos
+[Artifact](artifacts.md#form-scoped-checks).
+
 **Beslut och ändringar:** servern binder beslutet till behörig aktör, syfte,
 exakta modell-/källrevisioner och det visade underlaget. Återanvänd Solution-,
 Artifact- och kvittosystemen. Vald target eller `alignment` är inte ensamt bevis
@@ -217,6 +289,7 @@ granska berörda beroenden. Ett misslyckat sparande eller en saknad länk repare
 med befintliga kvitton utan att generera om geometri. Historik och orelaterade
 delar bevaras.
 
+<a id="form-ai-use"></a>
 #### Riktad AI-granskning och få anrop
 
 AI används för koncept, konstruktionsval, förklaringar och behövd källtolkning.
@@ -247,6 +320,36 @@ tolkar vid behov text, med kontrollerbara källor och möjlighet att hämta mer.
 Den väljer inte bort obligatoriska krav eller fattar användarens beslut. Val av
 Nano/Mini avgörs av bibehållna krav och total kostnad/tid per korrekt leverans,
 inte enbart priset per enskilt anrop.
+
+**Införandeordning för smartare AI-användning:**
+
+1. Ge huvud-Bob nästa avgränsade uppgift, helhetens bindande krav och relevanta
+   originalkällor. Han väljer plan, konstruktion och nästa handling. Ändra minsta
+   roll-/verktygsförklaring först när åtkomst, sammanhang och verktygsutfall är
+   kontrollerade enligt [promptmetoden](prompt-craft.md).
+2. Använd befintliga deterministiska plan-/konstruktionsändringar och gruppera
+   sammanhängande deländringar. Små planändringar via `edit_project_plan` behöver
+   redan idag ingen kompilator-/granskarmodell. Pröva den befintliga vägen innan
+   en ny automatisk planerare eller kollega införs.
+3. Lägg till den avgränsade läsaren bara för underlag som behöver tolkas.
+   Jämför direkt läsning med ett litet modellstött underlagspaket; även extra
+   anrop, missar och återhämtning räknas. Använd befintlig katalog och välj
+   tillräcklig modell för uppgiften, utan obligatorisk Nano → Mini → stor-kedja.
+4. Skicka konkreta granskningsfrågor tillsammans med kodresultat och relevanta
+   original. Saknad kravtäckning, motstridiga underlag och otillräckligt stöd
+   utlöser fortsatt utredning oavsett Bobs uttryckta säkerhet. En granskare får
+   inte godkänna bort ett kodfel eller en nödvändig fysisk/sakkunnig kontroll.
+5. Återanvänd observationer och renderresultat när deras källor, omfattning och
+   kontroll-/modellkontrakt fortfarande gäller. Nuvarande resultatläsare är
+   delvis bundna till samma tur; återanvändning över nya turer kräver uttrycklig
+   lagring, åtkomstprövning och färskhetsregler hos befintliga ägare.
+
+Den [daterade auditen](archive/bob-project-context-audit-2026-10-26.md) visade
+att CAD-granskaren redan använde Mini. Lägre modellklass är därför ingen visad
+besparing i sig. Huvudmodell, profiler och aktivering ändras först efter
+jämförande acceptans och ordinarie releasebeslut. Besparingsmålet är mindre
+upprepad tolkning och färre omtag per korrekt slutfört uppdrag, inte en fast
+kvot av tillåtna anrop eller samma antal arbetsstycken för varje projekt.
 
 ## 4. Kontrakt per led
 
@@ -453,14 +556,15 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — FORM och samtalsavstämning (2026-10-27):** förbered första
-arbetspaketet i [FORM-ordningen](#form-next): spårbar förfining från konceptdelar
-till byggdelar och versionsbunden återkoppling efter 2D enligt
-[samtalskontraktet](#form-dialogue), med [separat teknisk kontroll](#form-technical-checks). Planera därefter den
-modellbundna visuella 3D-förhandsvisningen före slutexport. [Hela flödet](#form-flow) och
-[underlagspaketet](ask-bob-context.md#task-source-packet) är nu dokumenterade;
-utökningarna är ännu inte implementerade. Befintliga acceptanspunkter nedan
-kvarstår. Historiska versionsnummer är releasebevis för respektive datum, inte
+**Aktivt nästa steg — självständig FORM med mer kodkontroll (2026-10-27):**
+förbered baslinje och reproducerbara fel-/framgångsfall i paket 0 i
+[genomförandeordningen](#form-next), utan nya betalda körningar. Följ med
+återanvändning av Bobs plan-/måttstöd och den första stegvisa förfiningen i
+paket 1–2. [Arbete i delar](#form-work-pieces), [kodkontroller](#form-code-checks),
+[AI-användning](#form-ai-use) och [samtalsavstämning](#form-dialogue) är
+specificerade; den sammanhängande utökningen är ännu inte implementerad.
+Befintliga acceptanspunkter nedan kvarstår.
+Historiska versionsnummer är releasebevis för respektive datum, inte
 instruktion att installera om äldre runtime.
 
 **Kvarstående modell-/ritningsacceptans från 2026-10-19:**
@@ -560,22 +664,65 @@ Serverbundna work-record- och planlänkverktyg samt konflikttransporten är nu i
 **Kvarstående produktacceptans:** verklig medlemsåterläsning, våningssängens resultat mot mockupen och mätningen av hela modellkedjans kostnad ligger kvar i E. [Artifact](artifacts.md#instance-roles-and-affected-outputs--release-d), [CAD](cad-adapter.md), [material](material-planning.md) och [datagränserna](#kvarstående-datagränser--kodgranskning-2026-10-10) äger de driftsatta ändringskontrakten. Tekniska prov stänger inte modell-/mockupacceptansen.
 
 <a id="form-next"></a>
-### FORM 1.0 — nästa arbetspaket och acceptans, uppdaterat 2026-10-27
+### FORM 1.0 — genomförandeplan för nästa nivå, uppdaterat 2026-10-27
 
-**Nästa handling:** precisera och därefter implementera den minsta förfiningen
-och samtalsbaserad avstämning av 2D i paket 1. Detta är den dokumenterade arbetsordningen,
-inte ett påstående om att utökningarna redan körs. Första FORM-leveransen är
-tekniskt installerad enligt [releasebeviset](foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26);
+**Plan, ännu inte implementerad.** Denna ordning preciserar och ersätter den
+tidigare fyrpaketsordningen i detta avsnitt. Målflödet och tidigare acceptanskrav
+består. Arbeta i avgränsade PR:ar; paket anger beroenden och granskningsbara resultat,
+inte fasta körsteg för Bob eller ett krav på exakt en PR per paket.
+Första FORM-leveransen är tekniskt installerad enligt
+[releasebeviset](foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26);
 dess SQL, frontend och katalog ska inte publiceras om för att denna plan mergas.
 
-| Ordning | Avgränsat arbete | Klart-villkor och ägare |
+| Ordning | Avgränsad leverans och återanvändning | Klar för nästa paket när |
 |---|---|---|
-| 1. Förfining och avstämning av 2D i samtalet | Definiera hur en konceptdel blir flera byggdelar och hur originalkrav följer med. Visa rätt 2D-version, ta emot vanlig återkoppling och återanvänd befintliga Solution-beslut/mandat. Precisera svarets innebörd och revisionskoppling utan ny godkännandeknapp. | [Solution-gränsen](solutions.md#form-refinement) och Artifact behåller identiteter, revisioner, koordinatram och krav. Prova vägg → reglar/skivor, bevarad funktion, spegling och saknat krav. Okänd/ostödd förfining ger en konkret teknisk lucka. [Samtalsavstämning](#form-dialogue) och [kravkontroll](#form-technical-checks) har skilda bevis; ett giltigt beslut eller delegerat val återanvänds utan extra klartecken. |
-| 2. Underlag för nästa arbete | Bygg det [avgränsade underlagspaketet](ask-bob-context.md#task-source-packet) på befintliga sök-/detalj-/konstruktionsläsare. Kod väljer strukturerade fakta; liten modell används för faktisk texttolkning. | Källor och revisioner kan öppnas exakt; senaste rättelser, lästäckning, konflikter och osäkerhet följer med. Ett missat urval eller läsfel får en återhämtningsväg. Privat minne förblir privat. Modellvalet behöver jämförande acceptans. |
-| 3. Visuell 3D, användarbeslut och slutleverans | Knyt tidig inspirationsbild till FORM-revisionen när den behövs. Bygg därefter detaljerad 3D-förhandsvisning från exakt Construction med material/färg, ljus och relevanta detaljvyer. Bind användarbeslut till visad modell; härled slutritningar, beskrivning och listor från samma version. | [Medier](media-and-steps.md#form-visual-preview), [Artifact](artifacts.md), [material](material-planning.md) och [CAD](cad-adapter.md#form-preview-and-export) återanvänds. Precisera lagring av presentation/beslut och bevisa versionslikhet, ändringshantering och återläsning. Ersätt först därefter obligatorisk full Rita-granskning med kodkontroller och riktad AI-bedömning vid behov; ta bort den ersatta vägen i den verifierade releasen. |
-| 4. Samlad acceptans och release | Kör riktade lokala kontroller och därefter separat godkända verkliga ägar-/modell-/CAD-prov. Följ repots befintliga manuella CI-, säkerhets- och releaseordning. | Samma generella metod klarar fallen nedan. Läs tillbaka exakta versioner och länkar efter omladdning och som behörig medlem; kontrollera även nekad åtkomst. Publicerad kod/katalog eller godkända fixturer räcker inte som modellacceptans. |
+| 0. Baslinje och kontrollfall | Samla relevanta befintliga körspår, skilj kod-/verktygsfel från modellbeteende och fastställ förväntade resultat för låda, våningssäng och lada. Återanvänd befintliga fixtures/testsviter och faktisk versions-/kostnadsbokföring. Ingen ny betald modellkörning ingår. | Originalkrav, rättelser, avbrott, tekniska fel och måttluckor har förväntade utfall. Saknade mätvärden/ej jämförbara historiska körningar redovisas. De tekniska bevis som krävs för att senare ersätta Rita är namngivna. |
+| 1. Självständig plan och nödvändiga mått | Anslut [målmetoden](#form-work-pieces) till befintlig [levande plan](living-project-plan.md#form-planning), mått, informationsbehov, fokus och fortsatt arbete. Bob väljer själv arbetsstycken och ordning. Rätta endast belagda åtkomst-/läs-/skriv-/fortsättningsluckor; lägg ingen ny planerarmodell framför Bob. | Öppet önskemål kan ge en sparad, återläst plan med kvarstående behov, ansvar och nästa möjliga arbete. Kända mått återanvänds; nya fysiska mått förblir okända tills underlag finns. Befintliga planbeslut och delegation respekteras; tekniska val flyttas inte till användaren. Lokal verifiering avser mekaniken, modellbeteendet följs i paket 5. |
+| 2. Stegvis FORM och kodkontroller | Implementera minsta [en-till-flera-förfining](solutions.md#form-refinement), versionsbunden 2D-återkoppling och [avgränsade kontrollbevis](artifacts.md#form-scoped-checks). Utöka befintliga parametrar, K2 och följdarbete enligt [kontrolltabellen](#form-code-checks). Börja med stödd geometri och naturliga deländringar i samma Construction. | Vägg → reglar/skivor bevarar krav och identiteter. Ett delresultat kan sparas med tydlig återstående omfattning, men kan inte levereras som färdig helhet. Prov hittar saknad funktion, spegling, felaktig anslutning, ändrat underlag och fel mellan separat giltiga delar. Samtalsbeslut och tekniska kontrollbevis hålls isär. |
+| 3. Relevant underlag och riktad AI | Bygg [underlagspaketet](ask-bob-context.md#task-source-packet) på befintliga läsare. Kod levererar exakta fakta och beroenden; liten modell tolkar bara behövt ostrukturerat underlag. Förbered riktad granskning med konkreta frågor och bevis, utan att ännu stänga dagens Rita-väg. | Original kan återöppnas, obligatoriska krav följer med och lästäckning/konflikter syns. Samma giltiga observation återanvänds inom implementerad livslängd. Läsfel, missat urval och återkallad åtkomst har säkra återhämtningsvägar. Profiler jämförs innan de aktiveras. |
+| 4. Modellbunden 3D och samlad leverans | Bygg detaljerad visuell 3D från exakt Construction, med material/färg, ljus och relevanta detaljvyer. Knyt eventuell tidig inspirationsbild till Solution. Bind vanlig återkoppling till visad version och härled ritningar, beskrivning och listor från samma underlag. | [Medier](media-and-steps.md#form-visual-preview), [Artifact](artifacts.md), [material](material-planning.md) och [CAD](cad-adapter.md#form-preview-and-export) delar exakta källversioner. Ändring efter visning hanteras, extra vy kräver ingen ny design och leveransen går att återläsa. Tekniska luckor kan inte stängas av ett positivt användarsvar. |
+| 5. Jämförande acceptans och kontrollerad release | Kör separat godkända verkliga ägar-/modell-/CAD-prov och jämför hela utfallet. Aktivera endast verifierade katalog-/modelländringar. Ersätt obligatorisk full Rita-granskning först när ersättningens kravtäckning, bevis och återhämtning är visade. | Samma generella metod klarar fallen nedan utan en förskriven objektsplan eller extra användarknuffar. Inga kända kritiska krav tappas eller tekniska fel godkänns i acceptansfallen. Kostnad/tid redovisas inklusive misslyckanden. Säkerhets-, medlems-, UI- och manuella releasekrav är uppfyllda; den ersatta vägen tas bort när pågående äldre jobb är omhändertagna. |
+
+**Kod- och verifieringsägare per paket:**
+
+- **1:** `project-plan.ts`, `plan-assistant.ts`, `plan-edit.ts`,
+  `project-work-records.ts` och befintlig fortsättningskod. Utöka relevanta
+  `plan-assistant`, `plan-edits`, `project-work-records`, `project-plan-links`
+  och `bob-completion-gate`-tester; ingen ny planhierarki.
+- **2:** `solution-concept.ts`, `construction-draft.ts`, `construction-edits.ts`,
+  `construction-checks.ts`, `construction-consequences.ts` och respektive SQL-ägare.
+  Utöka `solution-concept`/`solution-concept-sql`, `construction-checks`,
+  `construction-edits`, `construction-change-work` och `checked-construction-required`.
+  Befintliga tester får inte försvagas för att släppa igenom ofärdiga helheter.
+- **3:** befintliga projekt-/konstruktions-/privata historikläsare, resultatreferenser
+  och AI-katalogen. Prova urval, exakta original, omfattning, cache/åtkomst och
+  avbrott med kontrollerade modellresultat före ett godkänt modellprov.
+- **4–5:** `cad-assistant.ts`, `cad-review.ts`, CAD-/medie-/listägarna och UI genom
+  `database.ts`. Utöka `checked-construction-drawing`, `cad-review`,
+  `construction-lists` och berörda browserprov enligt
+  [Vera](../.claude/agents/vera.md) och [verifieringsreglerna](../.claude/skills/verify/SKILL.md).
+  Mobil, omladdning, läsfel, nekad åtkomst och gammal visad version ingår.
+
+Exakta nya schemafält, kontrollformat och migrationer beslutas inom respektive
+domängräns innan kod ändras. Använd tilläggsmigrationer, befintliga kvitton och
+aktuell behörighet. Säkerhetsprov omfattar outsider/annat projekt, återkallad
+åtkomst, gammalt versionsunderlag, privat källåteranvändning och idempotenta
+återförsök. Vid en godkänd driftsättning läggs kompatibel datagrund först, sedan
+berörda runtimes och UI, därefter aktivering. Läs tillbaka det som installerats.
+Rollback återställer aktivering först och behåller kompatibilitet för startade
+jobb och sparad historik; den öppnar ingen äldre okontrollerad ritväg.
+
+Full svit, CI, hosted ändringar och betalda prov följer fortfarande
+`CLAUDE.md`: de startas bara på uttrycklig beställning. Planen startar inga sådana
+körningar och ändrar inga profiler eller säkerhetsgränser.
 
 **Gemensamma acceptansfall:**
+
+Alla tre börjar med ett vanligt önskemål och varierande ofullständigt underlag.
+Bob får själv skapa planen, välja behövda mått och bestämma uppdelningen.
+Kontrollerade testsvar bevisar verktygskedjan; verkliga modellprov måste dessutom
+visa denna självständiga bedömning. Antalet arbetsstycken eller anrop är inget
+godkännandekriterium i sig.
 
 - **Låda:** ändra bredd; kontrollera samma rättade modell i 2D, beskrivning,
   byggdelar, detaljerad 3D-förhandsvisning, listor och slutritning. Godkänd version
@@ -584,10 +731,27 @@ dess SQL, frontend och katalog ska inte publiceras om för att denna plan mergas
 - **Våningssäng:** flytta stegen utan att ändra lådorna. Bevara originalfunktioner,
   visa rätt gavel och upptäck spegling. Testa sen rättelse efter sammanfattat
   samtal och efter 3D-godkännande: tidigare beslut gäller inte den flyttade stegen.
+  Avbryt efter ett sparat delresultat och återuppta utan att återskapa det.
+  Kontrollera att stegens ändrade anslutningar och eventuellt berörda fria utrymmen
+  omprövas, även när lådornas geometri kan bevaras.
 - **Lada:** tre rum längs längden, slutna plana tak över djurrum och lodrät stege
   mot angiven vägg. Kontrollera höjdkedjan och att alla vyer uttrycker samma modell.
   Taklutning och andra delar utanför första modellens stöd ska visas som luckor;
   principsnittet är inte en byggteknisk CAD-kapning.
+
+Prova ett redan sparat mått, ett verkligt saknat mått, ett mått Bob kan välja
+och ett som kod kan härleda. Bara nödvändig fysisk observation ska bli en
+mätfråga. Ett blockerande mått pausar beroende arbete; annat relevant arbete
+fortsätter. Öppna helhetskrav får inte försvinna när en del sparas eller kontrolleras.
+Ett arbetsstycke som klarar sin avgränsade kontroll får inte låsa upp slutexport
+för hela uppdraget. Separat giltiga delar med en felaktig gemensam anslutning
+måste ge avvikelse i helhetskontrollen.
+
+Tillför avsiktliga fel i testunderlagen: ändrad enhet, saknad funktion, fel sida,
+kollision, utebliven fog, gammalt källmått och utbytt Construction-revision.
+Kontrollerna ska hitta rätt fel eller redovisa otillräckligt stöd. Testa även
+giltiga ändringar så att falska stopp upptäcks. Krav i originalönskemålet som
+utelämnats ur modellens egen kravlista ingår i modellacceptansen.
 
 Prova dessutom att en snygg inspirationsbild inte godkänner annan geometri,
 att olösta/omodellerade detaljer och behövda invändiga vyer visas, samt att
@@ -614,6 +778,25 @@ måste hanteras när bakgrundsanrop tidsmäts. Den befintliga K2-/CAD-granskning
 gäller under arbetet tills den specificerade ersättningen är verifierad och
 publicerad; K2, käll-/behörighetsspärrar och fysisk osäkerhet kvarstår även därefter.
 Övrig medlemsacceptans stängs inte av denna planändring.
+
+**Jämförelsen i paket 5:** frys indata, förväntade utfall och versionsuppgifter
+före jämförelsen. Använd flera överenskomna upprepningar och varianter per
+grundfall; antal och kostnadsram bestäms i den uttryckliga provbeställningen.
+Återanvänd jämförbar historisk baslinje där den finns och märk annars att en
+före/efter-slutsats ännu inte går att dra. Kör inte om en gammal dyr kedja
+automatiskt. Redovisa minst följande per fall och konfiguration:
+
+| Mått | Vad som jämförs |
+|---|---|
+| Rätt slutresultat | Kravtäckning mot originalen, tekniska fel/falska godkännanden, användbara och återlästa leveranser. Saknad teknisk evidens får inte räknas som lyckad slutleverans. |
+| Användarens arbete | Nödvändiga observationer och meningsfulla designval jämfört med upprepade måttfrågor, tekniska frågor användaren inte kan besvara och onödiga ”fortsätt”. |
+| Omtag och kontinuitet | Lokala rättelser, omgenererat oförändrat arbete, avbrott/återupptagning och falska stopp. |
+| Resurser | Faktiska AI- och verktygsanrop, token/cache, kostnad inklusive misslyckanden samt tid från bakgrundsanropets start till slut och hela uppdragets leveranstid. |
+
+Ett billigare eller snabbare försök räcker inte om kvaliteten försämras.
+Modellklass och borttagning av rutinmässig granskning beslutas utifrån detta
+sammanvägda resultat. De första proven ger mätdata, inte ett löfte om ett visst
+pris, ett fast antal iterationer eller generell byggteknisk säkerhet.
 
 <a id="bob-task-pr-plan"></a>
 ### PR-plan — sammanhängande uppgiftsarbete och modelluppgradering, 2026-10-17

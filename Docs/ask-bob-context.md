@@ -149,6 +149,13 @@ It does not require the larger all-category catalog/router architecture below.
 | Coverage and conflict | What was searched/opened, remaining pages or omitted content, missing/unavailable/denied sources and conflicting values. An empty search does not establish that the project has no such requirement. |
 | Visual evidence | Original reference identity and relevant actual pixels/model views when interpretation or comparison needs them. A text description does not establish visual fidelity. |
 
+For [work in coherent parts](bob-delivery-flow.md#form-work-pieces), carry the
+current work goal, unfinished whole-design requirements, exact affected part IDs
+and shared interfaces. Selection cannot hide constraints from neighboring or
+later work. Existing dependency views expose their bounded coverage; expand the
+read when needed rather than claiming full dependency closure. Completion and
+next-action state stay with the living plan and Construction, not in the reader.
+
 Bob and reviewers must be able to expand the selection and read originals. A
 reader failure leaves an explicit limitation and the ordinary direct readers;
 it neither approves missing evidence nor forces a repeated small-model loop.
@@ -162,8 +169,10 @@ member/project/private thread boundaries. Project-wide reuse must never expose
 private conversation text.
 
 Reuse the observation for the same source identities/revisions, question and
-scope; recheck current authorization before reuse and refresh when a relevant
-source changes. Reuse the existing operation/result mechanisms where sufficient;
+scope and interpretation contract; recheck current authorization before reuse
+and refresh when a relevant source changes. Current construction result references
+are turn-local; cross-turn reuse requires an explicit durable observation contract.
+Reuse the existing operation/result mechanisms where sufficient;
 do not introduce a parallel memory store as a prerequisite. Exact schema, cache
 lifetime and code integration are implementation decisions still to be verified.
 

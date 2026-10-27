@@ -191,6 +191,17 @@ model store. Missing mappings, unsupported geometry or an unresolved controlling
 requirement remain explicit. A detail that changes intended form/function returns
 to a revised Solution and target decision before affected outputs are regenerated.
 
+Refinement must support [progress in coherent parts](bob-delivery-flow.md#form-work-pieces).
+Each saved scope identifies the conceptual components/features realized by its
+Construction parts and what remains unrefined. The whole Solution keeps those
+remaining requirements visible; omission is not removal or satisfaction. Shared
+coordinates, reserved spaces and interfaces constrain later work and are checked
+again when relevant inputs change. A local check cannot establish completion of
+the entire selected Solution. Its [scope and technical evidence](artifacts.md#form-scoped-checks)
+belong to Artifact; existing construction-readiness rules remain until the new
+versioned save/check contract is implemented. This is not permission to bypass
+unresolved controlling choices or to fabricate placeholder geometry.
+
 The [2026-10-27 FORM decision](bob-delivery-flow.md#form-flow) makes the user the
 reviewer of intended form/function in 2D and of the detailed model's appearance
 and function in 3D. Reuse existing Solution decisions and explicit delegation;
