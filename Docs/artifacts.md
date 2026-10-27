@@ -90,9 +90,12 @@ the existing Artifact identity, immutable construction revisions, source lineage
 and receipts for presentation links and acceptance evidence. Its exact schema
 and commands remain to be implemented; no new runtime acceptance state exists
 because of this section. Preserve actor/authority, decision purpose, exact
-Solution/target/Construction sources and the displayed evidence. A changed
-construction cannot inherit acceptance silently, and visual acceptance never
-promotes a concept to fabrication-ready. [State](bob-delivery-flow.md#form-next)
+Solution/target/Construction sources and the displayed evidence. Ordinary
+[conversation feedback](bob-delivery-flow.md#form-dialogue) supplies design
+alignment; its scoped meaning and private provenance remain separate from
+technical check results. A changed construction cannot inherit acceptance
+silently, and visual acceptance never promotes a concept to fabrication-ready.
+[State](bob-delivery-flow.md#form-next)
 owns the implementation and replacement of the current full CAD-review gate.
 
 ### Joint fasteners — owner decisions 2026-10-26

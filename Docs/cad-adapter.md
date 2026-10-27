@@ -9,9 +9,11 @@ Bob never sends Python, SQL, URLs or arbitrary CAD code to the geometry engine. 
 <a id="form-preview-and-export"></a>
 ## FORM preview and final export — specified decision 2026-10-27
 
-The [FORM flow](bob-delivery-flow.md#form-flow) now places user review of the
-detailed visual 3D model before final drawing/list delivery. That preview must
-derive from the exact Construction geometry used by the exports, with relevant
+The [FORM flow](bob-delivery-flow.md#form-flow) now places a natural conversation
+about the detailed visual 3D model before final drawing/list delivery; no FORM
+approval button is required. [Technical validation](bob-delivery-flow.md#form-technical-checks)
+remains on the system/specialist side, independently of the user's visual response.
+That preview must derive from the exact Construction geometry used by the exports, with relevant
 detail views and a revision-bound decision. The engine may already render during
 preview preparation; final export introduces no new construction choices.
 
