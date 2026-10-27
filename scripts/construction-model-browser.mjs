@@ -64,7 +64,7 @@ export async function verifyConstructionModelBrowser(page,base,fixture,artifacts
     archived:false,actor_label:'Fixture member',recorded_at:new Date().toISOString(),change_note:'Saved checkpoint',measurements:[],source_media_id:null,
     source_media_title:'',generator:null,generator_version:null,has_room_layout:false,has_stair_study:false,has_multifloor_plan:false}
   artifacts.records.set(id,row);artifacts.histories.set(id,[structuredClone(row)])
-  solutions.records.set(solution,{id:solution,project_id:'A',revision:1,title:'Box concept',design_intent:intent,area_id:null,archived:false})
+  solutions.records.set(solution,{id:solution,solution_id:solution,project_id:'A',revision:1,title:'Box concept',description:'Five saved panels',assumptions:'Synthetic design values',tradeoffs:'Not approved for building',design_intent:intent,area_id:null,archived:false,measurements:[],source_media_id:null,source_media_title:'',actor_label:'Fixture member',recorded_at:new Date().toISOString(),change_note:'Synthetic concept'})
   solutions.histories.set(solution,[structuredClone(solutions.records.get(solution))])
   solutions.decisions.push({project_id:'A',revision:targetRevision,solution_id:solution,solution_revision:1,reason:'Synthetic construction source',actor_label:'Fixture member',recorded_at:new Date().toISOString(),area_id:null,scope_key:'project'})
   const source={status:'ok',projectId:'A',artifact_id:id,revision:1,current_revision:1,area_id:null,title:row.title,archived:false,source_state:'current',
