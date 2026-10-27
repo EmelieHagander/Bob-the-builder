@@ -2,12 +2,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { projectSchema, asProjectUser } from './support/project-schema.ts'
-import { designIntent } from './support/design-intent-fixture.ts'
+import { constructionFormFixture as fixture } from './support/construction-form-fixture.ts'
 import { parameterPacket } from './support/cad-parameter-fixture.ts'
 import { manufacturePolicy } from './support/construction-instance-policy-fixture.ts'
 import { constructionFormScope, constructionFormReadiness, constructionFormIssues, parseFormRefinement } from '../supabase/functions/_shared/construction-form.ts'
-import type { DesignIntent } from '../supabase/functions/_shared/project-design-intent.ts'
-import type { ConceptModel } from '../supabase/functions/_shared/solution-concept.ts'
 import { parseDesignReadiness } from '../supabase/functions/_shared/project-design-intent.ts'
 import { createConstructionTools, checkedConstructionForDrawing } from '../supabase/functions/_shared/construction-draft.ts'
 import { createProjectWriter, type WritePayload } from '../supabase/functions/_shared/project-write.ts'
@@ -17,22 +15,6 @@ import { createAiCatalogSession } from '../supabase/functions/_shared/ai-catalog
 import { catalogFixture } from './support/ai-catalog-fixture.ts'
 import { FORM_REFINEMENT_SCHEMA } from '../supabase/functions/_shared/construction-form.ts'
 
-function fixture() {
-  const intent = designIntent('construction') as DesignIntent & { model: ConceptModel }
-  intent.features = ['frame', 'drawer'].map(id => ({ id, description: `Synthetic ${id} requirement`, basis: 'user_request', source_ref: null }))
-  intent.choices = [{ ...intent.choices[0], id: 'frame_design' }, { ...intent.choices[0], id: 'drawer_finish', question: 'Choose the later drawer finish', geometry_dependency: false, status: 'open', selected_direction: null }]
-  const component = (id: string, size: number[], at: number[]) => ({ id, label: id, kind: 'solid' as const, active: true, features: [id], choices: [id === 'frame' ? 'frame_design' : 'drawer_finish'],
-    position: at.map((_, k) => `${id}_p${k}`) as [string,string,string], size: size.map((_, k) => `${id}_s${k}`) as [string,string,string] })
-  const frame = component('frame', [600,400,18], [0,0,0]), drawer = component('drawer', [100,100,18], [800,0,0])
-  intent.model = { version: 1, frame: { origin: 'Synthetic front left', x: 'Length', y: 'Width', z: 'Height' },
-    nodes: [frame, drawer].flatMap((c, n) => [...c.position, ...c.size].map((id, k) => ({ id, role: 'decision' as const, unit: 'mm' as const, reason: 'Synthetic only', value: [[0,0,0,600,400,18],[800,0,0,100,100,18]][n][k] }))),
-    components: [frame, drawer], constraints: [], unsupported: [], views: [{id:'plan',label:'Plan',plane:'XY',kind:'projection',at:null},{id:'front',label:'Front',plane:'XZ',kind:'projection',at:null}] }
-  const recipe: any = { contract_version: 1, units: 'mm', assembly_id: 'partial_frame', views: ['front','top'],
-    definitions: [{id:'rail',primitive:'box',material_ref:null,x_mm:18,y_mm:400,z_mm:18}],
-    instances: ['left','right'].map((id, n) => ({id,definition_id:'rail',placement:{x:n*582,y:0,z:0,rx:0,ry:0,rz:0}})) }
-  const refinement = { version: 1 as const, mappings: [{component_id:'frame',instance_ids:['left','right']}] }
-  return { intent, recipe, refinement }
-}
 
 test('FORM scope follows canonical component, feature, shared-input and transitive constraint links', () => {
   const { intent, recipe, refinement } = fixture()
@@ -58,8 +40,8 @@ test('FORM scope follows canonical component, feature, shared-input and transiti
 })
 
 test('FORM checkpoints save, reopen and resume on the same artifact; whole delivery stays closed at both boundaries', async t => {
-  let priorManifest:any
-  const pg=await projectSchema(async(db,name)=>{if(name==='20261027091553_ai_form_refinement_catalog.sql')priorManifest=(await db.query("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result});t.after(()=>pg.close())
+  let priorManifest:any, formManifest:any
+  const pg=await projectSchema(async(db,name)=>{if(name==='20261027091553_ai_form_refinement_catalog.sql')priorManifest=(await db.query("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result;if(name==='20261027101807_construction_observations.sql')formManifest=(await db.query("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result});t.after(()=>pg.close())
   const owner=randomUUID(),stranger=randomUUID(),turn=randomUUID(),solution=randomUUID(),message='Develop this frame and keep the later drawer choice open.'
   await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now())',[owner,'form@example.test',stranger,'outsider@example.test'])
   const call=async(uid:string|null,name:string,args:any[],role='authenticated'):Promise<any> => (await asProjectUser(pg,uid,`select ${name}(${args.map((_,n)=>'$'+(n+1)).join(',')}) result`,args,role)).rows[0].result
@@ -75,7 +57,7 @@ test('FORM checkpoints save, reopen and resume on the same artifact; whole deliv
   const read=(id:string,revision:number|null=null)=>call(owner,'bob.read_construction_draft',[project,id,revision,null])
   let saved:any
   await t.test('catalog publication advertises only the compatible schema and preserves older pinned manifests',async()=>{
-    const manifest:any=(await pg.query("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+    const manifest:any=formManifest
     const current=createAiCatalogSession({rpc:async()=>({data:null,error:null})} as any,{app:'bob',manifest})
     const before=createAiCatalogSession({rpc:async()=>({data:null,error:null})} as any,{app:'bob',manifest:priorManifest})
     assert.deepEqual(current.tool('save_construction_draft').function.parameters.properties.form_refinement,FORM_REFINEMENT_SCHEMA)

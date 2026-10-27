@@ -24,6 +24,14 @@ let preBuildingScopeRows:any[]|undefined,preBuildingScopeVersions:Map<string,num
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const constructionEvidence=source.match(/\$construction_evidence_spec\$([\s\S]+?)\$construction_evidence_spec\$/)
+ if(constructionEvidence)for(const spec of JSON.parse(constructionEvidence[1])){
+  const row=seed.find(row=>row.key===spec.key)
+  row.definition={...row.definition,...spec.patch}
+  const {seed_version,source_revision,...rest}=row.metadata??{}
+  row.metadata={...rest,publication:'construction-evidence-v1',construction_evidence_version:1}
+  versions.set(row.key,versions.get(row.key)!+1)
+ }
  const formRefinement=source.match(/\$form_refinement_spec\$([\s\S]+?)\$form_refinement_spec\$/)
  if(formRefinement){
   const spec=JSON.parse(formRefinement[1]),row=seed.find(row=>row.key==='tools.save_construction_draft')

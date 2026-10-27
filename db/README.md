@@ -1575,6 +1575,18 @@ returns the same facts. Rollout: apply; nothing reads it until the Bob runtime
 calls it. Rollback: drop both functions.
 
 <a id="form-concept-persistence--source-only-2026-10-26"></a>
+## FORM check observations — source only, 2026-10-27
+
+Migration `20261027101807` adds `bob_private.construction_observations`, an
+immutable derived cache subordinate to existing Construction revisions. It has
+RLS and no direct member/service table grants. A service-only, active-claim RPC
+records code-produced checks; the authenticated reader enforces project access
+and assesses current sources on every new read. Exact retries deduplicate;
+historical results survive private chat reset and never authorize export.
+The [Artifact owner](../Docs/artifacts.md#form-scoped-checks) defines predicates,
+reuse and limits; the [backend guide](../supabase/README.md#form-checkpoint-release)
+owns activation order. Source code is not an applied migration.
+
 ## FORM concept persistence — installed, 2026-10-26
 
 Technical installation and remaining acceptance: [release evidence](../Docs/foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26).

@@ -1,5 +1,65 @@
 # Foundation verification and rollout
 
+<a id="form-evidence-2026-10-27"></a>
+## FORM property checks and durable observations — local verification, 2026-10-27
+
+The first 2b source slice adds [scoped technical evidence](artifacts.md#form-scoped-checks)
+after merged [plan #350](https://github.com/EmelieHagander/Bob-the-builder/pull/350)
+and [checkpoint #351](https://github.com/EmelieHagander/Bob-the-builder/pull/351),
+on main `536825eb80b0219cb50eaba1bd2340d97b217475`. The model still owns a proposed
+interpretation; code evaluates only explicit clear-space, minimum-span and
+connection probes against the exact canonical construction. Every registered
+feature retains coverage and unverified functional meaning. Local scope expands
+through canonical dependencies, touching parts and joints, while full K2 findings
+remain available. An unsupported external shape cannot silently disappear from
+neighbor coverage. No probe result opens final drawing or manufacturing gates.
+
+`construction-evidence.test.ts` checks label-without-function, partial coverage,
+unknown roles/dimensions, obstructed spaces, unsupported transforms, wrong joint
+faces, supported connection paths, scope expansion and expired checker knowledge.
+It reopens saved observations in a new tool instance without catalog reads or
+recomputation, checks tamper detection and storage/read failures, and reads all
+48 probe rows through exact pages within the 2,000-token budget including reuse
+metadata. Internal drawing checks keep their original schema and fresh guards.
+
+`construction-observations-sql.test.ts` applies the complete schema to disposable
+PGlite and drives the real tools/RPCs under separate authenticated/service roles.
+It verifies exact saved output, six results across four-reference pages, duplicate
+result idempotency, bound cursors, direct-member forgery denial, cross-project
+isolation, wrong/revoked claims and source-binding substitution. Completing and
+resetting the private conversation preserves evidence; a genuinely new claimed
+turn reads it. Changed selected sources and archive retain the old values but
+report `source_changed`; a new stale cache record is rejected. Revoked membership
+denies both reading and recording. Publication patches only check/read contracts
+and preserves older pinned manifests and every unrelated catalog definition.
+
+**230 focused cases verified across the focused run and final targeted rerun.**
+The broad focused run passed 229/230; its sole failure was the old view-schema
+expectation, corrected to the additive current catalog. After that correction and
+including saved-result metadata inside the page budget, all **30 affected
+evidence/readback/view/table tests passed, 0 failed or skipped**. Commands:
+
+```bash
+node --no-wasm-code-gc --import tsx --test --test-concurrency=3 tests/construction-evidence.test.ts tests/construction-observations-sql.test.ts tests/construction-form.test.ts tests/solution-concept.test.ts tests/solution-concept-sql.test.ts tests/construction-draft.test.ts tests/construction-checks.test.ts tests/construction-edits.test.ts tests/construction-views.test.ts tests/construction-table.test.ts tests/construction-parameters.test.ts tests/construction-repeats.test.ts tests/checked-construction-required.test.ts tests/checked-construction-drawing.test.ts tests/solution-design-readiness-sql.test.ts tests/project-design-readiness-tools.test.ts tests/construction-change-work.test.ts tests/construction-requirements.test.ts tests/construction-cut-plans.test.ts tests/fastener-requirements-sql.test.ts tests/cad-review.test.ts tests/ai-catalog.test.ts tests/ai-catalog-db.test.ts
+node --no-wasm-code-gc --import tsx --test --test-concurrency=2 tests/construction-evidence.test.ts tests/construction-observations-sql.test.ts tests/construction-views.test.ts tests/construction-table.test.ts
+```
+
+Both Bob Edge entrypoints pass Deno type checking, with the same temporary exact
+Supabase npm-type import map described in the checkpoint evidence below. Both
+catalog builders reproduce their SQL; changed documentation links and
+`git diff --check` pass. Archie guidance was applied manually; no independent
+agent review is claimed.
+
+Limits: synthetic local fixtures do not establish original-request coverage,
+semantic functional fidelity, physical/strength safety or real model behavior.
+Only check observations gain durable lifetime; list/cut-fit observations keep
+their existing turn/job scope. The broader [plan and next action](bob-delivery-flow.md#state)
+retain shown-version decisions, other property/geometry support, exact-model 3D
+and complete delivery. No full suite, CI, hosted migration, deployment, frontend
+change, browser acceptance, paid model/CAD call or catalog activation ran.
+[Release order and rollback](../supabase/README.md#form-checkpoint-release)
+remain separate, explicitly authorized work.
+
 <a id="form-checkpoints-2026-10-27"></a>
 ## FORM scoped checkpoints — source and local verification, 2026-10-27
 
@@ -39,6 +99,8 @@ shared nodes/features/constraints and touching envelopes are conservative
 dependencies. An envelope match is not functional evidence. Requirement/property
 checks, durable cross-turn check observations, shown-version 2D/3D decisions,
 exact-model 3D and complete delivery remain in the [plan](bob-delivery-flow.md#form-next).
+The later [first 2b verification](#form-evidence-2026-10-27) records the scoped
+property checks and durable observations without rewriting this 2a baseline.
 No independent agent review, full suite, CI, UI/browser acceptance, hosted
 migration, deployment, paid model/CAD call or catalog activation was performed.
 The [backend release guide](../supabase/README.md#form-checkpoint-release) owns

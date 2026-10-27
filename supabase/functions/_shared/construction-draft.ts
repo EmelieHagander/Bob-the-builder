@@ -1,5 +1,5 @@
 import { CONSTRUCTION_EDIT_TOOL, constructionEditIssues } from './construction-edits.ts'
-import { CONSTRUCTION_VIEW_TOOL, createConstructionViews, type ConstructionObservation } from './construction-views.ts'
+import { CONSTRUCTION_VIEW_TOOL, CONSTRUCTION_EVIDENCE_VIEW_TOOL, createConstructionViews, type ConstructionObservation } from './construction-views.ts'
 import { checkConstruction } from './construction-checks.ts'
 import { constructionLists } from './construction-lists.ts'
 import { constructionCutFit } from './construction-cut-fit.ts'
@@ -18,6 +18,7 @@ import type { ProjectWriter,WritePayload } from './project-write.ts'
 import { parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
 import { conceptConstructionIssues } from './solution-concept.ts'
 import { FORM_REFINEMENT_SCHEMA, constructionFormReadiness, constructionFormIssues, type FormRefinement } from './construction-form.ts'
+import { REQUIREMENT_PROBES_SCHEMA, EVIDENCE_COMPONENTS_SCHEMA, checkConstructionEvidence, constructionEvidenceReuse } from './construction-evidence.ts'
 
 /** Reconstruct a historical tool check; a new check position still reads live.
  * CAD render/review gates use their independent fresh readers. Old executions
@@ -88,6 +89,10 @@ export const CONSTRUCTION_PARAMETER_TOOL=tool('change_construction_parameters','
 export const CONSTRUCTION_CHECK_TOOL=tool('check_construction_draft','Check an exact current saved construction before drawing. Reads canonical geometry and catalog revisions server-side. Supports uncut wooden boxes, right-angle rotations and planar screwed/glued butt-joint concepts. Reports collisions, wrong local faces, missing joints, disconnected parts and material dimension mismatches with stable IDs. Compare returned bounds/count against the original request. concept_ready permits concept development only; fabrication_ready is always false until product, hardware, load and manufacturing checks exist. Unsupported operations and stale sources stop this check.',{
  artifact_id:uuid,revision:rev,
 })
+export const CONSTRUCTION_EVIDENCE_CHECK_TOOL=tool('check_construction_draft',CONSTRUCTION_CHECK_TOOL.function.description+
+ ' component_ids:[] checks the whole model; named concept IDs start a local scope that expands to dependencies, neighbors and joints. requirement_checks bind registered feature IDs to clear_space (a space/opening component), minimum_span (physical component, axis and positive minimum_node from the concept), or connected (mapped component_ids). Give each probe a stable id. The code reports actual properties and every unprobed/unsupported requirement, retaining unverified functional meaning. Both local and whole findings are saved for later turns; read them with view=results/result. A property pass does not prove the natural-language function or grant delivery.',{
+ artifact_id:uuid,revision:rev,component_ids:EVIDENCE_COMPONENTS_SCHEMA,requirement_checks:REQUIREMENT_PROBES_SCHEMA,
+})
 export const CONSTRUCTION_LIST_TOOL=tool('derive_construction_lists','Derive a concept BOM, one blank cut row per actual instance and joint references from the exact current checked construction, without redesign or rendering. Code counts instances and copies the server-computed local mm dimensions. assembly_dependencies=[] leaves order unresolved; otherwise name every saved joint once and its prerequisite joints. Code rejects cycles in this separate order graph; it does not verify physical tool access. No raw-sheet purchase count, hardware count or stock reservation is inferred. Use derive_cad_material_requirement to save blank requirements from the same construction revision, then read them back. This read tool does not save lists or approve fabrication.',{
  artifact_id:uuid,revision:rev,
  assembly_dependencies:{type:'array',maxItems:1024,items:obj({joint_id:id,depends_on:{type:'array',maxItems:64,uniqueItems:true,items:id}})},
@@ -143,6 +148,9 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  constructionTable?:boolean;
  constructionRepeats?:boolean;
  formRefinement?:boolean;
+ formEvidence?:boolean;
+ saveObservation?:(observation:ConstructionObservation)=>Promise<ConstructionObservation>;
+ readObservations?:(id:string,revision:number,resultId:string|null,after:string|null)=>Promise<Record<string,any>>;
  readConstructionReadiness?:(targetRevision:number,areaId:string|null,refinement:FormRefinement)=>Promise<unknown>;
  observationTime?:(input:unknown)=>Promise<string>;
  prepareEdit?:(payload:WritePayload)=>Promise<Record<string,any>>;
@@ -158,17 +166,30 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
  const views=createConstructionViews(opts.projectId,opts.now)
- const readTool=opts.constructionViews?CONSTRUCTION_VIEW_TOOL:CONSTRUCTION_READ_TOOL
+ const readTool=opts.constructionViews?(opts.formEvidence?CONSTRUCTION_EVIDENCE_VIEW_TOOL:CONSTRUCTION_VIEW_TOOL):CONSTRUCTION_READ_TOOL
+ const checkTool=opts.formEvidence?CONSTRUCTION_EVIDENCE_CHECK_TOOL:CONSTRUCTION_CHECK_TOOL
  const baseSaveTool=opts.constructionRepeats?CONSTRUCTION_REPEAT_SAVE_TOOL:CONSTRUCTION_SAVE_TOOL
  const saveTool=opts.formRefinement?withFormRefinement(baseSaveTool):baseSaveTool
- const present=(kind:string,id:string,revision:number,output:Record<string,any>,observedAt?:string)=>opts.constructionViews?views.observe(kind,id,revision,output,observedAt):output
+ const present=async(kind:string,id:string,revision:number,output:Record<string,any>,observedAt?:string)=>{
+  if(!opts.constructionViews)return output
+  const result=await views.observe(kind,id,revision,output,observedAt)
+  if(opts.formEvidence&&kind==='check'){
+   if(!opts.saveObservation)throw Error('construction_evidence_store_unavailable')
+   const stored=await opts.saveObservation(views.observation(result.result.result_id)!)
+   if(stored.id!==result.result.result_id)throw Error('construction_observation_mismatch')
+   await views.importObservation(stored)
+   if(!await opts.hasAccess())return {status:'denied'}
+   return {...result,result:{...result.result,observed_at:stored.observed_at},persistence:'saved'}
+  }
+  return result
+ }
  return {
  exportState():ConstructionToolsState{return opts.constructionViews?{version:2,used,observations:views.exportState()}:{version:1,used}},
  restoreState(state:ConstructionToolsState){if(state?.version!==(opts.constructionViews?2:1)||!Number.isSafeInteger(state.used)||state.used<0)throw new Error('construction_tools_checkpoint_invalid');if(state.version===2)views.restoreState(state.observations);used=state.used},
- tools:[readTool,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.writer?[saveTool,CONSTRUCTION_EDIT_TOOL,CONSTRUCTION_PARAMETER_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
+ tools:[readTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.writer?[saveTool,CONSTRUCTION_EDIT_TOOL,CONSTRUCTION_PARAMETER_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
  async execute(name:string,raw:unknown):Promise<Record<string,any>>{
   if(++used>12&&!opts.unlimitedWork)return {status:'budget_exhausted'}
-  const spec=[CONSTRUCTION_EDIT_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_PARAMETER_TOOL,readTool,saveTool,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CUT_SAVE_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL].find(s=>s.function.name===name)
+  const spec=[CONSTRUCTION_EDIT_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_PARAMETER_TOOL,readTool,saveTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CUT_SAVE_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL].find(s=>s.function.name===name)
   if(!spec)return {status:'invalid'}
   // An older pinned catalog may omit this new field. Preserve its uncertainty;
   // the database inherits an existing policy rather than erasing it.
@@ -296,12 +317,30 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
      if(draft?.projectId!==opts.projectId||!['ok','not_found'].includes(draft.status))return {status:'unavailable'}
      if(draft.status==='not_found')return {status:'not_found',projectId:opts.projectId}
      if(draft.artifact_id!==v.artifact_id||v.revision!==null&&draft.revision!==v.revision)return {status:'unavailable'}
+     if(opts.formEvidence&&(v.view==='results'||v.view==='result')){
+      if(!opts.readObservations)throw Error('construction_evidence_read_unavailable')
+      if(v.view==='results'&&(v.ids.length||v.result_id!==null||v.section!==null))return {status:'invalid',message:'List saved checks without IDs, result_id or section; follow next_read.'}
+      const stored=await opts.readObservations(v.artifact_id,draft.revision,v.view==='result'?v.result_id:null,v.view==='results'?v.after:null)
+      if(!await opts.hasAccess())return {status:'denied'}
+      if(stored?.projectId!==opts.projectId||stored.artifact_id!==v.artifact_id||stored.revision!==draft.revision||!['ok','not_found'].includes(stored.status))throw Error('construction_evidence_read_unavailable')
+      if(v.view==='results')return {...stored,view:'results',observation:'historical',
+       items:(stored.results??[]).map((r:Record<string,any>)=>({collection:'results',id:r.result_id,value:{...r,read:{...v,revision:draft.revision,view:'result',after:null,result_id:r.result_id}}})),
+       next_read:stored.next_after?{...v,revision:draft.revision,after:stored.next_after}:null,results:undefined,
+       message:'Saved check references for this revision. Open a result for findings and current reuse status; history grants no drawing or manufacturing permission.'}
+      if(stored.observation){
+       await views.importObservation(stored.observation)
+       const current={...draft,current_revision:stored.current_revision,source_state:stored.source_state,archived:stored.archived}
+       return await views.read(current,v,opts.viewPageTokens?.(),undefined,{persistence:'saved',reuse_status:constructionEvidenceReuse(stored.observation,current,(opts.now?.()??new Date()).toISOString().slice(0,10))})
+      }
+      // Earlier list/cut observations retain their turn-local lifetime.
+     }
+     const extraHeader=opts.formEvidence&&v.view==='overview'?{saved_results_read:{...v,revision:draft.revision,view:'results',after:null}}:{}
      if(opts.constructionTable&&v.view==='overview'){
       const fasteners=await tableFasteners(opts.readFasteners,draft.artifact_id,draft.revision)
       if(!await opts.hasAccess())return {status:'denied'}
-      return await views.read(draft,v,opts.viewPageTokens?.(),{table:true,fasteners})
+      return await views.read(draft,v,opts.viewPageTokens?.(),{table:true,fasteners},extraHeader)
      }
-     return await views.read(draft,v,opts.viewPageTokens?.())
+     return await views.read(draft,v,opts.viewPageTokens?.(),undefined,extraHeader)
     }
     const result=await opts.read(v.artifact_id,v.revision,v.after) as Record<string,any>
     if(!await opts.hasAccess())return {status:'denied'}
@@ -330,7 +369,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(current?.projectId!==opts.projectId||current.status!=='ok'||current.artifact_id!==v.artifact_id)throw new Error('construction_source_unavailable')
     if(current.revision!==v.revision||current.source_state!=='current'||current.archived)return {status:'conflict',message:'Construction or sources changed; read and revise before checking.'}
     const observedAt=opts.constructionViews?await (opts.observationTime?.({tool:name,artifact_id:v.artifact_id,revision:v.revision})??Promise.resolve((opts.now?.()??new Date()).toISOString())):undefined
-    const checked=checkConstruction(draft,catalog,(observedAt??(opts.now?.()??new Date()).toISOString()).slice(0,10),!!opts.constructionViews)
+    const today=(observedAt??(opts.now?.()??new Date()).toISOString()).slice(0,10)
+    const checked=opts.formEvidence&&name===CONSTRUCTION_CHECK_TOOL.function.name
+     ?checkConstructionEvidence(draft,catalog,today,v.component_ids,v.requirement_checks)
+     :checkConstruction(draft,catalog,today,!!opts.constructionViews)
     if(name===CONSTRUCTION_CHECK_TOOL.function.name)return await present('check',v.artifact_id,v.revision,{projectId:opts.projectId,...checked},observedAt)
     if(!checked.concept_ready)return await present(name===CONSTRUCTION_LIST_TOOL.function.name?'lists':'cut_fit',v.artifact_id,v.revision,{status:'needs_data',checked,message:'Correct the same construction before deriving lists; no quantities or fabrication approval returned.'},observedAt)
     if((name===CONSTRUCTION_CUT_FIT_TOOL.function.name||name===CONSTRUCTION_CUT_SAVE_TOOL.function.name)){
@@ -398,7 +440,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(opts.constructionRepeats&&message.startsWith('parameter_gaps:'))return {status:'invalid',reason:'array_binding_missing',message:'Bind all six arrays/<id>/start placement paths and arrays/<id>/spacing_mm. No construction saved.'}
    if(opts.constructionViews&&message==='construction_view_cursor_invalid')return {status:'invalid',message:'Use next_read from this exact revision, view and selection. A cursor cannot be reused for another selection.'}
    if(opts.constructionViews&&message==='construction_view_header_too_large')return {status:'invalid',message:'Use fewer named IDs or one result section to keep the page envelope small. No data was omitted as complete.'}
-   const known=/^(invalid_form_refinement|invalid_instance_policy|invalid_parameter_[a-z_]+|parameter_[a-z_]+|unknown_required_parameters|coordinate_[a-z_]+)$/
+   const known=/^(invalid_requirement_probe|invalid_form_refinement|invalid_instance_policy|invalid_parameter_[a-z_]+|parameter_[a-z_]+|unknown_required_parameters|coordinate_[a-z_]+)$/
    if(known.test(message))return {status:'invalid',message}
    // The owner-facing text stays generic; the cause must still reach the logs.
    console.error('[Construction tool unavailable]',JSON.stringify({tool:name,error:(error instanceof Error?error.name+': '+message:String(error)).slice(0,300)}))
@@ -411,7 +453,7 @@ export type ConstructionTools=ReturnType<typeof createConstructionTools>
 /** The drawing desk uses the same checker and exact caller reads, without
  * trusting a model's earlier assertion that a checkpoint passed. */
 export async function checkedConstructionForDrawing(opts:Parameters<typeof createConstructionTools>[0],id:string,revision:number) {
- const tools=createConstructionTools({...opts,constructionViews:false})
+ const tools=createConstructionTools({...opts,constructionViews:false,formEvidence:false})
  const checked=await tools.execute('check_construction_draft',{artifact_id:id,revision})
  if(checked.status!=='checked'||!checked.concept_ready)return {status:checked.status==='checked'?'needs_data':checked.status,checked}
  const draft=await opts.read(id,revision,null) as Record<string,any>

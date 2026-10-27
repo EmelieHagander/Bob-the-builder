@@ -557,13 +557,14 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 ## 12. State — nästa arbete
 
 **Aktivt nästa steg — självständig FORM med mer kodkontroll (2026-10-27):**
-bygg vidare från det versionsbundna delresultatet i paket 2a till paket 2b i
-[genomförandeordningen](#form-next): bind krav till kontrollerbara egenskaper och
-evidens, med lokala kontroller, helhetskontroll och hållbar återläsning mellan turer.
-Utöka först 2a där kontrollerna kräver mer precis hantering av okänd geometri eller
-gränssnitt. Behåll kontrollfallen i paket 0 och plan-/måttkopplingen i paket 1.
-Den [lokala checkpoint-verifieringen](foundation-verification.md#form-checkpoints-2026-10-27)
-äger första utfallet och dess begränsningar; jämförande modellbaslinje återstår.
+granska och merga paket 2b:s första [kontrollbevis](foundation-verification.md#form-evidence-2026-10-27),
+fortsätt sedan med paket 2c i [genomförandeordningen](#form-next): bind ett svar
+till exakt visat 2D-underlag och återanvänd samma beslutskontrakt för 3D.
+Behåll kvarvarande kravtolkning och stöd utanför de tre geometriska kontrollerna
+som explicita luckor; delkontrollerna öppnar ännu ingen slutleverans. Utöka 2a/2b
+när nya delar behöver andra geometrier eller gränssnitt. Behåll kontrollfallen i
+paket 0 och plan-/måttkopplingen i paket 1; jämförande modellbaslinje och separat
+godkänd driftsättning återstår.
 [Arbete i delar](#form-work-pieces), [kodkontroller](#form-code-checks),
 [AI-användning](#form-ai-use) och [samtalsavstämning](#form-dialogue) är
 specificerade; den sammanhängande leveranskedjan återstår.
@@ -670,7 +671,9 @@ Serverbundna work-record- och planlänkverktyg samt konflikttransporten är nu i
 <a id="form-next"></a>
 ### FORM 1.0 — genomförandeplan för nästa nivå, uppdaterat 2026-10-27
 
-**Plan, ännu inte implementerad.** Auditens precisering delar PR #349:s paket 2
+**Plan med avgränsade källkodssteg; hela flödet återstår.** Första 2a- och
+2b-stegen har [lokal verifiering](foundation-verification.md#form-evidence-2026-10-27),
+men innebär ingen driftsättning eller modellacceptans. Auditens precisering delar PR #349:s paket 2
 och 4 i mindre leveranser; målflödet och tidigare acceptanskrav består.
 Arbeta i avgränsade PR:ar; paket anger beroenden och granskningsbara resultat,
 inte fasta körsteg för Bob eller ett krav på exakt en PR per paket.

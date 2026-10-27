@@ -1068,7 +1068,7 @@ CAD view directions and independent review remain unchanged. Principle sections
 in the concept viewer do not add a CAD kernel section operation.
 
 <a id="form-scoped-checks"></a>
-### Scoped FORM progress and technical evidence — checkpoint source, 2026-10-27
+### Scoped FORM progress and technical evidence — source implementation, 2026-10-27
 
 [The implementation plan](bob-delivery-flow.md#form-next) extends this boundary
 for incremental design. A coherent construction may grow through existing part
@@ -1082,10 +1082,54 @@ owns mapping, conservative dependency closure and save readiness. Historical
 revisions reopen unchanged, including after ordinary edits and archive/restore.
 K2 reports `form_components_pending` where applicable and always reports
 `form_refinement_unverified` for this first explicit refinement contract. Existing
-joint/connectivity checks continue; local functional proof is not implemented.
+joint/connectivity checks continue; semantic functional proof is not implemented.
 CAD, manufacturing quantity and cut-plan SQL paths also reject an unverified
 refinement, including a caller-forged successful check. No database migration,
 catalog activation or runtime deployment is implied by this source implementation.
+
+The first 2b source increment extends the existing check tool with an explicit
+component scope and bounded requirement probes. Probes bind registered feature
+IDs to a modeled clear space, a minimum span from a canonical concept node, or
+connectivity between mapped components. They evaluate geometry and declared
+connections; interpreting a feature's natural-language meaning remains an
+explicit unverified gap. Every registered feature appears in coverage, including
+those with no probe. A property pass never upgrades a label into functional proof.
+Local geometry checks include canonical dependencies and contacting/jointed
+neighbors; the full-model check remains alongside them and keeps final gates.
+Unsupported geometry outside the local scope blocks a claimed complete neighbor
+check. Supported predicates are deliberately narrow:
+
+| Probe | What code establishes | What remains unverified |
+| --- | --- | --- |
+| `clear_space` | No physical part occupies the interior of the canonical space/opening box; touching its boundary is allowed | Motion, access, manufacturing tolerances and whether this region expresses the original function |
+| `minimum_span` | The mapped physical parts' world-axis envelope meets a positive mm node in the selected concept | Continuous support, usable volume and why this threshold satisfies the original requirement |
+| `connected` | All mapped physical parts have a path through supported, fitting declared joints | Fastener/adhesive products, strength, load and fabrication suitability |
+
+Unknown roles or dimensions remain unknown; unsupported shapes/methods remain
+unsupported. All registered features appear as `not_checked`, `unknown`,
+`unsupported`, `failed` or `properties_passed`, with `functional_fidelity` always
+`unverified`. These statuses are source behavior, not a deployed capability claim.
+
+Computed check observations use the existing result references and paged reader.
+A private immutable cache is subordinate to the exact Construction revision,
+independent of chat/job deletion. Only the trusted runtime under an active caller
+claim can record code-produced results; member reads recheck project access and
+current source state. Model tool arguments contain probe definitions, never a
+claimed verdict or cached output. Historical findings remain readable when stale;
+reuse for analysis requires the same revision, scope, purpose and checker/knowledge
+contract with current sources. Drawing/quantity gates still perform their own
+fresh checks. This cache neither stores private conversation text nor writes
+project geometry, requirements or decisions through service authority.
+The immutable result ID binds project, Artifact revision, check scope, probes and
+exact findings. `view=results` discovers saved checks in four-reference pages;
+`view=result` uses the existing token-bounded sections/fragment cursor. Matching
+checks deduplicate and retain the first observation time. Lists and cut-fit
+observations retain their existing turn/job lifetime in this slice. Cache writes
+over 4 MB fail rather than store truncated evidence. Reuse reports
+`current_for_analysis`, `source_changed`, `checker_changed` or `historical_only`;
+none is delivery permission. A new logical read checks live sources/access;
+same-job journal replay reconstructs the prior observation. Export checks remain
+fresh and independent. See [local evidence](foundation-verification.md#form-evidence-2026-10-27).
 
 Check evidence must identify exact input revisions, checker version, purpose,
 parts/requirements covered, relevant neighbor/interface coverage and remaining
@@ -1111,7 +1155,7 @@ A relevant input or checker change requires new evidence; historical results sta
 readable but cannot authorize a current output. Exact Construction revision pins
 still require affected outputs to be refreshed even when some geometry is preserved.
 Any reuse across turns needs durable evidence and a fresh authorization/source
-check: current turn-local result references alone do not provide that capability.
+check: legacy turn-local result references alone do not provide that capability.
 Keep the saved construction and check observations reopenable in a genuinely new
 turn, not only after restoring the same job's checkpoint. Reuse requires the
 same inputs, scope, purpose and checker contract, plus current source/access

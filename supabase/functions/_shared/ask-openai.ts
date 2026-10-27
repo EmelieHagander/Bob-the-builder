@@ -60,7 +60,8 @@ import { runClaimedProjectTurn } from './project-turn.ts'
 import { createAiCatalogSession, applyCatalogModelOptions, type AiCatalogSession } from './ai-catalog.ts'
 
 /** Project reads and writes use the caller JWT. Service access is restricted to shared AI
- * config/accounting, content-free execution diagnostics and Bob's private transcript/provider-state commands. */
+ * config/accounting, content-free execution diagnostics, Bob's private transcript/provider-state
+ * commands and claim-guarded derived caches (image provider links and code-produced FORM observations). */
 /** Journal replay re-runs every recorded step's access, tool-policy and image
  * freshness checks within milliseconds (hundreds of round trips per claim).
  * Reuse a successful live answer for a few seconds; a failure is never reused,
@@ -501,6 +502,22 @@ export async function answerWithOpenAi(opts: {
     ...(execution.projectFactsVersion === 1 ? { constructionTable: true } : {}),
     readDesignReadiness,
     formRefinement:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.form_refinement_version===1),
+    formEvidence:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.check_construction_draft'&&row.metadata?.construction_evidence_version===1),
+    saveObservation:async(observation:import('./construction-views.ts').ConstructionObservation)=>{
+      if(!claimedServer)throw new Error('construction_observation_unavailable')
+      const {p_generation:_generation,...stable}=binding
+      const result=await memo('construction:save_observation',{...stable,observation},async()=>{
+        const {data,error}=await internal.rpc('bob_record_construction_observation',{...binding,p_user:opts.userId,p_observation:observation}).abortSignal(AbortSignal.timeout(12000))
+        return {data,error}
+      })
+      if(result.error||!result.data)throw new Error('construction_observation_unavailable')
+      return result.data as import('./construction-views.ts').ConstructionObservation
+    },
+    readObservations:async(id:string,revision:number,resultId:string|null,after:string|null)=>{
+      const {data,error}=await readRpc('read_construction_results',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_result:resultId,p_after:after})
+      if(error)throw new Error('construction_observation_unavailable')
+      return data as Record<string,any>
+    },
     readConstructionReadiness:async(targetRevision:number,areaId:string|null,refinement:import('./construction-form.ts').FormRefinement)=>{
       const {data,error}=await rpc('read_construction_readiness',{p_project:opts.projectId,p_area:areaId,p_target_revision:targetRevision,p_form_refinement:refinement},AbortSignal.timeout(12000))
       if(error)throw new Error('construction_readiness_unavailable')
