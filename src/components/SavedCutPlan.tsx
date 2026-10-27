@@ -31,7 +31,8 @@ export function SavedCutPlan({ projectId, id, revision, source, onClose }: {
         <p>{kinds[sheet.kind]} · kerf {sheet.kerf} mm · edge trim {sheet.trim} mm · {sheet.grain === 'none' ? 'no grain restriction' : `grain along ${sheet.grain}`}.</p>
         {sheet.note && <p className="foundation-hint">{sheet.note}</p>}
         <svg role="img" aria-label={`Saved placement of ${sheet.parts.length} parts on sheet ${sheet.number}. Exact dimensions follow in the table.`}
-          viewBox={`0 0 ${sheet.length} ${sheet.width}`} style={{ width: '100%', maxHeight: 360, display: 'block', background: 'var(--surface-2)', border: '1px solid var(--line)' }}>
+          viewBox={`0 0 ${sheet.length} ${sheet.width}`} style={{ width: '100%', maxHeight: 360, display: 'block' }}>
+          <rect width={sheet.length} height={sheet.width} fill="var(--surface-2)" stroke="var(--ink)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
           {sheet.parts.map((part, i) => <rect key={i} x={part.x} y={part.y} width={part.length} height={part.width}
             fill="var(--accent)" stroke="var(--ink)" strokeWidth={1} vectorEffect="non-scaling-stroke"><title>{part.label}: {part.length} × {part.width} mm</title></rect>)}
         </svg>
