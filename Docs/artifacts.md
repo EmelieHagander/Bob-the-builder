@@ -83,7 +83,7 @@ Unknown controlling dimensions stop numeric compilation rather than becoming zer
 Generic Artifact revisions and older CAD saves cannot discard the construction checkpoint. A deferred revision guard enforces this across all existing command paths. Archive/restore copy the exact checkpoint without revalidating historical sources. The [K3 checked drawing path](cad-adapter.md#k3-checked-construction-drawings--2026-10-04) preserves and pins this construction through reviewed publication; K1 does not silently publish through the old CAD tool. K2–K5 and real model/participant acceptance remain in [State](bob-delivery-flow.md#state).
 
 <a id="construction-delivery-discovery"></a>
-### Exact construction delivery discovery — source implementation, 2026-10-27
+### Exact construction delivery discovery — technically installed, 2026-10-27
 
 `read_construction_delivery` finds saved drawings, blank/fastener requirements
 and cutting plans for an explicit Construction ID/revision. It reads the existing
@@ -105,8 +105,10 @@ not an approved fabrication or purchase plan; Rita and all existing technical
 and publication gates still apply.
 
 [Local verification](foundation-verification.md#form-delivery-readback-2026-10-27)
-uses a five-panel box, real isolated SQL and new reader/turn instances. It is not
-browser reload, paid model/CAD acceptance or a hosted release.
+uses a five-panel box, real isolated SQL and new reader/turn instances.
+[Hosted release evidence](foundation-verification.md#form-delivery-release-2026-10-27)
+confirms installed SQL/runtime/catalog and ordinary-caller recovery. Browser
+reload and real owner/model/CAD acceptance of the complete flow remain.
 
 ### FORM presentation and user decision — specified 2026-10-27
 
