@@ -24,10 +24,10 @@ export function parseFormRefinement(value: unknown): FormRefinement {
   return structuredClone(f)
 }
 
-export function constructionFormScope(intent: DesignIntent, raw: unknown) {
-  const refinement = parseFormRefinement(raw), model = intent.model
-  if (!model || refinement.mappings.some(m => !model.components.some(c => c.active && c.id === m.component_id))) throw Error('invalid_form_refinement')
-  const selected = new Set(refinement.mappings.map(m => m.component_id))
+export function constructionFormDependencies(intent: DesignIntent, componentIds: string[]) {
+  const model = intent.model
+  if (!model || componentIds.some(id => !model.components.some(c => c.active && c.id === id))) throw Error('invalid_form_refinement')
+  const selected = new Set(componentIds)
   const components = model.components.filter(c => c.active)
   // Conservative dependency closure: shared inputs, derived values and numeric
   // constraints all connect components. Even a shared zero is not ignored.
@@ -54,6 +54,13 @@ export function constructionFormScope(intent: DesignIntent, raw: unknown) {
     }
     changed = before !== affected.size
   }
+  return components.filter(c => affected.has(c.id)).map(c => c.id)
+}
+
+export function constructionFormScope(intent: DesignIntent, raw: unknown) {
+  const refinement = parseFormRefinement(raw), selected = new Set(refinement.mappings.map(m => m.component_id))
+  const affected = new Set(constructionFormDependencies(intent, [...selected]))
+  const components = intent.model!.components.filter(c => c.active)
   const pendingChoices = intent.choices.filter(c => {
     if (c.status === 'resolved') return false
     const linked = components.filter(p => p.choices.includes(c.id))

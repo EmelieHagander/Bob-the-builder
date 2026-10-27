@@ -1,6 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {createConstructionViews,CONSTRUCTION_VIEW_TOKENS,CONSTRUCTION_VIEW_MAX_TOKENS,CONSTRUCTION_VIEW_STEP_TOKENS,constructionViewBudget,CONSTRUCTION_VIEW_TOOL,type ConstructionViewQuery} from '../supabase/functions/_shared/construction-views.ts'
+import {createConstructionViews,CONSTRUCTION_VIEW_TOKENS,CONSTRUCTION_VIEW_MAX_TOKENS,CONSTRUCTION_VIEW_STEP_TOKENS,constructionViewBudget,CONSTRUCTION_EVIDENCE_VIEW_TOOL,type ConstructionViewQuery} from '../supabase/functions/_shared/construction-views.ts'
 import {createConstructionTools,checkedConstructionForDrawing} from '../supabase/functions/_shared/construction-draft.ts'
 import {checkConstruction} from '../supabase/functions/_shared/construction-checks.ts'
 import {countSerializedTokens} from '../supabase/functions/_shared/bob-token-budget.ts'
@@ -191,7 +191,7 @@ test('published view contract matches migrated catalog and old pinned manifests 
    assert.deepEqual(catalog.definition(key).definition,catalogFixture().definition(key).definition,key)
    assert.deepEqual(catalog.definition(key).metadata,catalogFixture().definition(key).metadata,key)
   }
-  assert.deepEqual(catalog.tool('read_construction_draft').function.parameters,CONSTRUCTION_VIEW_TOOL.function.parameters)
+  assert.deepEqual(catalog.tool('read_construction_draft').function.parameters,CONSTRUCTION_EVIDENCE_VIEW_TOOL.function.parameters)
   assert(!('view'in preConstructionViewsCatalogFixture().tool('read_construction_draft').function.parameters.properties))
   assert.equal(catalog.definition('tools.read_construction_draft').metadata.construction_view_version,1)
  }finally{await pg.close()}

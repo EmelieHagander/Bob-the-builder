@@ -12,11 +12,26 @@ export const CONSTRUCTION_CHECK_VERSION = 'orthogonal-butt-v1'
 export const CONSTRUCTION_ROLE_CHECK_VERSION = 'orthogonal-butt-role-v1'
 type RecordData = Record<string, any>
 type Issue = { code: string; ids: string[]; message: string }
-type Box = { id: string; min: number[]; max: number[]; faces: Map<string, { axis: number; sign: number; plane: number }> }
+export type ConstructionBox = { id: string; min: number[]; max: number[]; faces: Map<string, { axis: number; sign: number; plane: number }> }
+type Box = ConstructionBox
 const axes = ['x', 'y', 'z'] as const
 const tolerance = 0.000001 // canonical parameter precision, mm; not a manufacturing tolerance
 const same = (a: number, b: number) => Math.abs(a - b) <= tolerance
 const key = (a: string, b: string) => JSON.stringify([a, b].sort())
+/** The same exact box/frame transform for whole checks and scoped evidence. */
+export function constructionBox(instance: RecordData, definition: RecordData): ConstructionBox | null {
+ const d=definition,p=instance.placement
+ if(d?.primitive!=='box'||d.cuts?.length||![p.rx,p.ry,p.rz].every(v=>v%90===0))return null
+ const basis=intrinsicAxes([p.rx,p.ry,p.rz]).map(v=>v.map(Math.round))
+ const origin=[p.x,p.y,p.z],dims=[d.x_mm,d.y_mm,d.z_mm],min=[...origin],max=[...origin],faces:Box['faces']=new Map()
+ for(let local=0;local<3;local++){
+  const world=basis[local].findIndex(v=>Math.abs(v)===1),sign=basis[local][world]
+  min[world]+=Math.min(0,sign*dims[local]);max[world]+=Math.max(0,sign*dims[local])
+  faces.set(`${axes[local]}_min`,{axis:world,sign:-sign,plane:origin[world]})
+  faces.set(`${axes[local]}_max`,{axis:world,sign,plane:origin[world]+sign*dims[local]})
+ }
+ return {id:instance.id,min,max,faces}
+}
 const dimension = (r: RecordData, name: string) => {
  const p = r.properties?.[name]
  return p && p.unit === 'mm' && p.parameter === null && p.truth === 'provided_spec' && typeof p.value === 'string' && Number(p.value) > 0 && Number.isFinite(Number(p.value)) ? Number(p.value) : null
@@ -92,17 +107,7 @@ export function checkConstruction(draft: RecordData, catalog: Map<string, Record
   if (![p.rx, p.ry, p.rz].every(v => v % 90 === 0)) {
    add('unsupported_rotation', [instance.id], 'Only multiples of 90 degrees are checked; no approximate collision approval.'); continue
   }
-  // Reuse exactly the CAD frame convention; columns are the local basis vectors.
-  const basis = intrinsicAxes([p.rx, p.ry, p.rz]).map(v => v.map(Math.round))
-  const origin = [p.x, p.y, p.z], dims = [d.x_mm, d.y_mm, d.z_mm]
-  const min = [...origin], max = [...origin], faces: Box['faces'] = new Map()
-  for (let local = 0; local < 3; local++) {
-   const world = basis[local].findIndex(v => Math.abs(v) === 1), sign = basis[local][world]
-   min[world] += Math.min(0, sign * dims[local]); max[world] += Math.max(0, sign * dims[local])
-   faces.set(`${axes[local]}_min`, { axis: world, sign: -sign, plane: origin[world] })
-   faces.set(`${axes[local]}_max`, { axis: world, sign, plane: origin[world] + sign * dims[local] })
-  }
-  const box={ id: instance.id, min, max, faces }
+  const box=constructionBox(instance,d)!
   visibleBoxes.push(box)
   if(!referenceIds.has(instance.id))boxes.push(box)
  }

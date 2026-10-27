@@ -63,6 +63,7 @@ The semantic owner is [domain-dictionary.md](../Docs/domain-dictionary.md), incl
 | `_shared/ai-catalog.ts` | Request-pinned definition manifest, role/profile/tier resolution, catalog prompt/tool/output contracts and compatibility checks. |
 | `_shared/construction-draft.ts` | K1 shared construction checkpoint tools, using the CAD parameter evaluator and caller-authorised v14 writes; [Artifact contract](../Docs/artifacts.md#k1-construction-checkpoints). |
 | `_shared/construction-form.ts` | Versioned concept-to-part mapping, conservative scope dependencies and checkpoint-only readiness; [Solution contract](../Docs/solutions.md#form-refinement). |
+| `_shared/construction-evidence.ts` | Source-only scoped geometry/requirement probes and saved-observation reuse assessment; [Artifact contract](../Docs/artifacts.md#form-scoped-checks). |
 | `_shared/project-answer.ts` | Briefing and bounded tool loop, server-only continuation, truth rules. |
 | `_shared/current-view.ts`, `current-view-guard.ts` | Fixed caller-JWT screen hydration and freshness/verified-own-write checks; [context owner](../Docs/ask-bob-context.md#implemented-scope-and-remaining-target). P3 deployed; named-member acceptance remains open. |
 | `_shared/project-lookup.ts` | Fixed tool arguments, budgets, result states and provenance. |
@@ -73,7 +74,10 @@ The semantic owner is [domain-dictionary.md](../Docs/domain-dictionary.md), incl
 No browser or model has the service-role key. The shared service uses it for
 shared AI configuration, definition manifests, usage/call accounting and
 service-only background-job commands, plus the guarded private Bob
-conversation/context commands. Domain reads and writes still use the caller JWT.
+conversation/context commands and claim-guarded derived caches (image provider
+links and, in the FORM source increment, code-produced check observations).
+Domain reads and writes still use the caller JWT; the derived cache grants no
+geometry, requirement, decision or delivery authority.
 `OPENAI_API_KEY` is read only by the shared service and its background worker.
 
 Catalog-backed Bob calls use the resolved `aiDefinition`; settings prompt text
@@ -704,8 +708,10 @@ rolling either runtime back.
 
 The [Solution refinement contract](../Docs/solutions.md#form-refinement) and
 [Artifact evidence contract](../Docs/artifacts.md#form-scoped-checks) own this
-first slice. [Focused local evidence](../Docs/foundation-verification.md#form-checkpoints-2026-10-27)
-does not establish hosted deployment or model acceptance.
+checkpoint slice and the next scoped-evidence slice. Local evidence for
+[checkpoints](../Docs/foundation-verification.md#form-checkpoints-2026-10-27) and
+[observations](../Docs/foundation-verification.md#form-evidence-2026-10-27) does not
+establish hosted deployment or model acceptance.
 
 On a separately authorized release, apply core
 `20261027090942_construction_form_refinement.sql`, deploy `ask-bob` and
@@ -724,6 +730,24 @@ sources, so a forged check packet cannot activate delivery. No existing records
 are backfilled or rewritten. To suspend authoring, reactivate the prior save-tool
 catalog version; retain compatible runtime/core readers and guards for already
 saved refinements. Do not drop their history or roll back those guards.
+
+The evidence increment also requires core
+`20261027101807_construction_observations.sql`, compatible **both** `ask-bob` and
+`bob-worker`, then `20261027101808_ai_construction_evidence_catalog.sql`.
+When releasing both source slices together, install both cores before the runtime
+and activate both catalogs afterward. The evidence publication patches only the
+existing check/read tool schemas/descriptions; `construction_evidence_version=1`
+opts pinned jobs into probes and persistence. Previous manifests keep their
+schemas and journal paths. No model/settings or frontend release is required.
+
+The private cache writer is service-only and checks current project membership,
+the active caller claim, exact canonical source binding and current source state.
+Members cannot supply verdicts or write/read its table directly. The caller RPC
+rechecks membership and source state before handing exact saved output to the
+bounded runtime reader. Chat reset deletes neither construction nor evidence.
+To suspend new evidence checks, reactivate the previous check/read definitions
+together; keep compatible readers, history and fresh delivery guards. No cached
+check replaces Rita or permits an unverified refinement through CAD/quantity SQL.
 
 ## FORM concept release — technically installed, 2026-10-26
 

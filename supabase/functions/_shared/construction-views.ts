@@ -30,6 +30,9 @@ export const CONSTRUCTION_VIEW_TOOL = { type: 'function' as const, function: {
   result_id:nullable({type:'string',pattern:'^cs_[a-f0-9]{64}$'}),section:nullable({type:'string',minLength:1,maxLength:120}),
  },required:['artifact_id','revision','after','view','ids','result_id','section']},
 } }
+export const CONSTRUCTION_EVIDENCE_VIEW_TOOL={...CONSTRUCTION_VIEW_TOOL,function:{...CONSTRUCTION_VIEW_TOOL.function,
+ description:CONSTRUCTION_VIEW_TOOL.function.description+' view=results lists saved check references for this exact revision across turns; follow next_read. view=result reopens those findings. Source/checker changes keep history readable and prevent reuse as current evidence.',
+ parameters:{...CONSTRUCTION_VIEW_TOOL.function.parameters,properties:{...CONSTRUCTION_VIEW_TOOL.function.parameters.properties,view:{type:'string',enum:[...views,'results']}}}}}
 export type ConstructionObservation = { id:string; projectId:string; artifact_id:string; revision:number; kind:string; observed_at:string; output:Row }
 export type ConstructionViewQuery = {artifact_id:string|null;revision:number|null;after:string|null;view:string;ids:string[];result_id:string|null;section:string|null}
 const arr = (value:any):any[] => Array.isArray(value)?value:[]
@@ -217,6 +220,11 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
   if(!observation){observation={id,projectId,artifact_id,revision,kind,observed_at:observedAt,output:canonical};observations.push(observation);seen.set(id,observation)}
   return {...summary(observation),observation:'fresh_check',checked_at:observedAt}
  }
+ async function importObservation(value:ConstructionObservation){
+  const id='cs_'+await exactHash({projectId:value.projectId,artifact_id:value.artifact_id,revision:value.revision,kind:value.kind,output:stableJsonValue(value.output)})
+  if(id!==value.id)throw Error('construction_observation_mismatch')
+  restore([...observations.filter(o=>o.id!==value.id),value])
+ }
  function summary(o:ConstructionObservation){
   const output=o.output,checked=output.checked??output
   return {projectId,status:output.status,artifact_id:o.artifact_id,revision:o.revision,result:reference(o),
@@ -229,7 +237,7 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
  function sections(rows:Item[]){const counts=new Map<string,number>();for(const row of rows)counts.set(row.collection,(counts.get(row.collection)??0)+1);return [...counts].map(([name,count])=>({name,count}))}
  /** table (pinned per job) adds the compact construction table to the overview;
   * without it the overview stays exactly as before. */
- async function read(draft:Row,query:ConstructionViewQuery,budget=CONSTRUCTION_VIEW_TOKENS,table?:ConstructionTableOption):Promise<Row>{
+ async function read(draft:Row,query:ConstructionViewQuery,budget=CONSTRUCTION_VIEW_TOKENS,table?:ConstructionTableOption,extraHeader:Row={}):Promise<Row>{
   if(query.view==='result'){
    const o=query.result_id&&seen.get(query.result_id)
    if(!o||o.artifact_id!==query.artifact_id||o.revision!==query.revision)return {status:'not_found',projectId,message:'No observed result for this exact construction revision in this turn.'}
@@ -238,11 +246,11 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
    if(query.section&&!selected.length)return {status:'not_found',projectId,sections:sections(rows)}
    return page(query,{projectId,status:'ok',artifact_id:o.artifact_id,revision:o.revision,result_id:o.id,observed_at:o.observed_at,
     observation:'historical',current_revision:draft.current_revision??draft.revision,source_state:draft.source_state,archived:draft.archived,
-    sections:sections(rows),message:'Exact earlier observation. Current source status is shown separately; this does not rerun the check or renew approval.'},selected,budget)
+    sections:sections(rows),message:'Exact earlier observation. Current source status is shown separately; this does not rerun the check or renew approval.',...extraHeader},selected,budget)
   }
   if(query.result_id!==null||query.section!==null)return {status:'invalid',message:'result_id and section are only used with view=result.'}
   if(query.view==='notes'&&query.ids.length)return {status:'invalid',message:'Read notes without an ID filter; all original questions remain available.'}
-  const header={projectId,status:'ok',artifact_id:draft.artifact_id,revision:draft.revision,current_revision:draft.current_revision,source_state:draft.source_state,archived:draft.archived,roles_recorded:draft.instance_policy!=null}
+  const header={projectId,status:'ok',artifact_id:draft.artifact_id,revision:draft.revision,current_revision:draft.current_revision,source_state:draft.source_state,archived:draft.archived,roles_recorded:draft.instance_policy!=null,...extraHeader}
   if(query.view==='overview'){
    if(table?.table===true&&query.ids.length)return {status:'invalid',message:'Overview has no ID filter. Open exact records by ID in a detail view.'}
    if(table?.table!==true&&(query.after||query.ids.length))return {status:'invalid',message:'Overview has no item cursor or ID filter. Choose a detail view.'}
@@ -265,5 +273,5 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
    dependency_scope:query.view==='dependencies'?'parameter ancestors/dependents, bound parts and directly attached joints; newly reached neighboring parts may have further dependencies':'selected view; use dependencies for formulas, sources and affected parts',
    open_question_count:arr(draft.open_questions).length,notes_view:'notes'},selected.items,budget)
  }
- return {read,observe,exportState:()=>structuredClone(observations),restoreState:restore}
+ return {read,observe,importObservation,observation:(id:string)=>structuredClone(seen.get(id)),exportState:()=>structuredClone(observations),restoreState:restore}
 }
