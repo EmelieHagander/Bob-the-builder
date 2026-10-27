@@ -82,6 +82,19 @@ Unknown controlling dimensions stop numeric compilation rather than becoming zer
 
 Generic Artifact revisions and older CAD saves cannot discard the construction checkpoint. A deferred revision guard enforces this across all existing command paths. Archive/restore copy the exact checkpoint without revalidating historical sources. The [K3 checked drawing path](cad-adapter.md#k3-checked-construction-drawings--2026-10-04) preserves and pins this construction through reviewed publication; K1 does not silently publish through the old CAD tool. K2–K5 and real model/participant acceptance remain in [State](bob-delivery-flow.md#state).
 
+### FORM presentation and user decision — specified 2026-10-27
+
+The [FORM flow](bob-delivery-flow.md#form-flow) places a detailed visual preview
+and user decision before final export from the same Construction revision. Reuse
+the existing Artifact identity, immutable construction revisions, source lineage
+and receipts for presentation links and acceptance evidence. Its exact schema
+and commands remain to be implemented; no new runtime acceptance state exists
+because of this section. Preserve actor/authority, decision purpose, exact
+Solution/target/Construction sources and the displayed evidence. A changed
+construction cannot inherit acceptance silently, and visual acceptance never
+promotes a concept to fabrication-ready. [State](bob-delivery-flow.md#form-next)
+owns the implementation and replacement of the current full CAD-review gate.
+
 ### Joint fasteners — owner decisions 2026-10-26
 
 **Status: merged in PR #337, applied and deployed 2026-10-26; not yet

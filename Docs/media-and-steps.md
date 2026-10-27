@@ -136,6 +136,32 @@ reload, unsupported formats and project switching at 320/390/1280 px. These do n
 establish real-model visual quality; rollout and real photo acceptance belong to
 the feature PR.
 
+<a id="form-visual-preview"></a>
+## FORM visual mockups — specified decision 2026-10-27
+
+The [FORM flow](bob-delivery-flow.md#form-flow) owns when the user reviews 2D and
+detailed 3D. An early generated illustration helps choose appearance and setting;
+its handoff should retain the exact Solution revision, relevant model views and
+original image references. More prompt detail or a supplied model image does not
+make generated pixels authoritative geometry. New design choices return to
+Solution before detailed construction.
+
+The later detailed visual preview must render the actual Construction geometry
+used by final drawings, with material/color, lighting and useful camera/detail
+views. Presentation cannot reshape, omit or invent parts. A textual joint or
+hardware schedule does not automatically provide modeled screw geometry; show
+unmodeled/unresolved details as such. Appearance choices and uncertain textures
+must remain distinguishable from pinned material specifications. A generatively
+restyled rendering remains an illustration, not the exact model preview used
+for geometric acceptance.
+
+Reuse Media for illustrative assets and Artifact/Construction for the detailed
+model, derived presentation and source revisions. The presentation metadata,
+renderer and persistent link to the user's decision still need implementation;
+do not create a second editable geometry store. Existing source authorization,
+private storage, receipts and Step links apply. Today's image generation and
+CAD SVG/PNG previews do not establish this full presentation/acceptance flow.
+
 ## Manual task detail and steps
 
 `bob.tasks.instructions` stores the task's manually supplied scope/instructions.

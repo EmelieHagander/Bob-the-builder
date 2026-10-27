@@ -174,7 +174,7 @@ records its exact source and hosted readback. Real owner/model acceptance remain
 in [State](bob-delivery-flow.md#state).
 
 <a id="form-refinement"></a>
-### Concept-to-construction refinement — specified next boundary, 2026-10-26
+### Concept-to-construction refinement — specified next boundary, updated 2026-10-27
 
 The installed same-ID, unrotated-box handoff above is still the runtime limit.
 The next extension must let one conceptual component map to multiple detailed
@@ -191,6 +191,16 @@ model store. Missing mappings, unsupported geometry or an unresolved controlling
 requirement remain explicit. A detail that changes intended form/function returns
 to a revised Solution and target decision before affected outputs are regenerated.
 
-This does not implement a conversion or grant construction approval. The
-[whole FORM flow](bob-delivery-flow.md#form-flow) owns the two review stages and
+The [2026-10-27 FORM decision](bob-delivery-flow.md#form-flow) makes the user the
+reviewer of intended form/function in 2D and of the detailed model's appearance
+and function in 3D. Reuse existing Solution decisions and explicit delegation;
+selection/alignment alone does not prove that a particular preview was shown or
+accepted. The detailed 3D decision must also identify its exact Construction
+revision and presented evidence. Changed controlling inputs require reassessment
+within that decision's scope. This acceptance does not assert technical safety.
+Its precise persistence contract remains to be implemented with Artifact's
+existing revision/receipt owners.
+
+This does not implement conversion, preview acceptance or a new runtime gate. The
+[whole FORM flow](bob-delivery-flow.md#form-flow) owns review responsibility and
 [State](bob-delivery-flow.md#form-next) owns implementation order and acceptance.

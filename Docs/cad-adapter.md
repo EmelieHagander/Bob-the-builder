@@ -6,6 +6,29 @@ Every project CAD drawing requires one saved, checked construction revision with
 
 Bob never sends Python, SQL, URLs or arbitrary CAD code to the geometry engine. Bob produces a bounded, versioned construction request. The adapter validates it and a separate stateless worker translates it to build123d/Open Cascade.
 
+<a id="form-preview-and-export"></a>
+## FORM preview and final export — specified decision 2026-10-27
+
+The [FORM flow](bob-delivery-flow.md#form-flow) now places user review of the
+detailed visual 3D model before final drawing/list delivery. That preview must
+derive from the exact Construction geometry used by the exports, with relevant
+detail views and a revision-bound decision. The engine may already render during
+preview preparation; final export introduces no new construction choices.
+
+Today's worker receives resolved definitions, dimensions, placements, rotations,
+optional cuts/checks and requested views, plus the exact drawing source. Materials,
+joint choices and parameter dependencies remain in Construction; the worker does
+not solve placements from a list of joints. Existing STEP and SVG/PNG output is
+not yet the specified material/light presentation with user acceptance.
+
+The target removes routine full AI re-review of an unchanged accepted model's
+final export. Deterministic checks, exact source/geometry identity, authorization
+and receipt-safe save/link/readback remain; concrete unresolved questions can
+receive targeted AI review with original evidence. The current Rita candidate
+gate described below remains implemented until its replacement is verified and
+released. This documentation does not bypass it or publish a new catalog/runtime.
+[State](bob-delivery-flow.md#form-next) owns that implementation and acceptance.
+
 ## Save payload without preview pixels — 2026-10-26
 
 The save payload never carries preview pixels. `candidateForSave` returns the
