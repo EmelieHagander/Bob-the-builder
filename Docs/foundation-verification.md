@@ -1,5 +1,84 @@
 # Foundation verification and rollout
 
+<a id="form-feedback-2026-10-27"></a>
+## FORM shown-model feedback — source and local verification, 2026-10-27
+
+Package 2c is based on package 2b [PR #352](https://github.com/EmelieHagander/Bob-the-builder/pull/352)
+head `a4a797bca01ffe5d68aa6a93a849cca5d37dbd6e`. At publication preparation #352
+was still open; this increment is stacked on its branch. The
+[Solution owner](solutions.md#form-shown-feedback) defines source-bound ordinary
+feedback, shared typed history, explicit mandates and unchanged technical gates.
+[Release order](../supabase/README.md#form-feedback-release) remains source-only.
+
+Prior learnings were used as concrete verification boundaries:
+
+- [#307](https://github.com/EmelieHagander/Bob-the-builder/issues/307): read bounded
+  presentation/source metadata rather than construction geometry, page history and
+  return `PT409` for changed inputs without a serialization-retry loop. No hosted
+  latency improvement is claimed.
+- [#308](https://github.com/EmelieHagander/Bob-the-builder/issues/308): expose the
+  real tools in the existing shelf/method, bind writes at the actual caller/claim
+  boundary, and distinguish saved feedback/receipts from completed CAD delivery.
+  No new classifier, always-loaded behavioral rules or compulsory confirmation.
+- [#130](https://github.com/EmelieHagander/Bob-the-builder/issues/130): retain
+  response referents across draft changes, retry, worker yield/reclaim and private
+  reset; test stale sources, current facts and project isolation. Controlled
+  orchestration is not real-model comprehension or whole-task acceptance.
+
+`model-feedback.test.ts` applies the entire schema and drives the actual tool,
+writer, SQL/RLS, catalog and data seams. It covers view-only nonacceptance,
+server-owned presenter, scope and revisions, no-preview/foreign/forged/revoked
+writes, whole-response binding and correction/uncertainty consistency, limited
+acceptance, distinct delegation and same-turn Bob decisions, immutable retries,
+changed measurements/targets/heads, historical corrections and unresolved design
+choices. Pages recover older feedback without private text; reset removes the
+private transcript while shared decisions remain. Background worker generation
+changes preserve the original presentation and exactly one response. Area deletion
+retains historical scope identity; project deletion removes subordinate metadata.
+The TypeScript draft/data cases reject late evidence and project-switched callbacks.
+
+**149 focused cases covered across the run and targeted final rerun.** The focused
+run passed 147/149 (one failed assertion plus its parent): the new catalog workflow
+patch produced a null member through SQL JSON-operator precedence. Explicit
+parentheses fixed the publication; the regression now compares the complete
+workflow definition as well as tool schemas/cards, unchanged models, unaffected
+catalog definitions and older pinned manifests. All **47 affected final cases
+passed, 0 failed or skipped**. An earlier deletion case also caught and removed an
+Area FK that blocked normal project deletion; its final positive/negative cases pass.
+
+```bash
+node --no-wasm-code-gc --import tsx --test --test-concurrency=3 tests/model-feedback.test.ts tests/solution-concept-sql.test.ts tests/solution-design-readiness-sql.test.ts tests/project-solution-actions.test.ts tests/construction-form.test.ts tests/construction-evidence.test.ts tests/bob-screen-sql.test.ts tests/current-view.test.ts tests/current-view-runtime.test.ts tests/current-view-guard.test.ts tests/bob-surface.test.ts tests/tool-session.test.ts tests/solutions.test.ts tests/tool-catalog-parity.test.ts tests/bob-context-toolbox.test.ts tests/bob-bound-state-checkpoints.test.ts
+node --no-wasm-code-gc --import tsx --test --test-concurrency=2 tests/model-feedback.test.ts tests/solution-concept-sql.test.ts tests/solution-design-readiness-sql.test.ts tests/construction-form.test.ts tests/tool-catalog-parity.test.ts
+```
+
+Frontend type checking and the production fixture build pass. Both Bob Edge
+entrypoints pass Deno checks using the temporary exact Supabase npm-type import map
+recorded in the earlier FORM evidence. The new feedback and historical readiness
+catalog builders reproduce their publications; changed-document links and
+`git diff --check` are checked before publication. Vera/Archie guidance was applied
+manually, including existing UI/data seams, honest recovery and canonical owner
+placement. No separate agent review is claimed.
+
+**Browser proof remains blocked, not passed.** The built-UI HTTP fixture covers
+320/390/1280 px, rendered view registration, no automatic send, history/reload,
+reply freezing across a new view/head, late callbacks and failed-link retry. The
+local invocation stopped before opening a page because the configured Chromium
+executable does not exist, and no other installed Chrome/Chromium was found:
+
+```bash
+VITE_SUPABASE_URL=https://pwa-proof.invalid VITE_SUPABASE_ANON_KEY=installation-test-only npm run build
+FOUNDATION_FOCUS=model-feedback CHROME_PATH=/path/to/installed/chrome node --import tsx scripts/check-foundations-browser.mjs
+```
+
+The [verification skill](../.claude/skills/verify/SKILL.md) prohibits
+`playwright install`; no CI/workflow was started to substitute for the missing
+local browser. No screenshot, pixel/accessibility/browser pass, hosted migration,
+catalog activation, frontend/runtime deployment or paid model/CAD run is claimed.
+Natural-language classification (including real “yes, but” behavior), hosted named
+member acceptance, detailed 3D and final delivery remain open. The common
+presentation shape reserves 3D fields; 4a must implement its actual producer and
+fresh source/evidence checks before those fields can authorize work.
+
 <a id="form-evidence-2026-10-27"></a>
 ## FORM property checks and durable observations — local verification, 2026-10-27
 

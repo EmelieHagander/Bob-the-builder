@@ -13,14 +13,15 @@ export interface BobScreenPointer {
   solutionRevision?: number
   artifactId?: string
   artifactRevision?: number
+  presentationId?: string
   eventId?: string
 }
 
 const fields: Record<BobScreenSurface, readonly string[]> = {
   project: ['planStepId'], areas: [], area: ['areaId', 'planStepId'],
   task: ['areaId', 'taskId', 'planStepId', 'instructionId'], facts: ['areaId'],
-  solutions: ['areaId', 'solutionId', 'solutionRevision'],
-  drawings: ['areaId', 'artifactId', 'artifactRevision'],
+  solutions: ['areaId', 'solutionId', 'solutionRevision', 'presentationId'],
+  drawings: ['areaId', 'artifactId', 'artifactRevision', 'presentationId'],
   people: [], events: [], event: ['eventId'], shopping: [], today: [],
   announcements: [], building: [], 'material-plan': ['areaId'],
 }
@@ -44,6 +45,7 @@ export function parseBobScreen(value: unknown): BobScreenPointer | null {
       if (!Number.isSafeInteger(v[key]) || Number(v[key]) < 1 || Number(v[key]) > 2147483647) return invalid()
     } else if (!isBobOpaqueId(v[key])) return invalid()
   }
+  if ('presentationId' in v && (typeof v.presentationId !== 'string' || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(v.presentationId) || !('solutionId' in v || 'artifactId' in v))) return invalid()
   if (surface === 'area' && !v.areaId || surface === 'task' && !v.taskId || surface === 'event' && !v.eventId) return invalid()
   if (('artifactId' in v) !== ('artifactRevision' in v) || ('solutionId' in v) !== ('solutionRevision' in v)) return invalid()
   return { ...v } as unknown as BobScreenPointer

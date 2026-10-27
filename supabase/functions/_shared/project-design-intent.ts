@@ -22,6 +22,7 @@ export type DesignReadiness={
  design_intent:DesignIntent|null
  issues:{code:string;choice_id:string|null;message:string}[]
  deferred_choice_ids:string[]
+ model_feedback?:{id:string;presentation_id:string;outcome:'accepted';authority:'user'|'bob';scope:'whole_model';source_current:true}|null
  pin:DesignIntentPin|null
 }
 const object=(properties:Record<string,unknown>)=>({type:'object',additionalProperties:false,properties,required:Object.keys(properties)})
@@ -108,8 +109,10 @@ export function parseDesignReadiness(v:unknown):DesignReadiness|null{
  const intent=x.design_intent===null?null:parseDesignIntent(x.design_intent)
  const pin=x.pin===null?null:parseDesignIntentPin(x.pin)
  if(x.design_intent!==null&&!intent||x.pin!==null&&!pin)return null
+ const feedback=x.model_feedback
+ if(feedback!=null&&(!exact(feedback,['id','presentation_id','outcome','authority','scope','source_current'])||!uuid(feedback.id)||!uuid(feedback.presentation_id)||feedback.outcome!=='accepted'||!oneOf(feedback.authority,['user','bob'])||feedback.scope!=='whole_model'||feedback.source_current!==true))return null
  if(x.status==='ready'){
-  if(!intent||!pin||x.issues.length||intent.alignment.status!=='aligned'||intent.purpose!==x.purpose
+  if(!intent||!pin||x.issues.length||(intent.alignment.status!=='aligned'&&!feedback)||intent.purpose!==x.purpose
    ||pin.project_id!==x.project_id||(pin.area_id!==null&&pin.area_id!==x.area_id)||pin.target_revision!==x.target_revision||pin.solution_id!==x.solution_id||pin.solution_revision!==x.solution_revision||pin.purpose!==x.purpose
    ||intent.references.some(r=>r.role!=='context')&&!intent.features.length
    ||intent.choices.some(c=>c.status==='open'||c.status==='deferred'&&(x.purpose==='construction'||c.deferral?.scope!==x.purpose)))return null

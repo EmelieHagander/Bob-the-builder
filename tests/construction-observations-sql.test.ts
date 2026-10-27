@@ -12,8 +12,11 @@ import {catalogFixture} from './support/ai-catalog-fixture.ts'
 import {countSerializedTokens} from '../supabase/functions/_shared/bob-token-budget.ts'
 
 test('FORM observations survive a private reset, remain source-bound, and cannot be forged through a member API',async t=>{
- let before:any
- const pg=await projectSchema(async(db,name)=>{if(name==='20261027101808_ai_construction_evidence_catalog.sql')before=(await db.query("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result});t.after(()=>pg.close())
+ let before:any,published:any
+ const pg=await projectSchema(async(db,name)=>{
+  if(before&&!published)published=(await db.query("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+  if(name==='20261027101808_ai_construction_evidence_catalog.sql')before=(await db.query("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+ });t.after(()=>pg.close())
  const owner=randomUUID(),stranger=randomUUID(),turn=randomUUID(),solution=randomUUID(),message='Develop the frame; keep later work open.'
  await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now())',[owner,'evidence@example.test',stranger,'stranger@example.test'])
  const call=async(uid:string|null,name:string,args:any[],role='authenticated'):Promise<any>=>(await asProjectUser(pg,uid,`select ${name}(${args.map((_,n)=>'$'+(n+1)).join(',')}) result`,args,role)).rows[0].result
@@ -38,7 +41,7 @@ test('FORM observations survive a private reset, remain source-bound, and cannot
   saveObservation:async(o:any)=>{observations.push(structuredClone(o));return record(o)},
   readObservations:async(_id:string,revision:number,result:string|null,after:string|null)=>call(owner,'bob.read_construction_results',[project,id,revision,result,after])}
  await t.test('immutable catalog publication opts in current jobs while preserving all other definitions and prior schemas',async()=>{
-  const manifest:any=(await pg.query("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+  const manifest:any=published??(await pg.query("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
   const current=createAiCatalogSession({rpc:async()=>({data:null,error:null})} as any,{app:'bob',manifest})
   const prior=createAiCatalogSession({rpc:async()=>({data:null,error:null})} as any,{app:'bob',manifest:before})
   for(const tool of [CONSTRUCTION_EVIDENCE_CHECK_TOOL,CONSTRUCTION_EVIDENCE_VIEW_TOOL]){

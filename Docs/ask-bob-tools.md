@@ -14,6 +14,17 @@ system instructions and lists member availability, without loading their schemas
 next request carries the full manual and schema once in the native tool definition.
 The short directory remains available, including waiting prerequisites.
 
+**Shown-model feedback — source only, 2026-10-27.** `read_model_feedback` and
+`record_model_feedback` extend the existing Solution actions, the Project records
+and memory shelf and `workflow_solution_concept`. They load on demand and use the
+same caller, journal, writer and receipt paths in `ask-bob` and `bob-worker`.
+The reader pages bound presentation metadata and responses; the writer binds the
+whole current reply, presenter and exact source server-side. No additional model
+or always-loaded behavioral prompt is introduced. The [Solution owner](solutions.md#form-shown-feedback)
+defines outcome/scope/mandate semantics; [release ordering](../supabase/README.md#form-feedback-release)
+and [local proof/limits](foundation-verification.md#form-feedback-2026-10-27)
+remain separate from activation.
+
 **Drawing continuation preload — 2026-10-20.** A turn whose thread has a pending
 drawing request (the same `pending()` read the turn already makes) starts with
 the construction-drawing core loaded: `read_construction_draft`,

@@ -1,3 +1,4 @@
+import { MODEL_FEEDBACK_TOOLS, executeModelFeedback, type ModelFeedbackOptions } from './model-feedback.ts'
 import { fingerprint, rethrowContinuation } from './bob-job-journal.ts'
 import { applyProjectDelta, changeProseRejection, displayEditSnapshot, PROJECT_EDIT_TOOLS, type EditSnapshot } from './project-edits.ts'
 import { humanTextRejection, type HumanTextRejection } from './human-text.ts'
@@ -35,6 +36,7 @@ const solution = (s: SolutionContext | undefined): s is EditSnapshot & SolutionC
 const fields = (r: Record<string, any>) => Object.fromEntries(['title', 'description', 'assumptions', 'tradeoffs', 'source_media_id', 'design_intent'].map(k => [k, r[k]]))
 
 export function createSolutionActions(opts: {
+  modelFeedback?: Omit<ModelFeedbackOptions, 'projectId' | 'writer'>;
   projectId: string; writer?: ProjectWriter; hasAccess: () => Promise<boolean>; unlimitedWork?: boolean;
   read: (input: { resource: SolutionResource; query: string | null; after: string | null }) => PromiseLike<{ data: unknown; error: unknown }>;
 }) {
@@ -42,7 +44,7 @@ export function createSolutionActions(opts: {
   let reads = 0, partial = false
   const unavailable = () => { partial = true; return { status: 'unavailable' } }
   return {
-    tools: SOLUTION_ACTION_TOOLS,
+    tools: [...SOLUTION_ACTION_TOOLS, ...(opts.modelFeedback ? MODEL_FEEDBACK_TOOLS : [])],
     exportState(): SolutionActionsState {
       return JSON.parse(JSON.stringify({ version: 1, projectId: opts.projectId, reads, partial, contexts: [...contexts], pages: [...pages] }))
     },
@@ -59,6 +61,12 @@ export function createSolutionActions(opts: {
     get partial() { return partial },
     async execute(name: string, value: unknown): Promise<any> {
       if (!await opts.hasAccess()) return { status: 'denied' }
+      if (opts.modelFeedback && MODEL_FEEDBACK_TOOLS.some(t => t.function.name === name)) {
+        if (name === 'read_model_feedback') { if (!opts.unlimitedWork && reads >= 16) return { status: 'budget_exhausted' }; reads++ }
+        const result = await executeModelFeedback({ ...opts.modelFeedback, projectId: opts.projectId, writer: opts.writer }, name, value)
+        if (result.status === 'unavailable') partial = true
+        return result
+      }
       if (name === 'read_solution_context') {
         if (!exact(value, ['resource', 'query', 'next_ref']) || !['solutions', 'selected_solutions', 'scopes', 'measurements', 'images'].includes(value.resource)
           || !(value.query === null || nonempty(value.query, 200)) || !(value.next_ref === null || typeof value.next_ref === 'string')) return { status: 'invalid' }

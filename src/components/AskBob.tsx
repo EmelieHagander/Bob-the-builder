@@ -1,3 +1,4 @@
+import { createBobDraftBinding } from '../lib/bobDraftBinding'
 /*
  * Project-bound assistant drawer. The direct backend can read allowed project
  * records and save requested changes; generated prose remains an AI assessment. Layout
@@ -265,7 +266,15 @@ function WorkingBubble({ label, at, paused }: { label: string; at?: string; paus
 export function AskBob({ open, onClose, project }: { open: boolean; onClose: () => void; project: { id: string; name: string } }) {
   const surface = useBobSurfaceSnapshot(project.id)
   const { data: chips } = useAsync(() => db.getAskBobChips(), [project.id])
-  const [draft, setDraft] = useState('')
+  const [draft, setDraftState] = useState('')
+  const draftValue = useRef(''), draftBinding = useRef(createBobDraftBinding()), draftProject = useRef(project.id)
+  draftProject.current = project.id
+  function setDraft(value: string | ((previous: string) => string)) {
+    const next = typeof value === 'function' ? value(draftValue.current) : value
+    if (!next.trim()) draftBinding.current.clear()
+    else if (!draftValue.current.trim()) draftBinding.current.start(draftProject.current, getBobSurface(draftProject.current))
+    draftValue.current = next; setDraftState(next)
+  }
   const [images, setImages] = useState<DraftImage[]>([])
   const [imageError, setImageError] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
@@ -747,8 +756,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     sendVersion.current++
     const isCurrent = scope.current.capture()
     const clientTurnId = retryRequest?.turnId ?? crypto.randomUUID()
-    // A retry belongs to the original send. A new request reads navigation now.
-    const screen = appendUser ? getBobSurface(project.id) : retryRequest?.screen
+    // The draft and all retries retain the shown model they actually answered.
+    const screen = retryRequest ? retryRequest.screen : draftBinding.current.read(project.id, getBobSurface(project.id))
     if (!localHistory) keepOutgoing({ text, turnId: clientTurnId, screen, imageIds, threadId: serverThread.current })
     if (appendUser) { setDraft(''); if (!retryRequest) setImages([]); setImageError('') }
     setExpanded(false); setShowJump(false); stickToEnd.current = true; setRetry(null); setHistoryNotice(''); setWorkError('')
@@ -796,7 +805,9 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     } else if (result.unavailable !== 'project_changed') {
       if (['project_denied', 'unauthorized', 'not_configured', 'project_mismatch', 'turn_budget_exhausted', 'context_input_too_large'].includes(result.unavailable)) {
         keepOutgoing(null)
-        if (result.unavailable !== 'turn_budget_exhausted') setDraft(previous => previous || text)
+        if (result.unavailable !== 'turn_budget_exhausted') {
+          if (!draftValue.current) { setDraft(text); draftBinding.current.restore(project.id, screen) }
+        }
       }
       if (!['project_denied', 'unauthorized', 'not_configured', 'project_mismatch', 'turn_budget_exhausted', 'context_input_too_large'].includes(result.unavailable)) setRetry({ text, turnId: clientTurnId, screen, imageIds })
       const message = result.unavailable === 'not_configured'
@@ -879,7 +890,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           {hasOlder && <div><button type="button" className="btn" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? 'Loading older messages…' : 'Show older messages'}</button></div>}
           {olderError && <p role="alert">{olderError}</p>}
           <details className="bob-context" aria-label="Bob page context">
-            <summary>{recovering || retry ? 'Continuing the original request' : surface?.label ?? 'Project context'}</summary>
+            <summary>{recovering || retry ? 'Continuing the original request' : (draft && draftBinding.current.read(project.id, surface?.pointer ?? null)?.presentationId ? `Shown model · v${draftBinding.current.read(project.id, surface?.pointer ?? null)?.solutionRevision}` : surface?.label) ?? 'Project context'}</summary>
             <p>{recovering || retry ? 'Its saved page context stays with this request.' : 'Page focus only. Bob checks the saved project records when you send.'}</p>
           </details>
           {historyReady && !extra.length && !working && <Bubble projectId={project.id} msg={{ from: 'bob', text: `Ask me about ${project.name}, send a photo for a mockup, work out a build detail or request a saved update.` }} />}

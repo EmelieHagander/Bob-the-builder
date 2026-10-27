@@ -91,7 +91,7 @@ test('the latest catalog publishes the field and the rule note; the publication 
  const latest=catalogFixture()
  for(const key of ['tools.save_construction_draft','tools.transition_legacy_drawing','tools.edit_construction_parts','tools.derive_construction_lists']){
   assert.equal(latest.definition(key).metadata.joint_fastener_version,1,key)
-  assert.equal(latest.definition(key).metadata.publication,'joint-fasteners-v1',key)
+  assert.equal(latest.definition(key).metadata.publication,key==='tools.save_construction_draft'?'form-refinement-v1':'joint-fasteners-v1',key)
  }
  assert.deepEqual(latest.tool('edit_construction_parts').function.parameters,CONSTRUCTION_EDIT_TOOL.function.parameters)
  assert.match(latest.definition('tools.save_construction_draft').definition.additional_description,/Joint fastener: null applies the fixed rule/)

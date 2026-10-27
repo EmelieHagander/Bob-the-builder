@@ -966,5 +966,23 @@
     "always_load": false,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "read_model_feedback",
+    "description": "Read the shown model and its scoped feedback.",
+    "how_to": "The current user turn binds the presentation. Read its exact source, freshness and response/mandate history without loading geometry.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "record_model_feedback",
+    "description": "Save ordinary feedback on the shown model.",
+    "how_to": "Interpret the whole response in the normal conversation. Preserve corrections, ambiguity, scope and user versus Bob mandate. Shared metadata excludes private chat; technical checks remain separate.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
   }
 ]

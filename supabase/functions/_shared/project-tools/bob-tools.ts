@@ -27,7 +27,7 @@ import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicyR
 /** Toolbox shelves, in presentation order. A shelf is orientation for Bob, not
  * authority; unknown tools land on the last shelf. */
 export const TOOLBOX_SHELVES: { label: string; tools: string[] }[] = [
-  { label: 'Project records and memory', tools: ['change_task_readiness', 'read_work_context', 'edit_work_record', 'create_work_record', 'change_work_relation', 'change_work_state', 'read_solution_context', 'create_solution_alternative', 'select_solution_alternative', 'change_solution_evidence', 'read_project_edit_context', 'edit_project_record', 'search_project_data', 'read_project_orientation', 'read_project_record_section', 'read_project_work', 'search_conversation_history', 'read_conversation_message'] },
+  { label: 'Project records and memory', tools: ['change_task_readiness', 'read_work_context', 'edit_work_record', 'create_work_record', 'change_work_relation', 'change_work_state', 'read_model_feedback', 'record_model_feedback', 'read_solution_context', 'create_solution_alternative', 'select_solution_alternative', 'change_solution_evidence', 'read_project_edit_context', 'edit_project_record', 'search_project_data', 'read_project_orientation', 'read_project_record_section', 'read_project_work', 'search_conversation_history', 'read_conversation_message'] },
   { label: 'Project, phases and Areas', tools: ['save_project_description', 'set_project_phase', 'update_project_schedule', 'save_project_area', 'archive_project_area'] },
   { label: 'Living plan', tools: ['read_plan_link_context', 'change_plan_focus', 'change_plan_task_link', 'compile_project_plan', 'edit_project_plan', 'audit_project_plan', 'save_compiled_project_plan', 'propose_project_plan', 'decide_project_plan', 'set_project_plan_focus', 'link_project_plan_task', 'link_project_plan_evidence'] },
   { label: 'Tasks and build days', tools: ['save_project_task', 'update_project_task_work', 'manage_task_readiness', 'delete_project_task', 'save_project_build_day', 'delete_project_build_day'] },
@@ -102,7 +102,7 @@ export function createBobToolSession(opts: {
       execute: (v: unknown) => opts.projectEdits!.execute(spec.function.name, v),
     })),
     ...(opts.solutionActions?.tools ?? []).filter(spec => !opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + spec.function.name)).map(spec => ({ spec, version: 1,
-      gate: (): ToolGate => spec.function.name === 'read_solution_context' ? opts.solutionActions!.remaining > 0 ? 'available' : 'budget_exhausted' : writeGate(),
+      gate: (): ToolGate => ['read_solution_context', 'read_model_feedback'].includes(spec.function.name) ? opts.solutionActions!.remaining > 0 ? 'available' : 'budget_exhausted' : writeGate(),
       execute: (v: unknown) => opts.solutionActions!.execute(spec.function.name, v),
     })),
     ...(opts.workRecords?.tools ?? []).filter(spec => !opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + spec.function.name)).map(spec => ({

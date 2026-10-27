@@ -1,3 +1,5 @@
+import { verifyModelFeedbackBrowser } from './model-feedback-browser.mjs'
+import { verifyConceptsBrowser } from './solution-concept-browser.mjs'
 import { createStairFixture, verifyStairBrowser } from './stair-study-browser.mjs'
 import { createMultifloorFixture, verifyMultifloorBrowser } from './multifloor-browser.mjs'
 // Production React + database.ts + Supabase client; only HTTP services are fixtures.
@@ -208,6 +210,14 @@ try {
     await page.getByRole('button', { name: 'Sign in', exact: true }).click()
     await page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     await page.locator('.account-project-row').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open project Porch A', exact: true }).click()
+    await verifyModelFeedbackBrowser(page, base, solutions, focusedTurns, viewport.width)
+    if (process.env.FOUNDATION_FOCUS === 'model-feedback') {
+      await verifyConceptsBrowser(page, base, solutions, viewport.width)
+      assert.deepEqual(errors, [])
+      await context.close()
+      continue
+    }
+    await page.goto(base + '#/project')
     imageBytes = Buffer.from(await page.evaluate(() => {
       const canvas = document.createElement('canvas'); canvas.width = 120; canvas.height = 240
       const ctx = canvas.getContext('2d'); ctx.fillStyle = '#a74632'; ctx.fillRect(0, 0, 120, 240); ctx.fillStyle = '#f4f1e6'; ctx.fillRect(35, 40, 50, 180)
