@@ -90,7 +90,7 @@ become join tables:
 | `Measurement` | `bob.measurements`, append-only `bob.measurement_revisions`, invoker `bob.current_measurements` |
 | `ExistingComponent` | `bob.existing_components`, append-only `bob.component_revisions`, invoker `bob.current_components` |
 | `Solution`, `SolutionVersion` | `bob.solutions`, append-only `bob.solution_revisions`, invoker `bob.current_solutions` |
-| Shown-model feedback | `bob.solution_presentations`, `bob.solution_model_feedback`; [Solution contract](../Docs/solutions.md#form-shown-feedback), [2c release](../supabase/README.md#form-feedback-release), [source-only 3D producer](../supabase/README.md#form-construction-preview-release) |
+| Shown-model feedback | `bob.solution_presentations`, `bob.solution_model_feedback`; [Solution contract](../Docs/solutions.md#form-shown-feedback), [2c release](../supabase/README.md#form-feedback-release), [3D producer release](../supabase/README.md#form-construction-preview-release) |
 | `SolutionMeasurement` | `bob.solution_measurements`, invoker `bob.solution_measurement_details` with exact historical measurement versions |
 | `TargetDecision` | `bob.project_targets`, append-only `bob.target_revisions`, invoker `bob.current_target` |
 | `ProjectArtifact`, `ArtifactVersion` | `bob.artifacts`, append-only `bob.artifact_revisions`, exact `bob.artifact_measurements`, invoker `bob.current_artifacts` / `bob.artifact_measurement_details` |

@@ -94,3 +94,11 @@ build, so check `ss -ltnp` or isolate the run before trusting a pass.
 (`project_room_dimensions`); it names unknown parts and lists every conflicting
 value instead of picking one. Put a secondary line in its own element so exact
 `getByText` on the primary label still matches.
+
+## 2026-10-27 — Lazy-load checks follow module identity
+
+**Rule:** identify a lazy renderer through Vite's build manifest, then assert
+that its exact entry is absent before opening the view and loaded afterward.
+Shared styles and geometry helpers can receive the same filename prefix as the
+renderer; a prefix match is not evidence that the renderer loaded eagerly.
+Keep actual rendering and no-extra-source-read assertions alongside this check.

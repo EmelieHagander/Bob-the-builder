@@ -1,36 +1,55 @@
 # Foundation verification and rollout
 
 <a id="form-construction-preview-2026-10-27"></a>
-## FORM exact construction preview — source verification, 2026-10-27
+## FORM exact construction preview — hosted release, 2026-10-27
 
-Package 4a adds the first exact box-solid 3D producer to the existing Construction
-reader. [Media](media-and-steps.md#form-visual-preview), [CAD](cad-adapter.md#form-preview-and-export)
+The first package 4a box-solid preview is installed from main
+`ba917e8c876ec5662bf439926ffba1eec27a60cd` after [PR #354](https://github.com/EmelieHagander/Bob-the-builder/pull/354).
+Its tree matches tested head `8797a19cf539b957a354f08ff35aac15db2db03e`.
+[Media](media-and-steps.md#form-visual-preview), [CAD](cad-adapter.md#form-preview-and-export)
 and [Solution feedback](solutions.md#form-shown-feedback) own behavior;
-[release order](../supabase/README.md#form-construction-preview-release) requires
-its core before its frontend. This increment is not deployed.
+[release order](../supabase/README.md#form-construction-preview-release) was core → frontend.
 
-Focused checks cover intrinsic XYZ placement and exact bounds, every saved
-instance, pinned materials, explicit unknown appearance/reference volumes and
-refusal of unsupported cuts/curves. Full-schema SQL tests drive ordinary caller
-presentation/feedback RPCs, realized component scope, per-Construction history
-and cursor isolation, forged source/presenter rejection, stale/archived heads,
-idempotent receipts and the frontend project guard. A positive partial 3D answer
-neither accepts the pending drawer nor blocks independently ready refinement;
-current corrections remain a readiness gap. Existing 2D feedback and artifact
-tests pass in the focused run (31 cases before the additional reference-role test).
-Production build, data-read regression check and whitespace checks pass.
+**[CI #780](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/40530260010)
+passed: 1,917 tests, 0 failures, 0 skipped**, plus build, Edge, PWA and
+browser gates. Actual WebGL flows pass at 320/390/1280 px, with exact material
+labels, named views without geometry rereads, a frozen reply across revision
+changes, history/reload and source/shape failure recovery. All three preview
+screenshots were inspected. Artifact `12748202222` has SHA-256
+`d4afc55afc5aa9dccf3a764060473d7bc44e05f1d20e3012bce568e54da9f159`.
 
-The default foundations browser script now includes actual WebGL rendering at
-320/390/1280 px, exact material labels, named views without geometry rereads,
-frozen draft source across a new revision, history/reload and source/shape
-failure recovery. Browser execution and screenshot inspection are pending CI
-because this workspace has no installed Chrome. No browser pass is claimed here.
+The earlier shell lazy-load assertion confused shared CSS and geometry-math
+chunks with the renderer. It now resolves the exact dynamic renderer entry from
+Vite's manifest and still requires no renderer load before opening 3D, followed
+by a real load/render after opening.
+The material reader uses at most 128 validated exact revision pairs in batches
+of 32, with deduplication, row identity checks and project guards after awaits.
 
-Prior #307, #308 and #130 boundaries are retained: bounded metadata reads,
-unchanged ordinary authority/receipts, no new AI call, source-bound recovery and
-no claim that saving feedback delivers CAD, lists or Shopping. Existing Rita and
-technical gates remain. Package 4b, real-owner/model acceptance and final export
-coverage remain open.
+Source `20261027133050_construction_presentations.sql` (SHA-256
+`5eb79a2952a39de19d5bf1cd05d11d7cd671c6f5fbe8a447535a464bfc31e362`)
+is recorded as managed migration `20261027155944`. Readback matches
+all 27 expected FORM function bodies, definer/invoker flags, search paths and
+ACLs; the exact Construction FK, component constraint and index are present.
+Hosted rollback probes pass for ordinary-caller 3D presentation and claimed-turn
+feedback, realized frame-only scope, exact receipts/history, unchanged partial
+readiness, chat reset, archived-source rejection and outsider denial. The 2D
+compatibility probe also passes. No probe users remain after rollback.
+The security-advisor delta is limited to the expected
+[authenticated definer RPC notice](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)
+for the guarded presentation producer; no new ERROR or anonymous-execution
+finding was added.
+
+[Pages #386](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/40536819756)
+published that main commit. The public app loads `/Bob-the-builder/assets/index-rMX-bAZ5.js` from
+that build. No Edge, AI-catalog or model-setting change was required for 4a.
+
+Prior #307, #308 and #130 boundaries remain: exact bounded reads, ordinary
+authority/receipts and source-bound recovery. This first renderer refuses cuts
+and curves it cannot show exactly; reference volumes, unknown appearance and
+unmodeled joints remain explicit. Positive feedback cannot accept a missing
+drawer or replace technical approval. Existing Rita gates, package 4b, real
+owner/model acceptance and final drawing/list delivery remain open. These
+fixtures and rollback probes did not dispatch a paid model/CAD turn.
 
 <a id="form-feedback-2026-10-27"></a>
 <a id="form-hosted-release-2026-10-27"></a>

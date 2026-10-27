@@ -559,12 +559,13 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 **Aktivt nästa steg — självständig FORM med mer kodkontroll (2026-10-27):**
 paket 2a/2b/2c är mergade och tekniskt driftsatta med
 [1 904 gröna tester, browserprov och hosted återläsning](foundation-verification.md#form-hosted-release-2026-10-27).
-Fortsätt med 4a:s exakta konstruktionsvy i
-[PR #354](https://github.com/EmelieHagander/Bob-the-builder/pull/354), inklusive
-browseracceptans och dess separata databas-/frontendrelease.
-Fortsätt därefter med 4b för lådan i
-[genomförandeordningen](#form-next): detaljerad 3D från exakt Construction,
-samma beslutskontrakt och faktisk slutleverans.
+Även första 4a:s exakta boxmodell och gemensamma återkoppling är tekniskt
+installerade med [browser- och hosted bevis](foundation-verification.md#form-construction-preview-2026-10-27).
+**Nästa: 4b för lådan** i [genomförandeordningen](#form-next): använd samma
+Construction-revision för ritning, beskrivning och listor, reparera bara saknad
+länk/leverans efter avbrott och återöppna varje utlovat resultat efter omladdning.
+Preliminära listor och positiv återkoppling på modellen ersätter inte slutleveransens
+tekniska gränser. Utöka 4a separat när exakt stöd för andra geometrier behövs.
 Behåll kvarvarande kravtolkning och stöd utanför de tre geometriska kontrollerna
 som explicita luckor; delkontrollerna öppnar ännu ingen slutleverans. Utöka 2a/2b
 när nya delar behöver andra geometrier eller gränssnitt. Behåll kontrollfallen i
@@ -676,9 +677,10 @@ Serverbundna work-record- och planlänkverktyg samt konflikttransporten är nu i
 <a id="form-next"></a>
 ### FORM 1.0 — genomförandeplan för nästa nivå, uppdaterat 2026-10-27
 
-**Plan med avgränsade källkodssteg; hela flödet återstår.** Första 2a- och
-2b-stegen har [lokal verifiering](foundation-verification.md#form-evidence-2026-10-27),
-men innebär ingen driftsättning eller modellacceptans. Auditens precisering delar PR #349:s paket 2
+**Plan med avgränsade leveranser; hela flödet återstår.** Första 2a/2b/2c är
+[tekniskt driftsatta](foundation-verification.md#form-hosted-release-2026-10-27),
+liksom [4a:s boxmodell](foundation-verification.md#form-construction-preview-2026-10-27).
+Verklig modellacceptans återstår. Auditens precisering delar PR #349:s paket 2
 och 4 i mindre leveranser; målflödet och tidigare acceptanskrav består.
 Arbeta i avgränsade PR:ar; paket anger beroenden och granskningsbara resultat,
 inte fasta körsteg för Bob eller ett krav på exakt en PR per paket.

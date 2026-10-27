@@ -789,11 +789,11 @@ records the missing local browser, pending hosted/model acceptance and exact
 focused checks. No migration, runtime, catalog or frontend deployment ran.
 
 <a id="form-construction-preview-release"></a>
-## FORM construction preview — source only, 2026-10-27
+## FORM construction preview — technically installed, 2026-10-27
 
-After the 2a–2c core/runtime/catalog release, apply
-`20261027133050_construction_presentations.sql` before publishing its matching
-frontend. This adds the caller-JWT `record_construction_presentation` producer
+After the 2a–2c core/runtime/catalog release,
+`20261027133050_construction_presentations.sql` was applied as managed version
+`20261027155944` before its matching frontend. This adds the caller-JWT `record_construction_presentation` producer
 and extends the existing presentation reader, claimed-turn feedback writer and
 source guards. No model/settings/catalog or Edge release is needed for 4a.
 The exact Construction FK and server-derived component snapshot prevent a
@@ -804,7 +804,7 @@ registers evidence only after WebGL draws and the viewport is visible.
 
 Rollback may restore the earlier frontend while keeping compatible readers and
 history. Do not delete decisions or relax source guards. [Verification](../Docs/foundation-verification.md#form-construction-preview-2026-10-27)
-records source/test status; final delivery and real-model acceptance remain open.
+records full CI, browser, hosted and Pages evidence; final delivery and real-model acceptance remain open.
 
 ## FORM concept release — technically installed, 2026-10-26
 
