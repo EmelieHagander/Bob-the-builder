@@ -71,7 +71,11 @@ export async function verifyConstructionModelBrowser(page,base,fixture,artifacts
   const go=revision=>page.goto(base+`#/artifacts?drawing=${id}&revision=${revision}`)
   const model=page.getByRole('region',{name:'Construction model',exact:true})
   const drawn=async(view='overview')=>{
-    await model.getByRole('img',{name:`Saved construction, ${view} view`,exact:true}).waitFor()
+    const viewport=model.getByRole('img',{name:`Saved construction, ${view} view`,exact:true})
+    await viewport.waitFor()
+    // A mounted offscreen canvas is not a shown model. Scroll as a person does
+    // before expecting the visibility-gated presentation and discussion link.
+    await viewport.scrollIntoViewIfNeeded()
     await model.locator('[data-instances="5"]').waitFor()
     await model.getByRole('button',{name:'Discuss this model with Bob',exact:true}).waitFor()
     await model.getByText('Model feedback history',{exact:true}).waitFor()
