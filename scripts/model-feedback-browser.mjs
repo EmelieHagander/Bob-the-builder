@@ -82,5 +82,12 @@ export async function verifyModelFeedbackBrowser(page, base, fixture, turns, wid
   await send(current.id); await closeBob()
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'model/feedback fit mobile')
   await dialog.getByRole('button',{ name:'Close',exact:true }).click()
+  // Leave the shared fixture empty for the rest of the foundations journey.
+  fixture.records.delete(id)
+  fixture.histories.delete(id)
+  for (const [presentationId, presentation] of fixture.presentations) {
+    if (presentation.solution_id === id) fixture.presentations.delete(presentationId)
+  }
+  fixture.modelFeedback = fixture.modelFeedback.filter(feedback => feedback.solution_id !== id)
   console.log(`FORM model feedback: visible view, no auto-send, scoped history/reload, frozen reply, recovery/late callback at ${width}px; HTTP fixtures only.`)
 }
