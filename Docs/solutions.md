@@ -255,7 +255,7 @@ Final conversion and replacement of CAD review remain separate from these previe
 
 `solution_presentations` and `solution_model_feedback` are subordinate evidence
 and decisions on existing immutable Solution revisions, not new model geometry.
-Package 4a adds a source-only `construction_3d` producer for exact saved box
+Package 4a adds a technically installed `construction_3d` producer for exact saved box
 solids. Its Artifact/revision, material pins, named camera and realized component
 scope are derived by the server; its source guard reuses Artifact freshness.
 The shared history is scoped to that exact Construction revision. A whole-model
@@ -263,7 +263,7 @@ response expands only the shown components, including a partial refinement;
 it cannot accept missing components or replace the concept readiness decision.
 Current negative 3D feedback remains a readiness gap until a later covering
 response on the same sources. [3D evidence](foundation-verification.md#form-construction-preview-2026-10-27)
-distinguishes its source implementation from browser and hosted acceptance.
+records full CI, browser and hosted boundary verification.
 [2D release evidence](foundation-verification.md#form-hosted-release-2026-10-27)
 records full CI, browser and hosted boundary verification for 2a/2b/2c;
 real-model and final delivery acceptance remain separate.

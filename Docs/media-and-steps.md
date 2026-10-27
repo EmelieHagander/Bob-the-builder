@@ -155,13 +155,13 @@ must remain distinguishable from pinned material specifications. A generatively
 restyled rendering remains an illustration, not the exact model preview used
 for geometric acceptance.
 
-The source-only 4a increment adds a lazy Three.js view in the Construction reader.
+The technically installed first 4a increment adds a lazy Three.js view in the Construction reader.
 It renders every saved box instance with the CAD coordinate/rotation contract,
 exact material revisions, specified colour when available, lighting and six
 named views. Reference volumes are outlines; unknown roles, neutral appearance
 and unmodeled joints/hardware remain explicit. Cuts and curved solids refuse the
-entire preview until an exact renderer exists. Camera/zoom changes make no design
-or backend write. Visible rendering can register presentation metadata through
+entire preview until an exact renderer exists. Camera/zoom changes preserve the saved design.
+A newly visible named view can register presentation metadata through
 the [shared feedback contract](solutions.md#form-shown-feedback); opening a view
 never accepts it. Source denial, WebGL failure and unavailable geometry have
 distinct recoverable states. [Verification](foundation-verification.md#form-construction-preview-2026-10-27)
