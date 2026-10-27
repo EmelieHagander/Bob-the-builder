@@ -256,6 +256,18 @@ New stock reservations and Shopping publication also require classified current 
 
 `read_project_work(resource=cut_plan)` lists or reopens saved plans; `read_material_cut_plan` also reads a historical revision. Current need reads link to their saved plan. A changed construction, parameter source, need, material, bound format or capacity produces `source_state=changed`; historical layout and pins stay frozen. Saves use the existing caller/claimed-turn writer, current-request quote, optimistic revision and idempotent receipt ledger. Only project-authorized reads are granted on plan tables; authenticated clients cannot write them directly.
 
+**Read-only UI source increment — 2026-10-27; browser/publication pending:**
+Material plan accepts an exact `requirement`/`revision` URL and reuses its version
+reader independently of background list loading. Cut list & purchasing accepts
+an exact `cut_plan`/`revision` URL, reads `read_material_cut_plan`, and shows the
+saved sheet formats, placement diagram/table, ordered cuts and offcuts. Neither
+view substitutes a newer revision. Delivery links pin `construction` and
+`source_revision`; mismatches fail without showing another layout. Explicitly
+missing construction selections never fall back to an arbitrary construction.
+The view distinguishes hypothetical/stock/catalog formats and historical sources;
+it does not recompute fit or approve fabrication, reservation or purchase.
+[Focused evidence and remaining browser gate](foundation-verification.md#form-saved-delivery-ui-2026-10-27).
+
 Physical sheet formats belong to existing stock revisions as optional `sheet_format`, including exact material revision, dimensions, grain and explicit measured/provided/estimated basis. Revision omission preserves the format and explicit null removes it; lifecycle/history use the existing stock owner. A candidate may remain explicitly hypothetical, pin matching available same-project stock with unreserved whole-piece capacity, or pin a current readable catalog panel part. Duplicate candidate aliases share the same stock capacity. Catalog format binding does not establish supplier approval, availability or physical inspection. No production stock or product is invented by acceptance fixtures.
 
 **Saving and capacity preview do not reserve stock.** They retain false readiness/approval flags; the explicit reservation extension below is a separate operation. Individual construction blank allocation and Shopping guards remain in force. Compatible raw-sheet Shopping contributions remain a later boundary; hardware quantities/products and assembly/tool access remain separate gaps. Release and ordinary-member/model acceptance belong to [verification](foundation-verification.md); [State](bob-delivery-flow.md#state) owns the next gate.

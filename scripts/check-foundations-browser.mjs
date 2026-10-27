@@ -1,4 +1,5 @@
 import { createConstructionModelFixture, verifyConstructionModelBrowser } from './construction-model-browser.mjs'
+import { createSavedDeliveryFixture, verifySavedDeliveryBrowser } from './saved-delivery-browser.mjs'
 import { verifyModelFeedbackBrowser } from './model-feedback-browser.mjs'
 import { verifyConceptsBrowser } from './solution-concept-browser.mjs'
 import { createStairFixture, verifyStairBrowser } from './stair-study-browser.mjs'
@@ -52,6 +53,7 @@ try {
     const solutions = createSolutionsFixture(timestamp, assets, facts)
     const artifacts = createArtifactsFixture(timestamp, assets, facts, solutions)
     const constructionModel = createConstructionModelFixture(timestamp, artifacts)
+    const savedDelivery = createSavedDeliveryFixture()
     const multifloor = createMultifloorFixture(timestamp, artifacts, solutions)
     const stair = createStairFixture(timestamp, artifacts, multifloor)
     const roomLayout = createRoomLayoutFixture(timestamp, artifacts, solutions)
@@ -73,6 +75,7 @@ try {
       const fail = message => respond({ status: 409, json: { message } })
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
       if (method === 'OPTIONS') return respond({ status: 204 })
+      if (await savedDelivery.handle(request, url, respond)) return
       if (await constructionModel.handle(request, url, respond)) return
       if (path === '/rest/v1/rpc/project_plan_read') return respond({json:{record:request.postDataJSON().p_project==='A'?currentPlan:null}})
       if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_work_read') return respond({json:{project_id:route.request().postDataJSON().p_project,vocabulary_version:'2026-09-24.1',status:'not_initialized',revision:null,focus_step_id:null,areas:[],steps:(currentPlan?.steps??[]).map(s=>({...s,area_id:null,phase:'build',responsible_kind:'bob',responsible_person_id:null,tasks:s.tasks??[],related_tasks:[],requirements:[]})),unorganised_tasks:[]}})
@@ -212,6 +215,14 @@ try {
     await page.getByRole('button', { name: 'Sign in', exact: true }).click()
     await page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     await page.locator('.account-project-row').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open project Porch A', exact: true }).click()
+    if (!process.env.FOUNDATION_FOCUS || process.env.FOUNDATION_FOCUS === 'saved-delivery') {
+      await verifySavedDeliveryBrowser(page, base, savedDelivery, artifacts, constructionModel, materialPlanning, viewport.width)
+      if (process.env.FOUNDATION_FOCUS === 'saved-delivery') {
+        assert.deepEqual(errors, [])
+        await context.close()
+        continue
+      }
+    }
     await verifyModelFeedbackBrowser(page, base, solutions, focusedTurns, viewport.width)
     await verifyConstructionModelBrowser(page, base, constructionModel, artifacts, solutions, focusedTurns, viewport.width)
     if (['model-feedback', 'construction-model'].includes(process.env.FOUNDATION_FOCUS)) {

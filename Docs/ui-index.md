@@ -247,6 +247,7 @@ physical-phone and named-participant acceptance.
 | Solutions (`/solutions`) | compare alternatives and select an exact target version for the relevant scope | Area-scoped decisions must not overwrite another Area's selected target; decision history remains explicit |
 | Plans/drawings (`/artifacts`) | inspect/create target-linked build artifacts | selected target + stale lineage must be evaluated at the same Project/Area scope |
 | Material plan (`/material-plan`) | understand requirements, stock/reuse and purchase need | Area/task scope stays visible; target/drawing lineage must not bleed across Areas |
+| Construction **Saved outputs**; exact need and cut-plan links | reopen the version actually delivered, including after reload | [Source increment](artifacts.md#construction-delivery-discovery), with [browser verification still pending](foundation-verification.md#form-saved-delivery-ui-2026-10-27); no fabrication or purchase approval |
 | Building context (`/building`, `/account/buildings`) | maintain persistent physical truth | Building state stays separate from Project/Area lifecycle phase |
 | People | understand crew skills/needs | skills and safety-relevant dietary info must be easy to scan |
 | Events / Event detail | organise a build day | attendance and day plan must be obvious |

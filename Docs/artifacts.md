@@ -110,6 +110,16 @@ uses a five-panel box, real isolated SQL and new reader/turn instances.
 confirms installed SQL/runtime/catalog and ordinary-caller recovery. Browser
 reload and real owner/model/CAD acceptance of the complete flow remain.
 
+**UI source increment — 2026-10-27; browser verification and publication pending:**
+the Construction version reader adds **Saved outputs**, with separate paged
+drawing, material-need and cut-plan reads through `database.ts`. Links keep the
+exact output revision; needs and cut plans also retain the expected Construction
+revision. Historical, archived, changed, unavailable and empty results stay
+distinct. Opening a result uses its existing domain reader, with no generation,
+stock reservation, purchasing write or delivery-complete badge. The saved
+cut-plan view belongs to [material planning](material-planning.md#k4-saved-cutting-plans--2026-10-06).
+See the [focused verification boundary](foundation-verification.md#form-saved-delivery-ui-2026-10-27).
+
 ### FORM presentation and user decision — specified 2026-10-27
 
 The [FORM flow](bob-delivery-flow.md#form-flow) places a detailed visual preview

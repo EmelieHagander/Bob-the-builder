@@ -5,6 +5,9 @@ import { useBobSurface, openBobWithDraft } from '../lib/bobSurface'
 import { preliminaryConstructionList, preliminaryCutCsv } from '../domain/constructionPreview'
 import { Icon, Loading, useAsync, useProjectVersion } from '../components/ui'
 import { inputStyle } from '../components/form'
+import { SavedCutPlan } from '../components/SavedCutPlan'
+import { Modal } from '../components/Modal'
+import { savedOutputPointer, savedOutputSourcePointer, savedOutputUrl } from '../lib/savedOutputNavigation'
 import '../components/StorageBoxDrawing.css'
 
 const pageCard = { padding: 'var(--panel-padding)' }
@@ -22,6 +25,14 @@ export function BuildPreparation() {
   const [params, setParams] = useSearchParams()
   const areaFilter = params.get('area') ?? ''
   const requestedId = params.get('construction') ?? ''
+  const cutPlan = savedOutputPointer(params, 'cut_plan')
+  const cutSource = savedOutputSourcePointer(params)
+  const invalidCutLink = params.has('cut_plan') && (!cutPlan || ((params.has('construction') || params.has('source_revision')) && !cutSource))
+  const closeCutPlan = () => {
+    const next = new URLSearchParams(params)
+    for (const key of ['cut_plan', 'revision', 'source_revision']) next.delete(key)
+    setParams(next, { replace: true })
+  }
   const [retry, setRetry] = useState(0)
 
   const { data, loading, error } = useAsync(async () => {
@@ -33,20 +44,24 @@ export function BuildPreparation() {
     return { heads, areas, needs, cutPlans, shopping }
   }, [projectId, projectVersion, retry])
   const filtered = (data?.heads ?? []).filter(head => !areaFilter || head.areaId === areaFilter)
-  const chosen = filtered.find(head => head.id === requestedId) ?? filtered[0] ?? null
+  const chosen = (requestedId ? filtered.find(head => head.id === requestedId) : filtered[0]) ?? null
   const { data: source, loading: sourceLoading, error: sourceError } = useAsync(
     () => chosen ? db.getBuildConstructionSource(projectId, chosen.id, chosen.revision) : Promise.resolve(null),
     [projectId, chosen?.id, chosen?.revision, projectVersion, retry],
   )
-  const { data: fasteners, loading: fastenersLoading, error: fastenersError } = useAsync(
-    () => chosen ? db.getBuildConstructionFasteners(projectId, chosen.id, chosen.revision) : Promise.resolve(null),
+  const { data: fastenerRead, loading: fastenersLoading, error: fastenersError } = useAsync(
+    async () => chosen ? { projectId, id: chosen.id, revision: chosen.revision,
+      value: await db.getBuildConstructionFasteners(projectId, chosen.id, chosen.revision) } : null,
     [projectId, chosen?.id, chosen?.revision, projectVersion, retry],
   )
 
   useBobSurface(projectId, { surface: 'material-plan', ...(chosen?.areaId ? { areaId: chosen.areaId } : {}) },
     'Cut list and purchasing', 2)
 
-  const preview = source ? preliminaryConstructionList(source) : null
+  const fasteners = !fastenersLoading && !fastenersError && fastenerRead?.projectId === projectId
+    && fastenerRead.id === chosen?.id && fastenerRead.revision === chosen?.revision ? fastenerRead.value : null
+  const preview = !sourceLoading && !sourceError && source?.draft.projectId === projectId
+    && source.draft.artifact_id === chosen?.id && source.draft.revision === chosen?.revision ? preliminaryConstructionList(source) : null
   const validPreview = preview?.status === 'preliminary' ? preview : null
   const linkedNeeds = (data?.needs.items ?? []).filter(item => chosen && item.artifactId === chosen.id
     && item.artifactRevision === chosen.revision && !item.artifactChanged && !item.targetChanged
@@ -102,11 +117,13 @@ export function BuildPreparation() {
           {!!filtered.length && <label>
             <strong>Current construction</strong>
             <select style={inputStyle} value={chosen?.id ?? ''} onChange={event => choose(event.target.value)}>
+              {!chosen && <option value="">Choose an available construction</option>}
               {filtered.map(head => <option key={head.id} value={head.id}>{head.title} · v{head.revision}</option>)}
             </select>
           </label>}
         </div>
         {!filtered.length && <p>No current saved construction was found here. <Link to={'/artifacts' + (areaFilter ? '?area=' + encodeURIComponent(areaFilter) : '')}>See drawings and construction sources</Link>.</p>}
+        {!!filtered.length && requestedId && !chosen && <p>The requested construction is not in the current selection. Choose another construction explicitly to view its cut list.</p>}
         {chosen && <p className="foundation-hint">Source: {area?.name ?? 'The project'} · construction version {chosen.revision}. Nothing shown here is saved as a new material need.</p>}
       </section>
 
@@ -203,6 +220,8 @@ export function BuildPreparation() {
         {data.cutPlans.hasMore && <p className="foundation-hint">More cut plans exist; check them with Bob before using a plan.</p>}
         {currentPlan && <p className="foundation-hint">The cut plan is bound to its source version. A saved plan alone does not prove material quality, fixing, strength or safe working.</p>}
         <div className="foundation-actions">
+          {currentPlans.map(plan => <Link key={plan.id} className="btn" to={savedOutputUrl('cut_plans', plan.id, plan.revision,
+            { id: plan.artifact_id, revision: plan.artifact_revision, areaId: chosen?.areaId })}>Open saved cut plan · v{plan.revision}</Link>)}
           <Link className="btn" to={'/material-plan' + areaQuery}>Material plan</Link>
           <Link className="btn" to="/shopping">Shopping list</Link>
         </div>
@@ -224,5 +243,8 @@ export function BuildPreparation() {
         </div>
       </section>
     </>}
+    {invalidCutLink && <Modal title="Cut plan unavailable" onClose={closeCutPlan}><p>This link does not identify an exact saved version. Open the saved outputs from the construction again.</p></Modal>}
+    {!invalidCutLink && cutPlan && <SavedCutPlan key={`${projectId}:${cutPlan.id}:${cutPlan.revision}:${cutSource?.id}:${cutSource?.revision}`}
+      projectId={projectId} id={cutPlan.id} revision={cutPlan.revision} source={cutSource} onClose={closeCutPlan} />}
   </div>
 }

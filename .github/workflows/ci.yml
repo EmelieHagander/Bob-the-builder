@@ -1,13 +1,49 @@
 name: CI
+run-name: ${{ inputs.scope == 'full' && 'Full CI' || 'Saved delivery UI' }} · ${{ github.ref_name }}
 
 # Full verification runs only when requested in GitHub Actions.
 # Select the exact review branch before merging; a push or PR state change
 # must not launch this expensive workflow.
 on:
   workflow_dispatch:
+    inputs:
+      scope:
+        description: Verification scope (full CI only on explicit request)
+        type: choice
+        default: saved-delivery
+        options:
+          - saved-delivery
+          - full
 
 jobs:
+  saved-delivery:
+    if: ${{ inputs.scope != 'full' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build the app with isolated HTTP fixtures
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://pwa-proof.invalid
+          VITE_SUPABASE_ANON_KEY: installation-test-only
+      - name: Verify saved delivery at 320, 390 and 1280 pixels
+        run: CHROME_PATH="$(command -v google-chrome)" FOUNDATION_FOCUS=saved-delivery npm run verify:foundations
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: saved-delivery-screenshots
+          path: test-results/
+          if-no-files-found: ignore
   build:
+    if: ${{ inputs.scope == 'full' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

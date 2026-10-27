@@ -1,5 +1,33 @@
 # Foundation verification and rollout
 
+<a id="form-saved-delivery-ui-2026-10-27"></a>
+## FORM saved delivery UI — source checks, 2026-10-27
+
+The Construction reader now offers a paged **Saved outputs** index. Exact
+drawing, need and cut-plan links reopen their saved revisions. The new cut-plan
+reader shows saved sheet formats, placements, cuts and offcuts; it never reruns
+the fit. Source mismatches and malformed layouts fail, historical states remain
+explicit, and an unavailable requested Construction does not choose another one.
+Domain behavior is owned by [Artifacts](artifacts.md#construction-delivery-discovery)
+and [material planning](material-planning.md#k4-saved-cutting-plans--2026-10-06).
+
+**Passed locally:** 13 focused tests across `saved-delivery.test.ts`,
+`build-preparation-source.test.ts` and `material-planning.test.ts`, including
+an actual isolated SQL-saved cut layout through the frontend data reader,
+project-change guards, exact source/output pins, malformed data and paging.
+The production app build and browser-script syntax checks pass.
+
+**Not yet verified:** rendered navigation/reload, retry/denial, historical/empty
+states and responsive composition. The prepared `FOUNDATION_FOCUS=saved-delivery`
+browser scenario covers these at 320/390/1280 pixels. Local Chrome is absent;
+the separate browser cannot reach the local preview. The manual-only CI workflow
+defaults to `scope=saved-delivery`, which runs this scenario and uploads
+screenshots; the full CI job runs only with `scope=full`. The focused mode uses
+the existing registered workflow so it can run on the review branch before
+merge. It has not been dispatched. No new Pages release, hosted
+migration, AI-model call or CAD job was run. Merge/publication and browser proof
+remain open; the existing hosted delivery reader is unchanged.
+
 <a id="form-delivery-release-2026-10-27"></a>
 ## FORM delivery discovery — hosted release, 2026-10-27
 
