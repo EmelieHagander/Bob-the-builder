@@ -71,7 +71,7 @@ flowchart TD
   R -->|Nej| W[Paus med orsak och återupptagningsvillkor]
   G -->|Läsfel eller kostnadsstopp| W
   W -->|Ny relevant förutsättning| R
-  D --> V[5. Oberoende granskare och maskinell godkännandegrind]
+  D --> V[5. Granskning för syftet och maskinella kontroller]
   C -->|Källmanifest och aktuella oberoende kontroller| V
   B -->|Ursprungliga krav, inte designerns omskrivning| V
   V -->|Konstruktionsfel| D
@@ -85,16 +85,22 @@ flowchart TD
   X --> R
 ```
 
-Pilarna från projekt, fysisk plats, lösning och medier är **parallella källflöden**. De måste inte alla passera genom Bobs egen text. Granskaren får både kandidaten och en kontrollerbar koppling tillbaka till originalunderlaget. Kompletteringsslingan är villkorad; diagrammet ger inte tillstånd till oändliga modell- eller renderanrop.
+Pilarna från projekt, fysisk plats, lösning och medier är **parallella källflöden**. De måste inte alla passera genom Bobs egen text. Granskningen använder kandidaten och en kontrollerbar koppling tillbaka till originalunderlaget. Vem som granskar och när bestäms av leveransens syfte; FORM:s två användargranskningar nedan konkretiserar denna övergripande ruta. Den är inte ett obligatoriskt nytt AI-anrop efter varje rendering. Kompletteringsslingan är villkorad; diagrammet ger inte tillstånd till oändliga modell- eller renderanrop.
 
 <a id="form-flow"></a>
-### FORM — från tidig 2D till byggunderlag, 2026-10-26
+### FORM — användargranskad 2D och 3D före slutleverans, beslut 2026-10-27
 
 **Specificerad fortsättning på den tekniskt installerade första FORM-leveransen.**
 FORM betyder *Från Önskemål till Realiserbar Modell*. Den befintliga
 [Solution-modellen](solutions.md#early-concept-geometry-form--source-implementation-2026-10-26)
 ger redan reviderbar ortogonal konceptgeometri och deterministiska 2D-vyer.
-Det fulla flödet nedan är ännu inte verifierat med verkliga ägar-/modellfall.
+**Beslutet ersätter 2026-10-26-planens två obligatoriska AI-granskningar:**
+användaren granskar form och funktion i 2D och i en detaljerad 3D-förhandsvisning.
+Bob ansvarar för konstruktionsarbetet, kod för beräkningar och maskinella kontroller;
+AI-granskning används för konkreta osäkerheter eller avvikelser.
+Detta ändrar målflödet. Dagens obligatoriska Rita-granskning är fortfarande
+implementerad; ersättningsvägen, förhandsvisningen och dess versionsbundna
+användarbeslut återstår att implementera och verifiera innan den kan tas bort.
 [Releasebeviset](foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26)
 äger installerat nuläge; [State](#form-next) äger nästa arbetspaket.
 
@@ -106,35 +112,54 @@ med modellen. En serie omskrivna sammanfattningar räcker inte som källkedja.
 | Led | Källa och resultat | Ansvar för nästa beslut |
 |---|---|---|
 | Förstå uppdraget | Originalönskemål, tidigare rättelser, plats, mått, bilder och mandat. Krav, val, uppskattningar och okänt behåller sitt ursprung. | Bob identifierar användning, avgränsning och nödvändiga frågor. Befintliga projekt-/mått-/medieägare behåller sanningen. |
-| Tidig 2D och beskrivning | Samma Solution-revision innehåller avsikt, funktioner, val och den lätta modellen. Kod tar fram plan, sida och relevant principsnitt. En kort förklaring gör modellen begriplig. | Bob föreslår och gör riktade ändringar. Betydelsefulla ägarval tas inom befintligt mandat; ett nytt klartecken krävs inte för varje verktyg. |
-| Granskning efter 2D | Exakt konceptrevision, deterministiska kontroller, originalkrav och relevanta originalbilder. | Oberoende bedömning av att modellen uttrycker avsikten före dyr detaljering. Det semantiska granskningssteget återstår att implementera. |
-| Valfri bildmockup | Samma koncept, namngivna vyer och originalreferenser används för att visa utseende, materialkänsla och sammanhang. | Använd när bilden hjälper ett beslut. Nya designval återförs till Solution före detaljering. En illustration tillför inga uppmätta mått; automatisk versionsbunden FORM-överlämning till bildverktyget saknas ännu. |
-| Detaljerad konstruktion | Vald Solution-revision förfinas till Construction med delar, material, fogar, placeringar, parameterursprung och monteringsberoenden. | Bob gör konstruktionsval; kod räknar och kontrollerar. En konceptdel ska kunna motsvara flera byggdelar genom den planerade spårbara förfiningen. |
-| Beskrivning, listor och 3D | Detaljerad förklaring/monteringsanvisning, plock-/kapunderlag och CAD bygger på **samma exakta Construction-revision**. Listor räknas av kod och kompletteras med befintliga lager-, råämnes- och produktuppgifter. CAD renderar den kontrollerade geometrin. | Text förklarar konstruktionen; listor och rendering introducerar inga nya konstruktionsval. En dellista innehåller inte alla placeringar eller fogar och kan därför inte ensam vara 3D-källa. Preliminära längder är inte automatiskt en verifierad kapplan eller inköpslista. |
-| Granskning efter 3D och leverans | Oberoende granskare får exakt kandidat, aktuella originalkällor, vald avsikt, kontrollresultat och renderade vyer. Därefter sparar och länkar Bob rätt Artifact-version och återläser den. | Kandidatgranskning, återstående fysiska kontroller och leveranskvitton är skilda resultat. En passerad granskning betyder inte redan sparat eller konstruktionscertifierat. |
+| Tidig 2D och beskrivning | Samma Solution-revision innehåller avsikt, funktioner, val och den lätta modellen. Kod tar fram plan, sida och relevant principsnitt. En kort förklaring gör modellen begriplig. | Bob föreslår och gör riktade ändringar. Användaren granskar layout, mått, placeringar och önskade funktioner före detaljering. Beslutet gäller den visade versionen. |
+| Tidig visuell mockup vid behov | Konceptets exakta revision, namngivna vyer och originalreferenser ger underlag för utseende, materialkänsla och sammanhang. | Bilden hjälper användaren välja uttryck. Nya designval återförs till Solution. En AI-genererad illustration är fortfarande ett förslag även om prompten innehåller alla detaljer; den bekräftar inte geometri eller dolda förband. |
+| Detaljerad konstruktion och beskrivning | Vald Solution-revision förfinas till Construction med delar, material, fogar, placeringar, parameterursprung och monteringsberoenden. Beskrivningen förklarar denna exakta revision. | Bob gör konstruktionsval; kod räknar och kontrollerar. En konceptdel kan genom den planerade spårbara förfiningen bli flera byggdelar. Detaljering görs före den slutliga 3D-granskningen. |
+| Detaljerad visuell 3D-förhandsvisning | **Samma exakta Construction-geometri som slutritningarna** renderas med material/färg, ljus och valbara vyer som gör helhet och relevanta detaljer begripliga. | Användaren granskar den faktiska modellens form, utseende och funktioner. Modellens detaljer visas där de finns; text om en fog skapar inte automatiskt modellerade skruvar. Omodellerade eller olösta detaljer anges. Denna presentation och beslutskoppling återstår att bygga. |
+| Versionsbundet användarbeslut | Visad modell/presentation, Solution-/target- och Construction-revision, avgränsning samt kvarstående frågor följer med beslutet. | Användaren godkänner det visade för avsett syfte. Tidigare uttrycklig delegation kan användas inom sin omfattning och registreras som ett delegerat beslut, aldrig som påhittat användargodkännande. |
+| Slutliga ritningar, listor och leverans | CAD, detaljbeskrivning/monteringsanvisning och plock-/kapunderlag härleds från **den godkända Construction-revisionen**. Bob sparar, länkar och återläser rätt Artifact-version. | Exporten inför inga nya konstruktionsval. Kod kontrollerar versionslikhet, källaktualitet, geometri och leveranskvitton. Befintliga material-/lager-/produktägare kompletterar listorna; preliminära längder är inte en godkänd kapplan eller inköpslista. |
 
-Detaljbeskrivningens versionskoppling och mockupens nya överlämning behöver
-preciseras inom [Artifact](artifacts.md) respektive [medieägaren](media-and-steps.md).
+En dellista saknar delar av placeringarna och förbanden och kan inte ensam vara
+3D-källa. Geometrimotorn kan användas redan för förhandsvisningen; **slutlig CAD**
+är här export/publicering av accepterad geometri, inte ett nytt designsteg.
+Återanvänd giltiga renderresultat där det går. En ny kameravinkel ska inte kräva
+ett nytt konstruktionsanrop.
+
+Detaljbeskrivningens versionskoppling, förhandsvisningens presentationsdata och
+beslutets exakta lagring behöver preciseras inom [Artifact](artifacts.md),
+[Solutions](solutions.md#form-refinement) och [medieägaren](media-and-steps.md#form-visual-preview).
 Ingen separat beskrivnings-, list- eller projektminnesdatabas införs av detta flöde.
 Den ursprungliga [FORM-referensen](form-design-loop-review-2026-10-26.md) bevaras
 som metodunderlag; denna precisering äger relationen mellan leveranserna.
 
-#### Två granskningar med olika frågor
+#### Användarens granskning och Bobs tekniska ansvar
 
-**Efter 2D:** kontrollera funktioner, antal, axlar, sida, relativa placeringar,
-öppningar, fria utrymmen och styrande mått mot originalavsikten. Alla vyer ska
-beskriva samma modell. Markera vad som är okänt eller uttryckligen uppskjutet för
-konceptets syfte. Numeriskt giltig geometri och en länk till ett funktions-ID
-bevisar inte att funktionen finns. En oförändrad kandidat får inte köras om
-upprepade gånger som ersättning för att lösa en konkret avvikelse.
+**Efter 2D:** användaren bedömer om förslaget motsvarar önskemålet. Visa funktioner,
+antal, axlar, sida, relativa placeringar, öppningar, fria utrymmen och styrande
+mått begripligt. Alla vyer ska beskriva samma modell. Okänt och uttryckligen
+uppskjutet visas för konceptets syfte. Bob jämför med originalkrav och rättelser;
+kod kontrollerar uttryckbara villkor. En giltig JSON-modell eller ett funktions-ID
+bevisar inte att funktionen finns.
 
-**Efter 3D:** bevara den befintliga oberoende CAD-granskningen och kontrollera
-också att förfiningen bevarat konceptets styrande funktioner och relationer.
-Granskaren ska kunna öppna originalen utan att vara begränsad till designerns
-eller underlagsläsarens urval. Redovisa avvikelse med krav, berörd del/egenskap,
-källa och korrigering. Saknade spar-/Step-kvitton hör till efterföljande leverans,
-inte till påhittade geometrifel. K2, källaktualitet och behörighet kvarstår vid
-respektive servergräns.
+**Efter detaljerad 3D:** användaren bedömer den faktiska konstruktionens synliga
+form, uttryck och funktioner före slutleverans. Vyer och detaljvyer ska visa det
+som behöver bedömas, även på en annan sida eller invändigt. Material, färg och
+ljus gör modellen läsbar men får inte förvränga geometrin. En genererad eller
+generativt bearbetad inspirationsbild ersätter inte denna modellbundna visning.
+Bob ansvarar fortsatt för förfining, tekniska val och olösta frågor. Användaren
+behöver inte intyga hållfasthet, dolda förband eller produktlämplighet genom att
+godkänna utseendet; sådana kontroller behåller sina befintliga ägare och gränser.
+
+**Beslut och ändringar:** servern binder beslutet till behörig aktör, syfte,
+exakta modell-/källrevisioner och det visade underlaget. Återanvänd Solution-,
+Artifact- och kvittosystemen. Vald target eller `alignment` är inte ensamt bevis
+på att användaren sett en viss 3D-presentation. En relevant ändring av form,
+funktion, material eller styrande källa gör tidigare acceptans otillräcklig för
+den berörda delen: visa ändringen, räkna om och inhämta nytt beslut där mandatet
+kräver det. En extra vy eller återförsök av samma export kräver inget nytt
+designgodkännande. Dessa är två meningsfulla designbeslut, inga klartecken per
+verktyg eller vanliga konstruktionsdetaljer. Väntande beslut visas ärligt och
+pausar endast beroende arbete.
 
 Rätta på den nivå där felet uppstod: ändrad funktion eller övergripande form går
 till Solution; ett lokalt konstruktionsfel går till Construction. Räkna om och
@@ -142,20 +167,34 @@ granska berörda beroenden. Ett misslyckat sparande eller en saknad länk repare
 med befintliga kvitton utan att generera om geometri. Historik och orelaterade
 delar bevaras.
 
-#### Få AI-anrop med ett tydligt arbete
+#### Riktad AI-granskning och få anrop
 
-Fyra typer av bedömning kan behöva AI: formulera konceptet, granska avsikten i
-2D, detaljera konstruktionen och granska resultatet. Detta är **ansvar, inte ett
-löfte om fyra API-anrop** eller fyra nya agenter. Beskrivningar tas fram med
-respektive designarbete och återanvänds så länge deras källversion gäller.
-Illustration och djupare källtolkning används när uppgiften behöver dem.
-Hämtning av exakta poster, beroendeuppföljning, matematik, listor, projektioner,
-rendering och kvittokontroll är kodarbete.
+AI används för koncept, konstruktionsval, förklaringar och behövd källtolkning.
+Beskrivningar följer respektive designarbete och återanvänds så länge deras
+källversion gäller. Hämtning av exakta poster, beroendeuppföljning, matematik,
+listor, projektioner, rendering och kvittokontroll är kodarbete. Kodvalidering
+behövs även för strukturerad indata och är inget extra AI-anrop.
+
+En separat AI-granskare får en **konkret fråga**, berörda delar/beroenden,
+maskinella kontrollresultat och relevanta originalkällor, exempelvis vid
+motstridiga krav eller en förfining som kod inte kan verifiera. Den ska kunna
+öppna originalen och vid behov utöka omfattningen. Svaret anger krav,
+del/egenskap, källa, avvikelse och korrigering. Saknad evidens förblir en lucka;
+användarens visuella godkännande kan inte kringgå den. En liten modell kan
+slutföra en avgränsad granskning när den räcker; större modell används för
+konkret behov. Lägg inte obligatoriskt en billig granskare framför varje annan
+granskare. Oförändrat underlag ska inte köpas om för att få ett annat utslag.
+
+**Mål:** ingen rutinmässig full AI-omgranskning efter slutexport av oförändrad,
+accepterad modell. Innan dagens Rita-grind ersätts måste den nya vägen verifiera
+versionsbundna beslut, käll-/behörighetsspärrar, tekniska kontroller och återhämtning.
+Spar-/Step-kvitton förblir ett eget leveransansvar. K2 och kvarstående fysiska
+kontroller tas inte bort av detta beslut.
 
 Det planerade [underlagspaketet](ask-bob-context.md#task-source-packet) använder
 befintliga läsare och kan minska huvudmodellens upprepade letande. En liten modell
 tolkar vid behov text, med kontrollerbara källor och möjlighet att hämta mer.
-Den väljer inte bort obligatoriska krav och ersätter inte granskaren. Val av
+Den väljer inte bort obligatoriska krav eller fattar användarens beslut. Val av
 Nano/Mini avgörs av bibehållna krav och total kostnad/tid per korrekt leverans,
 inte enbart priset per enskilt anrop.
 
@@ -169,7 +208,7 @@ Fälten nedan är logiska kontrakt. Befintliga verktygsnamn, tillstånd och data
 | **2. Datainsamlaren bedömer hela underlaget** | Uppdraget samt parallella, behöriga källor: projekt/plan/Tasks, vald lösning, mått, fysisk plats/relationer, komponenter, material och bilder. | Giltigt uppdrag och ett avgränsat relevant sökområde. En saknad vald lösning får inte dölja andra luckor. | Exakta källposter/mediereferenser, lästäckning och bedömning av varje krav plus upptäckta nödvändiga beroenden. Klart när allt relevant inom deklarerad omfattning är bedömt eller begränsningen är explicit; inga tysta rest-sidor. | Tillräckligt → 4. Samlade kunskapsluckor/konflikter → 3. Läsfel, avkortning eller åtkomstproblem → särskilt tekniskt utfall med kvarvarande luckor bevarade. Den billiga modellen får inte ensam förklara oläst underlag irrelevant. |
 | **3. Bob löser kompletteringar** | Hela lucklistan, befintliga källor och Tasks/Steps, mandat, lösningsalternativ och konflikter. | Uppdraget är aktivt och luckornas innebörd känd. | Befogade beslut och korrigeringar sparas genom rätt domänkommandon. Kvarstående observationer får återanvänd eller ny Task/Step, alternativt strukturerad mätinsamling i chatten. Varje lucka har ansvarig, svarssätt och blockerad leverans. Klart när kvarvarande luckor är samlade och arbetsläget sparat — eller när allt är löst. | Relevanta sparade kompletteringar → 2 i samma uppdrag. Väntan på användaren → parkera med konkret återupptagningsvillkor; fortsätt oberoende arbete. Skrivfel → återställ den skrivningen. Ingen fråga om nytt lov när befintligt mandat räcker. |
 | **4. Designer konstruerar och renderar** | Godkänt intag, ursprungliga krav, exakt lösningsversion, källmanifest, relevanta bildpixlar och konstruktionskunskap. | Mottagaren bekräftar intagets giltighet, nödvändiga källor/bindningar, förmåga, behörighet och återstående budget. | Kandidat med konstruktion, beräkningsberoenden, geometri, delar/placeringar, vyer, exporter, hashvärden och öppna kontroller. Klart när kandidaten faktiskt renderats och inga tekniska diagnoser utger sig för att vara leverans. | Kandidat → 5. Upptäckt källlucka/konflikt → 3/2, inte påhittat mått. Konstruktionsfel → avgränsad korrigering. Render-/modellfel eller kostnadsstopp → korrekt pausorsak, inte en ny konstruktion som felsökningsmetod. |
-| **5. Granskaren bedömer; servern avgör om grinden öppnas** | Exakt kandidat, originalkrav, intag, bildreferenser, aktuella oberoende källkontroller och deterministiska kontrollresultat. | Samma kandidat- och källfingeravtryck; obligatoriska källor lästa; relevanta bilder levererade; granskningsförmåga och budget finns. | Kravtäckning, konkreta avvikelser och godkännande för uttryckligt syfte. Klart först när maskinella villkor och semantisk granskning båda godkänner. Resultatet binds till kandidat, krav, källversioner och granskningsversion. | Godkänt → 6. Geometri/konstruktion → 4 med specifika ändringar. Källfel/beslutsfel → 2/3. Ofullständig nödvändig evidens, tekniskt fel eller kostnadsstopp → ingen sparbar godkänd kandidat. |
+| **5. Granskning för syftet; servern kontrollerar beslut och villkor** | Exakt kandidat, originalkrav, visat underlag, aktuella källkontroller och deterministiska kontrollresultat. | Samma kandidat- och källfingeravtryck; obligatoriska källor lästa; relevanta vyer levererade; rätt beslutsmandat. Vid behövd AI-bedömning krävs också förmåga och budget. | Kravtäckning, konkreta avvikelser och beslut för uttryckligt syfte. I FORM granskar användaren 2D och detaljerad 3D före slutexport; separat AI-bedömning behövs för konkreta frågor enligt FORM-kontraktet. Resultatet binds till kandidat, krav, källor, visat underlag och beslutsaktör. Maskinella villkor gäller oavsett vem som granskar. | Giltiga beslut och kontroller → 6 utan ny full AI-granskning av samma export. Geometri/konstruktion → 4 med specifika ändringar. Källfel/beslutsfel → 2/3. Saknad nödvändig evidens eller beslut → beroende leverans väntar med konkret orsak. |
 | **6. Bob sparar, kopplar och levererar** | Godkänd exakt kandidat, käll-/kravfingeravtryck, förväntad Artifact-revision, rätt projekt och Steps samt befintliga kvitton. | Behörighet, mandat och källaktualitet kontrolleras igen vid spargränsen. Inget konkurrerande avslut har redan sparat samma leverans. | Versionskvitto, exakta steglänkar och återläsning från avsedd projektyta. Klart när rätt innehåll och länkar faktiskt är tillgängliga; utfallet anger syfte och återstående fysiska kontroller. | Komplett → levererat. Fil sparad men länk saknas → reparera länken utan ny generering. Skrivkonflikt/ändrad källa → uppdaterad bedömning, aldrig blind överskrivning. Bruten åtkomst → ärlig spärr, inte framgångsmeddelande. |
 
 **Ändringsansvar efter leverans:** Bob ansvarar för konsekvensbedömningen. Domänkommandot publicerar vilken källa/version som ändrats; beroendeuppföljningen identifierar berörda leveranser; respektive domän hanterar omräkning, omgranskning eller ändringsarbete. Arbetets verkliga utförande och inköp skrivs inte om som om de aldrig hänt.
@@ -364,9 +403,10 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — FORM och rätt underlag (2026-10-26):** förbered första
+**Aktivt nästa steg — FORM och användargranskning (2026-10-27):** förbered första
 arbetspaketet i [FORM-ordningen](#form-next): spårbar förfining från konceptdelar
-till byggdelar och granskningskontraktet efter 2D. [Hela flödet](#form-flow) och
+till byggdelar och versionsbundet användarbeslut efter 2D. Planera därefter den
+modellbundna visuella 3D-förhandsvisningen före slutexport. [Hela flödet](#form-flow) och
 [underlagspaketet](ask-bob-context.md#task-source-packet) är nu dokumenterade;
 utökningarna är ännu inte implementerade. Befintliga acceptanspunkter nedan
 kvarstår. Historiska versionsnummer är releasebevis för respektive datum, inte
@@ -469,38 +509,52 @@ Serverbundna work-record- och planlänkverktyg samt konflikttransporten är nu i
 **Kvarstående produktacceptans:** verklig medlemsåterläsning, våningssängens resultat mot mockupen och mätningen av hela modellkedjans kostnad ligger kvar i E. [Artifact](artifacts.md#instance-roles-and-affected-outputs--release-d), [CAD](cad-adapter.md), [material](material-planning.md) och [datagränserna](#kvarstående-datagränser--kodgranskning-2026-10-10) äger de driftsatta ändringskontrakten. Tekniska prov stänger inte modell-/mockupacceptansen.
 
 <a id="form-next"></a>
-### FORM 1.0 — nästa arbetspaket och acceptans, 2026-10-26
+### FORM 1.0 — nästa arbetspaket och acceptans, uppdaterat 2026-10-27
 
 **Nästa handling:** precisera och därefter implementera den minsta förfiningen
-och 2D-granskningen i paket 1. Detta är den dokumenterade arbetsordningen,
+och användarens 2D-beslut i paket 1. Detta är den dokumenterade arbetsordningen,
 inte ett påstående om att utökningarna redan körs. Första FORM-leveransen är
 tekniskt installerad enligt [releasebeviset](foundation-verification.md#form-concept-loop--local-synthetic-verification-2026-10-26);
 dess SQL, frontend och katalog ska inte publiceras om för att denna plan mergas.
 
 | Ordning | Avgränsat arbete | Klart-villkor och ägare |
 |---|---|---|
-| 1. Förfining och 2D-granskning | Definiera hur en konceptdel kan bli flera byggdelar och hur originalkrav följer med. Lägg till oberoende semantisk bedömning av exakt 2D-kandidat. | [Solution-gränsen](solutions.md#form-refinement) och Artifact behåller identiteter, revisioner, koordinatram och krav. Prova en vägg som blir reglar/skivor, bevarad funktion och ett avsiktligt speglat eller saknat krav; okänd/ostödd förfining ska ge en konkret lucka. Giltig 2D får gå vidare utan obligatoriska extrabekräftelser. |
+| 1. Förfining och användarens 2D-beslut | Definiera hur en konceptdel blir flera byggdelar och hur originalkrav följer med. Visa rätt 2D-version och återanvänd befintliga Solution-beslut/mandat; precisera vilket underlag beslutet gäller. | [Solution-gränsen](solutions.md#form-refinement) och Artifact behåller identiteter, revisioner, koordinatram och krav. Prova vägg → reglar/skivor, bevarad funktion, spegling och saknat krav. Okänd/ostödd förfining ger en konkret lucka. Ett giltigt beslut eller uttryckligt delegerat val återanvänds utan klartecken per verktyg; tekniska fel blir inte användarfrågor. |
 | 2. Underlag för nästa arbete | Bygg det [avgränsade underlagspaketet](ask-bob-context.md#task-source-packet) på befintliga sök-/detalj-/konstruktionsläsare. Kod väljer strukturerade fakta; liten modell används för faktisk texttolkning. | Källor och revisioner kan öppnas exakt; senaste rättelser, lästäckning, konflikter och osäkerhet följer med. Ett missat urval eller läsfel får en återhämtningsväg. Privat minne förblir privat. Modellvalet behöver jämförande acceptans. |
-| 3. Mockup och sammanhängande leverans | Koppla den valfria bildbeställningen till exakt FORM-revision och relevanta vyer. Bind detaljbeskrivning, listor och 3D till samma Construction. Utöka 3D-review med den nya förfiningen. | [Medier](media-and-steps.md), [Artifact](artifacts.md), [material](material-planning.md) och [CAD](cad-adapter.md) återanvänds. Nya bildval återförs till Solution; mått hämtas inte ur mockupen. Ändring påverkar rätt resultat och kvitton bevarar redan sparad leverans. |
+| 3. Visuell 3D, användarbeslut och slutleverans | Knyt tidig inspirationsbild till FORM-revisionen när den behövs. Bygg därefter detaljerad 3D-förhandsvisning från exakt Construction med material/färg, ljus och relevanta detaljvyer. Bind användarbeslut till visad modell; härled slutritningar, beskrivning och listor från samma version. | [Medier](media-and-steps.md#form-visual-preview), [Artifact](artifacts.md), [material](material-planning.md) och [CAD](cad-adapter.md#form-preview-and-export) återanvänds. Precisera lagring av presentation/beslut och bevisa versionslikhet, ändringshantering och återläsning. Ersätt först därefter obligatorisk full Rita-granskning med kodkontroller och riktad AI-bedömning vid behov; ta bort den ersatta vägen i den verifierade releasen. |
 | 4. Samlad acceptans och release | Kör riktade lokala kontroller och därefter separat godkända verkliga ägar-/modell-/CAD-prov. Följ repots befintliga manuella CI-, säkerhets- och releaseordning. | Samma generella metod klarar fallen nedan. Läs tillbaka exakta versioner och länkar efter omladdning och som behörig medlem; kontrollera även nekad åtkomst. Publicerad kod/katalog eller godkända fixturer räcker inte som modellacceptans. |
 
 **Gemensamma acceptansfall:**
 
 - **Låda:** ändra bredd; kontrollera samma rättade modell i 2D, beskrivning,
-  byggdelar, listor och 3D. Inga objektspecifika specialverktyg eller onödig mockup.
+  byggdelar, detaljerad 3D-förhandsvisning, listor och slutritning. Godkänd version
+  går till export utan ny full AI-granskning i målflödet. Inga objektspecifika
+  specialverktyg eller onödiga genererade inspirationsbilder.
 - **Våningssäng:** flytta stegen utan att ändra lådorna. Bevara originalfunktioner,
-  upptäck spegling och testa en sen rättelse efter sammanfattat samtal.
+  visa rätt gavel och upptäck spegling. Testa sen rättelse efter sammanfattat
+  samtal och efter 3D-godkännande: tidigare beslut gäller inte den flyttade stegen.
 - **Lada:** tre rum längs längden, slutna plana tak över djurrum och lodrät stege
   mot angiven vägg. Kontrollera höjdkedjan och att alla vyer uttrycker samma modell.
   Taklutning och andra delar utanför första modellens stöd ska visas som luckor;
   principsnittet är inte en byggteknisk CAD-kapning.
 
-Prova dessutom ändrad källrevision, missad relevant källa, saknat obligatoriskt
-underlag, läsfel och avbrott mellan sparande och länkning. Mät krav som tappas,
+Prova dessutom att en snygg inspirationsbild inte godkänner annan geometri,
+att olösta/omodellerade detaljer och behövda invändiga vyer visas, samt att
+godkännandet överlever omladdning och privat chattreset utan att privata uppgifter
+publiceras. Obehörig aktör, gammal modellversion eller ändrad styrande källa får
+inte ge giltig acceptans. Ett delegerat val får inte visas som användarens eget
+godkännande. En extra kameravy och återförsök av samma export ska återanvända
+giltigt beslut utan ny designrunda. Användarens visuella godkännande får inte
+kringgå ett tekniskt fel eller saknad nödvändig evidens.
+
+Prova missad relevant källa, saknat obligatoriskt underlag, läsfel och avbrott
+mellan sparande och länkning. Mät krav som tappas,
 falska godkännanden/stopp, felaktiga vyer, omtag, AI-/verktygsanrop, kostnad och
 hela leveranstiden för jämförbara resultat. [Auditens mätbegränsning](archive/bob-project-context-audit-2026-10-26.md#4-per-model-timing-cannot-currently-support-a-reliable-speed-comparison)
-måste hanteras när bakgrundsanrop tidsmäts. Den befintliga K2-/CAD-granskningen och
-övrig medlemsacceptans kvarstår under arbetet.
+måste hanteras när bakgrundsanrop tidsmäts. Den befintliga K2-/CAD-granskningen
+gäller under arbetet tills den specificerade ersättningen är verifierad och
+publicerad; K2, käll-/behörighetsspärrar och fysisk osäkerhet kvarstår även därefter.
+Övrig medlemsacceptans stängs inte av denna planändring.
 
 <a id="bob-task-pr-plan"></a>
 ### PR-plan — sammanhängande uppgiftsarbete och modelluppgradering, 2026-10-17

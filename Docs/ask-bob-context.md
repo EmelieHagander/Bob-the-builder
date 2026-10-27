@@ -153,8 +153,13 @@ Bob and reviewers must be able to expand the selection and read originals. A
 reader failure leaves an explicit limitation and the ordinary direct readers;
 it neither approves missing evidence nor forces a repeated small-model loop.
 The packet does not write project truth, select a Solution, certify geometry or
-replace the independent 2D/3D review. Preserve the current member/project/private
-thread boundaries. Project-wide reuse must never expose private conversation text.
+supply user acceptance. The [2026-10-27 FORM flow](bob-delivery-flow.md#form-flow)
+owns the two user review points and targeted AI assessment when needed. For such
+an assessment, include the concrete question, affected parts/dependencies and
+existing check results alongside original evidence; the reviewer can expand the
+selection. A reader summary is not an independent verdict. Preserve the current
+member/project/private thread boundaries. Project-wide reuse must never expose
+private conversation text.
 
 Reuse the observation for the same source identities/revisions, question and
 scope; recheck current authorization before reuse and refresh when a relevant
