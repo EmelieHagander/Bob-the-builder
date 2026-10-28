@@ -24,7 +24,10 @@ hosted project.
   its own publication boundary. `tool-catalog-parity` and `bob-release-capacity`
   already failed on main `4f3f034`. `construction-delivery` counted every later
   definition, so it would have failed after any later publication.
-- RESULT_PLACEHOLDER
+- **984 of 986** tests pass across the 133 test files that use the catalog
+  fixtures, the database catalog or the CAD runtime. The two failures, in
+  `construction-delivery`, were its boundary count; after that fix the file's
+  8 tests pass.
 - `deno check` of `ask-bob` and `bob-worker` passes, with the same local
   supabase-js import map.
 
