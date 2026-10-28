@@ -163,9 +163,64 @@ TypeScript checking with the already installed Node declarations. Both affected
 Edge entrypoints pass Deno checking with the temporary import map described
 above. No full suite, GitHub workflow, hosted write or paid model call was run.
 
-The same-artifact Solution/Construction revision repair, repeated discovery
-cost, and durable privacy-safe diagnostics for rejected edits remain open.
+The implementation below addresses same-artifact Solution/Construction
+reconciliation and repeated discovery. Live cost reduction and durable
+privacy-safe diagnostics for rejected edits remain open.
 The precise rejected arguments from this completed baseline are unavailable.
+
+<a id="bob-cost-controls-2026-10-28"></a>
+### Owner-approved cost corrections — source verified, installation pending
+
+The owner approved the prepared stop fixes and source reconciliation, requested
+at most six permanently loaded tools with descriptions read from the catalog,
+and selected **GPT-5.4 medium**. This does not authorize another paid acceptance
+run. Both candidate roles/policies remain off.
+
+Exact event accounting for the original baseline gives **116 tool executions**:
+
+| Turn | Tool executions | `describe_tool` | `read_construction_draft` | Other |
+|---|---:|---:|---:|---:|
+| Concept | 53 | 13 | 8 | 32 |
+| Width change | 25 | 8 | 10 | 7 |
+| Drawing and repair | 38 | 10 | 12 | 16 |
+| **Total** | **116** | **31** | **30** | **55** |
+
+These are observed executions, not a minimum necessary count. The 72 model calls
+above are a different measure. No observed `unknown_tool`/`not_offered` result
+proves a missing tool here; discovery and repair are costly, while distinct
+views/pages/freshness checks can explain legitimate repeated reads.
+
+`change_construction_parameters` now has an explicit target-revision input.
+The original implementation always retained the old source pin, leaving a small
+numeric repair unable to reconcile a later selected Solution. The new command
+preserves the Artifact ID and uses the existing authoritative write chain:
+readiness, concept geometry, FORM mapping, source/head locks, history and receipt
+replay still apply. A source-only refresh is explicit and cannot bless geometry
+that no longer matches. No baseline project data is repaired by installation.
+
+The immutable catalog publishes only three definitions: the parameter tool,
+`bob.tools.core_tools` (six names including discovery), and `profile.ask-bob`
+(high to medium). Runtime descriptions/schemas resolve from those pinned tool
+definitions. The model stays GPT-5.4; other roles/profiles and historical pins
+retain their settings. The [tool owner](ask-bob-tools.md) and
+[Artifact owner](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10)
+define the contracts; [AI seam](../supabase/README.md#roles-and-baseline-profiles)
+owns release ordering.
+
+**Focused verification:** 81 distinct local tests pass across the four stop-fix
+files above plus `bob-cost-controls`, `bob-context-strategy-main`,
+`bob-selective-tools` and `construction-source-refresh`. The full isolated SQL
+schema tests prove same-ID numeric and source-only reconciliation, rejection of
+old geometry/unknown controls/outsiders, exact receipt replay after later source
+changes, publication idempotency, unchanged unrelated definitions and historical
+manifest compatibility. The actual main-loop request exposes six catalog-derived
+tools from its first step at GPT-5.4 medium; a mocked read needs no discovery turn.
+Both Edge entrypoints pass Deno checking. The runner, builder and new tests pass
+targeted strict TypeScript checks with the exact local Supabase declarations and
+an environment-only Deno declaration. No production import changed.
+
+No full suite, workflow or paid model run was started. This proves technical
+behavior, not reduced live spending or complete model-driven drawing delivery.
 No automatic rebase, cross-revision read cache, model/prompt change, hosted
 migration or new paid run is part of these corrections. Savings and complete
 member acceptance therefore remain unmeasured.

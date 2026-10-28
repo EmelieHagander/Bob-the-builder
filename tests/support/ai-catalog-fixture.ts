@@ -20,10 +20,28 @@ let preContinuationRows:any[]|undefined,preContinuationVersions:Map<string,numbe
 let preTaskWorkflowRows:any[]|undefined,preTaskWorkflowVersions:Map<string,number>|undefined
 let preSourceRenewalRows:any[]|undefined,preSourceRenewalVersions:Map<string,number>|undefined
 let preBuildingScopeRows:any[]|undefined,preBuildingScopeVersions:Map<string,number>|undefined
+let preCostControlsRows:any[]|undefined,preCostControlsVersions:Map<string,number>|undefined
 // Materialise the explicit immutable publication patches in migration order.
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const costControls=source.match(/\$bob_cost_controls_spec\$([\s\S]+?)\$bob_cost_controls_spec\$/)
+ if(costControls){
+  preCostControlsRows=structuredClone(seed);preCostControlsVersions=new Map(versions)
+  const spec=JSON.parse(costControls[1])
+  for(const key of ['tools.change_construction_parameters','bob.tools','profile.ask-bob']){
+   const row=seed.find(row=>row.key===key),{seed_version,source_revision,...rest}=row.metadata??{}
+   row.metadata={...rest,publication:'bob-cost-controls-v1',bob_cost_controls_version:1}
+   if(key==='tools.change_construction_parameters'){
+    row.definition.parameters.properties.target_revision=spec.target_revision
+    row.definition.parameters.properties.changes.minItems=0
+    row.definition.parameters.required.push('target_revision');row.definition.required_parameters=[...row.definition.parameters.required]
+    row.definition.description+=spec.note;row.metadata.construction_source_refresh_version=1
+   }else if(key==='bob.tools')row.definition.core_tools=spec.core_tools
+   else row.definition.reasoning_effort=spec.reasoning_effort
+   versions.set(key,versions.get(key)!+1)
+  }
+ }
  const constructionEvidence=source.match(/\$construction_evidence_spec\$([\s\S]+?)\$construction_evidence_spec\$/)
  if(constructionEvidence)for(const spec of JSON.parse(constructionEvidence[1])){
   const row=seed.find(row=>row.key===spec.key)
@@ -387,6 +405,7 @@ for(const migration of migrations){
   for(const patch of JSON.parse(parameterContracts[1])){
    let row=seed.find(row=>row.key==='tools.'+patch.name)
    if(!row){row=structuredClone(seed.find(row=>row.key==='tools.save_construction_draft'));row.key='tools.'+patch.name;seed.push(row)}
+   row.definition.additional_description=patch.name==='change_construction_parameters'?policy.how_to:(row.definition.additional_description??'')+' For a changed construction, use change_construction_parameters, check its receipt revision and pass that exact construction_revision. Rendering cannot substitute a newer design.'
    versions.set(row.key,(versions.get(row.key)??0)+1)
    row.definition={...row.definition,...patch,handler:patch.name,required_parameters:patch.parameters.required,optional_parameters:[]}
   }
@@ -556,7 +575,7 @@ for(const migration of migrations){
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.
-for(const rows of [seed,originalSeed,...(preCompleteContextRows?[preCompleteContextRows]:[]),...(preSelectiveToolsRows?[preSelectiveToolsRows]:[]),...(preConstructionViewsRows?[preConstructionViewsRows]:[]),...(preConstructionEditsRows?[preConstructionEditsRows]:[]),...(preContextCoverageRows?[preContextCoverageRows]:[]),...(preTaskWorkflowRows?[preTaskWorkflowRows]:[]),...(preContinuationRows?[preContinuationRows]:[]),...(preSourceRenewalRows?[preSourceRenewalRows]:[]),...(preBuildingScopeRows?[preBuildingScopeRows]:[]),...(preContextStrategyRows?[preContextStrategyRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+for(const rows of [seed,originalSeed,...(preCostControlsRows?[preCostControlsRows]:[]),...(preCompleteContextRows?[preCompleteContextRows]:[]),...(preSelectiveToolsRows?[preSelectiveToolsRows]:[]),...(preConstructionViewsRows?[preConstructionViewsRows]:[]),...(preConstructionEditsRows?[preConstructionEditsRows]:[]),...(preContextCoverageRows?[preContextCoverageRows]:[]),...(preTaskWorkflowRows?[preTaskWorkflowRows]:[]),...(preContinuationRows?[preContinuationRows]:[]),...(preSourceRenewalRows?[preSourceRenewalRows]:[]),...(preBuildingScopeRows?[preBuildingScopeRows]:[]),...(preContextStrategyRows?[preContextStrategyRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):AiCatalogManifest{
  const modelTiers=new Map(rows.filter(row=>row.kind==='tier_binding').map(row=>[row.definition.model_name,row.definition.tier]))
  return{format_version:1,app:'bob',manifest_id:id,created_at:'2026-10-09T14:00:00Z',
@@ -569,6 +588,8 @@ function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):Ai
 const preConstructionEditsManifest=fixtureManifest(preConstructionEditsRows??seed,preConstructionEditsVersions??versions,'fixture-pre-construction-edits-manifest')
 export function preConstructionEditsCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw new Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preConstructionEditsManifest)})}
 const manifest=fixtureManifest(seed,versions,'fixture-manifest')
+const preCostControlsManifest=fixtureManifest(preCostControlsRows??seed,preCostControlsVersions??versions,'fixture-pre-cost-controls-manifest')
+export function preCostControlsCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preCostControlsManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 const preContextCoverageManifest=fixtureManifest(preContextCoverageRows??seed,preContextCoverageVersions??versions,'fixture-pre-context-coverage-manifest')
 export function preContextCoverageCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preContextCoverageManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 const preContextStrategyManifest=fixtureManifest(preContextStrategyRows??seed,preContextStrategyVersions??versions,'fixture-pre-context-strategy-manifest')

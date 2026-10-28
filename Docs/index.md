@@ -6,6 +6,10 @@
 
 ## Start here
 
+- [Bob cost corrections, 2026-10-28](foundation-verification.md#bob-cost-controls-2026-10-28)
+  — approved six catalog-owned core tools, GPT-5.4 medium and same-construction
+  source reconciliation; technical installation and live acceptance are separate.
+
 - [Selective tools and methods](ask-bob-tools.md#selective-methods-and-tools--prepared-2026-10-19)
   and [canonical repetition / natural pieces](artifacts.md#compact-repetition-and-natural-pieces--prepared-2026-10-19)
   — construction/tool support is technically installed; [hosted release evidence](foundation-verification.md#hosted-bob-release--2026-10-19)

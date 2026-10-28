@@ -25,7 +25,25 @@ defines outcome/scope/mandate semantics; [release ordering](../supabase/README.m
 and [local proof/limits](foundation-verification.md#form-feedback-2026-10-27)
 remain separate from activation.
 
-**Drawing continuation preload — 2026-10-20.** A turn whose thread has a pending
+**Six catalog-owned core tools — source prepared, 2026-10-28.** The owner approved
+up to six permanent tools, including discovery. New `bob.tools.core_tools` pins
+`describe_tool`, `search_project_data`, `open_project_item`,
+`read_solution_context`, `read_construction_draft` and
+`change_construction_parameters`. They are callable from the first main request
+and remain available through subsequent steps. Descriptions, manuals and schemas
+come from each tool's immutable catalog definition, through the existing binder;
+the runtime does not embed a second set of prompt descriptions. Discovery uses
+its catalog card. Normal policy, prerequisites and write authority still apply.
+
+The six-tool limit applies to automatic core loading. Bob can load other tools
+when needed, and selective loading still retains those tools within the turn.
+The new list supersedes the additive drawing, reading and building preloads
+below for new manifests; building-link facts remain in context. Older pinned
+manifests keep their original loading behavior. An invalid, duplicate, unknown
+or oversized core list fails before a model request. Installation and measured
+limits belong to [verification](foundation-verification.md#bob-cost-controls-2026-10-28).
+
+**Historical drawing continuation preload — 2026-10-20.** A turn whose thread has a pending
 drawing request (the same `pending()` read the turn already makes) starts with
 the construction-drawing core loaded: `read_construction_draft`,
 `check_construction_draft`, `design_project_cad`, `read_drawing_requests`,
@@ -87,7 +105,7 @@ core migration, both runtimes, then the publication
 ([database](../db/README.md#room-dimensions--2026-10-26)). Bob's writers are
 unchanged.
 
-**Owner decision — 2026-10-22:** do not redesign selective loading, allowed-tool
+**Owner decision — 2026-10-22, amended by the six-tool selection above:** do not redesign selective loading, allowed-tool
 restriction or instruction placement for provider caching. The cache work kept is
 a routing hint only ([decision A](ask-bob-conversations.md#pr3--bound-result-payloads-without-an-ai-history-summary)).
 

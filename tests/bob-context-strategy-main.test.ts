@@ -9,7 +9,7 @@ import { countContextTokens } from '../supabase/functions/_shared/bob-token-budg
 import { fingerprint } from '../supabase/functions/_shared/bob-job-journal.ts'
 import { BobContinuation } from '../supabase/functions/_shared/bob-job-journal.ts'
 import type { ContextSurface } from '../supabase/functions/_shared/bob-context-continuation.ts'
-import { catalogFixture, preContextStrategyCatalogFixture, preSelectiveToolsCatalogFixture, catalogCall } from './support/ai-catalog-fixture.ts'
+import { preCostControlsCatalogFixture as catalogFixture, preContextStrategyCatalogFixture, preSelectiveToolsCatalogFixture, catalogCall } from './support/ai-catalog-fixture.ts'
 import { createProjectContext } from './support/colleague-catalog-fixture.ts'
 import { createMediaAdapter } from '../supabase/functions/_shared/project-context/media.ts'
 import { buildingLinkFact, createBuildingScope } from '../supabase/functions/_shared/project-building-scope.ts'

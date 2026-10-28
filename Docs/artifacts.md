@@ -206,6 +206,20 @@ The bounded change command carries the construction Artifact ID, expected constr
 
 The server reads the checkpoint itself, applies the delta and uses `compileCadParameters` plus the existing SQL/source guards to compute all affected dimensions and placements. Unchanged geometry topology, bindings, materials and joints are retained. SQL independently compares the changed inputs and permitted numeric recipe fields, recomputes the graph, reads canonical material/joint metadata and checks sources/readiness at commit. Formula/topology changes require an explicit construction revision; the numeric command cannot silently add/remove parts or alter bindings. Commit one new immutable construction revision under its expected-revision guard, then check that exact revision. This is one bounded operation through the existing construction writer and its receipt ledger. Exact retry is checked before source compilation and returns the original receipt even after a later head/source revision.
 
+**Explicit selected-source reconciliation — source prepared, 2026-10-28.** The
+same bounded command gains `target_revision`: null retains the saved pin; an
+explicit current revision reconciles this same construction with the changed
+selected Solution. Update the Solution first, then supply its exact target
+revision together with the required numeric changes. `changes: []` is permitted
+only with an explicit target, for an otherwise unchanged construction. The
+database checks current readiness and exact concept geometry at commit; changing
+the pin cannot bless old geometry, unresolved controlling inputs or stale sources.
+FORM mappings, part identities, materials, joints and history remain preserved.
+An incompatible mapping/topology requires an explicit revision of the same
+artifact. Old pinned tools keep their original payload. The new tool schema is
+activated only after both runtimes support it. See the
+[release evidence](foundation-verification.md#bob-cost-controls-2026-10-28).
+
 Only a successful checkpoint receipt supplies the downstream construction ID/revision. Bob passes its revision as `construction_revision`; the drawing job reads that version from the database and follows the checked K3 path. It may select supported views; it cannot choose replacement dimensions. A resumed request keeps its saved version. Old pinned AI manifests that lacked this input capture the canonical version once; they do not follow a newer head on resume. Failed construction checks return concrete issues to Bob on the same construction. Rendering or export failures retain that checkpoint for retry. Independent review and save-time source/construction guards still apply. The caller's drawing reader returns `construction_source` from the typed exact relation described by the [database owner](../db/README.md#construction-data-authority-and-remaining-extensions).
 
 | Version | Meaning | When it advances |

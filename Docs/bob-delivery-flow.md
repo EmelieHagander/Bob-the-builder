@@ -556,13 +556,14 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — rätta lådflödets omtag före fler betalda prov (2026-10-28):**
-håll ändrad Solution och samma Construction på aktuella källrevisioner,
-kontrollera efter sista ändringen och minska upprepad verktygsupptäckt/läsning.
+**Aktivt nästa steg — installera godkända kostnadsrättningar före fler betalda prov (2026-10-28):**
+driftsätt den lokalt verifierade källavstämningen på samma Construction,
+sex katalogägda kärnverktyg och GPT-5.4 medium enligt
+[releaseordningen](../supabase/README.md#roles-and-baseline-profiles).
 Den första lådbaslinjen visade [hög anropskostnad, inaktuell källkoppling och en
 dubbel konstruktion](foundation-verification.md#form-package5-release-2026-10-28).
 Ägaren bad att undersöka kostnaden; de tre återstående betalda proven är pausade.
-Verifiera korrigeringen lokalt innan en ny avgränsad modelljämförelse beställs.
+En ny avgränsad modelljämförelse behöver en egen uttrycklig beställning.
 
 **Förebyggande rättningar är förberedda, inte driftsatta:** acceptansprovet
 stoppar före nästa betalda steg när en kontroll fallerar, begär stopp av sitt
@@ -571,8 +572,10 @@ behåller ursprunglig konstruktionsidentitet och rättade mått samt återläser
 ritningens källstatus. Konstruktionskontrollens konfliktsvar visar observerade
 revisioner och skiljer källändring från ändrat huvud eller arkivering. Se samma
 [verifikationspost](foundation-verification.md#form-package5-release-2026-10-28)
-för historiska föregångare, tester och avbrottens begränsningar. Själva
-Solution/Construction-reparationen och uppmätt kostnadsminskning återstår.
+för historiska föregångare, tester och avbrottens begränsningar. Den godkända
+Solution/Construction-reparationen är lokalt verifierad med bibehållna
+geometri-/källspärrar. Modellbeteende, faktisk kostnadsminskning och fullständig
+leverans på samma konstruktion återstår att mäta efter installation.
 
 Tidigare FORM-delar finns installerade:
 paket 2a/2b/2c är mergade och tekniskt driftsatta med
