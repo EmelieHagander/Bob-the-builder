@@ -1,5 +1,33 @@
 # Foundation verification and rollout
 
+<a id="targeted-cad-review-source-2026-10-28"></a>
+## Targeted CAD review — local source verification, 2026-10-28
+
+The [targeted CAD review](cad-adapter.md#targeted-cad-review) is prepared in
+source and inactive. No catalog row `role.cad-targeted-reviewer` exists in any
+publication, so production keeps the full Rita review.
+
+**Passed locally:**
+
+- **7 new tests** in `cad-targeted-review.test.ts`:
+  - Without the role, the call, input and save gate are unchanged, and stored checks are not read.
+  - With a fixture publication, every requirement is asked by exact id with its code evidence, and code computes a pass.
+  - A failed stored probe returns to K2 without any model call.
+  - Changed, unreadable or missing evidence is reported and is never counted as a pass.
+  - An optimistic reviewer cannot pass an unresolved required feature or views that are not `met`.
+  - The strict parser rejects omissions, unexplained failures, a skipped reference comparison and a model-supplied verdict.
+  - The runtime fingerprint includes the role only when a publication contains it.
+- **512 of 513** CAD, drawing, catalog and related tests pass. The one failure,
+  `tool-catalog-parity.test.ts`, also fails on unchanged main `89e1e7d`: the
+  historical seed-parity snapshot lacks `read_construction_delivery`, which #357
+  introduced. It is not caused by this change.
+- `deno check` of `ask-bob` and `bob-worker` passes. This environment blocks
+  esm.sh, so a local import map pointed `@supabase/supabase-js@2.49.8` at the
+  installed npm package of the same library. The app `tsc` check also passes.
+
+No full suite, CI, migration, catalog publication, Edge deployment, model call or
+CAD job was run.
+
 <a id="form-saved-delivery-ui-2026-10-27"></a>
 ## FORM saved delivery UI — browser-verified and published, 2026-10-27/28
 

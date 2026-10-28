@@ -678,6 +678,8 @@ export async function answerWithOpenAi(opts: {
     // Checkpoints name a reviewed candidate's render step instead of copying its files.
     ...(checkpoint && opts.background?.loadRenderFiles ? { loadRenderFiles: opts.background.loadRenderFiles } : {}),
     readDesignReadiness,
+    // Used only by the catalog-gated targeted review; the full review never reads it.
+    readConstructionObservations:constructionOptions.readObservations,
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
     makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40,undefined,lookupOptions),
     callModel,

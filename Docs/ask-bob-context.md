@@ -173,7 +173,9 @@ an assessment, include the concrete question, affected parts/dependencies and
 existing check results alongside original evidence; the reviewer can expand the
 selection. A reader summary is not an independent verdict. Preserve the current
 member/project/private thread boundaries. Project-wide reuse must never expose
-private conversation text.
+private conversation text. The first such assessment packet, for the
+[targeted CAD review](cad-adapter.md#targeted-cad-review), is prepared in source
+but inactive. The general packet assembly and reader role above are not implemented.
 
 Reuse the observation for the same source identities/revisions, question and
 scope and interpretation contract; recheck current authorization before reuse
