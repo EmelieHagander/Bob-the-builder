@@ -109,6 +109,9 @@ const validAnswer = (v: any, statuses: string[]) => exact(v, ['status', 'evidenc
 /** Strict: every packet requirement answered exactly once, a failure names its
  * correction, and the verdict is computed here rather than taken from a model. */
 export function parseTargetedCadReview(value: unknown, packet: CadReviewPacket): CadReview | null {
+ return parseTargetedCadAnswers(value, packet)?.review ?? null
+}
+export function parseTargetedCadAnswers(value: unknown, packet: CadReviewPacket): { review: CadReview; reference: 'met' | 'unresolved' | 'failed' | 'not_applicable' } | null {
  let v: any = value
  if (typeof v === 'string') { try { v = JSON.parse(v) } catch { return null } }
  if (!exact(v, ['summary', 'requirements', 'views', 'reference', 'issues']) || !text(v.summary)) return null
@@ -134,9 +137,79 @@ export function parseTargetedCadReview(value: unknown, packet: CadReviewPacket):
  const required = new Set(packet.requirements.filter(r => r.required).map(r => r.id))
  const requirements = answers.map(a => ({ id: a.id as string, status: a.status as Status, evidence: a.evidence as string }))
  const revise = requirements.some(r => r.status === 'failed' || required.has(r.id) && r.status !== 'met') || issues.some(i => i.severity === 'error') || v.views.status !== 'met'
- return { verdict: revise ? 'revise' : 'pass', summary: v.summary, requirements, issues }
+ return { review: { verdict: revise ? 'revise' : 'pass', summary: v.summary, requirements, issues }, reference: v.reference.status }
 }
 
-export async function targetedReviewBasis(packet: CadReviewPacket) {
- return { mode: 'targeted' as const, version: CAD_TARGETED_REVIEW_VERSION, packet: await fingerprint(packet) }
+export async function targetedReviewBasis(packet: CadReviewPacket, reused: 'none' | 'requirements' | 'all' = 'none') {
+ return { mode: 'targeted' as const, version: CAD_TARGETED_REVIEW_VERSION, packet: await fingerprint(packet), reused }
+}
+/** Verified preview hashes from the CAD transport manifest. */
+export function previewHashes(manifest: Row | undefined): Record<string, string> {
+ return Object.fromEntries(Object.entries(manifest?.preview_metadata ?? {}).flatMap(([view, meta]: [string, any]) => hex64(meta?.sha256) ? [[view, meta.sha256 as string]] : []))
+}
+
+/** Durable, private reuse record kept on the owner's drawing request (never
+ * project-wide): statuses and hashes only, no reviewer prose or owner text. */
+export interface TargetedReviewRecord {
+ version: typeof CAD_TARGETED_REVIEW_VERSION
+ key: string
+ requirements: Record<string, 'met' | 'unresolved'>
+ presentation: { owner_request: string; views: Record<string, string>; reference: 'met' | 'unresolved' | 'not_applicable' }
+}
+const hex64 = (v: unknown) => typeof v === 'string' && /^[0-9a-f]{64}$/.test(v)
+export function parseTargetedReviewRecord(v: any): TargetedReviewRecord | null {
+ if (!exact(v, ['version', 'key', 'requirements', 'presentation']) || v.version !== CAD_TARGETED_REVIEW_VERSION || !hex64(v.key)) return null
+ if (!v.requirements || typeof v.requirements !== 'object' || Array.isArray(v.requirements)
+  || Object.values(v.requirements).some(s => s !== 'met' && s !== 'unresolved')) return null
+ const p = v.presentation
+ if (!exact(p, ['owner_request', 'views', 'reference']) || !hex64(p.owner_request) || !['met', 'unresolved', 'not_applicable'].includes(p.reference)
+  || !p.views || typeof p.views !== 'object' || Array.isArray(p.views) || Object.values(p.views).some(h => !hex64(h))) return null
+ return structuredClone(v)
+}
+
+/** Everything the requirement answers depend on except the rendered sheets:
+ * exact construction, intent, requirement set, measurement/physical pins,
+ * reference versions, stored code evidence and the CAD runtime/catalog. */
+export function targetedReuseKey(input: { packet: CadReviewPacket; runtimeVersion: string | undefined; pins: unknown; referenceVersions: unknown }) {
+ const { packet } = input
+ return fingerprint({ version: CAD_TARGETED_REVIEW_VERSION, runtime: input.runtimeVersion ?? null, construction: packet.binding.construction,
+  design_intent: packet.binding.design_intent, requirements: packet.binding.requirements, pins: input.pins ?? null,
+  references: { refs: [...packet.coverage.references].sort(), versions: input.referenceVersions ?? null },
+  form_evidence: packet.coverage.form_evidence.status === 'current' ? packet.coverage.form_evidence.result_id : packet.coverage.form_evidence.status })
+}
+
+export type TargetedReuse = { reused: Record<string, 'met' | 'unresolved'>; complete: boolean }
+/** A matching record answers its requirements again without a model call.
+ * Only identical owner text and identical verified preview hashes also reuse
+ * the views/reference answers; otherwise those are asked again. */
+export function applyTargetedReuse(packet: CadReviewPacket, record: TargetedReviewRecord | null, key: string,
+ presentation: { owner_request: string; views: Record<string, string> }): { packet: CadReviewPacket; reuse: TargetedReuse | null } {
+ if (!record || record.key !== key || !packet.questions.requirements.every(id => Object.hasOwn(record.requirements, id))) return { packet, reuse: null }
+ const reused = Object.fromEntries(packet.questions.requirements.map(id => [id, record.requirements[id]])) as Record<string, 'met' | 'unresolved'>
+ const required = new Set(packet.requirements.filter(r => r.required).map(r => r.id))
+ if (Object.entries(reused).some(([id, s]) => required.has(id) && s !== 'met')) return { packet, reuse: null }
+ const views = Object.entries(presentation.views)
+ const complete = record.presentation.owner_request === presentation.owner_request && views.length > 0
+  && views.every(([view, hash]) => record.presentation.views[view] === hash)
+  && (packet.questions.reference ? record.presentation.reference === 'met' : record.presentation.reference === 'not_applicable')
+ return { packet: { ...structuredClone(packet), questions: { ...packet.questions, requirements: [] } }, reuse: { reused, complete } }
+}
+
+const REUSED_EVIDENCE = 'Reused from the accepted targeted review of this request: same construction revision, requirements, sources and review contract.'
+/** Full reuse: the earlier accepted answers stand; no model call. */
+export function reusedTargetedReview(packet: CadReviewPacket, reuse: TargetedReuse): CadReview {
+ return { verdict: 'pass', summary: 'Earlier accepted targeted review reused; nothing it depends on has changed.',
+  requirements: packet.requirements.map(r => ({ id: r.id, status: reuse.reused[r.id], evidence: REUSED_EVIDENCE })), issues: [] }
+}
+/** Partial reuse: merge the reused requirement answers with a fresh views,
+ * reference and issues answer. Code still computes the verdict. */
+export function withReusedRequirements(review: CadReview, packet: CadReviewPacket, reuse: TargetedReuse): CadReview {
+ return { ...review, requirements: packet.requirements.map(r => ({ id: r.id, status: reuse.reused[r.id], evidence: REUSED_EVIDENCE })) }
+}
+export function targetedReviewRecord(review: CadReview, reference: string, key: string,
+ presentation: { owner_request: string; views: Record<string, string> }): TargetedReviewRecord | null {
+ if (review.verdict !== 'pass' || review.requirements.some(r => r.status === 'failed') || !['met', 'unresolved', 'not_applicable'].includes(reference)) return null
+ return { version: CAD_TARGETED_REVIEW_VERSION, key,
+  requirements: Object.fromEntries(review.requirements.map(r => [r.id, r.status as 'met' | 'unresolved'])),
+  presentation: { owner_request: presentation.owner_request, views: { ...presentation.views }, reference: reference as 'met' | 'unresolved' | 'not_applicable' } }
 }

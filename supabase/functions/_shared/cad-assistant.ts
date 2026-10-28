@@ -24,7 +24,7 @@ import { parseDesignHandoff, CAD_REVIEW_SCOPE, parseCadReview, candidateFingerpr
 import { HANDOFF_INPUT_SCHEMA, REQUIREMENT_CHANGES_SCHEMA, prepareDesignHandoff } from './cad-handoff.ts'
 import { designIntentHandoff, parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
 import { verifyCadFiles } from './cad-transport.ts'
-import { buildCadReviewPacket, codeFindingReview, formEvidenceCoverage, parseTargetedCadReview, targetedReviewBasis, targetedReviewEnabled, type CadReviewPacket } from './cad-targeted-review.ts'
+import { applyTargetedReuse, buildCadReviewPacket, codeFindingReview, formEvidenceCoverage, parseTargetedCadAnswers, parseTargetedReviewRecord, previewHashes, reusedTargetedReview, targetedReuseKey, targetedReviewBasis, targetedReviewEnabled, targetedReviewRecord, withReusedRequirements, type CadReviewPacket, type TargetedReuse } from './cad-targeted-review.ts'
 
 const object=(v:unknown):v is Record<string,any>=>!!v&&typeof v==='object'&&!Array.isArray(v)
 const text=(v:unknown,n:number)=>typeof v==='string'&&v.trim().length>0&&v.length<=n
@@ -72,7 +72,7 @@ export interface CadAssistantState {
  requiredTools:string[]
  savedRequest:{id:string;revision:number;payload:DrawingRequest['payload']}|null
  terminalFailure:Record<string,unknown>|null
- acceptedReview:{fingerprint:string;review:CadReview;basis?:{mode:'targeted';version:string;packet:string}}|null
+ acceptedReview:{fingerprint:string;review:CadReview;basis?:{mode:'targeted';version:string;packet:string;reused:'none'|'requirements'|'all'}}|null
  metrics:{consultations:number;renders:number;input_corrections:number;reviews:number;review_rejections:number;review_unavailable:number}
  sources:ReturnType<typeof createProjectLookup>['sources']
  pieces:CadPiecesState
@@ -85,7 +85,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
  let used=0,candidate:CadCandidate|null=null,partial=false,requiredTools:string[]=[]
  let savedRequest:CadAssistantState['savedRequest']=null
  let terminalFailure:Record<string,unknown>|null=null
- let acceptedReview:{fingerprint:string;review:CadReview;basis?:{mode:'targeted';version:string;packet:string}}|null=null
+ let acceptedReview:CadAssistantState['acceptedReview']=null
  let renderFingerprint:string|null=null
  const metrics={consultations:0,renders:0,input_corrections:0,reviews:0,review_rejections:0,review_unavailable:0}
  const sources:ReturnType<typeof createProjectLookup>['sources']=[]
@@ -262,7 +262,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
   const readArtifact=async(id:string,revision:number|null)=>{const result=await opts.readArtifact(id,revision);await dependencies.record('read_cad_artifact',{artifact_id:id,revision},result);return result}
   const lookup=makeLookup(),groundingLookup=makeLookup(),until=opts.unlimitedWork?opts.deadline:opts.durable?opts.deadline-20000:Math.min(opts.deadline-20000,Date.now()+300000)
   const ownerRequest=[request?.payload.owner_request,opts.ownerRequest].filter(Boolean).filter((x,i,a)=>a.indexOf(x)===i).join('\n')||null
-  let payload:DrawingRequest['payload']={brief:structuredClone(raw),owner_request:ownerRequest,draft:renewingConstruction?undefined:request?.payload.draft,restoration:request?.payload.restoration,dependencies:renewingConstruction?undefined:request?.payload.dependencies,reference_refs:[...new Set([...(request?.payload.reference_refs??[]),...opts.referenceImageRefs?.()??[]])] }
+  let payload:DrawingRequest['payload']={brief:structuredClone(raw),owner_request:ownerRequest,draft:renewingConstruction?undefined:request?.payload.draft,restoration:request?.payload.restoration,dependencies:renewingConstruction?undefined:request?.payload.dependencies,...(!renewingConstruction&&request?.payload.targeted_review?{targeted_review:request.payload.targeted_review}:{}),reference_refs:[...new Set([...(request?.payload.reference_refs??[]),...opts.referenceImageRefs?.()??[]])] }
   const persist=async(status:string,patch:Partial<DrawingRequest['payload']>={})=>{payload={...payload,...patch};if(opts.requestStore)request=await opts.requestStore.save(request?.id??null,request?.revision??0,status,payload)}
   const checkAuthority=async()=>{
    if(!await opts.hasAccess())return false
@@ -538,7 +538,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
      }
      // Prepared FORM package 3 path. Unless the pinned catalog enables it, the
      // full review below runs with an unchanged call sequence and input.
-     let packet:CadReviewPacket|null=null
+     let packet:CadReviewPacket|null=null,reuse:TargetedReuse|null=null,reuseKey='',presentation:{owner_request:string;views:Record<string,string>}={owner_request:'',views:{}}
      if(targetedReviewEnabled(opts.aiCatalog.manifest())){
       packet=await buildCadReviewPacket({handoff,requiredFeatureIds,candidateFingerprint:pinned,
        construction:construction?{artifact_id:construction.artifact_id,revision:construction.revision}:null,designIntentPin:readiness.pin,
@@ -551,11 +551,20 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
        if(!opts.unlimitedWork&&(reviews>=3||renders>=4)){candidate=null;partial=true;return {status:'incomplete',stage:'review',saved:false,review}}
        return {status:'revise',saved:false,review}
       }
+      // An accepted answer for the same construction, requirements, sources and
+      // runtime is reused across turns; a changed owner text or sheet asks again.
+      reuseKey=await targetedReuseKey({packet,runtimeVersion,pins:{measurements:candidate.measurements,physical:physicalPins},
+       referenceVersions:[...(opts.context?.imageEvidence?.()??new Map())].sort(([a],[b])=>a.localeCompare(b))})
+      presentation={owner_request:await fingerprint(ownerRequest??''),views:previewHashes(candidate.packet.manifest)}
+      ;({packet,reuse}=applyTargetedReuse(packet,parseTargetedReviewRecord(payload.targeted_review),reuseKey,presentation))
      }
+     let review:CadReview|null,referenceStatus:string='not_applicable'
+     if(packet&&reuse?.complete){review=reusedTargetedReview(packet,reuse);referenceStatus=packet.questions.reference?'met':'not_applicable'}
+     else{
      reviews++;metrics.reviews++
      const reviewCandidate={title:candidate.title,description:candidate.description,assumptions:candidate.assumptions,recipe:candidate.packet.recipe,manifest:candidate.packet.manifest,measurements:candidate.measurements}
      const checked=await callWithCalculator({app:'bob',coworkerId:'bob',functionName:'cad-reviewer',aiFunction:'cad-reviewer',module:'cad',userId:opts.userId,
-      catalogRoleKey:packet?'cad-targeted-reviewer':'cad-reviewer',catalogSchemaKey:packet?'bob_cad_targeted_review':'bob_cad_review',catalogSchemaParameters:{requirement_ids:handoff.requirements.map(r=>r.id)},schemaName:packet?'bob_cad_targeted_review':'bob_cad_review',
+      catalogRoleKey:packet?'cad-targeted-reviewer':'cad-reviewer',catalogSchemaKey:packet?'bob_cad_targeted_review':'bob_cad_review',catalogSchemaParameters:{requirement_ids:packet?packet.questions.requirements:handoff.requirements.map(r=>r.id)},schemaName:packet?'bob_cad_targeted_review':'bob_cad_review',
       messages:[{role:'user',content:JSON.stringify(packet
        ?{project_id:opts.projectId,step_id:raw.step_id,area_id:raw.area_id,artifact_id:raw.artifact_id,review_scope:CAD_REVIEW_SCOPE,review_packet:packet,owner_request:ownerRequest,handoff,current_target:selected,
         candidate:reviewCandidate,design_readiness:readiness,source_evidence:constructionEvidence,independent_evidence:independentEvidence}
@@ -575,14 +584,19 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
       return terminalFailure={status:'unavailable',stage:'review',reason:checked.error,saved:false,
        user_message:'Granskaren nådde sin svarsgräns utan att lämna ett användbart resultat. Ritningen kunde därför inte godkännas eller sparas från det försöket. Jag stoppade försöket utan att starta om samma arbete.'}
      }
-     const review=checked.success?packet?parseTargetedCadReview(checked.data,packet):parseCadReview(checked.data,handoff,requiredFeatureIds):null
+     if(packet){
+      const answers=checked.success?parseTargetedCadAnswers(checked.data,packet):null
+      review=answers?reuse?withReusedRequirements(answers.review,packet,reuse):answers.review:null;referenceStatus=answers?.reference??'not_applicable'
+     }else review=checked.success?parseCadReview(checked.data,handoff,requiredFeatureIds):null
+     }
      if(!review){candidate=null;partial=true;metrics.review_unavailable++;return {status:'unavailable',stage:'review',reason:'review_unavailable',saved:false}}
      reviewPending=false
      if(missingViews.length){review.verdict='revise';review.issues.push({severity:'error',code:'views',correction:'Render missing requested views: '+missingViews.join(', ')})}
      if(review.verdict==='pass'){
       if(construction){const fresh=await refreshConstruction();if(fresh?.status!=='ready'){candidate=null;acceptedReview=null;return constructionFailure(fresh)}}
-      acceptedReview={fingerprint:pinned,review,...(packet?{basis:await targetedReviewBasis(packet)}:{})}
-      await persist('reviewed',{reviewed_candidate:drawingCandidateCommitment(candidate)})
+      acceptedReview={fingerprint:pinned,review,...(packet?{basis:await targetedReviewBasis(packet,reuse?reuse.complete?'all':'requirements':'none')}:{})}
+      await persist('reviewed',{reviewed_candidate:drawingCandidateCommitment(candidate),
+       ...(packet?{targeted_review:targetedReviewRecord(review,referenceStatus,reuseKey,presentation)??undefined}:{})})
       if(request&&opts.requestStore?.atomicSave)candidate.drawing_request={id:request.id,revision:request.revision}
       savedRequest=opts.requestStore?.atomicSave||!request?null:{id:request.id,revision:request.revision,payload:structuredClone(payload)}
       return {status:'ready',request_id:request?.id??null,saved:false,summary:review.summary,quality:acceptedReview,candidate:{title:candidate.title,part_count:candidate.packet.recipe.instances.length,assumptions:candidate.assumptions}}
