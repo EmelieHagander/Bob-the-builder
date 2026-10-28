@@ -1,11 +1,44 @@
 # Foundation verification and rollout
 
+<a id="targeted-cad-review-catalog-2026-10-28"></a>
+## Targeted CAD review catalog and #357 fixture parity — local verification, 2026-10-28
+
+`20261028080000_ai_targeted_cad_review_catalog.sql` publishes the
+[targeted review definitions](../supabase/README.md#targeted-cad-review-publication)
+with the role disabled. The runtime gate now requires `enabled: true`. Without
+that check, a present but disabled role would have selected the new path and
+then failed with `ai_function_disabled`. The publication is not applied to the
+hosted project.
+
+**Passed locally:**
+
+- **9 tests** in `cad-targeted-review.test.ts`:
+  - With the role disabled, the full Rita review runs unchanged.
+  - Applying the publication leaves the CAD runtime configuration identical, so no paid drawing attempt restarts.
+  - Enabling the role adds its role, contract, persona and schema.
+  - The published schema equals the runtime schema and binds exact requirement keys.
+  - The disabled role refuses resolution.
+- **#357 catalog drift is fixed.** The catalog fixture now replays the
+  construction-delivery publication. `tool-catalog-parity`,
+  `bob-release-capacity` and `construction-delivery` compare that later tool at
+  its own publication boundary. `tool-catalog-parity` and `bob-release-capacity`
+  already failed on main `4f3f034`. `construction-delivery` counted every later
+  definition, so it would have failed after any later publication.
+- RESULT_PLACEHOLDER
+- `deno check` of `ask-bob` and `bob-worker` passes, with the same local
+  supabase-js import map.
+
+No full suite, CI, hosted migration, catalog activation, Edge deployment, model
+call or CAD job was run.
+
 <a id="targeted-cad-review-source-2026-10-28"></a>
 ## Targeted CAD review — local source verification, 2026-10-28
 
 The [targeted CAD review](cad-adapter.md#targeted-cad-review) is prepared in
-source and inactive. No catalog row `role.cad-targeted-reviewer` exists in any
-publication, so production keeps the full Rita review.
+source and inactive. At this source step, no catalog row
+`role.cad-targeted-reviewer` existed, so production kept the full Rita review.
+The [inert catalog publication](#targeted-cad-review-catalog-2026-10-28)
+followed.
 
 **Passed locally:**
 
