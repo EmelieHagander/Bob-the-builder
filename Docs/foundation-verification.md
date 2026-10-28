@@ -15,7 +15,8 @@ by a generated migration. It is not applied to the hosted project.
   - Denial stops the read. Other failures, a missing Step, a missing target and invalid input stay explicit.
   - The policy published `active: false` is not offered and returns `unavailable`. With the policy enabled it is offered and executes.
   - The migration matches `build-ai-task-sources-catalog.ts --check`.
-- BLAST_PLACEHOLDER
+- **1051 of 1051** tests pass across the 139 test files that use the catalog
+  fixtures, the seed, the tool session, the database catalog or the CAD runtime.
 - `deno check` of `ask-bob` and `bob-worker` passes with the same local import map.
 
 No hosted change, policy activation, model call or CAD job was run.
