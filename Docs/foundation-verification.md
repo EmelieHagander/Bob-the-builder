@@ -1,13 +1,13 @@
 # Foundation verification and rollout
 
 <a id="construction-work-2026-10-28"></a>
-## Coherent Construction operations — local verification, 2026-10-28
+## Coherent Construction operations — installed, 2026-10-28
 
-**Implemented locally; hosted installation and paid/model acceptance remain open.**
+**Merged and technically installed; ordinary owner/model acceptance and cost measurement remain open.**
 The owner approved the four proposals after the cost investigation, retaining
 agent prompts and GPT-5.4 medium. The [tool owner](ask-bob-tools.md#coherent-construction-work)
 routes the read, write and check contracts; [State](bob-delivery-flow.md#state)
-owns remaining release and measurement work.
+owns remaining delivery and measurement work.
 
 Focused local runs passed **141 distinct test cases across 15 files**, including
 isolated full-schema PGlite fixtures with the existing service-owned work pin.
@@ -48,13 +48,67 @@ four tool interfaces and `bob.tools`, is idempotent, and preserves all other
 definition content/identities, profiles and inactive policies.
 
 Documentation placement and final diff were reviewed manually using Archie's
-owner/State rules; no independent reviewer was run. No hosted database, model,
-CAD render, deployment or GitHub workflow was started. Both migration files
-remain release inputs under the [coordinated ordering](../supabase/README.md#construction-work-release).
-The installed Supabase CLI crashed before creating a migration; the SQL file
-therefore uses the actual UTC timestamp from that attempt. PGlite is not proof
-of concurrent PostgreSQL behavior or hosted PostgREST consumption. Those release
-checks and the owner's real delivery/cost comparison remain open.
+owner/State rules; no independent reviewer was run. Local verification started
+no hosted work. The installed Supabase CLI crashed before creating a migration;
+the source SQL filename therefore uses the actual UTC timestamp from that attempt.
+
+### Hosted installation
+
+The owner subsequently requested merge and testing. [PR #367](https://github.com/EmelieHagander/Bob-the-builder/pull/367)
+merged as `7186551b3cf6d2c2c2b82458203c6311f9e81484`; its tree
+`b13b547afa6a07bac769db55b1ac74f492bc9382` matches the focused local verification.
+That exact source was installed in `yuobtgoidmmmwfqenkau`, core first, then
+worker and HTTP entrypoint, then catalog activation. No queued, running or
+paused Bob jobs existed at the release preflight or before activation.
+
+| Source migration | Hosted ledger version | Name |
+|---|---|---|
+| `20261028194859` | `20261028223425` | `construction_work_operations` |
+| `20261028200450` | `20261028224252` | `ai_construction_work_catalog` |
+
+| Function | Version | JWT verification | Bundle SHA-256 |
+|---|---|---|---|
+| `bob-worker` | 148 | existing custom authentication, `false` | `9034dd150acc9ef19ea191fa1f9727e7dfeb0d6639f53be9de0a3e1f2fb003b5` |
+| `ask-bob` | 180 | `true` | `591a085e9de9ff38111e8b638703bd6a56f54f2db647177b1f0f1bdb40a382e9` |
+
+Readback returned 122 worker and 124 HTTP files. Every executable file and both
+import maps match the merge source. The established bundler behavior omits the
+type-only provenance file and worker HTTP boundary, and empties type-only
+`cad-intake.ts`. Unauthenticated POSTs return HTTP 401 at both endpoints.
+
+A rollback-only hosted PostgreSQL fixture used a synthetic authenticated owner
+and the ordinary claimed-turn functions. Two dimensions, selected Solution,
+target and Construction advance together, retaining the Construction identity
+and current source pins. A late geometry mismatch rolls back all revisions and
+receipts; exact retry returns the same receipt; changed intent conflicts;
+an outsider cannot read or commit. The fixture explicitly flushes deferred
+constraints after each simulated RPC, matching the transaction boundary before
+asserting success. The initial unflushed fixture was corrected before activation.
+The final assertions pass and the synthetic user/project transaction is rolled
+back; subsequent readback finds no synthetic users. This is SQL/role evidence,
+not an authenticated PostgREST or concurrent-request test.
+
+All 309 active catalog heads were compared before/after. Only the following
+five advance; all content hashes and every other version/definition stay exact.
+`profile.ask-bob` v2 remains GPT-5.4 medium through `tier.standard`; the six core
+tool names remain exact. Existing disabled reader/reviewer policies remain off.
+
+| Key | Previous version / rollback ID | Installed version |
+|---|---|---|
+| `bob.tools` | 22 / `8b766faa-12f8-47d3-9b42-4459610a747e` | 23 |
+| `tools.read_construction_draft` | 5 / `f5013f0e-ad5d-425b-bf43-8366e10580a9` | 6 |
+| `tools.change_construction_parameters` | 5 / `e44d4494-7895-48a5-b26e-ecdb05ecc847` | 6 |
+| `tools.edit_construction_parts` | 2 / `bcf6c656-2811-4048-88c5-24658084572e` | 3 |
+| `tools.check_construction_draft` | 6 / `422d44cf-f7e3-49b2-a43c-d45466d990ee` | 7 |
+
+New functions have a fixed empty search path and authenticated-only execute
+grants; anon and service-role execution is denied. The [security advisor](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable) retains
+its seven existing categories and adds only the intended authenticated definer
+entry for `bob.prepare_construction_work` (107 → 108 in that category), whose
+claimed-user/project boundary was exercised above. Existing unrelated findings
+remain unchanged. No model/CAD run, full suite or GitHub workflow was started
+for this installation. A new Bob message picks up the new catalog; actual tool
+choice, complete delivery and USD savings still require the owner's live test.
 
 <a id="form-package5-release-2026-10-28"></a>
 ## FORM package 5 — hosted preparation and first comparison, 2026-10-28

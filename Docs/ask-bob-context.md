@@ -205,7 +205,7 @@ until an owner-approved enablement after the
 [comparative acceptance](bob-delivery-flow.md#form-next).
 
 <a id="construction-work-context"></a>
-**Construction work packet — local implementation, 2026-10-28.** The existing
+**Construction work packet — installed, 2026-10-28.** The existing
 construction reader's `view: work` reuses the code in `read_task_sources` without
 activating that dormant standalone tool or its small-model colleague. It adds
 the selected Solution's ordinary editable snapshot, exact parameter/binding,

@@ -131,7 +131,7 @@ server restart, model-facing contract and completion after correction. They do
 not measure live model latency or cost.
 
 <a id="construction-work-write"></a>
-### Selected Solution and Construction together — local implementation, 2026-10-28
+### Selected Solution and Construction together — installed, 2026-10-28
 
 The existing parameter and part editors can include `solution_edit` with an
 ordinary selected-Solution `edit_ref`, content deltas and reason. Preparation
@@ -161,8 +161,8 @@ outside this transaction and is only subsequent requested work.
 
 The [database owner](../db/README.md#construction-work-authority) owns privileges;
 [release ordering](../supabase/README.md#construction-work-release) and
-[local evidence](foundation-verification.md#construction-work-2026-10-28) are
-separate from this source contract.
+[local and hosted evidence](foundation-verification.md#construction-work-2026-10-28)
+are separate from live model acceptance.
 
 ### Second implementation: alternatives, selection and evidence links
 

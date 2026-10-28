@@ -1577,7 +1577,7 @@ calls it. Rollback: drop both functions.
 
 <a id="form-concept-persistence--source-only-2026-10-26"></a>
 <a id="construction-work-authority"></a>
-## Coherent Construction authority — local implementation, 2026-10-28
+## Coherent Construction authority — installed, 2026-10-28
 
 `20261028194859_construction_work_operations.sql` adds no project tables or
 parallel source register. `read_bob_selected_edit_context` is an authenticated
@@ -1598,8 +1598,8 @@ the parameter editor's explicit target reconciliation; old payloads remain valid
 
 [Writer semantics](../Docs/ask-bob-writes.md#construction-work-write),
 [release order](../supabase/README.md#construction-work-release) and
-[isolated verification](../Docs/foundation-verification.md#construction-work-2026-10-28)
-own the adjacent details. No hosted migration is implied by this source entry.
+[local and hosted verification](../Docs/foundation-verification.md#construction-work-2026-10-28)
+own the adjacent details and separate installation from model acceptance.
 
 ## FORM check observations — source only, 2026-10-27
 
