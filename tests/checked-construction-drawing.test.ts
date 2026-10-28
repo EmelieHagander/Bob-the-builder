@@ -52,9 +52,9 @@ function fixture(projectId='p_fixture'){
  const catalog=new Map([[material+'@1',{id:material,revision:1,current_revision:1,kind:'material',profile_code:'sheet_stock',categories:['wood.plywood','sheet'],properties:{thickness:{value:'18',unit:'mm',truth:'provided_spec',parameter:null}}}]])
  return {draft,catalog}
 }
-function runtime(){
+function runtime(coherentWork=false){
  const {draft,catalog}=fixture();let allowed=true,reads=0,renders=0,reviews=0,afterRender=()=>{},afterReview=()=>{},verdict='pass'
- const check=()=>checkedConstructionForDrawing({projectId:draft.projectId,message:'Draw this construction',hasAccess:async()=>allowed,read:async()=>{reads++;return structuredClone(draft)},
+ const check=()=>checkedConstructionForDrawing({projectId:draft.projectId,message:'Draw this construction',constructionViews:true,formEvidence:true,coherentWork,hasAccess:async()=>allowed,read:async()=>{reads++;return structuredClone(draft)},
   readCatalog:async(id,revision)=>({status:'ok',projectId:draft.projectId,record:catalog.get(id+'@'+revision)}),readSources:async()=>({project:new Map(),physical:new Map()})},artifact,1)
  const assistant=(extra:any={})=>createCadAssistant({projectId:draft.projectId,userId:'owner',ownerRequest:'Draw this exact bracket',hasAccess:async()=>allowed,available:true,deadline:Date.now()+200000,
   makeLookup:()=>createProjectLookup(draft.projectId,async(_p,i)=>({data:{records:i.dataset==='target'?[{id:'project',revision:1,solution_id:material}]:[],related:[],truncated:false},error:null}),1000,40),
@@ -65,6 +65,33 @@ function runtime(){
  return {draft,catalog,assistant,check,setAllowed:(v:boolean)=>{allowed=v},afterRender:(f:()=>void)=>{afterRender=f},afterReview:(f:()=>void)=>{afterReview=f},reject:()=>{verdict='revise'},counts:()=>({reads,renders,reviews})}
 }
 const request={request_id:null,brief:'Draw this exact bracket',handoff,artifact_id:artifact,area_id:null,component_id:null,step_id:null}
+test('coherent work reaches CAD render and review with the exact checked construction',async()=>{
+ const f=runtime(true),a=f.assistant(),original=structuredClone(f.draft)
+ const result=await a.consult({...request,construction_revision:1})
+ assert.equal(result.status,'ready',JSON.stringify(result))
+ assert.equal(f.counts().renders,1);assert.equal(f.counts().reviews,1)
+ assert.deepEqual(a.candidate!.packet.recipe,original.recipe)
+ assert.equal(a.candidate!.packet.manifest.bob_construction.artifact_id,artifact)
+ assert.equal(a.candidate!.packet.manifest.bob_construction.revision,1)
+ assert.equal(a.candidate!.packet.manifest.bob_construction.check.fabrication_ready,false)
+ assert.deepEqual(f.draft,original)
+})
+test('coherent work CAD checks still reject stale sources, broken geometry and revoked access',async()=>{
+ for(const mode of ['sources','revision','joints','access','changed_after_render']){
+  const f=runtime(true)
+  if(mode==='sources')f.draft.source_state='changed'
+  if(mode==='revision')f.draft.current_revision=2
+  if(mode==='joints')f.draft.joints=[]
+  if(mode==='access')f.setAllowed(false)
+  if(mode==='changed_after_render')f.afterRender(()=>{f.draft.source_state='changed'})
+  const a=f.assistant()
+  if(mode==='access')await assert.rejects(a.consult({...request,construction_revision:1}),/project_denied/)
+  else assert.notEqual((await a.consult({...request,construction_revision:1})).status,'ready',mode)
+  assert.equal(a.candidate,null,mode)
+  assert.equal(f.counts().renders,mode==='changed_after_render'?1:0,mode)
+  assert.equal(f.counts().reviews,0,mode)
+ }
+})
 test('same drawing request can explicitly renew its checked source while retaining requirements and dropping obsolete approvals/retries',async()=>{
  const f=runtime();let saved:any=null;const writes:any[]=[]
  const store={load:async()=>structuredClone(saved),save:async(id:any,revision:any,status:any,payload:any)=>{

@@ -556,14 +556,17 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — ägarens prov av sammanhängande operationer (2026-10-28):**
-testa det installerade [läs-/ändrings-/kontrollflödet](ask-bob-tools.md#coherent-construction-work)
-med ett nytt meddelande till Bob. Kontrollera samma konstruktionsidentitet,
-ursprungliga krav, färdig leverans, faktiska verktygsanrop och kostnad.
-[Releasebevisen](foundation-verification.md#construction-work-2026-10-28) skiljer
-merge och teknisk installation från återstående modellförmåga. Agentprompterna
-är orörda och Nano/Mini är uppskjutet. De tidigare betalda jämförelseproven är
-fortsatt pausade; ett automatiserat modellprov behöver en egen beställning.
+**Aktivt nästa steg — CAD-felet från betalprovet (2026-10-29):** granska,
+merga och driftsätt den lokalt verifierade rättningen av den interna
+konstruktionskontrollens schemaval. Därefter återstår ett separat godkänt
+leveransprov: spara och återöppna ritningen för samma Construction-revision.
+[Prov och felorsak](foundation-verification.md#construction-work-paid-2026-10-29)
+äger kostnader, faktiska anrop och den avgränsade rättningen; provet som helhet
+är underkänt trots fungerande breddändring. Utred också upprepning av samma
+runtimefel, onödiga förberedelsefel vid nyskapande och `partial` trots godkänd
+konstruktionskontroll efter tidigare läsfel. Agentprompterna är orörda,
+läsarmodellen är uppskjuten och inga ytterligare betalprov är startade eller
+automatiserade.
 
 Källavstämning på samma Construction, sex katalogägda kärnverktyg och
 GPT-5.4 medium är tekniskt installerade och återlästa och ligger kvar.
@@ -582,9 +585,9 @@ ritningens källstatus. Konstruktionskontrollens konfliktsvar visar observerade
 revisioner och skiljer källändring från ändrat huvud eller arkivering. Se samma
 [verifikationspost](foundation-verification.md#form-package5-release-2026-10-28)
 för historiska föregångare, tester och avbrottens begränsningar. Den installerade
-Solution/Construction-reparationen är lokalt verifierad med bibehållna
-geometri-/källspärrar. Modellbeteende, faktisk kostnadsminskning och fullständig
-leverans på samma konstruktion återstår att mäta.
+Solution/Construction-reparationen behåller geometri-/källspärrarna.
+Breddändringen har nu ett avgränsat livebevis i posten ovan; generaliserbar
+kostnadsminskning och fullständig leverans på samma konstruktion återstår.
 
 Tidigare FORM-delar finns installerade:
 paket 2a/2b/2c är mergade och tekniskt driftsatta med

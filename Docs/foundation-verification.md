@@ -1,9 +1,101 @@
 # Foundation verification and rollout
 
+<a id="construction-work-paid-2026-10-29"></a>
+## Coherent Construction operations — one paid box test, 2026-10-29
+
+**Partial result: creation and width change pass; final drawing fails.** The owner
+authorized one paid scenario after installation. [Run 40784608141](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/40784608141)
+ran once on `9afdb053cbcae107e45485500171c17577bdb056`, with the ordinary
+authenticated owner, in synthetic project `p_816e966c4610410eaf5c49a10a412d17`.
+The three sequential turns share catalog manifest
+`c2c77a1f-21de-4221-b6a1-11fbdd602ccd`: GPT-5.4 medium, `bob.tools` v23,
+the installed work interfaces, unchanged prompts and inactive source-reader /
+targeted-review policies. The workflow's `baseline` label retains those inactive
+policies; it does not restore the old tool catalog or high reasoning setting.
+
+| Step | Model calls | Tool calls¹ | Known model USD | Delivery elapsed | Result |
+|---|---:|---:|---:|---:|---|
+| Create box | 33 | 49 | 1.089639 | 614.438 s | One concept-ready Construction, five panels, 400 × 300 × 250 mm |
+| Change width | 8 | 10 | 0.264087 | 158.912 s | Same identity, revision 1 → 2, 500 × 300 × 250 mm |
+| Final drawing | 17 | 20 | 0.598010 | 317.534 s | Same Construction/revision preserved; zero drawings, renders or CAD reviews |
+| **Total** | **58** | **79** | **1.951736** | **1,090.884 s** | **Acceptance failed** |
+
+¹ Model-returned function calls: 76 domain-tool events plus three
+`get_work_history` context calls, which are not recorded as domain-tool events.
+All model calls are priced, with no failed provider calls or provider resends.
+57 calls used GPT-5.4 medium; one existing `completion-gate` call used
+GPT-5.4-mini low (USD 0.001690). That gate is not the deferred retrieval helper.
+Cumulative usage: 1,384,172 input tokens (1,003,520 cached) and 50,211 output
+tokens. This is logged model cost, excluding CAD/hosting/invoice reconciliation.
+
+The [content-free evidence](archive/form-box-paid-2026-10-29.json) retains exact
+turn/job IDs, tool counts, role accounting, acceptance checks and scoped CAD
+errors. The [workflow result image](archive/form-box-paid-2026-10-29.jpg) records
+the failed run. All three durable jobs completed; cancellation was not applied:
+the workflow finished before an attempted stop could reach the former button.
+No rerun, second scenario, full suite or CI run followed.
+
+The width turn used `read_construction_draft(view=work)`, one atomic
+`change_construction_parameters(solution_edit=...)`, and
+`check_construction_draft`; telemetry records source-bound read/change/check
+and complete check coverage. It also made two more construction reads, one
+Solution read, one project search, two `describe_tool` calls and one change-log
+read. Therefore the live path used ten tools, not the fixture's three.
+Compared with the prior width turn: domain tools 25 → 10, model calls 10 → 8,
+known USD 0.412406 → 0.264087 (36% lower). This is one comparison with both code
+and reasoning changed (high → medium), not an isolated or general savings claim.
+The total was lower than the prior USD 3.188723, but no complete drawing was
+delivered, so this does not establish cost per accepted delivery.
+
+### Findings and focused correction
+
+- **CAD regression reproduced:** all three failed design attempts logged
+  `Cannot read properties of undefined (reading 'enum')` before rendering.
+  `checkedConstructionForDrawing` disabled `constructionViews` and
+  `formEvidence` while inheriting `coherentWork:true`. Tool construction then
+  applied the work-view schema to the legacy read schema, which has no `view`.
+  Its internal two-argument check also does not use the interactive `outputs`
+  contract. The source correction explicitly disables `coherentWork` for this
+  internal fresh whole-construction check, preserving its existing access,
+  source, geometry and final revision gates. It changes no catalog or prompt.
+  **Source correction only; merge, deployment and live delivery remain open.**
+- **Failure recovery still wastes calls:** four `design_project_cad` calls
+  produced three `unavailable` results and one `existing_request`; three history
+  reads and a changed side view did not repair the same runtime exception.
+  Distinguish a repeatable runtime/schema fault from repairable model input in
+  the existing recovery path before another paid retry.
+- **Creation remains expensive:** nine material searches included four invalid
+  calls missing required `profile_code`; the corrected batch used `null`.
+  Five construction saves were needed: two `needs_data`, two `invalid`, one
+  saved. The observed sequence includes missing design intent, missing
+  alignment, an invalid `/purpose` edit path and material-definition bindings.
+  Inspect preparation/schema availability so the initial Solution/Construction
+  can be submitted consistently, without new behavioral prompt rules.
+- **Read/metric discrepancy:** initial project search hit SQL `57014`; later
+  construction acceptance passed, but the concept delivery event stayed
+  `partial`. Keep artifact acceptance separate from that delivery flag; inspect
+  recovery-state accounting before treating the flag as an end-result verdict.
+
+The new local CAD regression fails with the exact hosted `enum` exception on
+the released code. After the correction, **37/37 focused tests pass** across
+`checked-construction-drawing` and `construction-work`, including render/review
+test doubles, changed-source/revoked-access fences and the existing atomic SQL
+work path. These are local synthetic checks, not a successful paid rerun.
+Strict checking of the affected runtime and cached Deno checks for both
+`ask-bob` and `bob-worker` pass. A separate strict TypeScript invocation including
+the older CAD test file reports 18 existing fixture typing errors; the untouched
+release copy and changed copy have the same error messages/count. The executed
+test suite passes, but that test-file type check is not claimed green.
+`git diff --check` passes.
+Documentation was reviewed manually using Archie's owner/State rules.
+[State](bob-delivery-flow.md#state) owns the remaining correction and acceptance.
+
 <a id="construction-work-2026-10-28"></a>
 ## Coherent Construction operations — installed, 2026-10-28
 
-**Merged and technically installed; ordinary owner/model acceptance and cost measurement remain open.**
+**Merged and technically installed.** The subsequent
+[paid test](#construction-work-paid-2026-10-29) measures the width change but
+fails final drawing delivery; it supersedes the earlier unmeasured status below.
 The owner approved the four proposals after the cost investigation, retaining
 agent prompts and GPT-5.4 medium. The [tool owner](ask-bob-tools.md#coherent-construction-work)
 routes the read, write and check contracts; [State](bob-delivery-flow.md#state)
@@ -107,8 +199,9 @@ its seven existing categories and adds only the intended authenticated definer
 entry for `bob.prepare_construction_work` (107 → 108 in that category), whose
 claimed-user/project boundary was exercised above. Existing unrelated findings
 remain unchanged. No model/CAD run, full suite or GitHub workflow was started
-for this installation. A new Bob message picks up the new catalog; actual tool
-choice, complete delivery and USD savings still require the owner's live test.
+for this installation. The subsequent owner-authorized
+[live test](#construction-work-paid-2026-10-29) records actual tool choice and USD;
+complete drawing delivery remains unproven.
 
 <a id="form-package5-release-2026-10-28"></a>
 ## FORM package 5 — hosted preparation and first comparison, 2026-10-28
