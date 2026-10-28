@@ -266,7 +266,7 @@ view substitutes a newer revision. Delivery links pin `construction` and
 missing construction selections never fall back to an arbitrary construction.
 The view distinguishes hypothetical/stock/catalog formats and historical sources;
 it does not recompute fit or approve fabrication, reservation or purchase.
-[Focused evidence and remaining browser gate](foundation-verification.md#form-saved-delivery-ui-2026-10-27).
+[Browser and Pages release evidence](foundation-verification.md#form-saved-delivery-ui-2026-10-27).
 
 Physical sheet formats belong to existing stock revisions as optional `sheet_format`, including exact material revision, dimensions, grain and explicit measured/provided/estimated basis. Revision omission preserves the format and explicit null removes it; lifecycle/history use the existing stock owner. A candidate may remain explicitly hypothetical, pin matching available same-project stock with unreserved whole-piece capacity, or pin a current readable catalog panel part. Duplicate candidate aliases share the same stock capacity. Catalog format binding does not establish supplier approval, availability or physical inspection. No production stock or product is invented by acceptance fixtures.
 

@@ -1,7 +1,7 @@
 # Foundation verification and rollout
 
 <a id="form-saved-delivery-ui-2026-10-27"></a>
-## FORM saved delivery UI — source checks, 2026-10-27
+## FORM saved delivery UI — browser-verified and published, 2026-10-27/28
 
 The Construction reader now offers a paged **Saved outputs** index. Exact
 drawing, need and cut-plan links reopen their saved revisions. The new cut-plan
@@ -17,16 +17,32 @@ an actual isolated SQL-saved cut layout through the frontend data reader,
 project-change guards, exact source/output pins, malformed data and paging.
 The production app build and browser-script syntax checks pass.
 
-**Not yet verified:** rendered navigation/reload, retry/denial, historical/empty
-states and responsive composition. The prepared `FOUNDATION_FOCUS=saved-delivery`
-browser scenario covers these at 320/390/1280 pixels. Local Chrome is absent;
-the separate browser cannot reach the local preview. The manual-only CI workflow
-defaults to `scope=saved-delivery`, which runs this scenario and uploads
-screenshots; the full CI job runs only with `scope=full`. The focused mode uses
-the existing registered workflow so it can run on the review branch before
-merge. It has not been dispatched. No new Pages release, hosted
-migration, AI-model call or CAD job was run. Merge/publication and browser proof
-remain open; the existing hosted delivery reader is unchanged.
+**Browser-verified:** the focused manual check `scope=saved-delivery` passed on
+the final head `418c59773c90c04922c2a882a70184ea6b1531ca`
+([run #782](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/40583376720));
+[run #781](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/40582645726)
+on the previous head also passed. The same `FOUNDATION_FOCUS=saved-delivery`
+scenario was re-run locally with Chromium at 320/390/1280 pixels and its
+screenshots were reviewed. Exact navigation and reload, paging, historical and
+empty states, denied/failed reads with retry, dismissal, a 44 px close target and
+no page-level horizontal scroll pass. At 320/390 px the cut table scrolls inside
+its own container. Faded reader tabs in one screenshot were a CSS transition
+caught mid-animation; computed styles settle within 400 ms. The 13 focused tests
+were re-run on the final head and pass.
+
+**Published:** [PR #359](https://github.com/EmelieHagander/Bob-the-builder/pull/359)
+is merged at `89e1e7d9f28a4e38f4431f0561735f78b895c56b`; its tree
+`63b297222a56ffe046143a0248d5139e6a31d073` exactly matches the verified head.
+[Pages #387](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/40635832840)
+built and deployed that commit. The GitHub Pages deployment for it reports
+`success`, and the published build contains `index-DjaWBM1z.js` and the new
+`savedOutputNavigation-D-O5QYBK.js` chunk. The public page was not fetched from
+this release session because its network policy blocks the Pages host.
+The backend readers were already installed by
+[the delivery release](#form-delivery-release-2026-10-27), so no migration, Edge,
+AI-catalog or model-setting change was needed. No full CI, paid model call or CAD
+job ran. Real owner/model/CAD acceptance of the whole box flow remains in
+[State](bob-delivery-flow.md#state).
 
 <a id="form-delivery-release-2026-10-27"></a>
 ## FORM delivery discovery — hosted release, 2026-10-27

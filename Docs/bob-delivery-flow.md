@@ -561,12 +561,13 @@ paket 2a/2b/2c är mergade och tekniskt driftsatta med
 [1 904 gröna tester, browserprov och hosted återläsning](foundation-verification.md#form-hosted-release-2026-10-27).
 Även första 4a:s exakta boxmodell och gemensamma återkoppling är tekniskt
 installerade med [browser- och hosted bevis](foundation-verification.md#form-construction-preview-2026-10-27).
-**Nästa: kör den fokuserade browserkontrollen av återöppnade leveranser, rätta
-eventuella fynd och publicera UI-delen; verifiera därefter det sammanhängande
-lådflödet med verklig modell/CAD inom ett separat beställt prov.**
-[UI-ändringen och verifieringsgränsen](foundation-verification.md#form-saved-delivery-ui-2026-10-27)
-har ett fokuserat manuellt läge (`scope=saved-delivery`) i CI-workflowet för tre
-skärmbredder; hela CI-jobbet körs endast med `scope=full`. 4b:s versionsbundna
+4b:s UI för återöppnade leveranser är browserverifierad och publicerad med
+[Pages #387](foundation-verification.md#form-saved-delivery-ui-2026-10-27).
+**Nästa: paket 3 och förberedelse av Rita-ersättningen enligt
+[genomförandeordningen](#form-next); verifiera det sammanhängande lådflödet med
+verklig modell/CAD inom ett separat beställt prov.** CI-workflowets fokuserade
+manuella läge (`scope=saved-delivery`) kör tre skärmbredder; hela CI-jobbet körs
+endast med `scope=full`. 4b:s versionsbundna
 [leveransläsning](artifacts.md#construction-delivery-discovery) är tekniskt
 installerad med [release- och återhämtningsbevis](foundation-verification.md#form-delivery-release-2026-10-27).
 Sammanhängande acceptans återstår enligt [genomförandeordningen](#form-next): samma Construction-revision
