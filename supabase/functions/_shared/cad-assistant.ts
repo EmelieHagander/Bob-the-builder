@@ -24,6 +24,7 @@ import { parseDesignHandoff, CAD_REVIEW_SCOPE, parseCadReview, candidateFingerpr
 import { HANDOFF_INPUT_SCHEMA, REQUIREMENT_CHANGES_SCHEMA, prepareDesignHandoff } from './cad-handoff.ts'
 import { designIntentHandoff, parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
 import { verifyCadFiles } from './cad-transport.ts'
+import { buildCadReviewPacket, codeFindingReview, formEvidenceCoverage, parseTargetedCadReview, targetedReviewBasis, CAD_TARGETED_REVIEW_ROLE, type CadReviewPacket } from './cad-targeted-review.ts'
 
 const object=(v:unknown):v is Record<string,any>=>!!v&&typeof v==='object'&&!Array.isArray(v)
 const text=(v:unknown,n:number)=>typeof v==='string'&&v.trim().length>0&&v.length<=n
@@ -71,20 +72,20 @@ export interface CadAssistantState {
  requiredTools:string[]
  savedRequest:{id:string;revision:number;payload:DrawingRequest['payload']}|null
  terminalFailure:Record<string,unknown>|null
- acceptedReview:{fingerprint:string;review:CadReview}|null
+ acceptedReview:{fingerprint:string;review:CadReview;basis?:{mode:'targeted';version:string;packet:string}}|null
  metrics:{consultations:number;renders:number;input_corrections:number;reviews:number;review_rejections:number;review_unavailable:number}
  sources:ReturnType<typeof createProjectLookup>['sources']
  pieces:CadPiecesState
  renderFingerprint?:string
 }
 
-export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journaled turns read the two grounding lookups in a fixed order; a parallel pair can swap journal positions on resume (continuation_changed, 2026-10-21). */groundingReadOrder?:'serial'|'parallel';registerContextSurface?:SpecialistContextSurfaceRegistrar;allowSourceRenewal?:boolean;calculator?:ProjectCalculator;unlimitedWork?:boolean;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>)=>Promise<CadPacket>;readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];/** Durable checkpoints: the successful cad:render results with this input fingerprint, never journaled. */loadRenderFiles?:(renderFingerprint:string)=>Promise<unknown>;deadline:number;available:boolean}){
+export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journaled turns read the two grounding lookups in a fixed order; a parallel pair can swap journal positions on resume (continuation_changed, 2026-10-21). */groundingReadOrder?:'serial'|'parallel';registerContextSurface?:SpecialistContextSurfaceRegistrar;allowSourceRenewal?:boolean;calculator?:ProjectCalculator;unlimitedWork?:boolean;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>)=>Promise<CadPacket>;readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;/** Stored FORM checks; read only by the catalog-gated targeted review. */readConstructionObservations?:(id:string,revision:number,resultId:string|null,after:string|null)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];/** Durable checkpoints: the successful cad:render results with this input fingerprint, never journaled. */loadRenderFiles?:(renderFingerprint:string)=>Promise<unknown>;deadline:number;available:boolean}){
  const catalogText=(key:string,variables?:AiVariables)=>{if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable');return opts.aiCatalog.text(key,variables)}
  let lifecycleUsed=0
  let used=0,candidate:CadCandidate|null=null,partial=false,requiredTools:string[]=[]
  let savedRequest:CadAssistantState['savedRequest']=null
  let terminalFailure:Record<string,unknown>|null=null
- let acceptedReview:{fingerprint:string;review:CadReview}|null=null
+ let acceptedReview:{fingerprint:string;review:CadReview;basis?:{mode:'targeted';version:string;packet:string}}|null=null
  let renderFingerprint:string|null=null
  const metrics={consultations:0,renders:0,input_corrections:0,reviews:0,review_rejections:0,review_unavailable:0}
  const sources:ReturnType<typeof createProjectLookup>['sources']=[]
@@ -452,9 +453,31 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
      }
     }
    }
+   /** Newest stored FORM check of the exact revision. A failed or mismatched
+    * read is reported as unavailable evidence, never as a passed check. */
+   const readFormEvidence=async(draft:Record<string,any>|null)=>{
+    const unavailable=(reason:string)=>({coverage:{status:'unavailable' as const,reason},evidence:null})
+    if(!construction||!draft)return unavailable('construction_unavailable')
+    if(!opts.readConstructionObservations)return unavailable('reader_unavailable')
+    const today=new Date().toISOString().slice(0,10),pin=(row:any)=>row?.status==='ok'&&row.projectId===opts.projectId&&row.artifact_id===construction!.artifact_id&&row.revision===construction!.revision
+    try{
+     const list=await opts.readConstructionObservations(construction.artifact_id,construction.revision,null,null)
+     if(!pin(list)||!Array.isArray(list.results))return unavailable('read_mismatch')
+     const newest=list.results[0]?.result_id
+     if(typeof newest!=='string')return formEvidenceCoverage(null,draft,today)
+     const found=await opts.readConstructionObservations(construction.artifact_id,construction.revision,newest,null)
+     if(!pin(found)||found.observation?.id!==newest)return unavailable('read_mismatch')
+     return formEvidenceCoverage(found.observation,{...draft,current_revision:found.current_revision,source_state:found.source_state,archived:found.archived},today)
+    }catch(error){
+     rethrowContinuation(error)
+     if(error instanceof Error&&error.message==='project_denied')throw error
+     return unavailable('read_failed')
+    }
+   }
    const reviewCurrentCandidate=async():Promise<Record<string,any>>=>{
      if(!candidate)throw new Error('missing_candidate')
-     if(construction){const fresh=await refreshConstruction();if(fresh?.status!=='ready'){candidate=null;acceptedReview=null;return constructionFailure(fresh)}}
+     let reviewDraft:Record<string,any>|null=null
+     if(construction){const fresh=await refreshConstruction();if(fresh?.status!=='ready'){candidate=null;acceptedReview=null;return constructionFailure(fresh)};reviewDraft=fresh.draft}
      if(!reviewPending){partial=true;candidate=null;return {status:'incomplete',stage:'review',reason:'no_progress',saved:false}}
      // Review uses a fresh conversation with the same pinned geometry and sources.
      const missingViews=handoff.views.filter(view=>!candidate!.packet.recipe.views.includes(view))
@@ -513,11 +536,31 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
       if(!await checkAuthority())throw new Error('project_denied')
       return terminalFailure
      }
+     // Prepared FORM package 3 path. Absent from the pinned catalog, the full
+     // review below runs with an unchanged call sequence and input.
+     let packet:CadReviewPacket|null=null
+     if(opts.aiCatalog.manifest().definitions.some(row=>row.prompt_key===CAD_TARGETED_REVIEW_ROLE)){
+      packet=await buildCadReviewPacket({handoff,requiredFeatureIds,candidateFingerprint:pinned,
+       construction:construction?{artifact_id:construction.artifact_id,revision:construction.revision}:null,designIntentPin:readiness.pin,
+       renderedViews:candidate.packet.recipe.views,referenceRefs:opts.context?.openedImageRefs()??[],formEvidence:await readFormEvidence(reviewDraft)})
+      if(!await checkAuthority())throw new Error('project_denied')
+      if(packet.code_findings.length){
+       // A code failure needs a corrected candidate, not a paid opinion.
+       reviewPending=false;metrics.review_rejections++
+       const review=codeFindingReview(packet)
+       if(!opts.unlimitedWork&&(reviews>=3||renders>=4)){candidate=null;partial=true;return {status:'incomplete',stage:'review',saved:false,review}}
+       return {status:'revise',saved:false,review}
+      }
+     }
      reviews++;metrics.reviews++
+     const reviewCandidate={title:candidate.title,description:candidate.description,assumptions:candidate.assumptions,recipe:candidate.packet.recipe,manifest:candidate.packet.manifest,measurements:candidate.measurements}
      const checked=await callWithCalculator({app:'bob',coworkerId:'bob',functionName:'cad-reviewer',aiFunction:'cad-reviewer',module:'cad',userId:opts.userId,
-      catalogRoleKey:'cad-reviewer',catalogSchemaKey:'bob_cad_review',catalogSchemaParameters:{requirement_ids:handoff.requirements.map(r=>r.id)},schemaName:'bob_cad_review',
-      messages:[{role:'user',content:JSON.stringify({project_id:opts.projectId,step_id:raw.step_id,area_id:raw.area_id,artifact_id:raw.artifact_id,review_scope:CAD_REVIEW_SCOPE,independent_evidence:independentEvidence,owner_request:ownerRequest,handoff,current_target:selected,reference_refs:opts.context?.openedImageRefs()??[],
-       candidate:{title:candidate.title,description:candidate.description,assumptions:candidate.assumptions,recipe:candidate.packet.recipe,manifest:candidate.packet.manifest,measurements:candidate.measurements},
+      catalogRoleKey:packet?'cad-targeted-reviewer':'cad-reviewer',catalogSchemaKey:packet?'bob_cad_targeted_review':'bob_cad_review',catalogSchemaParameters:{requirement_ids:handoff.requirements.map(r=>r.id)},schemaName:packet?'bob_cad_targeted_review':'bob_cad_review',
+      messages:[{role:'user',content:JSON.stringify(packet
+       ?{project_id:opts.projectId,step_id:raw.step_id,area_id:raw.area_id,artifact_id:raw.artifact_id,review_scope:CAD_REVIEW_SCOPE,review_packet:packet,owner_request:ownerRequest,handoff,current_target:selected,
+        candidate:reviewCandidate,design_readiness:readiness,source_evidence:constructionEvidence,independent_evidence:independentEvidence}
+       :{project_id:opts.projectId,step_id:raw.step_id,area_id:raw.area_id,artifact_id:raw.artifact_id,review_scope:CAD_REVIEW_SCOPE,independent_evidence:independentEvidence,owner_request:ownerRequest,handoff,current_target:selected,reference_refs:opts.context?.openedImageRefs()??[],
+       candidate:reviewCandidate,
        design_readiness:readiness,required_feature_ids:[...requiredFeatureIds],source_evidence:constructionEvidence,evidence_truncated:false,deterministic_issues:missingViews.map(view=>({code:'missing_view',view}))})},
        ...referencePixels,{role:'user',content:Object.entries(candidate.packet.previews).flatMap(([view,png])=>[{type:'text' as const,text:catalogText('cad.preview.candidate-view',{view})},{type:'image_url' as const,image_url:{url:'data:image/png;base64,'+png,detail:'high' as const}}])}],
       // The calculator wrapper retains this schema while offering optional tools.
@@ -532,13 +575,13 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
       return terminalFailure={status:'unavailable',stage:'review',reason:checked.error,saved:false,
        user_message:'Granskaren nådde sin svarsgräns utan att lämna ett användbart resultat. Ritningen kunde därför inte godkännas eller sparas från det försöket. Jag stoppade försöket utan att starta om samma arbete.'}
      }
-     const review=checked.success?parseCadReview(checked.data,handoff,requiredFeatureIds):null
+     const review=checked.success?packet?parseTargetedCadReview(checked.data,packet):parseCadReview(checked.data,handoff,requiredFeatureIds):null
      if(!review){candidate=null;partial=true;metrics.review_unavailable++;return {status:'unavailable',stage:'review',reason:'review_unavailable',saved:false}}
      reviewPending=false
      if(missingViews.length){review.verdict='revise';review.issues.push({severity:'error',code:'views',correction:'Render missing requested views: '+missingViews.join(', ')})}
      if(review.verdict==='pass'){
       if(construction){const fresh=await refreshConstruction();if(fresh?.status!=='ready'){candidate=null;acceptedReview=null;return constructionFailure(fresh)}}
-      acceptedReview={fingerprint:pinned,review}
+      acceptedReview={fingerprint:pinned,review,...(packet?{basis:await targetedReviewBasis(packet)}:{})}
       await persist('reviewed',{reviewed_candidate:drawingCandidateCommitment(candidate)})
       if(request&&opts.requestStore?.atomicSave)candidate.drawing_request={id:request.id,revision:request.revision}
       savedRequest=opts.requestStore?.atomicSave||!request?null:{id:request.id,revision:request.revision,payload:structuredClone(payload)}

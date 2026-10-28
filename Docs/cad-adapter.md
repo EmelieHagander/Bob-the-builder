@@ -37,6 +37,56 @@ gate described below remains implemented until its replacement is verified and
 released. This documentation does not bypass it or publish a new catalog/runtime.
 [State](bob-delivery-flow.md#form-next) owns that implementation and acceptance.
 
+<a id="targeted-cad-review"></a>
+## Targeted CAD review — prepared, inactive, 2026-10-28
+
+**Source implementation; not published or activated.** This is the first step of
+FORM package 3 toward replacing the mandatory full Rita review. It runs only when
+the pinned catalog contains `role.cad-targeted-reviewer`. No catalog publication
+contains it yet, so every current turn keeps today's full review with an unchanged
+call sequence, input and save gate. `cad-targeted-review.ts` owns the contract.
+
+When active, the gate keeps every check that runs before review today. These
+are the preview, budget, authority, independent-source and measurement/physical
+pin checks. Code then builds a review packet for the exact candidate:
+
+- **Binding:** the candidate fingerprint, the Construction revision, the design-intent
+  pin and a fingerprint of the requirement set.
+- **Requirements:** every handoff requirement, with basis, source reference and a
+  required flag for `intent_*` features. Relevance never drops a requirement.
+- **Code evidence:** the newest stored FORM check of the exact revision, used only
+  while the [existing reuse rule](artifacts.md#form-scoped-checks) calls it
+  current. Changed, missing or unreadable evidence is reported as `not_current`,
+  `none` or `unavailable`; it never counts as a pass. Property evidence keeps
+  `functional_fidelity: unverified`.
+- **Code findings:** missing requested views and failed stored property checks.
+  These return the candidate to the K2 checkpoint **without a model call**; a
+  reviewer cannot approve them away. If the probe itself was the wrong
+  interpretation, a new stored check of the same revision supersedes it.
+- **Questions:** each requirement, the rendered views and, when reference images
+  were opened, the reference comparison.
+
+The reviewer answers every requirement by exact id with
+`met | unresolved | failed`, evidence and, for a failure, a correction. The views
+and reference questions are answered separately. **Code computes the verdict:**
+a failed answer, an unmet required feature, an error issue or views that are not
+`met` mean revise. The reviewer's schema has no verdict field. An accepted result
+records `basis: {mode: targeted, version, packet}`. The existing
+`reviewed_candidate` commitment, SQL save fences and Step-link receipts are
+unchanged.
+
+The existing `cad-reviewer` function switch governs both forms. When a publication
+adds the role and its `bob_cad_targeted_review` schema, the
+CAD runtime fingerprint (`drawing-runtime.ts`) includes them, so older in-flight
+requests do not mix review contracts.
+
+**Not yet covered:** these remain for the next increments:
+
+- reuse of an accepted review across turns for an unchanged accepted model
+- the catalog role, prompt and schema publication
+- the general [task source packet](ask-bob-context.md#task-source-packet)
+- the [comparative acceptance](bob-delivery-flow.md#form-next) that must precede activation and removal of the full review
+
 ## Save payload without preview pixels — 2026-10-26
 
 The save payload never carries preview pixels. `candidateForSave` returns the

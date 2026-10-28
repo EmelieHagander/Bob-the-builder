@@ -565,7 +565,16 @@ installerade med [browser- och hosted bevis](foundation-verification.md#form-con
 [Pages #387](foundation-verification.md#form-saved-delivery-ui-2026-10-27).
 **Nästa: paket 3 och förberedelse av Rita-ersättningen enligt
 [genomförandeordningen](#form-next); verifiera det sammanhängande lådflödet med
-verklig modell/CAD inom ett separat beställt prov.** CI-workflowets fokuserade
+verklig modell/CAD inom ett separat beställt prov.** Första steget, den
+[riktade CAD-granskningen](cad-adapter.md#targeted-cad-review), finns i källkod
+men är inaktiv tills en katalogpublicering innehåller dess roll. Kodfel stoppar
+utan modellanrop och koden räknar ut utslaget. Dagens fulla Rita-granskning
+gäller oförändrad. Återstår:
+
+- återanvändning över turer för en oförändrad godkänd modell
+- katalogroll och schema
+- det allmänna underlagspaketet
+- jämförande acceptans före aktivering CI-workflowets fokuserade
 manuella läge (`scope=saved-delivery`) kör tre skärmbredder; hela CI-jobbet körs
 endast med `scope=full`. 4b:s versionsbundna
 [leveransläsning](artifacts.md#construction-delivery-discovery) är tekniskt
