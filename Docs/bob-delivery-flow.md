@@ -556,26 +556,27 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — installera godkända kostnadsrättningar före fler betalda prov (2026-10-28):**
-driftsätt den lokalt verifierade källavstämningen på samma Construction,
-sex katalogägda kärnverktyg och GPT-5.4 medium enligt
-[releaseordningen](../supabase/README.md#roles-and-baseline-profiles).
+**Aktivt nästa steg — mät nästa uttryckligen beställda jämförelse (2026-10-28):**
+källavstämning på samma Construction, sex katalogägda kärnverktyg och
+GPT-5.4 medium är tekniskt installerade och återlästa.
+[Releasebevis](foundation-verification.md#bob-cost-controls-2026-10-28) skiljer
+mekaniken från kvarstående modellbeteende, leveranskvalitet och kostnad.
 Den första lådbaslinjen visade [hög anropskostnad, inaktuell källkoppling och en
 dubbel konstruktion](foundation-verification.md#form-package5-release-2026-10-28).
 Ägaren bad att undersöka kostnaden; de tre återstående betalda proven är pausade.
 En ny avgränsad modelljämförelse behöver en egen uttrycklig beställning.
 
-**Förebyggande rättningar är förberedda, inte driftsatta:** acceptansprovet
+**Förebyggande rättningar ingår i PR #366:** acceptansprovet
 stoppar före nästa betalda steg när en kontroll fallerar, begär stopp av sitt
 exakta bakgrundsjobb vid avbrott och sparar om stoppet bekräftades. Slutkontrollen
 behåller ursprunglig konstruktionsidentitet och rättade mått samt återläser
 ritningens källstatus. Konstruktionskontrollens konfliktsvar visar observerade
 revisioner och skiljer källändring från ändrat huvud eller arkivering. Se samma
 [verifikationspost](foundation-verification.md#form-package5-release-2026-10-28)
-för historiska föregångare, tester och avbrottens begränsningar. Den godkända
+för historiska föregångare, tester och avbrottens begränsningar. Den installerade
 Solution/Construction-reparationen är lokalt verifierad med bibehållna
 geometri-/källspärrar. Modellbeteende, faktisk kostnadsminskning och fullständig
-leverans på samma konstruktion återstår att mäta efter installation.
+leverans på samma konstruktion återstår att mäta.
 
 Tidigare FORM-delar finns installerade:
 paket 2a/2b/2c är mergade och tekniskt driftsatta med

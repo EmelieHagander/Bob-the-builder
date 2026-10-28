@@ -206,7 +206,7 @@ The bounded change command carries the construction Artifact ID, expected constr
 
 The server reads the checkpoint itself, applies the delta and uses `compileCadParameters` plus the existing SQL/source guards to compute all affected dimensions and placements. Unchanged geometry topology, bindings, materials and joints are retained. SQL independently compares the changed inputs and permitted numeric recipe fields, recomputes the graph, reads canonical material/joint metadata and checks sources/readiness at commit. Formula/topology changes require an explicit construction revision; the numeric command cannot silently add/remove parts or alter bindings. Commit one new immutable construction revision under its expected-revision guard, then check that exact revision. This is one bounded operation through the existing construction writer and its receipt ledger. Exact retry is checked before source compilation and returns the original receipt even after a later head/source revision.
 
-**Explicit selected-source reconciliation — source prepared, 2026-10-28.** The
+**Explicit selected-source reconciliation — technically installed, 2026-10-28.** The
 same bounded command gains `target_revision`: null retains the saved pin; an
 explicit current revision reconciles this same construction with the changed
 selected Solution. Update the Solution first, then supply its exact target

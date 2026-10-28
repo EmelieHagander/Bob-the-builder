@@ -25,7 +25,7 @@ defines outcome/scope/mandate semantics; [release ordering](../supabase/README.m
 and [local proof/limits](foundation-verification.md#form-feedback-2026-10-27)
 remain separate from activation.
 
-**Six catalog-owned core tools — source prepared, 2026-10-28.** The owner approved
+**Six catalog-owned core tools — technically installed, 2026-10-28.** The owner approved
 up to six permanent tools, including discovery. New `bob.tools.core_tools` pins
 `describe_tool`, `search_project_data`, `open_project_item`,
 `read_solution_context`, `read_construction_draft` and

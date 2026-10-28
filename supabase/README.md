@@ -137,7 +137,7 @@ access to a project.
 
 ### Roles and baseline profiles
 
-**Owner-approved cost correction — source prepared, 2026-10-28.**
+**Owner-approved cost correction — technically installed, 2026-10-28.**
 `profile.ask-bob` advances from high to **medium**, retaining the existing
 standard tier binding to **gpt-5.4**. This changes new main-Bob manifests only;
 other profiles, model bindings and already pinned jobs stay intact. The same

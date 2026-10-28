@@ -97,7 +97,7 @@ cost, not a reconciliation of provider invoices, CAD compute or GitHub hosting.
   complete. Individual rejected argument details were not retained in the
   completed job journal, so their precise causes are not claimed here.
 
-**Current decision:** keep both candidate roles and policies off. The baseline
+**Investigation decision, before the approved correction below:** keep both candidate roles and policies off. The baseline
 bunk-bed run and both candidate runs have not started. First correct the
 Solution/Construction revision sequence while preserving the same artifact and
 the existing source guards, reduce repeated discovery/read work, and make test
@@ -106,7 +106,7 @@ requesting another bounded live comparison. No new runtime fix or activation
 was deployed during this investigation. [State](bob-delivery-flow.md#state)
 owns the remaining work.
 
-### Recurring bugs and preventive corrections — source prepared, not deployed
+### Recurring bugs and preventive corrections — included in PR #366
 
 The owner asked to review recent failures before making more changes. The
 [19 October construction audit](bob-construction-path-audit-2026-10-19.md)
@@ -169,7 +169,7 @@ privacy-safe diagnostics for rejected edits remain open.
 The precise rejected arguments from this completed baseline are unavailable.
 
 <a id="bob-cost-controls-2026-10-28"></a>
-### Owner-approved cost corrections — source verified, installation pending
+### Owner-approved cost corrections — technically installed
 
 The owner approved the prepared stop fixes and source reconciliation, requested
 at most six permanently loaded tools with descriptions read from the catalog,
@@ -221,6 +221,36 @@ an environment-only Deno declaration. No production import changed.
 
 No full suite, workflow or paid model run was started. This proves technical
 behavior, not reduced live spending or complete model-driven drawing delivery.
+
+**Hosted readback:** reviewed source `422954ef4d5be27bf9758278396b066f061a8339`
+(tree `2fe36764c41e10640972a1b3d4d0400cba363eb5`) was installed from PR #366.
+The remaining PR update changes release documentation only. There were zero
+queued/running/paused Bob jobs at the installation preflight. The core migration
+was applied first, worker and HTTP runtime second, and the catalog publication
+last, after executable-source readback matched.
+
+| Function | Active version | Authentication | Bundle SHA-256 |
+|---|---:|---|---|
+| `bob-worker` | 147 | existing custom authentication; JWT flag false | `7a8410a514a94a3f9cae5cb85189bee83d98eeb2ae8eee07d0a7439a802d3a2c` |
+| `ask-bob` | 179 | JWT required | `ecbcb58d50f4dceebb401f7d005685575bce0d6786de638410ded9ec46c16d45` |
+
+Readback matched all executable bytes in 121/123 returned worker/HTTP files,
+including each import map. As in the preceding release, type-only provenance
+and the worker's type-only HTTP boundary are omitted, and `cad-intake.ts` is
+empty after type erasure. No unexplained differences remain.
+
+| Source migration | Hosted ledger version / name |
+|---|---|
+| `20261028174716_construction_parameter_source_refresh.sql` | `20261028180808 / construction_parameter_source_refresh` |
+| `20261028174802_ai_bob_cost_controls_catalog.sql` | `20261028180954 / ai_bob_cost_controls_catalog` |
+
+Exactly three of the 310 catalog-head entries changed: `bob.tools`,
+`tools.change_construction_parameters` (v5) and `profile.ask-bob` (v2, medium).
+`tier.standard` remains v1/GPT-5.4. The six core names and nullable explicit
+target input were read back. Both patched SQL functions contain the guarded
+reconciliation path. Both candidate roles and policies remain disabled.
+Security/performance advisor categories and finding counts are unchanged.
+No historical project, construction, drawing or paid execution was modified.
 No automatic rebase, cross-revision read cache, model/prompt change, hosted
 migration or new paid run is part of these corrections. Savings and complete
 member acceptance therefore remain unmeasured.
