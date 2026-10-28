@@ -303,7 +303,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(prepared.status!=='ready'&&prepared.status!=='saved')return prepared
     if(prepared.status==='ready'){
      const draft=prepared.draft
-     if(draft?.artifact_id!==v.record_id||draft.revision!==v.expected_revision||draft.current_revision!==v.expected_revision||draft.archived)return {status:'conflict'}
+     if(draft?.projectId!==opts.projectId||draft.artifact_id!==v.record_id)return {status:'unavailable'}
+     if(draft.revision!==v.expected_revision||draft.current_revision!==v.expected_revision||draft.archived)return {status:'conflict'}
      payload.data.computed=await compileConstructionParameterChange(opts.projectId,draft,v.changes,opts.readSources)
     }
     if(!await opts.hasAccess())return {status:'denied'}
@@ -374,7 +375,12 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     const current=await (opts.readCurrent?.(v.artifact_id)??opts.read(v.artifact_id,null,null)) as Record<string,any>
     if(!await opts.hasAccess())return {status:'denied'}
     if(current?.projectId!==opts.projectId||current.status!=='ok'||current.artifact_id!==v.artifact_id)throw new Error('construction_source_unavailable')
-    if(current.revision!==v.revision||current.source_state!=='current'||current.archived)return {status:'conflict',message:'Construction or sources changed; read and revise before checking.'}
+    if(current.revision!==v.revision||current.source_state!=='current'||current.archived)return {status:'conflict',
+     reason:current.archived?'construction_archived':current.revision!==v.revision?'construction_revision_changed':'construction_sources_changed',
+     artifact_id:v.artifact_id,requested_revision:v.revision,current_revision:current.revision,target_revision:current.target_revision,source_state:current.source_state,
+     message:current.archived?'This construction is archived; no current check was produced.'
+      :current.revision!==v.revision?'Read the current revision of this same construction before checking; no current check was produced.'
+      :'This construction still refers to changed or unavailable sources. Read its pinned sources and current project readiness before revising this same artifact; no current check was produced.'}
     const observedAt=opts.constructionViews?await (opts.observationTime?.({tool:name,artifact_id:v.artifact_id,revision:v.revision})??Promise.resolve((opts.now?.()??new Date()).toISOString())):undefined
     const today=(observedAt??(opts.now?.()??new Date()).toISOString()).slice(0,10)
     const checked=opts.formEvidence&&name===CONSTRUCTION_CHECK_TOOL.function.name

@@ -26,7 +26,7 @@ async function current(ctx: StepContext) {
   const id = binding[kind + '_id'], revision = binding[kind + '_revision']
   if (id && !catalog.has(id + '@' + revision)) catalog.set(id + '@' + revision, await ctx.reader.catalogRecord(id, revision))
  }
- const checked = (ctx.checker ?? checkConstruction)(draft, catalog, new Date().toISOString().slice(0, 10))
+ const checked: Row = (ctx.checker ?? checkConstruction)(draft, catalog, new Date().toISOString().slice(0, 10))
  ctx.check('construction_concept_ready', checked.concept_ready === true, checked.concept_ready ? undefined : checked.issues.slice(0, 5))
  ctx.observe('construction', { artifact_id: draft.artifact_id, revision: draft.revision, parts: checked.part_count, joints: checked.joint_count, size_mm: size(checked) })
  return { draft, checked }
@@ -35,11 +35,16 @@ function sameArtifact(ctx: StepContext, now: { draft: Row }) {
  ctx.check('same_construction_artifact', now.draft.artifact_id === ctx.state.artifact_id, { before: ctx.state.artifact_id, after: now.draft.artifact_id })
  ctx.check('new_construction_revision', now.draft.revision > ctx.state.revision, { before: ctx.state.revision, after: now.draft.revision })
 }
-async function savedDrawing(ctx: StepContext) {
+async function savedDrawing(ctx: StepContext, geometry: (now: { draft: Row; checked: Row }) => void) {
  const now = await current(ctx)
  if (!now) return
+ ctx.check('same_construction_artifact', now.draft.artifact_id === ctx.state.artifact_id, { before: ctx.state.artifact_id, after: now.draft.artifact_id })
+ ctx.check('construction_revision_preserved', now.draft.revision >= ctx.state.revision, { before: ctx.state.revision, after: now.draft.revision })
+ geometry(now)
  const drawings = await ctx.reader.drawings(now.draft.artifact_id, now.draft.revision)
- ctx.check('drawing_saved_for_latest_revision', drawings.length > 0, { construction_revision: now.draft.revision, drawings: drawings.length })
+ const currentDrawings = drawings.filter(d => d.source?.artifact_id === now.draft.artifact_id && d.source.revision === now.draft.revision
+  && d.revision === d.current_revision && d.archived === false && d.source_state === 'current')
+ ctx.check('drawing_saved_for_latest_revision', currentDrawings.length > 0, { construction_revision: now.draft.revision, drawings: drawings.length, current_drawings: currentDrawings.length })
  ctx.observe('drawings', drawings.map(d => ({ id: d.id, revision: d.revision, source: d.source ?? null })))
 }
 const ladderOffset = (draft: Row, checked: Row) => {
@@ -62,7 +67,10 @@ export const FORM_SCENARIOS: FormScenario[] = [
     sameArtifact(ctx, now)
     ctx.check('changed_size', JSON.stringify(size(now.checked)) === JSON.stringify([500, 300, 250]), size(now.checked))
     Object.assign(ctx.state, { revision: now.draft.revision }) } },
-  { label: 'final_drawing', message: 'Gör nu den slutliga ritningen av den rättade lådan med vyer framifrån, från sidan och ovanifrån, och spara den kopplad till konstruktionen.', after: savedDrawing },
+  { label: 'final_drawing', message: 'Gör nu den slutliga ritningen av den rättade lådan med vyer framifrån, från sidan och ovanifrån, och spara den kopplad till konstruktionen.', after: ctx => savedDrawing(ctx, now => {
+   ctx.check('five_parts', now.checked.part_count === 5, { parts: now.checked.part_count })
+   ctx.check('changed_size', JSON.stringify(size(now.checked)) === JSON.stringify([500, 300, 250]), size(now.checked))
+  }) },
  ] },
  { id: 'bunk-bed', title: 'Våningssäng — stegen flyttas, sedan ritning', steps: [
   { label: 'concept', message: 'Våningssäng för två barn: två madrasser 90 × 200 cm, total höjd högst 1600 mm, stege på vänster gavel sett framifrån och två lådor under den nedre sängen. Ta fram lösningen och spara en kontrollerad konstruktion av stommen med stegen; lådorna får stå kvar som återstående arbete.',
@@ -80,9 +88,16 @@ export const FORM_SCENARIOS: FormScenario[] = [
     ctx.check('ladder_moved_to_opposite_gable', offset !== null && ctx.state.ladder_offset !== null && Math.sign(offset) === -Math.sign(ctx.state.ladder_offset) && offset !== 0,
      { before: ctx.state.ladder_offset, after: offset })
     const others = (now.draft.recipe?.instances ?? []).filter((i: Row) => !/ladder|stege|steg/i.test(i.id))
-    const changed = (ctx.state.others as Row[]).filter(o => JSON.stringify(others.find((i: Row) => i.id === o.id)?.placement ?? null) !== JSON.stringify(o.placement)).map(o => o.id)
+    const before = new Map((ctx.state.others as Row[]).map(o => [o.id, o.placement]))
+    const after = new Map(others.map((o: Row) => [o.id, o.placement]))
+    const changed = [...new Set([...before.keys(), ...after.keys()])].filter(id => JSON.stringify(before.get(id)) !== JSON.stringify(after.get(id)))
     ctx.observe('non_ladder_parts_changed', changed)
     Object.assign(ctx.state, { revision: now.draft.revision }) } },
-  { label: 'drawing', message: 'Gör ritningen av stommen med vyer framifrån och från sidan och spara den kopplad till konstruktionen.', after: savedDrawing },
+  { label: 'drawing', message: 'Gör ritningen av stommen med vyer framifrån och från sidan och spara den kopplad till konstruktionen.', after: ctx => savedDrawing(ctx, now => {
+   const offset = ladderOffset(now.draft, now.checked)
+   ctx.check('ladder_moved_to_opposite_gable', offset !== null && ctx.state.ladder_offset !== null && Math.sign(offset) === -Math.sign(ctx.state.ladder_offset) && offset !== 0,
+    { before: ctx.state.ladder_offset, after: offset })
+   ctx.check('height_limit', (size(now.checked)?.[2] ?? Infinity) <= 1600, size(now.checked))
+  }) },
  ] },
 ]

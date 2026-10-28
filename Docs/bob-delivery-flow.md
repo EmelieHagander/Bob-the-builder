@@ -559,11 +559,20 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 **Aktivt nästa steg — rätta lådflödets omtag före fler betalda prov (2026-10-28):**
 håll ändrad Solution och samma Construction på aktuella källrevisioner,
 kontrollera efter sista ändringen och minska upprepad verktygsupptäckt/läsning.
-Säkerställ också att ett avbrutet acceptansprov stoppar sitt exakta bakgrundsjobb.
 Den första lådbaslinjen visade [hög anropskostnad, inaktuell källkoppling och en
 dubbel konstruktion](foundation-verification.md#form-package5-release-2026-10-28).
 Ägaren bad att undersöka kostnaden; de tre återstående betalda proven är pausade.
 Verifiera korrigeringen lokalt innan en ny avgränsad modelljämförelse beställs.
+
+**Förebyggande rättningar är förberedda, inte driftsatta:** acceptansprovet
+stoppar före nästa betalda steg när en kontroll fallerar, begär stopp av sitt
+exakta bakgrundsjobb vid avbrott och sparar om stoppet bekräftades. Slutkontrollen
+behåller ursprunglig konstruktionsidentitet och rättade mått samt återläser
+ritningens källstatus. Konstruktionskontrollens konfliktsvar visar observerade
+revisioner och skiljer källändring från ändrat huvud eller arkivering. Se samma
+[verifikationspost](foundation-verification.md#form-package5-release-2026-10-28)
+för historiska föregångare, tester och avbrottens begränsningar. Själva
+Solution/Construction-reparationen och uppmätt kostnadsminskning återstår.
 
 Tidigare FORM-delar finns installerade:
 paket 2a/2b/2c är mergade och tekniskt driftsatta med

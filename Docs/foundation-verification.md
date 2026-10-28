@@ -78,7 +78,8 @@ cost, not a reconciliation of provider invoices, CAD compute or GitHub hosting.
   `read_construction_draft` executions occurred across the three turns. Ten
   main-model calls returned only `describe_tool`, costing USD 0.401794.
   Tool executions are not separate model calls and these figures overlap the
-  totals above.
+  totals above. Counts alone do not establish redundant identical reads: views,
+  pages and fresh source checks can legitimately repeat a tool name.
 - **Verified source invalidation:** construction
   `2396e451-7241-4b25-908c-d71671328b6b` revision 2 was saved at 15:42:50 UTC,
   still pinned to target/solution revision 2. The subsequent solution edit
@@ -105,6 +106,70 @@ requesting another bounded live comparison. No new runtime fix or activation
 was deployed during this investigation. [State](bob-delivery-flow.md#state)
 owns the remaining work.
 
+### Recurring bugs and preventive corrections — source prepared, not deployed
+
+The owner asked to review recent failures before making more changes. The
+[19 October construction audit](bob-construction-path-audit-2026-10-19.md)
+already traced expensive full-document repair loops to missing bounded edits
+and imprecise errors. Those capabilities have since shipped; they should not be
+reintroduced as a new fix. [Issue #307](https://github.com/EmelieHagander/Bob-the-builder/issues/307)
+isolated source-assessment timeouts, and
+[issue #308](https://github.com/EmelieHagander/Bob-the-builder/issues/308)
+separated unavailable capabilities, different read views, checkpoint failures
+and incomplete delivery. A completed worker, saved construction or passed CAD
+review did not by itself prove that the requested drawing was delivered.
+
+The new source corrections apply those lessons at the boundaries that still
+fail in today's code:
+
+- **Stop a failed paid sequence:** the runner persists each turn identity before
+  submission, then stops after the first failed acceptance check. `failed`,
+  `cancelled` and `paused` jobs no longer remain in the polling loop until timeout.
+  An active drawing recovery prevents a completed parent from ending the step.
+- **Propagate interruptions:** the workflow uses `exec node` so process signals
+  reach the runner. SIGINT/SIGTERM, timeout and transport failures trigger the
+  existing member-authorized `bob_cancel_job` for the exact accepted job. A lost
+  acceptance is reconciled by its original turn ID without resubmission. Caller
+  abort signals survive the fetch deadline wrapper; cleanup has an independent
+  five-second signal. The report records confirmed, already-terminal or
+  unconfirmed cancellation, is written incrementally by atomic rename, and its
+  upload step also runs after cancellation.
+- **Check the final object:** the last step must retain the original construction
+  identity and corrected box dimensions/part count or ladder side/height limit.
+  A historical, archived, stale or wrongly pinned drawing cannot pass. The
+  delivery index is paginated and its `not_checked` entries are reopened through
+  `current_drawing_overview`; the index alone is not source verification. Added
+  and removed non-ladder parts are included in observations, without converting
+  the protocol's judgement-only observations into automatic failures.
+- **Expose an actionable conflict:** construction checks distinguish a changed
+  head, changed/unavailable sources and an archived artifact, returning the
+  requested/current construction revisions and the observed target pin. This
+  reuses the existing fresh read and produces no new check evidence. Parameter
+  preparation also rejects a mismatched project before compilation or writing,
+  matching the other construction paths' project boundary.
+
+Cancellation remains best effort if the runner is forcibly killed, the network
+fails, acceptance occurs after reconciliation, or a terminal parent has a
+separate active recovery that the cancellation API refuses. These cases remain
+unconfirmed in the report; stopping the driver is never claimed as proof that
+server work stopped. No new background watcher is installed.
+
+**Focused verification:** 56 tests pass across `live-form-runner`,
+`form-acceptance`, `construction-views` and `construction-parameters`, including
+real subprocess SIGINT/SIGTERM, lost acceptance, timeout, failed cancellation,
+active recovery, stale drawings, identity/geometry regression, project mismatch
+and exact-write replay. The runner and its lifecycle tests pass strict targeted
+TypeScript checking with the already installed Node declarations. Both affected
+Edge entrypoints pass Deno checking with the temporary import map described
+above. No full suite, GitHub workflow, hosted write or paid model call was run.
+
+The same-artifact Solution/Construction revision repair, repeated discovery
+cost, and durable privacy-safe diagnostics for rejected edits remain open.
+The precise rejected arguments from this completed baseline are unavailable.
+No automatic rebase, cross-revision read cache, model/prompt change, hosted
+migration or new paid run is part of these corrections. Savings and complete
+member acceptance therefore remain unmeasured.
+
 <a id="form-package5-comparison"></a>
 ## FORM package 5 — prepared first comparison, 2026-10-28
 
@@ -127,8 +192,8 @@ owner uses it. There is no per-project switch.
 - `scripts/form-acceptance-scenarios.ts` holds the frozen messages and checks.
   - **Hard checks:** one saved construction is concept-ready, the same artifact
     gets a new revision, the requested size or height limit holds, the ladder
-    moves to the opposite gable, and a saved drawing exists for the latest
-    revision.
+    moves to the opposite gable, and the final step preserves that identity and
+    correction with a current saved drawing for the latest revision.
   - **Recorded as observations only:** sizes, part counts, the ladder offset and
     any changed non-ladder parts.
 - `scripts/run-live-form-acceptance.ts` runs one scenario once.
@@ -138,7 +203,8 @@ owner uses it. There is no per-project switch.
   - It refuses to start without `BOB_FORM_LIVE_CONFIRM=paid-acceptance-approved`
     on a first attempt.
   - It writes a content-free report with turn ids, wall time, checks and
-    observations.
+    observations after each transition, stops on failed checks, and records the
+    outcome of exact-job cancellation on interruption or failure.
 - `.github/workflows/live-form-acceptance.yml` is manual only and runs on main
   only. Its inputs are scenario, config label and approval.
 - `scripts/form-package3-enable.sql` and `scripts/form-package3-rollback.sql`

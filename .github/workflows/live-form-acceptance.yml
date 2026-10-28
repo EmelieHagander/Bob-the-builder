@@ -60,9 +60,9 @@ jobs:
           BOB_FORM_CONFIG: ${{ inputs.config }}
           BOB_FORM_LIVE_CONFIRM: ${{ inputs.approval }}
           BOB_FORM_REPORT: test-results/form-${{ inputs.scenario }}-${{ inputs.config }}.json
-        run: node --import tsx scripts/run-live-form-acceptance.ts
+        run: exec node --import tsx scripts/run-live-form-acceptance.ts
       - name: Retain the content-free run report
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: form-${{ inputs.scenario }}-${{ inputs.config }}-${{ github.run_id }}
