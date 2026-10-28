@@ -1,5 +1,84 @@
 # Foundation verification and rollout
 
+<a id="form-package5-comparison"></a>
+## FORM package 5 — prepared first comparison, 2026-10-28
+
+**Prepared, not run.** Two frozen scenarios compare the current path with the
+FORM package 3 candidate on real model and CAD calls:
+
+- **Box:** a five-panel box, then a width change, then the final drawing.
+- **Bunk bed:** a frame with the ladder on the left, then the ladder moved to the
+  right with nothing else changed, then a drawing.
+
+The candidate has the [targeted CAD review](cad-adapter.md#targeted-cad-review),
+[`read_task_sources`](ask-bob-context.md#read-task-sources) and the
+[source reader](ask-bob-context.md#source-reader) on. The owner decided on
+2026-10-28 to switch the candidate on for the whole hosted app, because only the
+owner uses it. There is no per-project switch.
+
+**Pieces:**
+
+- `scripts/form-acceptance-scenarios.ts` holds the frozen messages and checks.
+  - **Hard checks:** one saved construction is concept-ready, the same artifact
+    gets a new revision, the requested size or height limit holds, the ladder
+    moves to the opposite gable, and a saved drawing exists for the latest
+    revision.
+  - **Recorded as observations only:** sizes, part counts, the ladder offset and
+    any changed non-ladder parts.
+- `scripts/run-live-form-acceptance.ts` runs one scenario once.
+  - It signs in as the owner member, creates a new disposable Verification
+    project and sends durable turns. It never retries a paid turn or uses a
+    service key.
+  - It refuses to start without `BOB_FORM_LIVE_CONFIRM=paid-acceptance-approved`
+    on a first attempt.
+  - It writes a content-free report with turn ids, wall time, checks and
+    observations.
+- `.github/workflows/live-form-acceptance.yml` is manual only and runs on main
+  only. Its inputs are scenario, config label and approval.
+- `scripts/form-package3-enable.sql` and `scripts/form-package3-rollback.sql`
+  switch the three parts on or off for all users.
+  - They create new catalog versions and change the two tool policies.
+  - They are idempotent and are not migrations, so the baseline can run first.
+- `scripts/report-form-acceptance.sql` reports per scenario and configuration:
+  elapsed time, calls, failures, resends, tokens, known USD and CAD renders,
+  reviews and rejections. It also breaks results down per role version.
+
+**Run order (owner approval and hosted access required):**
+
+1. Deploy `ask-bob` and `bob-worker` from main. The deployment carries the
+   inactive code from PRs #361–#364.
+2. Apply migrations `20261028080000`, `20261028120000` and `20261028140000`.
+   They change no behaviour. Read back the five disabled definitions and the two
+   inactive policies.
+3. Dispatch the workflow with `config=baseline` for `box` and for `bunk-bed`.
+4. Run `scripts/form-package3-enable.sql`.
+5. Dispatch the workflow with `config=candidate` for both scenarios.
+6. Paste the reported turn ids into `scripts/report-form-acceptance.sql`.
+7. Compare correctness, owner work, rework and resources as
+   [package 5](bob-delivery-flow.md#form-next) requires. Keep the candidate on,
+   or run `scripts/form-package3-rollback.sql`.
+
+**Cost frame:** earlier hosted runs logged about USD 0.25 per construction turn
+and about USD 1 per drawing phase. That suggests roughly USD 1.5–3 per scenario
+run and USD 6–12 for these four runs. This is an estimate, not a cap; the
+workflow cannot stop on cost. One run per scenario and configuration is a first
+measurement. It is not the repeated comparison package 5 needs before removing
+the full Rita review.
+
+**Passed locally (no network):** 4 tests in `form-acceptance.test.ts`:
+
+- **Box:** the scenario passes only for the requested width change, and fails
+  without a saved drawing.
+- **Bunk bed:** the scenario fails if the ladder stays on the same gable or the
+  frame is too tall.
+- **Runner:** it refuses to start without its scenario, approval or a first
+  attempt, and creates no project.
+- **Workflow:** it is manual only.
+- **Switches:** in a PGlite database with all migrations, enablement turns both
+  roles and both policies on. A second run publishes nothing new. Rollback turns
+  everything off again and removes the targeted reviewer from the CAD runtime
+  identity.
+
 <a id="source-reader-2026-10-28"></a>
 ## Small source reader — local verification, 2026-10-28
 
