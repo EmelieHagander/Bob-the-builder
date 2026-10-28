@@ -836,6 +836,12 @@ Do not delete saved models or weaken construction validation to roll back UI.
 <a id="form-package3-switch"></a>
 ## FORM package 3 switch — operator scripts, 2026-10-28
 
+**Hosted status:** both runtimes and all three inert publications are installed.
+Both roles and policies remain off; the first baseline was interrupted for
+cost investigation and the remaining comparison runs are paused. See the
+[release and cost evidence](../Docs/foundation-verification.md#form-package5-release-2026-10-28)
+before operating the switch.
+
 `scripts/form-package3-enable.sql` switches on three inert publications for all
 users: `role.cad-targeted-reviewer`, `role.source-reader`, and the
 `read_task_sources` and `read_source_findings` policies.

@@ -556,30 +556,31 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — självständig FORM med mer kodkontroll (2026-10-27):**
+**Aktivt nästa steg — rätta lådflödets omtag före fler betalda prov (2026-10-28):**
+håll ändrad Solution och samma Construction på aktuella källrevisioner,
+kontrollera efter sista ändringen och minska upprepad verktygsupptäckt/läsning.
+Säkerställ också att ett avbrutet acceptansprov stoppar sitt exakta bakgrundsjobb.
+Den första lådbaslinjen visade [hög anropskostnad, inaktuell källkoppling och en
+dubbel konstruktion](foundation-verification.md#form-package5-release-2026-10-28).
+Ägaren bad att undersöka kostnaden; de tre återstående betalda proven är pausade.
+Verifiera korrigeringen lokalt innan en ny avgränsad modelljämförelse beställs.
+
+Tidigare FORM-delar finns installerade:
 paket 2a/2b/2c är mergade och tekniskt driftsatta med
 [1 904 gröna tester, browserprov och hosted återläsning](foundation-verification.md#form-hosted-release-2026-10-27).
 Även första 4a:s exakta boxmodell och gemensamma återkoppling är tekniskt
 installerade med [browser- och hosted bevis](foundation-verification.md#form-construction-preview-2026-10-27).
 4b:s UI för återöppnade leveranser är browserverifierad och publicerad med
 [Pages #387](foundation-verification.md#form-saved-delivery-ui-2026-10-27).
-**Nästa: paket 3 och förberedelse av Rita-ersättningen enligt
-[genomförandeordningen](#form-next); verifiera det sammanhängande lådflödet med
-verklig modell/CAD inom ett separat beställt prov.** Första steget, den
-[riktade CAD-granskningen](cad-adapter.md#targeted-cad-review), finns i källkod.
-Dess katalogroll publiceras avstängd. Vägen är därför inaktiv tills en godkänd
-publicering slår på rollen. Kodfel stoppar utan modellanrop och koden räknar ut
-utslaget. En godkänd granskning återanvänds över turer inom samma
-ritningsbegäran, utan modellanrop när inget den bygger på har ändrats.
-Dagens fulla Rita-granskning gäller oförändrad. Första kodvarianten av det
-allmänna [underlagspaketet](ask-bob-context.md#read-task-sources),
-`read_task_sources`, och den lilla
-[läsarmodellen](ask-bob-context.md#source-reader), `read_source_findings`, är
-publicerade avstängda. Läsarens fynd måste citera källan ordagrant och
-kontrolleras i kod. Två jämförande prov (låda och våningssäng, nuvarande mot
-ny konfiguration) är [förberedda men inte körda](foundation-verification.md#form-package5-comparison).
-Återstår:
-- jämförande acceptans före aktivering CI-workflowets fokuserade
+Paket 3:s [riktade CAD-granskning](cad-adapter.md#targeted-cad-review),
+[underlagspaket](ask-bob-context.md#read-task-sources) och
+[läsarmodell](ask-bob-context.md#source-reader) är tekniskt installerade men
+fortfarande avstängda. Dagens fulla Rita-väg används. Den
+[förberedda jämförelsen](foundation-verification.md#form-package5-comparison)
+återupptas först efter kostnads-/korrekthetsutredningen; den ersätter inte den
+bredare acceptansen i [genomförandeordningen](#form-next).
+
+CI-workflowets fokuserade
 manuella läge (`scope=saved-delivery`) kör tre skärmbredder; hela CI-jobbet körs
 endast med `scope=full`. 4b:s versionsbundna
 [leveransläsning](artifacts.md#construction-delivery-discovery) är tekniskt
