@@ -17,7 +17,8 @@ a generated migration. It is not applied to the hosted project.
   - The publication is disabled and generated from code. An enabled role resolves the runtime schema.
   - The tool is offered only when both the role and the policy are enabled.
 - The 6 `task-sources.test.ts` tests still pass with the added Solution summary.
-- READER_BLAST_PLACEHOLDER
+- **1075 of 1075** tests pass across the 143 test files that use the catalog
+  fixtures, the seed, the tool session, the turn runtime or the CAD runtime.
 - `deno check` of `ask-bob` and `bob-worker` and the app `tsc` check pass.
 
 No hosted change, role or policy activation, model call or CAD job was run.
