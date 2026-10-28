@@ -1,9 +1,265 @@
 # Foundation verification and rollout
 
+<a id="form-package5-release-2026-10-28"></a>
+## FORM package 5 — hosted preparation and first comparison, 2026-10-28
+
+**Hosted preparation is installed; paid comparison is paused for cost investigation.** The owner
+approved the two-function release, three inert publications and four paid runs
+with a USD 6–12 estimate (not a cap). PR #365 was already merged when the release
+started. Source: `45df440ec19675b6085a8d97cdab853ceddf627f`.
+
+The two complete dependency closures were deployed worker first, then read back:
+
+| Function | Version | JWT verification | Bundle SHA-256 |
+|---|---|---|---|
+| `bob-worker` | 146 | existing custom authentication, `false` | `a1cb1b0ff9803a9021efa5ccb925cc13d4e6ab9d03e837f5fe8f09d55ac164f4` |
+| `ask-bob` | 178 | `true` | `83ce7094689d7429c954ad8386d8b3cfa2602823574a6bf68a8b4cdd20498141` |
+
+Every returned executable file matches the merge source. The bundler omits
+type-only provenance and the worker's type-only HTTP boundary, and returns the
+type-only `cad-intake.ts` as empty. Both Deno import maps match. No queued or
+running Bob jobs existed before the release.
+
+| Reviewed source migration | Hosted ledger version | Publication |
+|---|---|---|
+| `20261028080000` | `20261028152546` | `ai_targeted_cad_review_catalog` |
+| `20261028120000` | `20261028152555` | `ai_task_sources_catalog` |
+| `20261028140000` | `20261028152602` | `ai_source_reader_catalog` |
+
+Readback confirms both new roles are disabled and both new policies are inactive
+in `bob.tool_catalog` and `bob.tools` v21. Existing security-advisor categories
+and finding counts are unchanged. The baseline uses the full Rita path.
+
+**Focused verification:** all 27 tests pass across `form-acceptance`,
+`cad-targeted-review`, `source-reader` and `task-sources`. Both Edge entrypoints
+pass Deno checking using the exact Supabase 2.49.8 npm declarations and installed
+tokenizer through a temporary local import map; direct esm.sh access was refused.
+No production import changed. No full suite or CI workflow was run.
+
+The [prepared comparison](#form-package5-comparison) owns the scenarios and
+run order. This first measurement does not complete the broader FORM acceptance
+or authorize removal of the existing full-review implementation.
+
+### First baseline and cost investigation
+
+Only `box / baseline` was dispatched: [run 40716168468](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/40716168468),
+first attempt on the merge above, synthetic project
+`p_00de2d5f83754a11a1dc09ef5b23f788`. The owner questioned the running USD 2.25
+cost and asked to investigate. The GitHub driver was cancelled at 15:55:42 UTC;
+its independent durable Bob turn continued and completed at 15:59:39 UTC, with
+the final language-delivery call recorded at 15:59:55 UTC. A narrowly scoped
+operator-stop request returned `Invalid or expired requestState`; readback showed
+the job had completed, so it was not retried. No background test jobs remain
+queued or running. No acceptance JSON was uploaded after workflow cancellation.
+These are hosted accounting/readback findings, not a passing workflow result.
+
+| Step | Turn | Model calls | Known model USD |
+|---|---|---:|---:|
+| Concept | `dcc0718d-5a52-4b7a-9aea-677544078737` | 32 | 1.210695 |
+| Width change | `b4bb1993-d33d-4225-a0cc-93b10934dbb4` | 10 | 0.412406 |
+| Drawing and repair | `b5915051-615d-496c-9c90-240d557a4100` | 30 | 1.565622 |
+| **Total** | Three distinct turns | **72** | **3.188723** |
+
+The drawing turn has a separate language-delivery execution under the same
+turn ID; count the events once per turn, not once per Bob job. All 72 model
+events have prices, no failed model calls, and `attempt=0`. This is logged model
+cost, not a reconciliation of provider invoices, CAD compute or GitHub hosting.
+
+- **Main cost:** 70 `ask-bob` calls used `gpt-5.4 / high`, USD 3.085053
+  (96.75% of the total). They accumulated 2,221,555 input tokens, including
+  1,579,520 cached input tokens, and 72,339 output tokens. These are cumulative
+  context tokens across calls, not unique user input.
+- **Review cost:** one full `cad-reviewer` call used `gpt-5.4-mini / high`,
+  USD 0.097935. One `bob-delivery-language` call cost USD 0.005735. The single
+  CAD render and review passed their own checks. Replacing the review alone
+  cannot remove the dominant cost in this case; source-reader savings remain
+  unmeasured because the candidate was never enabled.
+- **Repeated navigation:** 31 `describe_tool` executions and 30
+  `read_construction_draft` executions occurred across the three turns. Ten
+  main-model calls returned only `describe_tool`, costing USD 0.401794.
+  Tool executions are not separate model calls and these figures overlap the
+  totals above. Counts alone do not establish redundant identical reads: views,
+  pages and fresh source checks can legitimately repeat a tool name.
+- **Verified source invalidation:** construction
+  `2396e451-7241-4b25-908c-d71671328b6b` revision 2 was saved at 15:42:50 UTC,
+  still pinned to target/solution revision 2. The subsequent solution edit
+  advanced the selected target to revision 3 at 15:44:12 UTC. The construction
+  is consequently `source_state=changed`, reason `target_changed`. The width
+  turn's final claim of a checked construction no longer described a current
+  checkpoint after its last write.
+- **Repair and identity failure:** the drawing turn recorded a CAD `needs_data`,
+  two construction `conflict` results and three `invalid` edits/saves, then
+  created `c92dcafd-6df3-4e4e-b5ce-fc11fa852c9a` revision 1 at 15:55:19 UTC.
+  Drawing `2cd0299a-b286-4a6f-a1be-e1a93c7f2734` revision 1 was saved against
+  that new construction at 15:58:15 UTC. Both construction identities remain
+  unarchived, which violates the frozen scenario's one-construction condition.
+  The delivery event is `partial` although the final answer says the work is
+  complete. Individual rejected argument details were not retained in the
+  completed job journal, so their precise causes are not claimed here.
+
+**Investigation decision, before the approved correction below:** keep both candidate roles and policies off. The baseline
+bunk-bed run and both candidate runs have not started. First correct the
+Solution/Construction revision sequence while preserving the same artifact and
+the existing source guards, reduce repeated discovery/read work, and make test
+cancellation propagate to the exact durable member job. Verify locally before
+requesting another bounded live comparison. No new runtime fix or activation
+was deployed during this investigation. [State](bob-delivery-flow.md#state)
+owns the remaining work.
+
+### Recurring bugs and preventive corrections — included in PR #366
+
+The owner asked to review recent failures before making more changes. The
+[19 October construction audit](bob-construction-path-audit-2026-10-19.md)
+already traced expensive full-document repair loops to missing bounded edits
+and imprecise errors. Those capabilities have since shipped; they should not be
+reintroduced as a new fix. [Issue #307](https://github.com/EmelieHagander/Bob-the-builder/issues/307)
+isolated source-assessment timeouts, and
+[issue #308](https://github.com/EmelieHagander/Bob-the-builder/issues/308)
+separated unavailable capabilities, different read views, checkpoint failures
+and incomplete delivery. A completed worker, saved construction or passed CAD
+review did not by itself prove that the requested drawing was delivered.
+
+The new source corrections apply those lessons at the boundaries that still
+fail in today's code:
+
+- **Stop a failed paid sequence:** the runner persists each turn identity before
+  submission, then stops after the first failed acceptance check. `failed`,
+  `cancelled` and `paused` jobs no longer remain in the polling loop until timeout.
+  An active drawing recovery prevents a completed parent from ending the step.
+- **Propagate interruptions:** the workflow uses `exec node` so process signals
+  reach the runner. SIGINT/SIGTERM, timeout and transport failures trigger the
+  existing member-authorized `bob_cancel_job` for the exact accepted job. A lost
+  acceptance is reconciled by its original turn ID without resubmission. Caller
+  abort signals survive the fetch deadline wrapper; cleanup has an independent
+  five-second signal. The report records confirmed, already-terminal or
+  unconfirmed cancellation, is written incrementally by atomic rename, and its
+  upload step also runs after cancellation.
+- **Check the final object:** the last step must retain the original construction
+  identity and corrected box dimensions/part count or ladder side/height limit.
+  A historical, archived, stale or wrongly pinned drawing cannot pass. The
+  delivery index is paginated and its `not_checked` entries are reopened through
+  `current_drawing_overview`; the index alone is not source verification. Added
+  and removed non-ladder parts are included in observations, without converting
+  the protocol's judgement-only observations into automatic failures.
+- **Expose an actionable conflict:** construction checks distinguish a changed
+  head, changed/unavailable sources and an archived artifact, returning the
+  requested/current construction revisions and the observed target pin. This
+  reuses the existing fresh read and produces no new check evidence. Parameter
+  preparation also rejects a mismatched project before compilation or writing,
+  matching the other construction paths' project boundary.
+
+Cancellation remains best effort if the runner is forcibly killed, the network
+fails, acceptance occurs after reconciliation, or a terminal parent has a
+separate active recovery that the cancellation API refuses. These cases remain
+unconfirmed in the report; stopping the driver is never claimed as proof that
+server work stopped. No new background watcher is installed.
+
+**Focused verification:** 56 tests pass across `live-form-runner`,
+`form-acceptance`, `construction-views` and `construction-parameters`, including
+real subprocess SIGINT/SIGTERM, lost acceptance, timeout, failed cancellation,
+active recovery, stale drawings, identity/geometry regression, project mismatch
+and exact-write replay. The runner and its lifecycle tests pass strict targeted
+TypeScript checking with the already installed Node declarations. Both affected
+Edge entrypoints pass Deno checking with the temporary import map described
+above. No full suite, GitHub workflow, hosted write or paid model call was run.
+
+The implementation below addresses same-artifact Solution/Construction
+reconciliation and repeated discovery. Live cost reduction and durable
+privacy-safe diagnostics for rejected edits remain open.
+The precise rejected arguments from this completed baseline are unavailable.
+
+<a id="bob-cost-controls-2026-10-28"></a>
+### Owner-approved cost corrections — technically installed
+
+The owner approved the prepared stop fixes and source reconciliation, requested
+at most six permanently loaded tools with descriptions read from the catalog,
+and selected **GPT-5.4 medium**. This does not authorize another paid acceptance
+run. Both candidate roles/policies remain off.
+
+Exact event accounting for the original baseline gives **116 tool executions**:
+
+| Turn | Tool executions | `describe_tool` | `read_construction_draft` | Other |
+|---|---:|---:|---:|---:|
+| Concept | 53 | 13 | 8 | 32 |
+| Width change | 25 | 8 | 10 | 7 |
+| Drawing and repair | 38 | 10 | 12 | 16 |
+| **Total** | **116** | **31** | **30** | **55** |
+
+These are observed executions, not a minimum necessary count. The 72 model calls
+above are a different measure. No observed `unknown_tool`/`not_offered` result
+proves a missing tool here; discovery and repair are costly, while distinct
+views/pages/freshness checks can explain legitimate repeated reads.
+
+`change_construction_parameters` now has an explicit target-revision input.
+The original implementation always retained the old source pin, leaving a small
+numeric repair unable to reconcile a later selected Solution. The new command
+preserves the Artifact ID and uses the existing authoritative write chain:
+readiness, concept geometry, FORM mapping, source/head locks, history and receipt
+replay still apply. A source-only refresh is explicit and cannot bless geometry
+that no longer matches. No baseline project data is repaired by installation.
+
+The immutable catalog publishes only three definitions: the parameter tool,
+`bob.tools.core_tools` (six names including discovery), and `profile.ask-bob`
+(high to medium). Runtime descriptions/schemas resolve from those pinned tool
+definitions. The model stays GPT-5.4; other roles/profiles and historical pins
+retain their settings. The [tool owner](ask-bob-tools.md) and
+[Artifact owner](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10)
+define the contracts; [AI seam](../supabase/README.md#roles-and-baseline-profiles)
+owns release ordering.
+
+**Focused verification:** 81 distinct local tests pass across the four stop-fix
+files above plus `bob-cost-controls`, `bob-context-strategy-main`,
+`bob-selective-tools` and `construction-source-refresh`. The full isolated SQL
+schema tests prove same-ID numeric and source-only reconciliation, rejection of
+old geometry/unknown controls/outsiders, exact receipt replay after later source
+changes, publication idempotency, unchanged unrelated definitions and historical
+manifest compatibility. The actual main-loop request exposes six catalog-derived
+tools from its first step at GPT-5.4 medium; a mocked read needs no discovery turn.
+Both Edge entrypoints pass Deno checking. The runner, builder and new tests pass
+targeted strict TypeScript checks with the exact local Supabase declarations and
+an environment-only Deno declaration. No production import changed.
+
+No full suite, workflow or paid model run was started. This proves technical
+behavior, not reduced live spending or complete model-driven drawing delivery.
+
+**Hosted readback:** reviewed source `422954ef4d5be27bf9758278396b066f061a8339`
+(tree `2fe36764c41e10640972a1b3d4d0400cba363eb5`) was installed from PR #366.
+The remaining PR update changes release documentation only. There were zero
+queued/running/paused Bob jobs at the installation preflight. The core migration
+was applied first, worker and HTTP runtime second, and the catalog publication
+last, after executable-source readback matched.
+
+| Function | Active version | Authentication | Bundle SHA-256 |
+|---|---:|---|---|
+| `bob-worker` | 147 | existing custom authentication; JWT flag false | `7a8410a514a94a3f9cae5cb85189bee83d98eeb2ae8eee07d0a7439a802d3a2c` |
+| `ask-bob` | 179 | JWT required | `ecbcb58d50f4dceebb401f7d005685575bce0d6786de638410ded9ec46c16d45` |
+
+Readback matched all executable bytes in 121/123 returned worker/HTTP files,
+including each import map. As in the preceding release, type-only provenance
+and the worker's type-only HTTP boundary are omitted, and `cad-intake.ts` is
+empty after type erasure. No unexplained differences remain.
+
+| Source migration | Hosted ledger version / name |
+|---|---|
+| `20261028174716_construction_parameter_source_refresh.sql` | `20261028180808 / construction_parameter_source_refresh` |
+| `20261028174802_ai_bob_cost_controls_catalog.sql` | `20261028180954 / ai_bob_cost_controls_catalog` |
+
+Exactly three of the 310 catalog-head entries changed: `bob.tools`,
+`tools.change_construction_parameters` (v5) and `profile.ask-bob` (v2, medium).
+`tier.standard` remains v1/GPT-5.4. The six core names and nullable explicit
+target input were read back. Both patched SQL functions contain the guarded
+reconciliation path. Both candidate roles and policies remain disabled.
+Security/performance advisor categories and finding counts are unchanged.
+No historical project, construction, drawing or paid execution was modified.
+No automatic rebase, cross-revision read cache, model/prompt change, hosted
+migration or new paid run is part of these corrections. Savings and complete
+member acceptance therefore remain unmeasured.
+
 <a id="form-package5-comparison"></a>
 ## FORM package 5 — prepared first comparison, 2026-10-28
 
-**Prepared, not run.** Two frozen scenarios compare the current path with the
+**Prepared comparison protocol.** The [first baseline and subsequent pause](#form-package5-release-2026-10-28)
+supersede the original not-run status. Two frozen scenarios compare the current path with the
 FORM package 3 candidate on real model and CAD calls:
 
 - **Box:** a five-panel box, then a width change, then the final drawing.
@@ -21,8 +277,8 @@ owner uses it. There is no per-project switch.
 - `scripts/form-acceptance-scenarios.ts` holds the frozen messages and checks.
   - **Hard checks:** one saved construction is concept-ready, the same artifact
     gets a new revision, the requested size or height limit holds, the ladder
-    moves to the opposite gable, and a saved drawing exists for the latest
-    revision.
+    moves to the opposite gable, and the final step preserves that identity and
+    correction with a current saved drawing for the latest revision.
   - **Recorded as observations only:** sizes, part counts, the ladder offset and
     any changed non-ladder parts.
 - `scripts/run-live-form-acceptance.ts` runs one scenario once.
@@ -32,7 +288,8 @@ owner uses it. There is no per-project switch.
   - It refuses to start without `BOB_FORM_LIVE_CONFIRM=paid-acceptance-approved`
     on a first attempt.
   - It writes a content-free report with turn ids, wall time, checks and
-    observations.
+    observations after each transition, stops on failed checks, and records the
+    outcome of exact-job cancellation on interruption or failure.
 - `.github/workflows/live-form-acceptance.yml` is manual only and runs on main
   only. Its inputs are scenario, config label and approval.
 - `scripts/form-package3-enable.sql` and `scripts/form-package3-rollback.sql`

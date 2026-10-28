@@ -137,6 +137,19 @@ access to a project.
 
 ### Roles and baseline profiles
 
+**Owner-approved cost correction — technically installed, 2026-10-28.**
+`profile.ask-bob` advances from high to **medium**, retaining the existing
+standard tier binding to **gpt-5.4**. This changes new main-Bob manifests only;
+other profiles, model bindings and already pinned jobs stay intact. The same
+publication adds the [six catalog-owned core tools](../Docs/ask-bob-tools.md)
+and the source-reconciliation schema for `change_construction_parameters`.
+Install `20261028174716_construction_parameter_source_refresh.sql`, deploy both
+complete Edge closures with their existing authentication, then apply
+`20261028174802_ai_bob_cost_controls_catalog.sql`. Rollback restores the three
+previous catalog heads first, keeping compatible code/core for pinned jobs.
+[Verification](../Docs/foundation-verification.md#bob-cost-controls-2026-10-28)
+owns installation receipts and the unmeasured live cost/quality outcome.
+
 This table describes the published coverage correction. Role retirement and
 specialist loading are verified in [coverage release evidence](../Docs/foundation-verification.md#bob-context-coverage-corrections--2026-10-18).
 Ordinary owner/model and CAD acceptance remain in [State](../Docs/bob-delivery-flow.md#state).
@@ -835,6 +848,12 @@ Do not delete saved models or weaken construction validation to roll back UI.
 
 <a id="form-package3-switch"></a>
 ## FORM package 3 switch — operator scripts, 2026-10-28
+
+**Hosted status:** both runtimes and all three inert publications are installed.
+Both roles and policies remain off; the first baseline was interrupted for
+cost investigation and the remaining comparison runs are paused. See the
+[release and cost evidence](../Docs/foundation-verification.md#form-package5-release-2026-10-28)
+before operating the switch.
 
 `scripts/form-package3-enable.sql` switches on three inert publications for all
 users: `role.cad-targeted-reviewer`, `role.source-reader`, and the

@@ -87,6 +87,11 @@ export const CONSTRUCTION_PARAMETER_TOOL=tool('change_construction_parameters','
  key:{type:'string',pattern:'^[A-Za-z0-9_-]{1,80}$'},record_id:uuid,expected_revision:rev,
  changes:CONSTRUCTION_PARAMETER_CHANGES_SCHEMA,change_note:{type:'string',minLength:1,maxLength:1000},request_quote:{type:'string',minLength:1,maxLength:500},
 })
+export const CONSTRUCTION_SOURCE_REFRESH_NOTE=' target_revision:null preserves the saved target pin. After reading a changed selected Solution, supply its current target_revision to reconcile this SAME construction with it; changes:[] refreshes only that pin. Readiness and exact concept-geometry checks still apply. Update the Solution before reconciling the construction, then check the saved receipt revision after the final change. A mismatch needs corrected inputs or an explicit full revision of this same artifact, not a duplicate.'
+export const CONSTRUCTION_PARAMETER_REFRESH_TOOL=tool('change_construction_parameters',CONSTRUCTION_PARAMETER_TOOL.function.description+CONSTRUCTION_SOURCE_REFRESH_NOTE,{
+ ...CONSTRUCTION_PARAMETER_TOOL.function.parameters.properties,
+ target_revision:nullableRev,changes:{...CONSTRUCTION_PARAMETER_CHANGES_SCHEMA,minItems:0},
+})
 export const CONSTRUCTION_CHECK_TOOL=tool('check_construction_draft','Check an exact current saved construction before drawing. Reads canonical geometry and catalog revisions server-side. Supports uncut wooden boxes, right-angle rotations and planar screwed/glued butt-joint concepts. Reports collisions, wrong local faces, missing joints, disconnected parts and material dimension mismatches with stable IDs. Compare returned bounds/count against the original request. concept_ready permits concept development only; fabrication_ready is always false until product, hardware, load and manufacturing checks exist. Unsupported operations and stale sources stop this check.',{
  artifact_id:uuid,revision:rev,
 })
@@ -150,6 +155,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  constructionRepeats?:boolean;
  formRefinement?:boolean;
  formEvidence?:boolean;
+ constructionSourceRefresh?:boolean;
  saveObservation?:(observation:ConstructionObservation)=>Promise<ConstructionObservation>;
  readObservations?:(id:string,revision:number,resultId:string|null,after:string|null)=>Promise<Record<string,any>>;
  readConstructionReadiness?:(targetRevision:number,areaId:string|null,refinement:FormRefinement)=>Promise<unknown>;
@@ -172,6 +178,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  const checkTool=opts.formEvidence?CONSTRUCTION_EVIDENCE_CHECK_TOOL:CONSTRUCTION_CHECK_TOOL
  const baseSaveTool=opts.constructionRepeats?CONSTRUCTION_REPEAT_SAVE_TOOL:CONSTRUCTION_SAVE_TOOL
  const saveTool=opts.formRefinement?withFormRefinement(baseSaveTool):baseSaveTool
+ const parameterTool=opts.constructionSourceRefresh?CONSTRUCTION_PARAMETER_REFRESH_TOOL:CONSTRUCTION_PARAMETER_TOOL
  const present=async(kind:string,id:string,revision:number,output:Record<string,any>,observedAt?:string)=>{
   if(!opts.constructionViews)return output
   const result=await views.observe(kind,id,revision,output,observedAt)
@@ -188,10 +195,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  return {
  exportState():ConstructionToolsState{return opts.constructionViews?{version:2,used,observations:views.exportState()}:{version:1,used}},
  restoreState(state:ConstructionToolsState){if(state?.version!==(opts.constructionViews?2:1)||!Number.isSafeInteger(state.used)||state.used<0)throw new Error('construction_tools_checkpoint_invalid');if(state.version===2)views.restoreState(state.observations);used=state.used},
- tools:[readTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.readDelivery?[CONSTRUCTION_DELIVERY_TOOL]:[]),...(opts.writer?[saveTool,CONSTRUCTION_EDIT_TOOL,CONSTRUCTION_PARAMETER_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
+ tools:[readTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.readDelivery?[CONSTRUCTION_DELIVERY_TOOL]:[]),...(opts.writer?[saveTool,CONSTRUCTION_EDIT_TOOL,parameterTool,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
  async execute(name:string,raw:unknown):Promise<Record<string,any>>{
   if(++used>12&&!opts.unlimitedWork)return {status:'budget_exhausted'}
-  const spec=[CONSTRUCTION_EDIT_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_PARAMETER_TOOL,readTool,saveTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CUT_SAVE_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL,...(opts.readDelivery?[CONSTRUCTION_DELIVERY_TOOL]:[])].find(s=>s.function.name===name)
+  const spec=[CONSTRUCTION_EDIT_TOOL,CONSTRUCTION_LEGACY_TOOL,parameterTool,readTool,saveTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CUT_SAVE_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL,...(opts.readDelivery?[CONSTRUCTION_DELIVERY_TOOL]:[])].find(s=>s.function.name===name)
   if(!spec)return {status:'invalid'}
   // An older pinned catalog may omit this new field. Preserve its uncertainty;
   // the database inherits an existing policy rather than erasing it.
@@ -296,14 +303,16 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(name===CONSTRUCTION_PARAMETER_TOOL.function.name){
     if(!opts.writer||!opts.prepareParameterChange)return {status:'unavailable'}
     if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {status:'invalid',message:'Use an exact quote from the current request.'}
+    if(opts.constructionSourceRefresh&&!v.changes.length&&v.target_revision===null)return {status:'invalid',message:'Name changed inputs or an explicit current target revision.'}
     const payload:WritePayload={kind:'construction_parameters',record_id:v.record_id,expected_revision:v.expected_revision,expected_updated_at:null,request_quote:v.request_quote,
-     data:{key:v.key,change_note:v.change_note,changes:v.changes,computed:null}}
+     data:{key:v.key,change_note:v.change_note,changes:v.changes,computed:null,...(opts.constructionSourceRefresh?{target_revision:v.target_revision}:{})}}
     const prepared=await opts.prepareParameterChange(payload)
     if(!await opts.hasAccess())return {status:'denied'}
     if(prepared.status!=='ready'&&prepared.status!=='saved')return prepared
     if(prepared.status==='ready'){
      const draft=prepared.draft
-     if(draft?.artifact_id!==v.record_id||draft.revision!==v.expected_revision||draft.current_revision!==v.expected_revision||draft.archived)return {status:'conflict'}
+     if(draft?.projectId!==opts.projectId||draft.artifact_id!==v.record_id)return {status:'unavailable'}
+     if(draft.revision!==v.expected_revision||draft.current_revision!==v.expected_revision||draft.archived)return {status:'conflict'}
      payload.data.computed=await compileConstructionParameterChange(opts.projectId,draft,v.changes,opts.readSources)
     }
     if(!await opts.hasAccess())return {status:'denied'}
@@ -374,7 +383,12 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     const current=await (opts.readCurrent?.(v.artifact_id)??opts.read(v.artifact_id,null,null)) as Record<string,any>
     if(!await opts.hasAccess())return {status:'denied'}
     if(current?.projectId!==opts.projectId||current.status!=='ok'||current.artifact_id!==v.artifact_id)throw new Error('construction_source_unavailable')
-    if(current.revision!==v.revision||current.source_state!=='current'||current.archived)return {status:'conflict',message:'Construction or sources changed; read and revise before checking.'}
+    if(current.revision!==v.revision||current.source_state!=='current'||current.archived)return {status:'conflict',
+     reason:current.archived?'construction_archived':current.revision!==v.revision?'construction_revision_changed':'construction_sources_changed',
+     artifact_id:v.artifact_id,requested_revision:v.revision,current_revision:current.revision,target_revision:current.target_revision,source_state:current.source_state,
+     message:current.archived?'This construction is archived; no current check was produced.'
+      :current.revision!==v.revision?'Read the current revision of this same construction before checking; no current check was produced.'
+      :'This construction still refers to changed or unavailable sources. Read its pinned sources and current project readiness before revising this same artifact; no current check was produced.'}
     const observedAt=opts.constructionViews?await (opts.observationTime?.({tool:name,artifact_id:v.artifact_id,revision:v.revision})??Promise.resolve((opts.now?.()??new Date()).toISOString())):undefined
     const today=(observedAt??(opts.now?.()??new Date()).toISOString()).slice(0,10)
     const checked=opts.formEvidence&&name===CONSTRUCTION_CHECK_TOOL.function.name

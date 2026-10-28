@@ -505,6 +505,7 @@ export async function answerWithOpenAi(opts: {
     readDesignReadiness,
     formRefinement:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.form_refinement_version===1),
     formEvidence:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.check_construction_draft'&&row.metadata?.construction_evidence_version===1),
+    constructionSourceRefresh:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.change_construction_parameters'&&row.metadata?.construction_source_refresh_version===1),
     saveObservation:async(observation:import('./construction-views.ts').ConstructionObservation)=>{
       if(!claimedServer)throw new Error('construction_observation_unavailable')
       const {p_generation:_generation,...stable}=binding

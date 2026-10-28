@@ -206,6 +206,20 @@ The bounded change command carries the construction Artifact ID, expected constr
 
 The server reads the checkpoint itself, applies the delta and uses `compileCadParameters` plus the existing SQL/source guards to compute all affected dimensions and placements. Unchanged geometry topology, bindings, materials and joints are retained. SQL independently compares the changed inputs and permitted numeric recipe fields, recomputes the graph, reads canonical material/joint metadata and checks sources/readiness at commit. Formula/topology changes require an explicit construction revision; the numeric command cannot silently add/remove parts or alter bindings. Commit one new immutable construction revision under its expected-revision guard, then check that exact revision. This is one bounded operation through the existing construction writer and its receipt ledger. Exact retry is checked before source compilation and returns the original receipt even after a later head/source revision.
 
+**Explicit selected-source reconciliation — technically installed, 2026-10-28.** The
+same bounded command gains `target_revision`: null retains the saved pin; an
+explicit current revision reconciles this same construction with the changed
+selected Solution. Update the Solution first, then supply its exact target
+revision together with the required numeric changes. `changes: []` is permitted
+only with an explicit target, for an otherwise unchanged construction. The
+database checks current readiness and exact concept geometry at commit; changing
+the pin cannot bless old geometry, unresolved controlling inputs or stale sources.
+FORM mappings, part identities, materials, joints and history remain preserved.
+An incompatible mapping/topology requires an explicit revision of the same
+artifact. Old pinned tools keep their original payload. The new tool schema is
+activated only after both runtimes support it. See the
+[release evidence](foundation-verification.md#bob-cost-controls-2026-10-28).
+
 Only a successful checkpoint receipt supplies the downstream construction ID/revision. Bob passes its revision as `construction_revision`; the drawing job reads that version from the database and follows the checked K3 path. It may select supported views; it cannot choose replacement dimensions. A resumed request keeps its saved version. Old pinned AI manifests that lacked this input capture the canonical version once; they do not follow a newer head on resume. Failed construction checks return concrete issues to Bob on the same construction. Rendering or export failures retain that checkpoint for retry. Independent review and save-time source/construction guards still apply. The caller's drawing reader returns `construction_source` from the typed exact relation described by the [database owner](../db/README.md#construction-data-authority-and-remaining-extensions).
 
 | Version | Meaning | When it advances |
@@ -1067,6 +1081,13 @@ Drawing request cards show shared Task/current Plan requirement names, responsib
 ## K2 — construction concept checks
 
 `check_construction_draft` reads one exact saved K1 Artifact revision and its exact catalog revisions through the caller's existing readers. It rechecks the current head, source freshness and project access before returning a result. No model-supplied geometry or catalog record can replace these reads. The report is transient, revision-bound evidence; it does not mutate the checkpoint or grant publication authority.
+
+Prepared source correction (2026-10-28): a refused check identifies
+`construction_revision_changed`, `construction_sources_changed` or
+`construction_archived` and includes the requested/current construction revision,
+observed target pin and source state from that same fresh read. These describe
+the refusal, not new check evidence or authority to rebase onto changed sources.
+See [verification and release state](foundation-verification.md#form-package5-release-2026-10-28).
 
 Checker `orthogonal-butt-v1` supports uncut wooden boxes with rotations that are exact multiples of 90 degrees, and planar `screwed_butt` / `glued_butt` concepts. It reuses CAD's intrinsic XYZ axes, checks declared local face normals, positive contact area, volume collisions, every touching pair's joint, connectivity, exact material thickness/cross-section and dimensioned panel pins. Physical joint cycles are valid. Unsupported geometry/methods, changed sources and missing knowledge stop concept readiness. Precision tolerance is 0.000001 mm, not a fabrication allowance. At most 32 distinct catalog revisions are read; reports cap issue lists while preserving full counts.
 

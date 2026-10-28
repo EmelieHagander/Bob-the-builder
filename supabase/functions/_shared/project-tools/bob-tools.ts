@@ -53,6 +53,17 @@ const shelfOf = (name: string) => TOOLBOX_SHELVES.find(s => s.tools.includes(nam
  * 38 of 57 turns began with a manual-only step; these three were the most
  * loaded). Offering is not authority: policy and gates still apply. */
 export const CORE_READ_PRELOAD = ['search_project_data', 'list_project_category', 'open_project_item']
+/** The pinned catalog owns the small permanent bench, including discovery.
+ * Descriptions and schemas still resolve through the normal catalog binding. */
+export function catalogCoreTools(catalog: AiCatalogSession): string[] | null {
+  const names = catalog.definition('bob.tools', 'tool_contract').definition.core_tools
+  if (names === undefined) return null // Existing pinned jobs retain their preload behavior.
+  if (!Array.isArray(names) || names.length < 1 || names.length > 6 || !names.includes('describe_tool')
+    || new Set(names).size !== names.length || names.some(name => typeof name !== 'string'
+      || !catalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + name && row.definition_kind === 'tool_contract')))
+    throw new Error('core_tool_catalog_invalid')
+  return names as string[]
+}
 /** Loaded from the first step when the project links no whole building
  * (2026-10-25: Bob answered from project data alone and missed the house). */
 export const BUILDING_SCOPE_PRELOAD = ['read_building_scope', 'change_building_scope']

@@ -29,6 +29,36 @@ function fixture(count=3){
 }
 const query=(view='overview',extra:Partial<ConstructionViewQuery>={}):ConstructionViewQuery=>({artifact_id:artifact,revision:1,view,ids:[],after:null,result_id:null,section:null,...extra})
 const bounded=(value:any)=>assert(countSerializedTokens(value)<=CONSTRUCTION_VIEW_TOKENS,`page was ${countSerializedTokens(value)} tokens`)
+
+test('a refused current check identifies revision, source and archive conflicts without returning a new check',async()=>{
+ for(const patch of [{revision:2,current_revision:2},{source_state:'changed'},{source_state:'unavailable'},{archived:true}]){
+  const {draft,record}=fixture(1),current={...draft,...patch}
+  let reads=0
+  const tools=createConstructionTools({projectId:project,message:'Check this construction',constructionViews:true,unlimitedWork:true,hasAccess:async()=>true,
+   read:async()=>{reads++;return draft},readCurrent:async()=>{reads++;return current},readCatalog:async()=>({projectId:project,status:'ok',record}),
+   readSources:async()=>({project:new Map(),physical:new Map()})})
+  const result=await tools.execute('check_construction_draft',{artifact_id:artifact,revision:1})
+  assert.equal(result.status,'conflict');assert.equal(result.artifact_id,artifact)
+  assert.equal(result.requested_revision,1);assert.equal(result.current_revision,current.revision)
+  assert.equal(result.target_revision,1);assert.equal(result.source_state,current.source_state)
+  assert.equal(result.reason,current.archived?'construction_archived':current.revision===2?'construction_revision_changed':'construction_sources_changed')
+  assert.equal(reads,2,'diagnostics use the existing fresh read, not another paid or database operation')
+  assert.equal('concept_ready'in result,false)
+  const saved=tools.exportState();assert.equal(saved.version,2)
+  assert.deepEqual(saved.version===2?saved.observations:null,[],'a refused check cannot become saved evidence')
+ }
+})
+
+test('a parameter preparation for another project cannot compile or commit even when artifact IDs match',async()=>{
+ const {draft}=fixture(1)
+ const tools=createConstructionTools({projectId:project,message:'Change width',hasAccess:async()=>true,read:async()=>draft,
+  prepareParameterChange:async()=>({status:'ready',draft:{...draft,projectId:'other-project'}}),
+  readSources:async()=>{assert.fail('cross-project source read')},
+  writer:{commit:async()=>{assert.fail('cross-project write')}} as any})
+ const result=await tools.execute('change_construction_parameters',{key:'width',record_id:artifact,expected_revision:1,
+  changes:[{id:'width',role:'decision',value:700,unit:'mm',reason:'Requested width'}],change_note:'Requested width',request_quote:'Change width'})
+ assert.equal(result.status,'unavailable')
+})
 async function collect(read:(q:ConstructionViewQuery)=>Promise<any>,q:ConstructionViewQuery){
  const rows:any[]=[];let calls=0
  do{const page=await read(q);assert.equal(page.status,'ok',JSON.stringify(page));bounded(page);rows.push(...page.items);q=page.next_read;if(++calls>1000)throw Error('Non-advancing cursor')}while(q)
