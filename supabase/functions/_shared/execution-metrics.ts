@@ -10,6 +10,14 @@ export type ExecutionEvent = {
 export interface ExecutionMetricsState {
   version: 1; runId: string; turnId: string; startedAt: number; observation: TurnObservation | null;
 }
+export type WorkDiagnostics={operation?:string;reused?:boolean;revision?:number;new_revision?:number|null;source_changed?:boolean;coverage_complete?:boolean;outputs_requested?:number}
+function workCounts(value:WorkDiagnostics|undefined):Record<string,number|boolean|string|null>{
+ if(!value||!['work_read','work_change','work_check'].includes(value.operation??''))return {}
+ const counts:Record<string,number|boolean|string|null>={work_operation:value.operation!}
+ for(const key of ['reused','source_changed','coverage_complete'] as const)if(typeof value[key]==='boolean')counts['work_'+key]=value[key]!
+ for(const key of ['revision','new_revision','outputs_requested'] as const)if(Number.isSafeInteger(value[key])&&Number(value[key])>=0)counts['work_'+key]=Number(value[key])
+ return counts
+}
 // Event attribution preserves historic role names; this is not a dispatch registry.
 const roles=new Set(['ask-bob','cad-research','cad-designer','cad-reviewer','context-summary','plan-compiler','plan-reviewer','bob-delivery-language'])
 const outputPhases=new Set(['commentary','final_answer','legacy','tool_calls','refusal','incomplete'])
@@ -63,10 +71,10 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
           step:label(call.step),attempt:number(call.attempt)}})
     },
     /** One row per executed tool call: which tool, its status and the step. */
-    tool(input:{name:string;status:string;step:number;index:number;ms:number;validation_code?:string}){
+    tool(input:{name:string;status:string;step:number;index:number;ms:number;validation_code?:string;diagnostics?:WorkDiagnostics}){
       void write({...base(),event_key:`tool:${input.step}:${input.index}`.slice(0,80),kind:'tool',role:'tool',status:code(input.status,'returned'),
         duration_ms:Math.round(number(input.ms)),input_tokens:null,output_tokens:null,cost_usd:null,
-        counts:{tool:code(input.name,'invalid_name'),step:number(input.step),...validationCounts(input.validation_code)}})
+        counts:{tool:code(input.name,'invalid_name'),step:number(input.step),...validationCounts(input.validation_code),...workCounts(input.diagnostics)}})
     },
     async finish(input:{ok:boolean;partial?:boolean;uncertain?:boolean;recovered?:boolean;writes:number;error?:string;uncertainResends?:number;reusedModelCalls?:number;cad?:{consultations:number;renders:number;input_corrections:number;reviews:number;review_rejections:number;review_unavailable:number;review_passed:boolean}}){
       const end=turn?.end

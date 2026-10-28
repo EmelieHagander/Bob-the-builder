@@ -5,6 +5,8 @@ import { projectFactsPacket } from './project-facts.ts'
 import { createWorkRecords } from './project-work-records.ts'
 import { createSolutionActions } from './project-solution-actions.ts'
 import { createProjectEdits } from './project-edits.ts'
+import { readTaskSources } from './task-sources.ts'
+import { createConstructionViews } from './construction-views.ts'
 import {createProjectCalculator,hasCalculatorContract} from './project-calculator.ts'
 import { readPhysicalCadSources } from './cad-physical-lineage.ts'
 import { parameterSourcePins } from './cad-parameters.ts'
@@ -434,7 +436,7 @@ export async function answerWithOpenAi(opts: {
   }
   // Route new bound actions separately; pinned older journals retain their RPC names.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => writeRpc(payload.kind === 'form_feedback' ? 'record_model_feedback' : payload.kind === 'bound_building_scope' ? 'bob_project_write_v21' : payload.kind === 'bound_plan_link' ? 'bob_project_write_v20' : payload.kind === 'bound_work' ? 'bob_project_write_v19' : ['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'].includes(payload.kind) ? 'bob_project_write_v18' : ['bound_project', 'bound_solution'].includes(payload.kind) ? 'bob_project_write_v17' : 'bob_project_write_v16', { ...binding, p_payload: payload }),
+    payload => writeRpc(payload.kind === 'construction_work' ? 'commit_construction_work' : payload.kind === 'form_feedback' ? 'record_model_feedback' : payload.kind === 'bound_building_scope' ? 'bob_project_write_v21' : payload.kind === 'bound_plan_link' ? 'bob_project_write_v20' : payload.kind === 'bound_work' ? 'bob_project_write_v19' : ['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'].includes(payload.kind) ? 'bob_project_write_v18' : ['bound_project', 'bound_solution'].includes(payload.kind) ? 'bob_project_write_v17' : 'bob_project_write_v16', { ...binding, p_payload: payload }),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
     { unlimitedWork, taskWorkDiagnostics: contract.work_completion_version === 1 || contract.work_completion_version === 2 },
@@ -455,6 +457,7 @@ export async function answerWithOpenAi(opts: {
   })
   const projectEdits = createProjectEdits({ unlimitedWork, projectId: opts.projectId, writer, hasAccess, sources: lookup.sources,
     read: input => rpc('read_bob_edit_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
+    readSelected: areaId => rpc('read_bob_selected_edit_context', { p_project: opts.projectId, p_area: areaId }, AbortSignal.timeout(12000)),
   })
   const projectContext = createProjectContext({ unlimitedWork,
     reviewInstruction: aiCatalog.text('drawing-review.instruction'),
@@ -506,6 +509,34 @@ export async function answerWithOpenAi(opts: {
     formRefinement:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.form_refinement_version===1),
     formEvidence:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.check_construction_draft'&&row.metadata?.construction_evidence_version===1),
     constructionSourceRefresh:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.change_construction_parameters'&&row.metadata?.construction_source_refresh_version===1),
+    coherentWork:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_draft'&&row.metadata?.construction_work_version===1),
+    prepareSolutionEdit:projectEdits.prepare,
+    prepareWork:async(payload:import('./project-write.ts').WritePayload)=>{
+      const {data,error}=await rpc('prepare_construction_work',{...binding,p_payload:payload},AbortSignal.timeout(12000))
+      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_work_preparation_failed'}
+      return data
+    },
+    readWorkSources:async(draft:Record<string,any>|null,stepId:string|null)=>{
+      const packet=await readTaskSources({area_id:draft?.area_id??null,step_id:stepId,construction:draft?{artifact_id:draft.artifact_id,revision:draft.revision}:null},
+        {projectId:opts.projectId,search:q=>lookup.search(q as any),construction:draft?q=>createConstructionViews(opts.projectId).read(draft,q as any):undefined})
+      const solutionEdit=packet.solution?.status==='ok'
+        ?await projectEdits.readSelected(packet.solution.inherited_from_project?null:draft?.area_id??null):{status:'not_requested'}
+      return {packet,solutionEdit}
+    },
+    openDelivery:async(resource:import('./construction-delivery.ts').ConstructionDeliveryResource,id:string,revision:number)=>{
+      if(resource==='drawings'){
+        const {data,error}=await memo('construction:delivery_current',{id,revision},async()=>{
+          const result=await client.from('current_drawing_overview').select('id,project_id,revision,source_state,source_reasons,steps')
+            .eq('project_id',opts.projectId).eq('id',id).eq('revision',revision).abortSignal(AbortSignal.timeout(10000)).maybeSingle()
+          return {data:result.data,error:result.error}
+        })
+        if(error||data?.project_id!==opts.projectId)return {status:'unavailable'}
+        return {status:'ok',record:data}
+      }
+      const result=await operationalReader.execute({resource:resource==='requirements'?'requirement':'cut_plan',record_id:id,after_id:null})
+      const record=result.status==='ok'&&result.records?.find((r:Record<string,any>)=>r.id===id&&r.revision===revision)
+      return record?{status:'ok',record}:{status:'unavailable'}
+    },
     saveObservation:async(observation:import('./construction-views.ts').ConstructionObservation)=>{
       if(!claimedServer)throw new Error('construction_observation_unavailable')
       const {p_generation:_generation,...stable}=binding

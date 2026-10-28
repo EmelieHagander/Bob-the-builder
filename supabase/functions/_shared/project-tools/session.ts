@@ -20,6 +20,8 @@ export interface ToolDefinition {
   group?: string
   /** Shown when the tool is waiting for a prerequisite created earlier in the turn. */
   waitingFor?: string
+  /** A concrete candidate/proposal gate, not a general always-loaded tool. */
+  readyContinuation?: boolean
   gate(): ToolGate
   execute(args: unknown): Promise<unknown>
 }
@@ -89,6 +91,7 @@ function policySupportsHandler(name: string, policyVersion: number, handlerVersi
  * group; selective manifests retain only the method until individual selection.
  * Each member keeps its own policy, gate and version checks. */
 export interface WorkflowCard { name: string; card: string; method: string; tools: string[] }
+export interface ToolFollowup { after_tool:string; statuses:string[]; tools:string[]; when?:{field:string;equals:string|boolean} }
 
 export interface ToolboxEntry { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string; description?: string; instructionLoaded?: boolean }
 
@@ -107,12 +110,18 @@ export interface ToolSessionState {
   cards: [string, string | null][]
 }
 
-export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; selectiveTools?: boolean; /** Tools of work already in progress, loaded without a describe_tool round (lazy loading only). */ preloadTools?: () => string[]; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; catalogWorkflows?: () => WorkflowCard[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
+export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; selectiveTools?: boolean;
+  autoLoadReady?:boolean; followups?:ToolFollowup[];
+  /** Tools of work already in progress, loaded without a describe_tool round (lazy loading only). */ preloadTools?: () => string[]; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; catalogWorkflows?: () => WorkflowCard[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
   const lazy = opts.toolInstructions === 'lazy'
   const selective = lazy && opts.selectiveTools === true
   const workflows = new Set<string>()
   const onDemand = lazy || opts.toolInstructions === 'on_demand'
   const loaded = new Map<string, number>()
+  const followups=opts.followups??[]
+  if(!Array.isArray(followups)||followups.length>32||followups.some(f=>!f||!NAME.test(f.after_tool)||!Array.isArray(f.statuses)||!f.statuses.length
+    ||f.statuses.some(s=>typeof s!=='string'||!NAME.test(s))||!Array.isArray(f.tools)||f.tools.length>8||f.tools.some(t=>typeof t!=='string'||!NAME.test(t))
+    ||f.when&&(!NAME.test(f.when.field)||!['string','boolean'].includes(typeof f.when.equals))))throw Error('tool_catalog_unavailable')
   // Loaded across a context rollover: their manuals moved into summarized
   // history, so the offered schema carries the manual itself.
   const carried = new Set<string>()
@@ -224,6 +233,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
         const { state, def } = resolve(row)
         if (!def || state === 'unavailable' || state === 'not_allowed') { loaded.delete(row.name); carried.delete(row.name); continue }
         if (loaded.get(row.name) !== def.version) { loaded.delete(row.name); carried.delete(row.name) }
+        if(lazy&&opts.autoLoadReady&&def.readyContinuation&&state==='available')loaded.set(row.name,def.version)
         visible.set(row.name, def.version)
         const group = def.group ?? 'Other tools'
         const card = lazy ? { description: cardDescription(row), instructionLoaded: loaded.has(row.name) } : {}
@@ -292,6 +302,16 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
       try {
         const result = await def.execute(input)
         record('execute', name, object(result) && typeof result.status === 'string' ? result.status : 'returned')
+        if(lazy&&object(result))for(const followup of followups){
+          if(followup.after_tool!==name||!followup.statuses.includes(String(result.status))
+            ||followup.when&&result[followup.when.field]!==followup.when.equals)continue
+          for(const next of followup.tools){
+            const policy=current.tools.find(row=>row.name===next),resolved=policy?resolve(policy):null
+            // Loading never grants authority; prepare and execute both recheck
+            // current policy, handler version and the ordinary domain gate.
+            if(resolved?.def&&resolved.state==='available')loaded.set(next,resolved.def.version)
+          }
+        }
         return result
       } catch (error) {
         rethrowContinuation(error)

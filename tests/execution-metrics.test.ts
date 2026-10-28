@@ -3,6 +3,20 @@ import assert from 'node:assert/strict'
 import {createExecutionMetrics,type ExecutionEvent} from '../supabase/functions/_shared/execution-metrics.ts'
 import {createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 import {projectSchema} from './support/project-schema.ts'
+
+test('work diagnostics contain bounded outcomes only, never source content or identities',()=>{
+ const events:ExecutionEvent[]=[]
+ const metrics=createExecutionMetrics({runId:'run',turnId:'turn',startedAt:0,write:async e=>{events.push(e)}})
+ metrics.tool({name:'check_construction_draft',status:'checked',step:3,index:0,ms:4,diagnostics:{operation:'work_check',reused:true,revision:2,
+  new_revision:null,source_changed:false,coverage_complete:true,outputs_requested:2,artifact_id:'PRIVATE',text:'PRIVATE'} as any})
+ assert.deepEqual(events[0].counts,{tool:'check_construction_draft',step:3,work_operation:'work_check',work_reused:true,
+  work_revision:2,work_source_changed:false,work_coverage_complete:true,work_outputs_requested:2})
+ metrics.tool({name:'read_construction_draft',status:'ok',step:4,index:0,ms:1,diagnostics:{operation:'PRIVATE',revision:1}})
+ assert.deepEqual(events[1].counts,{tool:'read_construction_draft',step:4})
+ metrics.tool({name:'change_construction_parameters',status:'saved',step:5,index:0,ms:1,diagnostics:{operation:'work_change',revision:-1,new_revision:Infinity,reused:'PRIVATE'} as any})
+ assert.deepEqual(events[2].counts,{tool:'change_construction_parameters',step:5,work_operation:'work_change'})
+ assert(!JSON.stringify(events).includes('PRIVATE'))
+})
 const reply={success:true,data:'PRIVATE ANSWER',model:'fixture',usage:{input_tokens:12,output_tokens:8,total_tokens:20},estimatedCostUsd:0.01}
 test('actual provider calls are counted once across journal replay; delivery records the end reason, saves, candidate and partial work',async()=>{
  const events=new Map<string,ExecutionEvent>(),entries:JournalEntry[]=[]
@@ -54,10 +68,10 @@ test('diagnostics stay service-only even when a normal user belongs to a project
  const pg=await projectSchema()
  try{
   for(const role of ['anon','authenticated']){
-   const {rows}=await pg.query(`select has_table_privilege('${role}','bob.execution_events','select') as read,has_table_privilege('${role}','bob.execution_events','insert') as write`)
+   const {rows}=await pg.query<{read:boolean;write:boolean}>(`select has_table_privilege('${role}','bob.execution_events','select') as read,has_table_privilege('${role}','bob.execution_events','insert') as write`)
    assert.equal(rows[0].read,false);assert.equal(rows[0].write,false)
   }
-  const {rows}=await pg.query(`select relrowsecurity from pg_class where oid='bob.execution_events'::regclass`);assert.equal(rows[0].relrowsecurity,true)
+  const {rows}=await pg.query<{relrowsecurity:boolean}>(`select relrowsecurity from pg_class where oid='bob.execution_events'::regclass`);assert.equal(rows[0].relrowsecurity,true)
  }finally{await pg.close()}
 })
 
@@ -90,9 +104,9 @@ test('role migration preserves historical rows and service-only access while adm
   await pg.query(insert,[run,turn,'new:research','cad-research'])
   await assert.rejects(pg.query(insert,[run,turn,'unknown','unregistered-role']),(e:any)=>e.code==='23514')
   await pg.exec('reset role')
-  const {rows}=await pg.query("select convalidated from pg_constraint where conrelid='bob.execution_events'::regclass and conname='execution_events_role_check'")
+  const {rows}=await pg.query<{convalidated:boolean}>("select convalidated from pg_constraint where conrelid='bob.execution_events'::regclass and conname='execution_events_role_check'")
   assert.equal(rows[0].convalidated,true)
-  assert.equal((await pg.query("select count(*)::integer as n from bob.execution_events where role='other'")).rows[0].n,1,'historical other cannot safely be relabelled')
+  assert.equal((await pg.query<{n:number}>("select count(*)::integer as n from bob.execution_events where role='other'")).rows[0].n,1,'historical other cannot safely be relabelled')
   for(const role of ['anon','authenticated']){
    await pg.exec('set role '+role)
    await assert.rejects(pg.query('select * from bob.execution_events'),(e:any)=>e.code==='42501')

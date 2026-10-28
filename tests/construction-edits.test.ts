@@ -8,6 +8,7 @@ import {compileCadParameters} from '../supabase/functions/_shared/cad-parameters
 import {CONSTRUCTION_EDIT_TOOL} from '../supabase/functions/_shared/construction-edits.ts'
 import {createAiCatalogSession} from '../supabase/functions/_shared/ai-catalog.ts'
 import {catalogFixture,preConstructionEditsCatalogFixture} from './support/ai-catalog-fixture.ts'
+import {withConstructionWorkWrite} from '../supabase/functions/_shared/construction-work.ts'
 import {createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
 import {createProjectWriter} from '../supabase/functions/_shared/project-write.ts'
 import {createBobToolSession} from '../supabase/functions/_shared/project-tools/bob-tools.ts'
@@ -86,7 +87,7 @@ test('bounded construction edits preserve canonical data, receipts and authority
    assert.deepEqual(current.definition(key).definition,catalogFixture().definition(key).definition,key)
    assert.deepEqual(current.definition(key).metadata,catalogFixture().definition(key).metadata,key)
   }
-  assert.deepEqual(current.tool('edit_construction_parts').function.parameters,CONSTRUCTION_EDIT_TOOL.function.parameters)
+  assert.deepEqual(current.tool('edit_construction_parts').function.parameters,withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL).function.parameters)
   const options={message,writer:writer(),constructionTools:tools(),lookup:createProjectLookup(project,async()=>({data:[],error:null}),async()=>({data:[],error:null})),readPolicy:seedToolPolicy}
   const old=createBobToolSession({...options,aiCatalog:preConstructionEditsCatalogFixture()})
   assert(!(await old.prepare()).some(t=>t.function.name==='edit_construction_parts'))

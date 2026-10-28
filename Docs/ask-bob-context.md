@@ -204,6 +204,25 @@ nothing. The policy is published `active: false`, so Bob is not offered the tool
 until an owner-approved enablement after the
 [comparative acceptance](bob-delivery-flow.md#form-next).
 
+<a id="construction-work-context"></a>
+**Construction work packet — local implementation, 2026-10-28.** The existing
+construction reader's `view: work` reuses the code in `read_task_sources` without
+activating that dormant standalone tool or its small-model colleague. It adds
+the selected Solution's ordinary editable snapshot, exact parameter/binding,
+part, joint, material and role records, notes and frame context. A nonempty
+`ids` selection follows newly reached dependencies until closed; empty selects
+the whole Construction. Missing IDs, source gaps and conflicting pins remain
+explicit. Without a Construction, the same source packet reports that absence.
+
+Each response has a 12,000-token bound. Oversized rows use the existing exact
+fragment/cursor format; `next_read` and coverage prevent a partial packet from
+appearing complete. Cursors bind the governing source content as well as the
+Construction revision and selection. Only derived rows are cached (four packets
+per tool session); fresh caller/source reads still precede reuse. This cache
+does not become a second project register or persist private model reasoning.
+The [tool contract](ask-bob-tools.md#coherent-construction-work) owns availability;
+the [write contract](ask-bob-writes.md#construction-work-write) owns edit authority.
+
 <a id="source-reader"></a>
 **Small source reader — `read_source_findings`, published inactive 2026-10-28.**
 It takes the same scope as `read_task_sources` plus one concrete question.

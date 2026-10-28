@@ -135,6 +135,29 @@ authorization, execution limits, revision guards and receipts remain executable
 server code. A database definition cannot introduce an executable tool or grant
 access to a project.
 
+<a id="construction-work-release"></a>
+### Coherent Construction release — local preparation, 2026-10-28
+
+The owner approved local implementation without agent prompt edits. Follow
+the normal explicit release authorization before changing hosted runtime.
+Apply `20261028194859_construction_work_operations.sql`, deploy both complete
+`bob-worker` and `ask-bob` closures with their existing authentication, then
+activate `20261028200450_ai_construction_work_catalog.sql`. The generated
+publication changes only the read/parameter/part/check interfaces and
+`bob.tools.operation_followups`; it preserves role content, GPT-5.4 medium,
+the six core tools and inactive reader/reviewer policies. Generate/check it
+with `scripts/build-ai-construction-work-catalog.ts` and the migration path.
+
+Before activation, read back the new functions and grants plus both runtime
+versions. Preserve the prior five catalog heads for rollback. Revert those
+heads first if necessary; keep compatible runtime/database support until
+already pinned jobs drain. Do not remove committed revisions or receipt
+history. Pinned older jobs retain their earlier schemas and journal path.
+The [tool owner](../Docs/ask-bob-tools.md#coherent-construction-work) defines
+behavior; [verification](../Docs/foundation-verification.md#construction-work-2026-10-28)
+separates local evidence from installation and paid acceptance. No model run,
+render, CI or deployment is automatically authorized by this implementation.
+
 ### Roles and baseline profiles
 
 **Owner-approved cost correction — technically installed, 2026-10-28.**

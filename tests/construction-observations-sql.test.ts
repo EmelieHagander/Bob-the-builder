@@ -8,7 +8,7 @@ import {manufacturePolicy} from './support/construction-instance-policy-fixture.
 import {createConstructionTools,CONSTRUCTION_EVIDENCE_CHECK_TOOL} from '../supabase/functions/_shared/construction-draft.ts'
 import {CONSTRUCTION_EVIDENCE_VIEW_TOOL} from '../supabase/functions/_shared/construction-views.ts'
 import {createAiCatalogSession} from '../supabase/functions/_shared/ai-catalog.ts'
-import {catalogFixture} from './support/ai-catalog-fixture.ts'
+import {preConstructionWorkCatalogFixture as catalogFixture} from './support/ai-catalog-fixture.ts'
 import {countSerializedTokens} from '../supabase/functions/_shared/bob-token-budget.ts'
 
 test('FORM observations survive a private reset, remain source-bound, and cannot be forged through a member API',async t=>{

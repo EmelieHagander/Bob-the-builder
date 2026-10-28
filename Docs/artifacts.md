@@ -1078,6 +1078,40 @@ Drawing cards show source freshness independently of saved Concept/Measured/Buil
 
 Drawing request cards show shared Task/current Plan requirement names, responsibility and destination Step, with relevant measurement/Task/Step links, waiting/reconnect/budget states and the exact saved drawing link. Shared labels come only from canonical project records, never private conversation briefs or assessments. A missing canonical label is reported rather than replaced with private prose. Ask Bob actions reuse the current project's drawer and surface focus. See [the context owner](ask-bob-context.md#implemented-scope-and-remaining-target) for that boundary and [State](bob-delivery-flow.md#state) for remaining acceptance gates and [verification](foundation-verification.md#p3-hosted-technical-release--2026-09-30) for release proof.
 
+<a id="construction-work-check"></a>
+## Complete work checks — local implementation, 2026-10-28
+
+For new `construction_work_version=1` manifests, `check_construction_draft`
+returns all reported technical findings in one response when they fit its
+12,000-token bound. Otherwise it returns an exact saved-result page,
+`next_read`, counts and explicit incomplete coverage. `component_ids` and
+property probes keep their existing meanings; complete reported findings do
+not mean complete semantic requirement proof. Fabrication readiness and
+whole-delivery acceptance retain their separate existing gates.
+
+Same-revision evidence is reusable only with the same checker contract, probe
+selection and valid source binding. The tool rechecks caller access and the
+current Construction before and after assembly. It searches the local session,
+then at most four saved check references on the first history page; a miss
+recomputes rather than asking Bob for another read. Original observation time
+is preserved. Historical results remain readable without becoming current.
+
+`outputs: []` checks the Construction alone. Requested `drawings`,
+`requirements` or `cut_plans` follow the exact Construction delivery index and
+reopen each identity/revision through its canonical current reader. Missing,
+stale, unreadable, archived or incompletely traversed categories cannot pass.
+Traversal is bounded to 32 pages per category; returned detail is bounded to
+48 records with explicit omitted counts and an index pointer. Every traversed
+record contributes to the verdict even when its detail is omitted. This proves
+current saved outputs in the requested categories, not that every promised
+identity was specified, every requirement satisfied or physical work approved.
+No rendering or new model review is started by this check.
+
+Read packets and combined writes are owned by
+[context](ask-bob-context.md#construction-work-context) and
+[writes](ask-bob-writes.md#construction-work-write). Deployment and measured
+model behavior remain separate in [verification](foundation-verification.md#construction-work-2026-10-28).
+
 ## K2 — construction concept checks
 
 `check_construction_draft` reads one exact saved K1 Artifact revision and its exact catalog revisions through the caller's existing readers. It rechecks the current head, source freshness and project access before returning a result. No model-supplied geometry or catalog record can replace these reads. The report is transient, revision-bound evidence; it does not mutate the checkpoint or grant publication authority.

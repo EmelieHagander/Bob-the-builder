@@ -8,14 +8,14 @@ import { parameterPacket } from './support/cad-parameter-fixture.ts'
 import { manufacturePolicy } from './support/construction-instance-policy-fixture.ts'
 import { createConstructionTools } from '../supabase/functions/_shared/construction-draft.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
-import { catalogFixture } from './support/ai-catalog-fixture.ts'
+import { preConstructionWorkCatalogFixture } from './support/ai-catalog-fixture.ts'
 
 test('explicit source reconciliation preserves construction identity, receipt and FORM guards', async t => {
   const publication = '20261028174802_ai_bob_cost_controls_catalog.sql'
   let beforeCatalog: any
   const pg = await projectSchema(async (db, name) => {
     if (name === publication) beforeCatalog = (await db.query<any>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
-  })
+  }, publication)
   t.after(() => pg.close())
   const rpc = async (uid: string | null, name: string, args: any[], role = 'authenticated'): Promise<any> =>
     ((await asProjectUser(pg, uid, `select ${name}(${args.map((_, n) => '$' + (n + 1)).join(',')}) result`, args, role)).rows[0] as any).result
@@ -60,7 +60,7 @@ test('explicit source reconciliation preserves construction identity, receipt an
     for (const prior of beforeCatalog.definitions) {
       const row = current.definitions.find((r: any) => r.prompt_key === prior.prompt_key)
       if (!keys.includes(prior.prompt_key)) assert.deepEqual(row, prior)
-      else { assert.equal(row.version, prior.version + 1); assert.deepEqual(row.definition, catalogFixture().definition(row.prompt_key, row.definition_kind).definition) }
+      else { assert.equal(row.version, prior.version + 1); assert.deepEqual(row.definition, preConstructionWorkCatalogFixture().definition(row.prompt_key, row.definition_kind).definition) }
     }
     assert.equal(beforeCatalog.definitions.find((r: any) => r.prompt_key === 'profile.ask-bob').definition.reasoning_effort, 'high')
     assert.equal(current.definitions.find((r: any) => r.prompt_key === 'profile.ask-bob').definition.reasoning_effort, 'medium')

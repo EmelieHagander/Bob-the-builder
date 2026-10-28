@@ -556,9 +556,20 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — mät nästa uttryckligen beställda jämförelse (2026-10-28):**
-källavstämning på samma Construction, sex katalogägda kärnverktyg och
-GPT-5.4 medium är tekniskt installerade och återlästa.
+**Aktivt nästa steg — granskning och release av sammanhängande operationer (2026-10-28):**
+ägaren har godkänt lokal implementation av de fyra förslagen från
+[helhetsanalysen](archive/bob-cost-and-retrieval-audit-2026-10-28.md), med
+agentprompterna orörda. Kvar är granskning, merge och uttryckligen beställd
+Supabase-installation enligt [releaseordningen](../supabase/README.md#construction-work-release).
+[Verktygsägaren](ask-bob-tools.md#coherent-construction-work) beskriver det
+implementerade läs-/ändrings-/kontrollflödet; [lokala bevis](foundation-verification.md#construction-work-2026-10-28)
+skiljer det från driftsättning och faktisk modellförmåga. Nano/Mini är uppskjutet.
+Efter godkänd installation behövs ett separat beställt modellprov av samma
+konstruktionsidentitet, ursprungliga krav, färdig leverans och faktisk kostnad.
+De tidigare betalda jämförelseproven ligger fortsatt pausade.
+
+Källavstämning på samma Construction, sex katalogägda kärnverktyg och
+GPT-5.4 medium är tekniskt installerade och återlästa och ligger kvar.
 [Releasebevis](foundation-verification.md#bob-cost-controls-2026-10-28) skiljer
 mekaniken från kvarstående modellbeteende, leveranskvalitet och kostnad.
 Den första lådbaslinjen visade [hög anropskostnad, inaktuell källkoppling och en
@@ -625,7 +636,7 @@ managed migrationer finns i databasen. [Exakt release- och säkerhetsbevis](foun
 äger installerade ID:n, kataloger och källåterläsning. Upprepa **inte**
 denna SQL-/Edge-installation utifrån tidigare utkast.
 
-Nästa handling är ett **separat godkänt, verkligt medlems-/modellprov** med relevanta
+Efter helhetsbeslutet återstår ett **separat godkänt, verkligt medlems-/modellprov** med relevanta
 bilder, tre nya konstruktionsdelar, felrättning, kontroll, ritningsgranskning,
 sparande och återöppning utan extra användarknuff. Läs samma uppdrags-/källrevision
 och avslutade kvitton före nytt betalt försök; återskapa inte den gamla kostsamma
