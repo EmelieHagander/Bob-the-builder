@@ -1,6 +1,6 @@
 import {fingerprint} from './bob-job-journal.ts'
 import {CAD_REVIEW_CONTRACT} from './cad-review.ts'
-import {CAD_TARGETED_REVIEW_ROLE,CAD_TARGETED_REVIEW_VERSION} from './cad-targeted-review.ts'
+import {CAD_TARGETED_REVIEW_ROLE,CAD_TARGETED_REVIEW_VERSION,targetedReviewEnabled} from './cad-targeted-review.ts'
 import {CAD_TRANSPORT_CONTRACT} from './cad-transport.ts'
 import {createAiCatalogSession,type AiCatalogSession,type AiCatalogManifest} from './ai-catalog.ts'
 import {BOB_MODEL_BUDGET_POLICY_REVISION} from './bob-model-budget.ts'
@@ -11,10 +11,10 @@ const cadRoles=['cad-reviewer']
  * new Bob/plan persona or a model-row timestamp cannot restart a paid attempt. */
 export function drawingCatalogConfiguration(manifest:AiCatalogManifest){
  const byKey=new Map(manifest.definitions.map(row=>[row.prompt_key,row]))
- // The prepared targeted reviewer joins the runtime only once a catalog
- // publication contains it; older manifests keep their exact configuration.
- const pending=[...cadRoles.map(role=>'role.'+role),...(byKey.has(CAD_TARGETED_REVIEW_ROLE)?[CAD_TARGETED_REVIEW_ROLE]:[])],selected=new Set<string>(),models=new Set<string>()
- const cadSources=['cad-assistant.ts','cad-review.ts','cad-targeted-review.ts','drawing-review.ts','project-grounding.ts','project-lookup.ts','material-catalog.ts','building-knowledge.ts','project-context/dispatcher.ts']
+ // The targeted reviewer joins the runtime only once a publication enables it.
+ // Its inert (disabled) definitions must not restart in-flight paid attempts.
+ const pending=[...cadRoles.map(role=>'role.'+role),...(targetedReviewEnabled(manifest)?[CAD_TARGETED_REVIEW_ROLE]:[])],selected=new Set<string>(),models=new Set<string>()
+ const cadSources=['cad-assistant.ts','cad-review.ts','drawing-review.ts','project-grounding.ts','project-lookup.ts','material-catalog.ts','building-knowledge.ts','project-context/dispatcher.ts']
  for(const row of manifest.definitions){
   // Immutable old manifests may still contain removed free-design definitions.
   // They are not runtime dependencies and must never restart paid review.

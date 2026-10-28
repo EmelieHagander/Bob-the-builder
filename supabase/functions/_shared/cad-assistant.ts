@@ -24,7 +24,7 @@ import { parseDesignHandoff, CAD_REVIEW_SCOPE, parseCadReview, candidateFingerpr
 import { HANDOFF_INPUT_SCHEMA, REQUIREMENT_CHANGES_SCHEMA, prepareDesignHandoff } from './cad-handoff.ts'
 import { designIntentHandoff, parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
 import { verifyCadFiles } from './cad-transport.ts'
-import { buildCadReviewPacket, codeFindingReview, formEvidenceCoverage, parseTargetedCadReview, targetedReviewBasis, CAD_TARGETED_REVIEW_ROLE, type CadReviewPacket } from './cad-targeted-review.ts'
+import { buildCadReviewPacket, codeFindingReview, formEvidenceCoverage, parseTargetedCadReview, targetedReviewBasis, targetedReviewEnabled, type CadReviewPacket } from './cad-targeted-review.ts'
 
 const object=(v:unknown):v is Record<string,any>=>!!v&&typeof v==='object'&&!Array.isArray(v)
 const text=(v:unknown,n:number)=>typeof v==='string'&&v.trim().length>0&&v.length<=n
@@ -536,10 +536,10 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
       if(!await checkAuthority())throw new Error('project_denied')
       return terminalFailure
      }
-     // Prepared FORM package 3 path. Absent from the pinned catalog, the full
-     // review below runs with an unchanged call sequence and input.
+     // Prepared FORM package 3 path. Unless the pinned catalog enables it, the
+     // full review below runs with an unchanged call sequence and input.
      let packet:CadReviewPacket|null=null
-     if(opts.aiCatalog.manifest().definitions.some(row=>row.prompt_key===CAD_TARGETED_REVIEW_ROLE)){
+     if(targetedReviewEnabled(opts.aiCatalog.manifest())){
       packet=await buildCadReviewPacket({handoff,requiredFeatureIds,candidateFingerprint:pinned,
        construction:construction?{artifact_id:construction.artifact_id,revision:construction.revision}:null,designIntentPin:readiness.pin,
        renderedViews:candidate.packet.recipe.views,referenceRefs:opts.context?.openedImageRefs()??[],formEvidence:await readFormEvidence(reviewDraft)})

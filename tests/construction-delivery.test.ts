@@ -58,8 +58,10 @@ function box() {
 }
 
 test('FORM box delivery is found after interruption and reopened from one exact revision without rewriting saved outputs',async t=>{
- let priorManifest:any
+ let priorManifest:any,publishedManifest:any
+ // Later publications may add definitions; compare this publication at its own boundary.
  const f=await cutPlanFixture(t,box(),async(pg,name)=>{
+  if(priorManifest&&!publishedManifest)publishedManifest=(await pg.query("select shared.resolve_ai_catalog('bob') m")).rows[0].m
   if(name==='20261027162751_ai_construction_delivery_catalog.sql')priorManifest=(await pg.query("select shared.resolve_ai_catalog('bob') m")).rows[0].m
  })
  const index=(resource:string,revision=1,after:string|null=null,uid:string|null=f.user,role='authenticated')=>
@@ -156,8 +158,9 @@ test('FORM box delivery is found after interruption and reopened from one exact 
   const original=await active();assert.deepEqual(original.definition.parameters,CONSTRUCTION_DELIVERY_TOOL.function.parameters)
   assert.equal(original.definition.description,CONSTRUCTION_DELIVERY_TOOL.function.description)
   const current:any=(await f.pg.query("select shared.resolve_ai_catalog('bob') m")).rows[0].m
-  assert.equal(current.definitions.length,priorManifest.definitions.length+1)
-  for(const old of priorManifest.definitions)if(old.prompt_key!=='bob.tools')assert.deepEqual(current.definitions.find((r:any)=>r.prompt_key===old.prompt_key),old,old.prompt_key)
+  const published=publishedManifest??current
+  assert.equal(published.definitions.length,priorManifest.definitions.length+1)
+  for(const old of priorManifest.definitions)if(old.prompt_key!=='bob.tools')assert.deepEqual(published.definitions.find((r:any)=>r.prompt_key===old.prompt_key),old,old.prompt_key)
   const tools=createConstructionTools({projectId:f.project,message:'Read delivery',hasAccess:async()=>true,constructionViews:true,formEvidence:true,
    read:unused,readSources:unused,readDelivery:(id,revision,resource,after)=>f.rpc('bob.read_construction_delivery',[f.project,id,revision,resource,after])})
   for(const manifest of [priorManifest,current]){

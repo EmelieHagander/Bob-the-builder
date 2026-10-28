@@ -566,13 +566,12 @@ installerade med [browser- och hosted bevis](foundation-verification.md#form-con
 **Nästa: paket 3 och förberedelse av Rita-ersättningen enligt
 [genomförandeordningen](#form-next); verifiera det sammanhängande lådflödet med
 verklig modell/CAD inom ett separat beställt prov.** Första steget, den
-[riktade CAD-granskningen](cad-adapter.md#targeted-cad-review), finns i källkod
-men är inaktiv tills en katalogpublicering innehåller dess roll. Kodfel stoppar
-utan modellanrop och koden räknar ut utslaget. Dagens fulla Rita-granskning
-gäller oförändrad. Återstår:
+[riktade CAD-granskningen](cad-adapter.md#targeted-cad-review), finns i källkod.
+Dess katalogroll publiceras avstängd. Vägen är därför inaktiv tills en godkänd
+publicering slår på rollen. Kodfel stoppar utan modellanrop och koden räknar ut
+utslaget. Dagens fulla Rita-granskning gäller oförändrad. Återstår:
 
 - återanvändning över turer för en oförändrad godkänd modell
-- katalogroll och schema
 - det allmänna underlagspaketet
 - jämförande acceptans före aktivering CI-workflowets fokuserade
 manuella läge (`scope=saved-delivery`) kör tre skärmbredder; hela CI-jobbet körs

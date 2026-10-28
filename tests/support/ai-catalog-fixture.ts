@@ -204,6 +204,12 @@ for(const migration of migrations){
   seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-completion-gate-v1'}})
   versions.set(addition.key,1)
  }
+ // Inert publication: the role stays disabled until a later, approved enablement.
+ const targetedCadReview=source.match(/\$targeted_cad_review_additions\$([\s\S]+?)\$targeted_cad_review_additions\$/)
+ if(targetedCadReview)for(const {metadata,...addition} of JSON.parse(targetedCadReview[1])){
+  seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'targeted-cad-review-v1',...metadata}})
+  versions.set(addition.key,1)
+ }
  const coverageAdditions=source.match(/\$context_coverage_additions\$([\s\S]+?)\$context_coverage_additions\$/)
  if(coverageAdditions){
   preContextCoverageRows=structuredClone(seed);preContextCoverageVersions=new Map(versions)
@@ -408,6 +414,25 @@ for(const migration of migrations){
   const box=seed.find(row=>row.key==='bob.tools');box.definition.catalog.push(...policies)
   box.definition.contract_keys.push(...policies.map((p:any)=>'tools.'+p.name));box.definition.shelves.find((s:any)=>s.label==='Drawings and CAD').tools.push(...policies.map((p:any)=>p.name))
   versions.set(box.key,versions.get(box.key)!+1)
+ }
+ // FORM 4b delivery readback (#357): new tool from the read_construction_changes template.
+ const deliveryContracts=source.match(/\$construction_delivery_contracts\$([\s\S]+?)\$construction_delivery_contracts\$/)
+ if(deliveryContracts){
+  const policies=JSON.parse(source.match(/\$construction_delivery_policies\$([\s\S]+?)\$construction_delivery_policies\$/)![1])
+  for(const patch of JSON.parse(deliveryContracts[1])){
+   const policy=policies.find((p:any)=>p.name===patch.name),row=structuredClone(seed.find(row=>row.key==='tools.read_construction_changes'));row.key='tools.'+patch.name
+   row.definition={...row.definition,...patch,handler:patch.name,required_parameters:patch.parameters.required,optional_parameters:[],additional_description:policy.how_to,card_description:policy.description}
+   row.definition.envelope.schema_version=1
+   row.metadata={publication:'construction-delivery-v1',server_fields:[]}
+   seed.push(row);versions.set(row.key,1)
+  }
+  const box=seed.find(row=>row.key==='bob.tools');versions.set(box.key,versions.get(box.key)!+1)
+  const{seed_version,source_revision,...rest}=box.metadata??{};box.metadata={...rest,publication:'construction-delivery-v1'}
+  for(const policy of policies){
+   if(!box.definition.catalog.some((p:any)=>p.name===policy.name))box.definition.catalog.push(policy)
+   if(!box.definition.contract_keys.includes('tools.'+policy.name))box.definition.contract_keys.push('tools.'+policy.name)
+   const shelf=box.definition.shelves.find((s:any)=>s.label==='Drawings and CAD');if(!shelf.tools.includes(policy.name))shelf.tools.push(policy.name)
+  }
  }
  const calculatorContract=source.match(/\$calculator_contract\$([\s\S]+?)\$calculator_contract\$/)
  if(calculatorContract){
