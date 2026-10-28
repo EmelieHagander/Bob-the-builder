@@ -1,5 +1,25 @@
 # Foundation verification and rollout
 
+<a id="task-sources-2026-10-28"></a>
+## Task source packet reader — local verification, 2026-10-28
+
+[`read_task_sources`](ask-bob-context.md#read-task-sources) is published inactive
+by a generated migration. It is not applied to the hosted project.
+
+**Passed locally:**
+
+- **6 tests** in `task-sources.test.ts`:
+  - One read returns the selected Solution, the Step requirements and the Construction state, with exact revisions, open items, pointers and a fixed read order.
+  - An Area inherits the project target and says so.
+  - A stale or differently pinned Construction gives four distinct conflicts.
+  - Denial stops the read. Other failures, a missing Step, a missing target and invalid input stay explicit.
+  - The policy published `active: false` is not offered and returns `unavailable`. With the policy enabled it is offered and executes.
+  - The migration matches `build-ai-task-sources-catalog.ts --check`.
+- BLAST_PLACEHOLDER
+- `deno check` of `ask-bob` and `bob-worker` passes with the same local import map.
+
+No hosted change, policy activation, model call or CAD job was run.
+
 <a id="targeted-cad-review-reuse-2026-10-28"></a>
 ## Targeted CAD review reuse and budget binding — local verification, 2026-10-28
 

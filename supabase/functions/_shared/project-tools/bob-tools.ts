@@ -23,6 +23,7 @@ import type { ProjectContext } from '../project-context/dispatcher.ts'
 import type { MaterialCatalogReader } from '../material-catalog.ts'
 import { SAVE_COMPILED_PLAN_TOOL, type createPlanAssistant } from '../plan-assistant.ts'
 import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicyReader, type ToolInstructions } from './session.ts'
+import { TASK_SOURCES_TOOL, readTaskSources } from '../task-sources.ts'
 
 /** Toolbox shelves, in presentation order. A shelf is orientation for Bob, not
  * authority; unknown tools land on the last shelf. */
@@ -145,6 +146,12 @@ export function createBobToolSession(opts: {
       gate: (): ToolGate => ['save_construction_draft','edit_construction_parts','change_construction_parameters','transition_legacy_drawing','change_construction_roles','continue_construction_change','save_construction_cut_plan'].includes(spec.function.name) && writeGate() !== 'available' ? writeGate() : opts.constructionTools!.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.constructionTools!.execute(spec.function.name, v),
     })),
+    // FORM package 3 source packet: registered only where a publication carries
+    // its contract; its policy stays inactive until owner-approved acceptance.
+    ...(opts.aiCatalog?.manifest().definitions.some(row => row.prompt_key === 'tools.read_task_sources') ? [{ spec: TASK_SOURCES_TOOL, version: 1,
+      gate: (): ToolGate => opts.lookup.remaining >= 2 ? 'available' : 'budget_exhausted',
+      execute: (v: unknown) => readTaskSources(v, { projectId: opts.lookup.exportState().projectId, search: q => opts.lookup.search(q as any),
+        construction: opts.constructionTools ? q => opts.constructionTools!.execute('read_construction_draft', q) : undefined }) }] : []),
     ...(opts.catalogReader?.tools ?? []).map(spec => ({ spec, version: 1,
       gate: (): ToolGate => opts.catalogReader!.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.catalogReader!.read(spec.function.name, v),

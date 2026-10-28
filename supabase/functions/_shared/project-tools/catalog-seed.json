@@ -993,5 +993,14 @@
     "always_load": false,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "read_task_sources",
+    "description": "Collect the governing sources for the next piece of work in one read.",
+    "how_to": "Pass the Area (null for the whole project), the plan Step whose completion requirements apply (or null) and the exact saved Construction revision when one exists. Returns the selected Solution's features and open choices, the Step requirements and the Construction's freshness, Solution pin and FORM scope, with exact revisions, open items, conflicts and coverage. Reopen originals through the returned pointers. Private conversation, images and the meaning of free text are not included; nothing here approves a design, measurement or fabrication.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": false
   }
 ]

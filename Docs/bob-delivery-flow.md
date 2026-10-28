@@ -571,9 +571,11 @@ Dess katalogroll publiceras avstängd. Vägen är därför inaktiv tills en godk
 publicering slår på rollen. Kodfel stoppar utan modellanrop och koden räknar ut
 utslaget. En godkänd granskning återanvänds över turer inom samma
 ritningsbegäran, utan modellanrop när inget den bygger på har ändrats.
-Dagens fulla Rita-granskning gäller oförändrad. Återstår:
+Dagens fulla Rita-granskning gäller oförändrad. Första kodvarianten av det
+allmänna [underlagspaketet](ask-bob-context.md#read-task-sources),
+`read_task_sources`, är publicerad avstängd. Återstår:
 
-- det allmänna underlagspaketet
+- den lilla läsarmodellen för ostrukturerade källor
 - jämförande acceptans före aktivering CI-workflowets fokuserade
 manuella läge (`scope=saved-delivery`) kör tre skärmbredder; hela CI-jobbet körs
 endast med `scope=full`. 4b:s versionsbundna
