@@ -5,6 +5,10 @@ import {catalogFixture} from './support/ai-catalog-fixture.ts'
 import type {AiCatalogManifest} from '../supabase/functions/_shared/ai-catalog.ts'
 import type {ToolPolicy} from '../supabase/functions/_shared/project-tools/session.ts'
 import seed from '../supabase/functions/_shared/project-tools/catalog-seed.json' with {type:'json'}
+import {readFileSync} from 'node:fs'
+/** Policies a later publication installs that the offline fixture does not replay. */
+const deliveryPolicies=JSON.parse(readFileSync(new URL('../supabase/migrations/20261027162751_ai_construction_delivery_catalog.sql',import.meta.url),'utf8')
+ .match(/\$construction_delivery_policies\$([\s\S]+?)\]\$construction_delivery_policies\$/)![1]+']') as ToolPolicy[]
 const publication='20261017050720_ai_task_workflow_catalog.sql'
 const revisedNames=['change_task_readiness','create_work_record','edit_work_record']
 const policySql='select name,description,how_to,schema_version,always_load,preload_phases,active from bob.tool_catalog order by name'
@@ -30,7 +34,10 @@ test('historical policy keeps seed parity and current policy matches only the th
    assert(published,'the building scope publication has a pinned '+name+' policy')
    assert.deepEqual(seed.filter(policy=>policy.name===name),[published],'the new seed entry exactly matches its published policy')
   }
-  assert.deepEqual(historical,sorted(seed.filter(policy=>!['read_conversation_message','read_project_orientation','edit_construction_parts','read_building_scope','change_building_scope','read_model_feedback','record_model_feedback'].includes(policy.name))),'all policies present at the historical boundary retain exact seed parity')
+  const delivery=deliveryPolicies.find(policy=>policy.name==='read_construction_delivery')
+  assert(delivery,'the construction delivery publication installs its policy')
+  assert.deepEqual(seed.filter(policy=>policy.name==='read_construction_delivery'),[delivery],'the seed entry exactly matches its published policy')
+  assert.deepEqual(historical,sorted(seed.filter(policy=>!['read_conversation_message','read_project_orientation','edit_construction_parts','read_building_scope','change_building_scope','read_model_feedback','record_model_feedback','read_construction_delivery'].includes(policy.name))),'all policies present at the historical boundary retain exact seed parity')
   const {rows}=await pg.query<ToolPolicy>(policySql)
   const manifest=(await pg.query<{manifest:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) manifest")).rows[0].manifest
   const currentPolicies=manifest.definitions.find(d=>d.prompt_key==='bob.tools')!.definition.catalog as ToolPolicy[]
