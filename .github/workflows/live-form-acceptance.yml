@@ -1,0 +1,71 @@
+name: Live FORM package 5 comparison (paid)
+
+# Manual only. Each dispatch runs ONE frozen scenario once with real model and
+# CAD calls on the catalog that is active at that moment. Run baseline before
+# scripts/form-package3-enable.sql and candidate after it; see
+# Docs/foundation-verification.md#form-package5-comparison.
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Frozen scenario
+        required: true
+        type: choice
+        options:
+          - box
+          - bunk-bed
+      config:
+        description: Catalog state at dispatch (label only; the hosted catalog decides)
+        required: true
+        type: choice
+        options:
+          - baseline
+          - candidate
+      approval:
+        description: The owner approved this paid run
+        required: true
+        type: choice
+        options:
+          - paid-acceptance-approved
+permissions:
+  contents: read
+
+concurrency:
+  group: live-form-acceptance
+  cancel-in-progress: false
+
+jobs:
+  run:
+    if: github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: github-pages
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run the scenario once as the owner member
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
+          BOB_USER_EMAIL: ${{ secrets.BOB_USER_EMAIL }}
+          BOB_USER_PASSWORD: ${{ secrets.BOB_USER_PASSWORD }}
+          BOB_FORM_SCENARIO: ${{ inputs.scenario }}
+          BOB_FORM_CONFIG: ${{ inputs.config }}
+          BOB_FORM_LIVE_CONFIRM: ${{ inputs.approval }}
+          BOB_FORM_REPORT: test-results/form-${{ inputs.scenario }}-${{ inputs.config }}.json
+        run: node --import tsx scripts/run-live-form-acceptance.ts
+      - name: Retain the content-free run report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: form-${{ inputs.scenario }}-${{ inputs.config }}-${{ github.run_id }}
+          path: test-results/form-*.json
+          if-no-files-found: ignore
+          retention-days: 30

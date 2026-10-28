@@ -576,7 +576,9 @@ allmänna [underlagspaketet](ask-bob-context.md#read-task-sources),
 `read_task_sources`, och den lilla
 [läsarmodellen](ask-bob-context.md#source-reader), `read_source_findings`, är
 publicerade avstängda. Läsarens fynd måste citera källan ordagrant och
-kontrolleras i kod. Återstår:
+kontrolleras i kod. Två jämförande prov (låda och våningssäng, nuvarande mot
+ny konfiguration) är [förberedda men inte körda](foundation-verification.md#form-package5-comparison).
+Återstår:
 - jämförande acceptans före aktivering CI-workflowets fokuserade
 manuella läge (`scope=saved-delivery`) kör tre skärmbredder; hela CI-jobbet körs
 endast med `scope=full`. 4b:s versionsbundna

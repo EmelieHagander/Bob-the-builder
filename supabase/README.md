@@ -833,6 +833,20 @@ validators capable of reading already saved concept revisions and paused jobs.
 Do not delete saved models or weaken construction validation to roll back UI.
 `build-ai-form-concept-catalog.ts --check` verifies publication against source.
 
+<a id="form-package3-switch"></a>
+## FORM package 3 switch — operator scripts, 2026-10-28
+
+`scripts/form-package3-enable.sql` switches on three inert publications for all
+users: `role.cad-targeted-reviewer`, `role.source-reader`, and the
+`read_task_sources` and `read_source_findings` policies.
+`scripts/form-package3-rollback.sql` switches them off. Both scripts create new
+catalog versions and update `bob.tool_catalog`. Both are idempotent, and both
+leave pinned in-flight jobs on their manifest. They are deliberately not
+migrations, so the [baseline comparison](../Docs/foundation-verification.md#form-package5-comparison)
+can run first. Run them only after the runtimes from main are deployed and the
+three publications are applied. Enabling changes the CAD runtime identity, which
+is intended.
+
 <a id="source-reader-publication"></a>
 ## Small source reader — inert publication, 2026-10-28
 
