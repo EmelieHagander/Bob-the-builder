@@ -23,8 +23,11 @@ export function isDrawingModelCall(authority: DrawingBudgetAuthority | undefined
  return options.app==='bob'&&options.coworkerId==='bob'&&options.module==='cad'
   &&options.functionName==='cad-reviewer'
   &&options.aiFunction===options.functionName&&(role===undefined||role===options.functionName)
-  &&options.aiDefinition?.app==='bob'&&options.aiDefinition.roleKey==='role.'+options.functionName
+  &&options.aiDefinition?.app==='bob'&&(DRAWING_ROLE_KEYS[options.functionName]??[]).includes(options.aiDefinition.roleKey)
 }
+/** Catalog roles that may serve a bound CAD review. The targeted reviewer runs
+ * under the cad-reviewer function and must share its durable reservation. */
+const DRAWING_ROLE_KEYS:Record<string,readonly string[]>={'cad-reviewer':['role.cad-reviewer','role.cad-targeted-reviewer']}
 
 /** A stop threshold, not a provider billing cap: the last in-flight call may
  * cross it. Wrap journal replay too, so completed logical calls rebuild usage

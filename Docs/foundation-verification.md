@@ -1,5 +1,30 @@
 # Foundation verification and rollout
 
+<a id="targeted-cad-review-reuse-2026-10-28"></a>
+## Targeted CAD review reuse and budget binding — local verification, 2026-10-28
+
+Before this change, nothing reused an accepted review durably. Resuming a
+`reviewed` request in a new job rendered and paid for the review again; files
+and the accepted review lived only within one job. The
+[reuse record](cad-adapter.md#targeted-cad-review) closes that gap for the
+targeted path. A budget defect was also fixed before any activation.
+`isDrawingModelCall` accepted only `role.cad-reviewer`, so an enabled targeted
+reviewer would have bypassed the durable drawing reservation.
+
+**Passed locally:**
+
+- **12 tests** in `cad-targeted-review.test.ts`:
+  - A new turn resumes an unchanged request with zero model calls (`reused: all`), and the record contains no prose or owner text.
+  - A new owner message or a changed sheet asks only views/issues, with an empty requirement schema (`reused: requirements`).
+  - A changed runtime or stored evidence asks every requirement.
+  - Malformed or pixel-carrying records are ignored.
+  - Only Rita's and the targeted role share the CAD reservation.
+- **391 of 391** CAD, drawing, budget, delivery and metrics tests pass.
+- `deno check` of `ask-bob` and `bob-worker` passes with the same local import map.
+
+The role remains disabled. No hosted change, catalog activation, model call or
+CAD job was run.
+
 <a id="targeted-cad-review-catalog-2026-10-28"></a>
 ## Targeted CAD review catalog and #357 fixture parity — local verification, 2026-10-28
 

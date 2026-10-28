@@ -569,9 +569,10 @@ verklig modell/CAD inom ett separat beställt prov.** Första steget, den
 [riktade CAD-granskningen](cad-adapter.md#targeted-cad-review), finns i källkod.
 Dess katalogroll publiceras avstängd. Vägen är därför inaktiv tills en godkänd
 publicering slår på rollen. Kodfel stoppar utan modellanrop och koden räknar ut
-utslaget. Dagens fulla Rita-granskning gäller oförändrad. Återstår:
+utslaget. En godkänd granskning återanvänds över turer inom samma
+ritningsbegäran, utan modellanrop när inget den bygger på har ändrats.
+Dagens fulla Rita-granskning gäller oförändrad. Återstår:
 
-- återanvändning över turer för en oförändrad godkänd modell
 - det allmänna underlagspaketet
 - jämförande acceptans före aktivering CI-workflowets fokuserade
 manuella läge (`scope=saved-delivery`) kör tre skärmbredder; hela CI-jobbet körs

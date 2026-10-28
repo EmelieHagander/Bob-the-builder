@@ -76,6 +76,31 @@ records `basis: {mode: targeted, version, packet}`. The existing
 `reviewed_candidate` commitment, SQL save fences and Step-link receipts are
 unchanged.
 
+**Reuse across turns (source, inactive with the role).** An accepted targeted
+review stores a reuse record on the owner's thread-private drawing request.
+Project members never read it. The record holds requirement statuses, a reuse key
+and hashes only; it keeps no reviewer prose, owner text or pixels. The key covers:
+
+- the exact Construction revision
+- the design-intent pin and requirement set
+- the measurement and physical pins
+- the reference-image versions
+- the stored FORM evidence identity
+- the CAD runtime/catalog version
+
+A later candidate of the same request has three outcomes:
+
+- **Same key, same owner text and identical verified preview hashes:** the
+  earlier accepted answers are reused with **no model call**. The re-rendered
+  candidate still passes every code gate and the SQL save fences.
+- **Same key, but the owner text or a sheet changed:** the requirement answers
+  are reused. Only the views, reference and issues are asked again.
+- **Anything in the key changed:** every requirement is asked again.
+
+`basis.reused` records `none`, `requirements` or `all`. The targeted call shares
+the existing durable CAD review reservation: the budget treats
+`role.cad-targeted-reviewer` like Rita's role under the `cad-reviewer` function.
+
 The existing `cad-reviewer` function switch governs both forms. Only an enabled
 role adds it, its contract and its `bob_cad_targeted_review` schema to the CAD
 runtime fingerprint (`drawing-runtime.ts`). Older in-flight requests therefore do
@@ -83,7 +108,7 @@ not mix review contracts. The disabled publication changes no fingerprint.
 
 **Not yet covered:** these remain for the next increments:
 
-- reuse of an accepted review across turns for an unchanged accepted model
+- reuse across separate drawing requests; a new request asks again
 - the owner-approved publication that enables the role
 - the general [task source packet](ask-bob-context.md#task-source-packet)
 - the [comparative acceptance](bob-delivery-flow.md#form-next) that must precede activation and removal of the full review

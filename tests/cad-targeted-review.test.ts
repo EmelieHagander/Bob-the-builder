@@ -12,6 +12,8 @@ import {constructionEvidenceBinding,constructionEvidenceContract} from '../supab
 import {drawingCatalogConfiguration} from '../supabase/functions/_shared/drawing-runtime.ts'
 import {buildCadReviewPacket,codeFindingReview,formEvidenceCoverage,parseTargetedCadReview,CAD_TARGETED_REVIEW_ROLE,CAD_TARGETED_REVIEW_SCHEMA} from '../supabase/functions/_shared/cad-targeted-review.ts'
 import type {DesignHandoff} from '../supabase/functions/_shared/cad-review.ts'
+import {parseTargetedReviewRecord} from '../supabase/functions/_shared/cad-targeted-review.ts'
+import {isDrawingModelCall} from '../supabase/functions/_shared/bob-model-budget.ts'
 
 const artifact='11111111-1111-4111-8111-111111111111',material='22222222-2222-4222-8222-222222222222'
 const today=new Date().toISOString().slice(0,10)
@@ -50,11 +52,12 @@ function observation(draft:any,status:'failed'|'properties_passed',binding=const
     requirements:[{feature_id:'f1',requirement:feature.description,property_check_ids:['p1'],status,functional_fidelity:'unverified'}],
     whole_delivery_ready:false,fabrication_ready:false}}}
 }
-function runtime(opts:{targeted:boolean;stored?:(draft:any)=>any;readerFails?:boolean;reply?:(o:any)=>any}){
+function runtime(opts:{targeted:boolean;stored?:(draft:any)=>any;readerFails?:boolean;reply?:(o:any)=>any;store?:any;owner?:string;sheet?:string;runtime?:string}){
  const {draft,catalog}=fixture(),calls:any[]=[],reads:any[]=[]
  const check=()=>checkedConstructionForDrawing({projectId:draft.projectId,message:'Draw this construction',hasAccess:async()=>true,read:async()=>structuredClone(draft),
   readCatalog:async(id,revision)=>({status:'ok',projectId:draft.projectId,record:catalog.get(id+'@'+revision)}),readSources:async()=>({project:new Map(),physical:new Map()})},artifact,1)
- const assistant=createCadAssistant({projectId:draft.projectId,userId:'owner',ownerRequest:'Draw this exact bracket',hasAccess:async()=>true,available:true,deadline:Date.now()+200000,
+ const assistant=createCadAssistant({projectId:draft.projectId,userId:'owner',ownerRequest:opts.owner??'Draw this exact bracket',hasAccess:async()=>true,available:true,deadline:Date.now()+200000,
+  ...(opts.store?{requestStore:opts.store}:{}),...(opts.runtime?{runtimeVersion:async()=>opts.runtime!}:{}),
   ...(opts.targeted?{aiCatalog:targetedCatalog()}:{}),
   makeLookup:()=>createProjectLookup(draft.projectId,async(_p,i)=>({data:{records:i.dataset==='target'?[{id:'project',revision:1,solution_id:material}]:[],related:[],truncated:false},error:null}),1000,40),
   readDesignReadiness:async(targetRevision,purpose,areaId)=>{
@@ -71,7 +74,8 @@ function runtime(opts:{targeted:boolean;stored?:(draft:any)=>any;readerFails?:bo
    if(result===null)return {...head,results:stored?[{result_id:stored.id,kind:'check'}]:[],coverage:{total_items:stored?1:0,complete:true},next_after:null}
    return {...head,observation:stored}
   },
-  render:async recipe=>({recipe,manifest:{bounding_box_mm:checkConstruction(draft,catalog,'2026-10-04').bounds_mm,checks:{collisions:{status:'complete',overlaps:[]}},annotations:{version:1,coverage:'complete'},engine:{name:'build123d'},assembly_id:recipe.assembly_id},files:{front:'Zml4dHVyZQ=='},previews:Object.fromEntries(recipe.views.map(v=>[v,'Zml4dHVyZQ==']))}),
+  render:async recipe=>({recipe,manifest:{bounding_box_mm:checkConstruction(draft,catalog,'2026-10-04').bounds_mm,checks:{collisions:{status:'complete',overlaps:[]}},annotations:{version:1,coverage:'complete'},engine:{name:'build123d'},assembly_id:recipe.assembly_id,
+   preview_metadata:Object.fromEntries(recipe.views.map(v=>[v,{file:v+'.png',sha256:(opts.sheet??'b').repeat(64),source_sha256:'c'.repeat(64)}]))},files:{front:'Zml4dHVyZQ=='},previews:Object.fromEntries(recipe.views.map(v=>[v,'Zml4dHVyZQ==']))}),
   callModel:async(o:any)=>{
    calls.push(o)
    assert.equal(o.aiFunction,'cad-reviewer','the existing CAD review switch governs both review forms')
@@ -188,4 +192,61 @@ test('the published schema is the runtime schema and binds exact requirement key
  assert.equal(role.definition.definition.response_schema_key,'schema.bob_cad_targeted_review')
  assert.match(session.text('targeted-cad-review.contract'),/You do not decide the verdict/)
  assert.throws(()=>catalogFixture().role('cad-targeted-reviewer'),/ai_function_disabled/,'published disabled')
+})
+
+/** Owner/thread-private request store, as drawing-request-store.ts provides it. */
+function requestStore(){
+ let saved:any=null;const writes:any[]=[]
+ return {writes,get saved(){return saved},load:async()=>structuredClone(saved),save:async(id:any,revision:any,status:any,payload:any)=>{
+  assert.equal(revision,saved?.revision??0)
+  saved={id:id??'33333333-3333-4333-8333-333333333333',revision:revision+1,status,payload:structuredClone(payload)};writes.push(structuredClone(saved));return structuredClone(saved)
+ }}
+}
+
+test('an accepted targeted review is kept privately and reused in a new turn without another model call',async()=>{
+ const store=requestStore(),first=runtime({targeted:true,store,runtime:'r1'})
+ assert.equal((await first.assistant.consult(request)).status,'ready');assert.equal(first.calls.length,1)
+ const record=store.saved.payload.targeted_review
+ assert.equal(store.saved.status,'reviewed');assert.equal(record.version,'cad-targeted-review-v1')
+ assert.deepEqual(record.requirements,{[shapeId]:'met',intent_f1:'met'})
+ assert.doesNotMatch(JSON.stringify(record),/Synthetic views|Draw this exact bracket/,'no reviewer prose or owner text is stored')
+ const resumed=runtime({targeted:true,store,runtime:'r1'})
+ const result=await resumed.assistant.consult({...request,request_id:store.saved.id})
+ assert.equal(result.status,'ready',JSON.stringify(result));assert.equal(resumed.calls.length,0,'unchanged accepted model: no paid review')
+ assert.equal(resumed.assistant.quality!.basis!.reused,'all');assert(resumed.assistant.candidate,'the re-rendered candidate is saveable')
+ assert.deepEqual(store.saved.payload.targeted_review,record)
+})
+
+test('a new owner message or sheet asks only the views and issues; changed sources ask everything again',async()=>{
+ for(const variant of [{owner:'Draw this exact bracket. Also show the top clearly.'},{sheet:'d'}]){
+  const store=requestStore();await runtime({targeted:true,store,runtime:'r1'}).assistant.consult(request)
+  const next=runtime({targeted:true,store,runtime:'r1',...variant})
+  assert.equal((await next.assistant.consult({...request,request_id:store.saved.id})).status,'ready')
+  assert.equal(next.calls.length,1)
+  assert.deepEqual(next.calls[0].schema.properties.requirements.required,[],'requirement answers are reused, not asked')
+  assert.deepEqual(JSON.parse(next.calls[0].messages[0].content).review_packet.questions.requirements,[])
+  const review=next.assistant.quality!
+  assert.equal(review.basis!.reused,'requirements');assert.deepEqual(review.review.requirements.map((r:any)=>r.status),['met','met'])
+ }
+ for(const variant of [{runtime:'r2'},{stored:(draft:any)=>observation(draft,'properties_passed')}]){
+  const store=requestStore();await runtime({targeted:true,store,runtime:'r1'}).assistant.consult(request)
+  const next=runtime({targeted:true,store,runtime:'r1',...variant})
+  await next.assistant.consult({...request,request_id:store.saved.id})
+  assert.deepEqual(next.calls[0].schema.properties.requirements.required,[shapeId,'intent_f1'],'a changed runtime or evidence asks every requirement')
+  assert.equal(next.assistant.quality!.basis!.reused,'none')
+ }
+})
+
+test('a reused record cannot carry an unresolved required feature and malformed records are ignored',()=>{
+ assert.equal(parseTargetedReviewRecord({version:'cad-targeted-review-v1',key:'a'.repeat(64),requirements:{x:'failed'},presentation:{owner_request:'b'.repeat(64),views:{},reference:'met'}}),null)
+ assert.equal(parseTargetedReviewRecord({version:'cad-targeted-review-v1',key:'a'.repeat(64),requirements:{},presentation:{owner_request:'b'.repeat(64),views:{front:'data:image/png;base64,AA'},reference:'met'}}),null)
+})
+
+test('the targeted reviewer shares the durable CAD review reservation; other roles do not',()=>{
+ const authority=(roleKey:string,functionName='cad-reviewer')=>({requestId:'33333333-3333-4333-8333-333333333333',
+  options:{app:'bob',coworkerId:'bob',module:'cad',functionName,aiFunction:functionName,aiDefinition:{app:'bob',roleKey} as any}})
+ assert.equal(isDrawingModelCall(authority('role.cad-reviewer'),'cad-reviewer'),true)
+ assert.equal(isDrawingModelCall(authority('role.cad-targeted-reviewer'),'cad-reviewer'),true)
+ assert.equal(isDrawingModelCall(authority('role.ask-bob'),'cad-reviewer'),false)
+ assert.equal(isDrawingModelCall(authority('role.cad-targeted-reviewer','ask-bob'),'ask-bob'),false)
 })
