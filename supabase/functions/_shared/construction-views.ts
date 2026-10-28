@@ -4,13 +4,16 @@ import type { FastenerSchedule } from './construction-fasteners.ts'
 import { INSTANCE_ROLE_POLICY } from './construction-instance-policy.ts'
 
 type Row = Record<string, any>
-type Item = { collection: string; id: string; value: unknown }
+export type ConstructionViewItem = { collection: string; id: string; value: unknown }
+type Item = ConstructionViewItem
 /** Default page and the floor for every read. Jobs without the
  * constructionPageVersion pin keep exactly this size, so their replays match. */
 export const CONSTRUCTION_VIEW_TOKENS = 2000
 /** Owner decision A (2026-10-22, pinned per job): each page costs Bob a whole
  * model step, so one read may return up to this much of the selected view. */
 export const CONSTRUCTION_VIEW_MAX_TOKENS = 6000
+/** One complete work packet replaces several separate view/model round trips. */
+export const CONSTRUCTION_WORK_MAX_TOKENS = 12000
 /** Reads in the same model step share this, never below the default page, so
  * a step holds at most max(12,000, 2,000 x reads) tokens of construction pages. */
 export const CONSTRUCTION_VIEW_STEP_TOKENS = 12000
@@ -34,7 +37,7 @@ export const CONSTRUCTION_EVIDENCE_VIEW_TOOL={...CONSTRUCTION_VIEW_TOOL,function
  description:CONSTRUCTION_VIEW_TOOL.function.description+' view=results lists saved check references for this exact revision across turns; follow next_read. view=result reopens those findings. Source/checker changes keep history readable and prevent reuse as current evidence.',
  parameters:{...CONSTRUCTION_VIEW_TOOL.function.parameters,properties:{...CONSTRUCTION_VIEW_TOOL.function.parameters.properties,view:{type:'string',enum:[...views,'results']}}}}}
 export type ConstructionObservation = { id:string; projectId:string; artifact_id:string; revision:number; kind:string; observed_at:string; output:Row }
-export type ConstructionViewQuery = {artifact_id:string|null;revision:number|null;after:string|null;view:string;ids:string[];result_id:string|null;section:string|null}
+export type ConstructionViewQuery = {artifact_id:string|null;revision:number|null;after:string|null;view:string;ids:string[];result_id:string|null;section:string|null;step_id?:string|null;work_kind?:string|null}
 const arr = (value:any):any[] => Array.isArray(value)?value:[]
 async function exactHash(value:unknown){
  const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(stableJsonValue(value))))
@@ -94,6 +97,30 @@ export function constructionViewItems(draft:Row,view:string,ids:string[]):{items
  if(view==='bindings')for(const b of bindings)if(wanted.has(b.node))missing.delete(b.node)
  if(view==='joints')for(const j of joints)for(const end of ['first','second'])if(wanted.has(j[end].instance_id))missing.delete(j[end].instance_id)
  return {items:out,missing_ids:[...missing]}
+}
+
+/** Follow every newly reached part/node/joint until the selected subgraph is
+ * closed. A view intended for editing cannot stop at the first neighbor. */
+export function constructionWorkItems(draft:Row,ids:string[]):{items:Item[];missing_ids:string[]} {
+ const all=['parameters','bindings','parts','joints','materials','roles'].flatMap(view=>constructionViewItems(draft,view,[]).items)
+ if(!ids.length)return {items:[...constructionViewItems(draft,'notes',[]).items,...all],missing_ids:[]}
+ const known=new Set(all.map(item=>item.id)),selected=new Set(ids),records=new Map<string,Item>()
+ let prior=-1
+ while(prior!==selected.size){
+  prior=selected.size
+  const part=constructionViewItems(draft,'dependencies',[...selected])
+  for(const item of part.items){
+   records.set(item.collection+':'+item.id,item)
+   if(['nodes','definitions','instances','joints','bindings'].includes(item.collection))selected.add(item.id)
+  }
+ }
+ return {items:[...constructionViewItems(draft,'notes',[]).items,...all.filter(item=>records.has(item.collection+':'+item.id))],missing_ids:ids.filter(id=>!known.has(id))}
+}
+
+/** Reuses exact-row/fragment paging. Every page is bound to governing source
+ * revisions too, so changing a Solution/Step cannot silently splice pages. */
+export function constructionWorkPage(query:ConstructionViewQuery,header:Row,rows:Item[],binding:Row,budget=CONSTRUCTION_WORK_MAX_TOKENS){
+ return page(query,header,rows,budget,{scope:'construction_work',binding:{...binding,step_id:query.step_id??null,work_kind:query.work_kind??null}})
 }
 
 /** Compact construction table (owner decision 2026-10-26, pinned per job).
@@ -173,7 +200,7 @@ function resultItems(output:Row):Item[]{
  * read after the last page; without one, pages are unchanged. */
 type PageLayout={binding?:Row;scope?:string;present?:(records:Row[])=>Row;last?:Row}
 async function page(query:ConstructionViewQuery,header:Row,rows:Item[],budget:number,layout:PageLayout={}):Promise<Row>{
- if(!Number.isSafeInteger(budget)||budget<CONSTRUCTION_VIEW_TOKENS||budget>CONSTRUCTION_VIEW_MAX_TOKENS)throw new Error('construction_view_budget_invalid')
+ if(!Number.isSafeInteger(budget)||budget<CONSTRUCTION_VIEW_TOKENS||budget>(query.view==='work'?CONSTRUCTION_WORK_MAX_TOKENS:CONSTRUCTION_VIEW_MAX_TOKENS))throw new Error('construction_view_budget_invalid')
  const binding=(await exactHash({artifact_id:query.artifact_id,revision:query.revision,view:query.view,ids:query.ids,result_id:query.result_id,section:query.section,...layout.binding})).slice(0,24)
  let index=0,offset=0
  if(query.after){const m=/^cv1:([a-f0-9]{24}):(\d+):(\d+)$/.exec(query.after);if(!m||m[1]!==binding)throw new Error('construction_view_cursor_invalid');index=Number(m[2]);offset=Number(m[3])}

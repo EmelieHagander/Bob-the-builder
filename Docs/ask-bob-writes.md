@@ -130,6 +130,40 @@ The isolated tests cover the real SQL/RLS/ledger path, downstream rollback,
 server restart, model-facing contract and completion after correction. They do
 not measure live model latency or cost.
 
+<a id="construction-work-write"></a>
+### Selected Solution and Construction together — local implementation, 2026-10-28
+
+The existing parameter and part editors can include `solution_edit` with an
+ordinary selected-Solution `edit_ref`, content deltas and reason. Preparation
+uses the same content editor, prose validation and preservation rules as
+`edit_project_record`. `target_revision` must be null for this combined command:
+the server binds the newly selected revision. Alignment resets to draft unless
+the content delta explicitly establishes it. This is no new approval channel.
+
+`commit_construction_work` executes the existing bound Solution/selection write
+and Construction write in one database transaction. It requires the same
+project, selected scope, current Solution and Construction revisions, claimed
+turn and server-owned request quote. The same Construction identity receives
+one new immutable revision. Source, geometry and readiness guards re-run against
+the new selection; any rejection rolls back both domains and all their receipts.
+Empty numeric changes are allowed with a Solution edit when source reconciliation
+alone is valid. Normal parameter/part batches remain available with
+`solution_edit: null`; explicit `target_revision` also allows the part editor to
+reconcile an already changed selected source under the same guards.
+
+The ordinary ledger stores the combined intent under its operation key and
+returns Construction, Solution and target receipts. Exact replay is resolved
+before current-head checks, so it returns the original result after later work.
+Reusing the key with changed intent conflicts. The writer retains the latest
+projection per identity; a replay cannot replace it with an older revision.
+An uncertain transport outcome uses the existing recovery path. Rendering is
+outside this transaction and is only subsequent requested work.
+
+The [database owner](../db/README.md#construction-work-authority) owns privileges;
+[release ordering](../supabase/README.md#construction-work-release) and
+[local evidence](foundation-verification.md#construction-work-2026-10-28) are
+separate from this source contract.
+
 ### Second implementation: alternatives, selection and evidence links
 
 **Technically deployed through PR #255; ordinary-member/model acceptance remains open.** `project-solution-actions.ts` adds

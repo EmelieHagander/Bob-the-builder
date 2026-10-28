@@ -95,7 +95,7 @@ export const WRITE_TOOL_PROSE: Record<string, readonly string[]> = {
   save_building_context: ['new_building_name', 'new_building_notes', ...['notes_append', 'name', 'kind', 'notes', 'subject', 'description'].map(field => 'operations.*.fields.' + field)],
 }
 export interface WritePayload {
-  kind: 'form_feedback' | 'construction_edit' | 'bound_building_scope' | 'bound_plan_link' | 'bound_work' | 'bound_solution_create' | 'bound_solution_target' | 'bound_solution_evidence' | 'bound_project' | 'bound_solution' | 'construction_roles' | 'construction_consequence' | 'legacy_construction' | 'construction_parameters' | 'cad_shell' | 'cad_shell_steps' | 'supplier_article' | 'pack_purchase' | 'cut_plan_shopping' | 'cut_plan_stock' | 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
+  kind: 'construction_work' | 'form_feedback' | 'construction_edit' | 'bound_building_scope' | 'bound_plan_link' | 'bound_work' | 'bound_solution_create' | 'bound_solution_target' | 'bound_solution_evidence' | 'bound_project' | 'bound_solution' | 'construction_roles' | 'construction_consequence' | 'legacy_construction' | 'construction_parameters' | 'cad_shell' | 'cad_shell_steps' | 'supplier_article' | 'pack_purchase' | 'cut_plan_shopping' | 'cut_plan_stock' | 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -471,6 +471,19 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
           throw new Error('Unknown write result')
         }
         const receipt = checkedReceipt(data, projectId)
+        if (payload.kind === 'construction_work') {
+          const requestedSolution=payload.data.solution as WritePayload
+          const related = (data as { related_receipts?: unknown }).related_receipts
+          if (!Array.isArray(related) || related.length !== 2 || receipt.dataset !== 'artifacts'
+            || receipt.recordId !== payload.record_id || receipt.revision !== Number(payload.expected_revision) + 1) throw Error('Missing construction work receipts')
+          const confirmed = related.map(r => checkedReceipt(r, projectId))
+          const solution = confirmed.find(r => r.dataset === 'solutions'), target = confirmed.find(r => r.dataset === 'target')
+          if (!solution || !target || solution.recordId !== requestedSolution.record_id
+            || solution.revision !== Number(requestedSolution.expected_revision) + 1
+            || target.record.solution_id !== solution.recordId || target.record.solution_revision !== solution.revision
+            || target.revision !== Number((requestedSolution.data.target as {revision:number}).revision) + 1) throw Error('Mismatched construction work receipts')
+          confirmed.forEach(r => { remember(r); rememberExecuted(r) }); used += confirmed.length
+        }
         if (payload.kind === 'bound_solution' || payload.kind === 'bound_solution_evidence') {
           const related = (data as { related_receipts?: unknown }).related_receipts
           if (!Array.isArray(related) || related.length !== (payload.data.target === null ? 0 : 1)) throw new Error('Missing bound edit receipts')

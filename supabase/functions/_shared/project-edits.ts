@@ -155,14 +155,63 @@ export function displayEditSnapshot(snapshot: EditSnapshot) {
   }
 }
 
-export function createProjectEdits(opts: { projectId: string; read: ReadTransport; writer?: ProjectWriter; hasAccess: () => Promise<boolean>; sources?: ProjectSource[]; unlimitedWork?: boolean }) {
+export function createProjectEdits(opts: { projectId: string; read: ReadTransport;
+  /** Exact selected scope, using the same caller-bound snapshot contract. */
+  readSelected?: (areaId: string | null) => PromiseLike<{ data: unknown; error: unknown }>;
+  writer?: ProjectWriter; hasAccess: () => Promise<boolean>; sources?: ProjectSource[]; unlimitedWork?: boolean }) {
   const contexts = new Map<string, EditSnapshot>()
   const pages = new Map<string, { resource: Resource; query: string | null; after: string }>()
   let reads = 0
   let partial = false
   const unavailable = () => { partial = true; return { status: 'unavailable' } }
+  const remember = async (snapshot: EditSnapshot) => {
+    if (snapshot.project_id !== opts.projectId || !snapshot.record || !Array.isArray(snapshot.measurements)
+      || !safeText(snapshot.key, 250) || !safeText(snapshot.record.id, 200)
+      || (snapshot.resource === 'project_description' ? !safeText(snapshot.record.updated_at, 60) : !Number.isSafeInteger(snapshot.record.revision))) throw Error('invalid_edit_snapshot')
+    const ref = 'edit_' + await fingerprint(snapshot)
+    contexts.set(ref, structuredClone(snapshot))
+    const dataset = snapshot.resource === 'project_description' ? 'project' : 'solutions'
+    if (opts.sources && !opts.sources.some(s => s.dataset === dataset && s.recordId === snapshot.record.id)) opts.sources.push({ projectId: opts.projectId, dataset, recordId: snapshot.record.id, label: snapshot.record.title ?? snapshot.scope_label, retrievedAt: new Date().toISOString(), updatedAt: snapshot.record.updated_at ?? snapshot.record.recorded_at ?? null, truth: 'unknown' })
+    return { edit_ref: ref, scope: snapshot.scope_label, selected: snapshot.target !== null, selected_version_is_current: snapshot.target === null || snapshot.head_revision === undefined || snapshot.head_revision === snapshot.record.revision, content: displayEditSnapshot(snapshot) }
+  }
+  const prepare = async (value: unknown): Promise<{ status: 'ready'; payload: WritePayload; snapshot: EditSnapshot } | WriteResult> => {
+    const v = value as Record<string, any>
+    const snapshot = v && typeof v.edit_ref === 'string' ? contexts.get(v.edit_ref) : undefined
+    try {
+      if (!exact(v, ['edit_ref', 'changes', 'reason', 'request_quote']) || !snapshot || !safeText(v.reason, 1000)) throw new Error('Read and choose a server-issued edit_ref, then supply changes and a reason.')
+      const humanText = changeProseRejection(v.changes, v.reason)
+      if (humanText) return { ...fail(humanText.message), validation: { code: 'human_text', fields: humanText.fields } }
+      if (snapshot.target && snapshot.head_revision !== undefined && snapshot.head_revision !== snapshot.record.revision) throw new Error('The selected version is older than this solution’s latest version. Read the alternatives and reconcile the selected direction explicitly before editing; do not overwrite newer work.')
+      const record = await applyProjectDelta(snapshot, v.changes, v.reason)
+      const payload: WritePayload = snapshot.resource === 'project_description'
+        ? { kind: 'bound_project', record_id: opts.projectId, expected_updated_at: snapshot.record.updated_at, expected_revision: null, request_quote: v.request_quote, data: { description: record.description } }
+        : { kind: 'bound_solution', record_id: snapshot.record.id, expected_updated_at: null, expected_revision: snapshot.record.revision, request_quote: v.request_quote,
+            data: { target: snapshot.target, solution: { title: record.title, description: record.description, assumptions: record.assumptions, tradeoffs: record.tradeoffs, source_media_id: record.source_media_id, design_intent: record.design_intent, measurements: snapshot.measurements, change_note: v.reason } } }
+      return { status: 'ready', payload, snapshot: structuredClone(snapshot) }
+    } catch (error) { rethrowContinuation(error); return fail(error instanceof Error ? error.message : 'Invalid content changes.') }
+  }
   return {
     tools: PROJECT_EDIT_TOOLS,
+    /** Prepare exactly the ordinary content delta without writing. The caller
+     * may compose it with a Construction change in one database transaction. */
+    prepare:async(value:unknown)=>await opts.hasAccess()?prepare(value):{status:'denied' as const},
+    async readSelected(areaId: string | null): Promise<any> {
+      if (!await opts.hasAccess()) return { status: 'denied' }
+      if (!opts.readSelected) return unavailable()
+      if (!opts.unlimitedWork && reads >= 16) return { status: 'budget_exhausted' }
+      reads++
+      try {
+        const { data, error } = await opts.readSelected(areaId)
+        if (!await opts.hasAccess()) return { status: 'denied' }
+        if (error || !Array.isArray(data) || data.length > 1 || JSON.stringify(data).length > 240000) return unavailable()
+        if (!data.length) return { status: 'empty' }
+        const snapshot = data[0] as EditSnapshot
+        if (snapshot.resource !== 'selected_solutions' || !snapshot.target
+          || snapshot.target.area_id !== areaId || snapshot.target.solution_id !== snapshot.record?.id
+          || snapshot.target.solution_revision !== snapshot.record?.revision) return unavailable()
+        return { status: 'ok', entry: await remember(snapshot), target: structuredClone(snapshot.target) }
+      } catch (error) { rethrowContinuation(error); return unavailable() }
+    },
     exportState(): ProjectEditsState {
       return JSON.parse(JSON.stringify({ version: 1, projectId: opts.projectId, reads, partial, contexts: [...contexts], pages: [...pages], sources: opts.sources ?? [] }))
     },
@@ -193,14 +242,8 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
           if (error || !Array.isArray(data) || data.length > 3 || JSON.stringify(data).length > 240000) return unavailable()
           const entries = []
           for (const snapshot of data.slice(0, 2) as EditSnapshot[]) {
-            if (snapshot.project_id !== opts.projectId || snapshot.resource !== input.resource || !snapshot.record || !Array.isArray(snapshot.measurements)
-              || !safeText(snapshot.key, 250) || !safeText(snapshot.record.id, 200)
-              || (input.resource === 'project_description' ? !safeText(snapshot.record.updated_at, 60) : !Number.isSafeInteger(snapshot.record.revision))) return unavailable()
-            const ref = 'edit_' + await fingerprint(snapshot)
-            contexts.set(ref, structuredClone(snapshot))
-            entries.push({ edit_ref: ref, scope: snapshot.scope_label, selected: snapshot.target !== null, selected_version_is_current: snapshot.target === null || snapshot.head_revision === undefined || snapshot.head_revision === snapshot.record.revision, content: displayEditSnapshot(snapshot) })
-            const dataset = snapshot.resource === 'project_description' ? 'project' : 'solutions'
-            if (opts.sources && !opts.sources.some(s => s.dataset === dataset && s.recordId === snapshot.record.id)) opts.sources.push({ projectId: opts.projectId, dataset, recordId: snapshot.record.id, label: snapshot.record.title ?? snapshot.scope_label, retrievedAt: new Date().toISOString(), updatedAt: snapshot.record.updated_at ?? snapshot.record.recorded_at ?? null, truth: 'unknown' })
+            if (snapshot.resource !== input.resource) return unavailable()
+            entries.push(await remember(snapshot))
           }
           let next_ref: string | null = null
           if (data.length > 2) {
@@ -214,20 +257,10 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
       const v = value as Record<string, any>
       const snapshot = v && typeof v.edit_ref === 'string' ? contexts.get(v.edit_ref) : undefined
       const key = snapshot ? snapshot.resource + ':' + snapshot.key : 'unbound'
-      let payload: WritePayload | null = null, invalid: string | undefined, humanText: HumanTextRejection | null = null
-      try {
-        if (!exact(v, ['edit_ref', 'changes', 'reason', 'request_quote']) || !snapshot || !safeText(v.reason, 1000)) throw new Error('Read and choose a server-issued edit_ref, then supply changes and a reason.')
-        humanText = changeProseRejection(v.changes, v.reason)
-        if (humanText) throw new Error(humanText.message)
-        if (snapshot.target && snapshot.head_revision !== undefined && snapshot.head_revision !== snapshot.record.revision) throw new Error('The selected version is older than this solution’s latest version. Read the alternatives and reconcile the selected direction explicitly before editing; do not overwrite newer work.')
-        const record = await applyProjectDelta(snapshot, v.changes, v.reason)
-        payload = snapshot.resource === 'project_description'
-          ? { kind: 'bound_project', record_id: opts.projectId, expected_updated_at: snapshot.record.updated_at, expected_revision: null, request_quote: v.request_quote, data: { description: record.description } }
-          : { kind: 'bound_solution', record_id: snapshot.record.id, expected_updated_at: null, expected_revision: snapshot.record.revision, request_quote: v.request_quote,
-              data: { target: snapshot.target, solution: { title: record.title, description: record.description, assumptions: record.assumptions, tradeoffs: record.tradeoffs, source_media_id: record.source_media_id, design_intent: record.design_intent, measurements: snapshot.measurements, change_note: v.reason } } }
-      } catch (error) { rethrowContinuation(error); invalid = error instanceof Error ? error.message : 'Invalid content changes.' }
-      const result = await opts.writer.commitBound('edit_project_record', key, payload)
-      if (invalid && result.status === 'invalid') return { ...fail(invalid), ...(humanText ? { validation: { code: 'human_text', fields: humanText.fields } } : {}) }
+      const prepared = await prepare(value)
+      if (prepared.status === 'denied') return prepared
+      const result = await opts.writer.commitBound('edit_project_record', key, prepared.status === 'ready' ? prepared.payload : null)
+      if (prepared.status !== 'ready' && result.status === 'invalid') return prepared
       // The canonical receipt stays in the writer for delivery/recovery. The
       // model gets content and outcome, never a new set of IDs to transcribe.
       return result.status === 'saved' ? { status: 'saved', selected_updated: snapshot?.target !== null && snapshot?.resource !== 'project_description', message: 'Saved the same record. Read again before another edit.', content: displayEditSnapshot({ ...snapshot!, record: result.receipt!.record }) } : result

@@ -1,5 +1,61 @@
 # Foundation verification and rollout
 
+<a id="construction-work-2026-10-28"></a>
+## Coherent Construction operations — local verification, 2026-10-28
+
+**Implemented locally; hosted installation and paid/model acceptance remain open.**
+The owner approved the four proposals after the cost investigation, retaining
+agent prompts and GPT-5.4 medium. The [tool owner](ask-bob-tools.md#coherent-construction-work)
+routes the read, write and check contracts; [State](bob-delivery-flow.md#state)
+owns remaining release and measurement work.
+
+Focused local runs passed **141 distinct test cases across 15 files**, including
+isolated full-schema PGlite fixtures with the existing service-owned work pin.
+Historical publication fixtures retain exact old-manifest comparisons alongside
+the new interfaces. The main-loop/context/metrics run passed **36/36**;
+the final cache/pagination replay run passed **12/12**; the four interface/SQL suites
+passed **47/47**. This is an aggregate of focused runs, not a full-suite/CI claim.
+
+- `construction-work`: real claimed-user read → atomic Solution/Construction
+  write → saved check; preserved identity and untouched requirements/records;
+  late geometry failure rolls back both domains and every receipt; denied and
+  mismatched scopes, exact retry after later work, changed-key intent conflict,
+  lost-response recovery, saved evidence after restart, stale revisions,
+  dependency closure, source-bound paging and bounded output readback.
+- `tool-session`, `bob-selective-tools`, `bob-cost-controls` and
+  `bob-context-strategy-main`: catalog-owned schemas, unchanged six core names,
+  current gates, no newly offered tool inside the old batch, checkpoint recovery,
+  prompt/profile preservation and existing context behavior.
+- `project-edits`, `construction-parameters`, `construction-edits`,
+  `construction-views`, `construction-evidence`, `construction-observations-sql`,
+  `construction-delivery`, `construction-source-refresh`, `task-sources` and
+  `execution-metrics`: existing domain authority, lineage, history and
+  content-free diagnostics remain covered.
+
+The ordinary main-loop fixture uses **3 domain tool calls and 5 main requests**:
+read, change, check, candidate answer, existing post-write completion review.
+It needs no `describe_tool` round or helper model. The provider is a deterministic
+test double; this does not measure live model choice, delivered quality or USD.
+Worker-local cache diagnostics are excluded from model/journal input so a cache
+miss after restart cannot change otherwise identical replay bytes. Metrics still
+receive the bounded operation/reuse outcome.
+
+Strict TypeScript passed for the affected runtime, builder and new tests. Both
+Edge entrypoints (`ask-bob`, `bob-worker`) passed cached local Deno checks using
+the installed exact SDK declarations. The catalog generator `--check` and
+`git diff --check` passed. The SQL fixture proves the publication changes only
+four tool interfaces and `bob.tools`, is idempotent, and preserves all other
+definition content/identities, profiles and inactive policies.
+
+Documentation placement and final diff were reviewed manually using Archie's
+owner/State rules; no independent reviewer was run. No hosted database, model,
+CAD render, deployment or GitHub workflow was started. Both migration files
+remain release inputs under the [coordinated ordering](../supabase/README.md#construction-work-release).
+The installed Supabase CLI crashed before creating a migration; the SQL file
+therefore uses the actual UTC timestamp from that attempt. PGlite is not proof
+of concurrent PostgreSQL behavior or hosted PostgREST consumption. Those release
+checks and the owner's real delivery/cost comparison remain open.
+
 <a id="form-package5-release-2026-10-28"></a>
 ## FORM package 5 — hosted preparation and first comparison, 2026-10-28
 

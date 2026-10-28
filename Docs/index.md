@@ -6,6 +6,11 @@
 
 ## Start here
 
+- [Cost and retrieval analysis, 2026-10-28](archive/bob-cost-and-retrieval-audit-2026-10-28.md)
+  — dated findings behind the owner-approved [coherent construction operations](ask-bob-tools.md#coherent-construction-work).
+  Local implementation and paid/live acceptance are separate; [State](bob-delivery-flow.md#state)
+  owns release and comparison gates. Nano/Mini remains deferred.
+
 - [Bob cost corrections, 2026-10-28](foundation-verification.md#bob-cost-controls-2026-10-28)
   — approved six catalog-owned core tools, GPT-5.4 medium and same-construction
   source reconciliation; technical installation and live acceptance are separate.

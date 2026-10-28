@@ -149,7 +149,7 @@ export type ProjectAnswerOptions = {
   hasAccess: () => Promise<boolean>; previousResponseId?: string;
   writer?: ProjectWriter; context?: WorkingContext; deadline?: number; modelTimeoutMs?: number; unlimitedWork?: boolean;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;
-  onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string }) => void;
+  onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string; diagnostics?:import('./execution-metrics.ts').WorkDiagnostics }) => void;
   /** Names of the calls this model step will execute, before the first runs.
    * Called again with the same names when a checkpointed step resumes. */
   onToolBatch?: (names: string[]) => void;
@@ -435,7 +435,14 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         catch (error) { rethrowContinuation(error); observe('failed'); return { ok: false, error: toolFailureCode(error) } }
         observation.tool_calls++
         try { opts.onTool?.({ name: call.function.name, status: String(result?.status ?? 'returned'), step: step + 1, index, ms: Date.now() - began,
+          ...(result?.diagnostics?{diagnostics:result.diagnostics}:{}),
           ...(completionAware && typeof result?.validation?.code === 'string' ? { validation_code: result.validation.code } : {}) }) } catch { /* diagnostics only */ }
+        // Cache hits are worker-local telemetry. Their loss on resume must not
+        // change model/journal bytes for the same exact source result.
+        if (['work_read','work_change','work_check'].includes(result?.diagnostics?.operation)) {
+          const { diagnostics: _diagnostics, ...content } = result
+          result = content
+        }
         if (result?.status === 'denied') {
           // A refused record is not a lost project: only real loss of access ends the turn.
           if (result?.reason !== 'access' || !await opts.hasAccess()) { observe('failed'); return { ok: false, error: 'project_denied' } }

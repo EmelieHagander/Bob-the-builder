@@ -182,7 +182,7 @@ export function createBobToolSession(opts: {
     ...(opts.cadAssistant ? [
       ...(opts.cadAssistant.lifecycleTools??[]).map(spec=>({spec,version:1,gate:():ToolGate=>opts.cadAssistant!.lifecycleRemaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.cadAssistant!.lifecycle(spec.function.name,v)})),
       ...opts.cadAssistant.tools.map(spec => ({spec,version:3,gate:():ToolGate=>opts.cadAssistant!.remaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.cadAssistant!.consult(v)})),
-      {spec:SAVE_CAD_TOOL,version:1,waitingFor:opts.aiCatalog?.text('tools.waiting.cad-ready') ?? 'appears when design_project_cad returns a reviewed candidate',
+      {spec:SAVE_CAD_TOOL,version:1,readyContinuation:true,waitingFor:opts.aiCatalog?.text('tools.waiting.cad-ready') ?? 'appears when design_project_cad returns a reviewed candidate',
        gate:():ToolGate=>writeGate()!=='available'?writeGate():opts.cadAssistant!.candidate?'available':'missing_context',execute:async(v:unknown)=>{
         if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==1||typeof (v as any).request_quote!=='string')return {status:'invalid'}
         const ready=await opts.cadAssistant!.candidateForSave();if(ready.status!=='ready')return ready
@@ -197,7 +197,7 @@ export function createBobToolSession(opts: {
       execute: (v: unknown) => opts.planAssistant!.consult(spec.function.name, v),
     })),
     ...(opts.planAssistant ? [{
-      spec:SAVE_COMPILED_PLAN_TOOL,version:1,waitingFor:opts.aiCatalog?.text('tools.waiting.plan-ready') ?? 'appears when compile_project_plan or edit_project_plan returns proposal_ready',
+      spec:SAVE_COMPILED_PLAN_TOOL,version:1,readyContinuation:true,waitingFor:opts.aiCatalog?.text('tools.waiting.plan-ready') ?? 'appears when compile_project_plan or edit_project_plan returns proposal_ready',
       gate:():ToolGate=>writeGate()!=='available'?writeGate():opts.planAssistant!.canSave?'available':'missing_context',
       execute:async(v:unknown)=>{
         if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==1||typeof (v as any).request_quote!=='string') return {status:'invalid',saved:false}
@@ -209,6 +209,9 @@ export function createBobToolSession(opts: {
     }] : []),
   ]
   return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions, ...(opts.preloadTools ? { preloadTools: opts.preloadTools } : {}),
+    ...(opts.aiCatalog?.manifest().definitions.some(row=>row.prompt_key==='bob.tools'&&row.metadata?.construction_work_version===1)?{
+      autoLoadReady:true,followups:opts.aiCatalog.definition('bob.tools','tool_contract').definition.operation_followups as import('./session.ts').ToolFollowup[],
+    }:{}),
     selectiveTools: opts.aiCatalog?.manifest().definitions.some(row => row.prompt_key === 'bob.workflows' && row.metadata?.selective_tools_version === 1),
     ...(opts.aiCatalog ? { catalogTool: (name, parameters) => opts.aiCatalog!.tool(name, parameters),
       ...(opts.toolInstructions === 'lazy' ? { catalogColleagues: (name: string) => bobColleagues(opts.aiCatalog!, [name]),

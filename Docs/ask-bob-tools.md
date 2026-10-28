@@ -43,6 +43,37 @@ manifests keep their original loading behavior. An invalid, duplicate, unknown
 or oversized core list fails before a model request. Installation and measured
 limits belong to [verification](foundation-verification.md#bob-cost-controls-2026-10-28).
 
+<a id="coherent-construction-work"></a>
+### Coherent construction operations — local implementation, 2026-10-28
+
+New manifests pin `construction_work_version=1` on four tool interfaces and
+`bob.tools`. Agent instructions, model profiles and the six core names remain
+unchanged. Existing manifests retain their original schemas and execution path.
+These are source changes awaiting the [coordinated release](../supabase/README.md#construction-work-release).
+
+| Operation | Existing interface and new behavior |
+|---|---|
+| Read | `read_construction_draft(view: work)` gathers exact editable inputs, the affected dependency closure and governing sources. `work_kind` selects parameters, parts or inspection; `step_id` names an approved Step or is null. The [context owner](ask-bob-context.md#construction-work-context) defines coverage and caching. |
+| Change | `change_construction_parameters` or `edit_construction_parts` accepts several related deltas plus an optional server-bound `solution_edit`. The [writer owner](ask-bob-writes.md#construction-work-write) defines atomicity, source reconciliation and recovery. |
+| Check | `check_construction_draft` returns bounded complete findings for the receipt revision and optionally reopens saved output categories. The [Artifact owner](artifacts.md#construction-work-check) defines evidence and limits. |
+
+The pinned catalog's `operation_followups` loads the part editor after a parts
+work read, the checker after a successful save, and the drawing tool after a
+concept-ready check. A reviewed CAD candidate or compiled plan proposal also
+exposes its save tool when that existing gate is ready. Loading offers a tool on
+the next model request; it does not execute it or bypass policy, version,
+authorization or the current request's offered-tool fence. Descriptions and
+schemas still come from the pinned catalog. Checkpoints retain loaded tools.
+This adds no seventh permanent core tool or new model helper.
+
+The existing post-write completion review remains. A synthetic main-loop proof
+therefore uses three domain tool calls and five main requests: read, change,
+check, candidate answer and completion review. It is proof of accessible
+capability, not that a live model will always choose this sequence or cost.
+Content-free `work_*` diagnostics record operation, reuse, revisions, coverage
+and requested output count through the existing metrics owner; no source text
+or record identities are added to those diagnostics.
+
 **Historical drawing continuation preload — 2026-10-20.** A turn whose thread has a pending
 drawing request (the same `pending()` read the turn already makes) starts with
 the construction-drawing core loaded: `read_construction_draft`,

@@ -9,6 +9,7 @@ import {createBobJournal,stableJsonValue} from '../supabase/functions/_shared/bo
 import {projectSchema} from './support/project-schema.ts'
 import {createAiCatalogSession,type AiCatalogManifest} from '../supabase/functions/_shared/ai-catalog.ts'
 import {catalogFixture,preConstructionViewsCatalogFixture} from './support/ai-catalog-fixture.ts'
+import {withConstructionWorkRead} from '../supabase/functions/_shared/construction-work.ts'
 import {parameterPlan} from './support/cad-parameter-fixture.ts'
 import {compileCadParameters} from '../supabase/functions/_shared/cad-parameters.ts'
 
@@ -221,7 +222,7 @@ test('published view contract matches migrated catalog and old pinned manifests 
    assert.deepEqual(catalog.definition(key).definition,catalogFixture().definition(key).definition,key)
    assert.deepEqual(catalog.definition(key).metadata,catalogFixture().definition(key).metadata,key)
   }
-  assert.deepEqual(catalog.tool('read_construction_draft').function.parameters,CONSTRUCTION_EVIDENCE_VIEW_TOOL.function.parameters)
+  assert.deepEqual(catalog.tool('read_construction_draft').function.parameters,withConstructionWorkRead(CONSTRUCTION_EVIDENCE_VIEW_TOOL).function.parameters)
   assert(!('view'in preConstructionViewsCatalogFixture().tool('read_construction_draft').function.parameters.properties))
   assert.equal(catalog.definition('tools.read_construction_draft').metadata.construction_view_version,1)
  }finally{await pg.close()}

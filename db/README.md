@@ -1576,6 +1576,31 @@ returns the same facts. Rollout: apply; nothing reads it until the Bob runtime
 calls it. Rollback: drop both functions.
 
 <a id="form-concept-persistence--source-only-2026-10-26"></a>
+<a id="construction-work-authority"></a>
+## Coherent Construction authority — local implementation, 2026-10-28
+
+`20261028194859_construction_work_operations.sql` adds no project tables or
+parallel source register. `read_bob_selected_edit_context` is an authenticated
+invoker/RLS read of the exact selected scope using the ordinary editable
+Solution snapshot. `prepare_construction_work` and the private commit delegate
+to existing claimed-turn, content, Construction and receipt validators under
+an empty search path. The public commit is an invoker wrapper. Anonymous and
+service-role execution is revoked; the actual caller must have project access
+and the live write claim. Direct private invocation retains the same checks.
+
+A project lock serializes the compound commit. Existing domain writes enforce
+expected heads, exact selection and source constraints. Both domain revisions
+and their ledger rows roll back together on failure. The combined operation
+key compares intent before head validation for exact recovery, while a changed
+intent conflicts. Serialization/deadlock errors leave the RPC as `PT409`,
+preserving the existing PostgREST retry boundary. Bounded part edits also gain
+the parameter editor's explicit target reconciliation; old payloads remain valid.
+
+[Writer semantics](../Docs/ask-bob-writes.md#construction-work-write),
+[release order](../supabase/README.md#construction-work-release) and
+[isolated verification](../Docs/foundation-verification.md#construction-work-2026-10-28)
+own the adjacent details. No hosted migration is implied by this source entry.
+
 ## FORM check observations — source only, 2026-10-27
 
 Migration `20261027101807` adds `bob_private.construction_observations`, an

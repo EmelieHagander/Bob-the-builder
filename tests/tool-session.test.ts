@@ -22,6 +22,42 @@ function fixture(rows = [policy('read_records', true), policy('draw_shape', fals
 }
 const names = (specs: { function: { name: string } }[]) => specs.map(s => s.function.name)
 
+test('catalog followups load the next action without a manual round and retain every authority fence',async()=>{
+ const f=fixture();let status='saved'
+ f.definitions[0].execute=async()=>({status,work_operation:'parts'})
+ const options={definitions:f.definitions,readPolicy:async()=>({phase:'design',tools:f.rows}),toolInstructions:'lazy' as const,selectiveTools:true,
+  preloadTools:()=>['read_records'],followups:[{after_tool:'read_records',statuses:['saved'],when:{field:'work_operation',equals:'parts'},tools:['draw_shape']}]}
+ const s=createToolSession(options)
+ assert.deepEqual(names(await s.prepare()),['read_records','describe_tool'])
+ status='conflict';await s.execute('read_records',{})
+ assert(!names(await s.prepare()).includes('draw_shape'),'a failed operation does not load its successor')
+ status='saved';await s.execute('read_records',{})
+ assert.equal((await s.execute('draw_shape',{})).status,'not_offered','the existing model batch cannot acquire new authority')
+ const restored=createToolSession(options);restored.restoreState(s.exportState())
+ assert(names(await restored.prepare()).includes('draw_shape'))
+ f.setGate('draw_shape','not_allowed');assert.equal((await restored.execute('draw_shape',{})).status,'not_allowed')
+ f.setGate('draw_shape','available');f.rows[1].active=false
+ assert(!names(await restored.prepare()).includes('draw_shape'))
+ f.rows[1].active=true;f.rows[1].schema_version=2
+ await restored.execute('read_records',{})
+ assert(!names(await restored.prepare()).includes('draw_shape'),'policy/handler mismatch cannot be loaded')
+ assert.equal(f.writes,0)
+})
+
+test('only concrete ready candidates automatically expose their continuation, with catalog descriptions',async()=>{
+ const f=fixture();f.definitions[1].readyContinuation=true;f.setGate('draw_shape','missing_context')
+ const s=createToolSession({definitions:f.definitions,readPolicy:async()=>({phase:'design',tools:f.rows}),toolInstructions:'lazy',
+  selectiveTools:true,autoLoadReady:true,preloadTools:()=>['read_records'],catalogTool:(name,parameters)=>({type:'function',function:{name,description:'CATALOG '+name,parameters}})})
+ assert.deepEqual(names(await s.prepare()),['read_records','describe_tool'])
+ f.setGate('draw_shape','available')
+ assert.equal((await s.execute('draw_shape',{})).status,'not_offered')
+ const tools=await s.prepare()
+ assert(names(tools).includes('draw_shape'));assert(!names(tools).includes('analyse_materials'),'waitingFor text is not an always-loaded grant')
+ assert.equal(tools.find(t=>t.function.name==='draw_shape')!.function.description,'CATALOG draw_shape')
+ f.setGate('draw_shape','missing_context');assert.equal((await s.execute('draw_shape',{})).status,'missing_context')
+ assert(!names(await s.prepare()).includes('draw_shape'))
+})
+
 test('on-demand manuals preserve purpose, implementation boundaries, schemas and direct invocation', async () => {
   const f = fixture(), compact = f.make('on_demand')
   const before = await f.session.prepare(), after = await compact.prepare()
