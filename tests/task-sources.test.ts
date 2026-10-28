@@ -14,7 +14,7 @@ const intent={version:1,purpose:'construction',summary:'Bunk bed',references:[{i
  choices:[{id:'drawers',question:'Drawers under the bed?',status:'deferred',deferral:{reason:'Owner decides later'}},{id:'wood',question:'Pine or birch?',status:'resolved',selected_direction:'Pine'}],
  alignment:{status:'aligned',basis:'Discussed'}}
 const target=(area:string|null)=>({id:area??'project',revision:3,solution_id:solution,solution_revision:2,design_intent:intent})
-const plan={id:project,status:'approved',revision:7,steps:[{id:'step1',title:'Build frame',state:'active',tasks:[],requirements:[{id:'req1',type:'artifact',resolution:'open'},{id:'req2',type:'measurement',resolution:'satisfied'}]}]}
+const plan={id:project,status:'approved',revision:7,steps:[{id:'step1',title:'Build frame',state:'active',tasks:[],requirements:[{id:'req1',type:'artifact',resolution:'open'},{id:'req2',type:'measurement',resolution:'waived'}]}]}
 const overview=(over:any={})=>({status:'ok',projectId:project,artifact_id:artifact,revision:4,current_revision:4,source_state:'current',archived:false,area_id:null,target_revision:3,
  form:{verification:'unverified',solution_id:solution,solution_revision:2,mapped_components:3,pending_components:1,pending_choices:0},counts:{open_questions:2},...over})
 function readers(opts:{targets?:Record<string,any>;planStatus?:string;construction?:(q:any)=>any}={}){

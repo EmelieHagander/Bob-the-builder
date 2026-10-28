@@ -63,7 +63,7 @@ export async function readTaskSources(raw: unknown, readers: {
   const choices = rows(intent?.choices)
   solution = { status: selected.solution_id ? 'ok' : 'no_selected_solution', target_id: selected.id, target_revision: selected.revision ?? null, inherited_from_project: inherited,
    solution_id: selected.solution_id ?? null, solution_revision: selected.solution_revision ?? null,
-   alignment: intent?.alignment?.status ?? null,
+   summary: typeof intent?.summary === 'string' ? intent.summary : null, alignment: intent?.alignment?.status ?? null,
    features: rows(intent?.features).map(f => ({ id: f.id, description: f.description, basis: f.basis, source_ref: f.source_ref ?? null })),
    choices: choices.map(c => ({ id: c.id, question: c.question, status: c.status, ...(c.selected_direction ? { selected_direction: c.selected_direction } : {}), ...(c.deferral ? { deferral: c.deferral } : {}) })),
    references: rows(intent?.references).map(r => ({ image_id: r.image_id, role: r.role })),

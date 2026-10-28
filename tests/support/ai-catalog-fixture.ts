@@ -204,6 +204,12 @@ for(const migration of migrations){
   seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-completion-gate-v1'}})
   versions.set(addition.key,1)
  }
+ // Inert FORM 3 source reader: role disabled, tool policy inactive.
+ const sourceReader=source.match(/\$source_reader_additions\$([\s\S]+?)\$source_reader_additions\$/)
+ if(sourceReader)for(const addition of JSON.parse(sourceReader[1])){
+  seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'source-reader-v1'}})
+  versions.set(addition.key,1)
+ }
  // Inert publication: the role stays disabled until a later, approved enablement.
  const targetedCadReview=source.match(/\$targeted_cad_review_additions\$([\s\S]+?)\$targeted_cad_review_additions\$/)
  if(targetedCadReview)for(const {metadata,...addition} of JSON.parse(targetedCadReview[1])){
@@ -417,7 +423,7 @@ for(const migration of migrations){
  }
  // Read tools published from the read_construction_changes template: FORM 4b
  // delivery readback (#357) and the inactive FORM 3 task source packet.
- for(const [tag,publication,shelfLabel] of [['construction_delivery','construction-delivery-v1','Drawings and CAD'],['task_sources','task-sources-v1','Project records and memory']] as const){
+ for(const [tag,publication,shelfLabel] of [['construction_delivery','construction-delivery-v1','Drawings and CAD'],['task_sources','task-sources-v1','Project records and memory'],['source_findings','source-reader-v1','Project records and memory']] as const){
   const contracts=source.match(new RegExp('\\$'+tag+'_contracts\\$([\\s\\S]+?)\\$'+tag+'_contracts\\$'))
   if(!contracts)continue
   const policies=JSON.parse(source.match(new RegExp('\\$'+tag+'_policies\\$([\\s\\S]+?)\\$'+tag+'_policies\\$'))![1])

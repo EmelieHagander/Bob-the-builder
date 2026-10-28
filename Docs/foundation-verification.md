@@ -1,5 +1,27 @@
 # Foundation verification and rollout
 
+<a id="source-reader-2026-10-28"></a>
+## Small source reader — local verification, 2026-10-28
+
+The [source reader](ask-bob-context.md#source-reader) is published inactive by
+a generated migration. It is not applied to the hosted project.
+
+**Passed locally:**
+
+- **5 tests** in `source-reader.test.ts`:
+  - Only verbatim-quoted findings with known refs survive. An unmatched quote and an invented ref are reported as rejected, and conflicts with unknown refs are dropped.
+  - Exact pins, limits and the checkpointed call counter are returned.
+  - These cases make no model call: a disabled role, an exhausted budget, no text sources, and a denied read.
+  - A failed or malformed model reply returns `unavailable` without findings.
+  - Truncation is reported.
+  - The publication is disabled and generated from code. An enabled role resolves the runtime schema.
+  - The tool is offered only when both the role and the policy are enabled.
+- The 6 `task-sources.test.ts` tests still pass with the added Solution summary.
+- READER_BLAST_PLACEHOLDER
+- `deno check` of `ask-bob` and `bob-worker` and the app `tsc` check pass.
+
+No hosted change, role or policy activation, model call or CAD job was run.
+
 <a id="task-sources-2026-10-28"></a>
 ## Task source packet reader — local verification, 2026-10-28
 

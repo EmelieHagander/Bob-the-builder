@@ -177,6 +177,7 @@ export type ProjectAnswerOptions = {
   currentView?: CurrentView; validateCurrentView?: () => Promise<boolean>; getCurrentViewEvidence?: () => CurrentView;
   checkpoint?: BobAnswerCheckpoint;
   knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; workRecords?: WorkRecords; planLinks?: PlanLinks; buildingScope?: BuildingScope; planAssistant?: ReturnType<typeof createPlanAssistant>;
+  sourceReader?: import('./source-reader.ts').SourceReader;
 }
 export async function runProjectAnswer(opts: ProjectAnswerOptions): Promise<ProjectAnswer> {
   const saved = opts.checkpoint?.state

@@ -24,6 +24,7 @@ import type { MaterialCatalogReader } from '../material-catalog.ts'
 import { SAVE_COMPILED_PLAN_TOOL, type createPlanAssistant } from '../plan-assistant.ts'
 import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicyReader, type ToolInstructions } from './session.ts'
 import { TASK_SOURCES_TOOL, readTaskSources } from '../task-sources.ts'
+import { SOURCE_FINDINGS_TOOL, sourceReaderEnabled, type SourceReader } from '../source-reader.ts'
 
 /** Toolbox shelves, in presentation order. A shelf is orientation for Bob, not
  * authority; unknown tools land on the last shelf. */
@@ -71,6 +72,8 @@ export function createBobToolSession(opts: {
   toolInstructions?: ToolInstructions;
   knowledgeReader?: KnowledgeReader;
   context?: WorkingContext; projectContext?: ProjectContext; readPolicy: ToolPolicyReader;
+  /** FORM small source reader; offered only where a publication enables it. */
+  sourceReader?: SourceReader;
   operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; workRecords?: WorkRecords; planLinks?: PlanLinks; buildingScope?: BuildingScope; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }) {
   const writeGate = (): ToolGate => !opts.writer ? 'not_allowed' : opts.writer.uncertain ? 'write_uncertain' : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted'
@@ -151,6 +154,11 @@ export function createBobToolSession(opts: {
     ...(opts.aiCatalog?.manifest().definitions.some(row => row.prompt_key === 'tools.read_task_sources') ? [{ spec: TASK_SOURCES_TOOL, version: 1,
       gate: (): ToolGate => opts.lookup.remaining >= 2 ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => readTaskSources(v, { projectId: opts.lookup.exportState().projectId, search: q => opts.lookup.search(q as any),
+        construction: opts.constructionTools ? q => opts.constructionTools!.execute('read_construction_draft', q) : undefined }) }] : []),
+    // Registered only with an enabled reader role; its policy gates the offer.
+    ...(opts.sourceReader && opts.aiCatalog && sourceReaderEnabled(opts.aiCatalog) ? [{ spec: SOURCE_FINDINGS_TOOL, version: 1,
+      gate: (): ToolGate => opts.sourceReader!.remaining > 0 && opts.lookup.remaining >= 2 ? 'available' : 'budget_exhausted',
+      execute: (v: unknown) => opts.sourceReader!.execute(v, { search: q => opts.lookup.search(q as any),
         construction: opts.constructionTools ? q => opts.constructionTools!.execute('read_construction_draft', q) : undefined }) }] : []),
     ...(opts.catalogReader?.tools ?? []).map(spec => ({ spec, version: 1,
       gate: (): ToolGate => opts.catalogReader!.remaining > 0 ? 'available' : 'budget_exhausted',

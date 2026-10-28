@@ -1002,5 +1002,14 @@
     "always_load": false,
     "preload_phases": [],
     "active": false
+  },
+  {
+    "name": "read_source_findings",
+    "description": "Ask a small reader one concrete question about the exact text sources of the next piece of work.",
+    "how_to": "Pass the same Area, Step and exact Construction revision as read_task_sources, plus one concrete question. Each finding names its source and quotes it verbatim; code discards findings whose quote is not in that source. Findings are interpretation, not project truth: reopen the originals before relying on one. Private conversation and images are not read.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": false
   }
 ]

@@ -573,9 +573,10 @@ utslaget. En godkänd granskning återanvänds över turer inom samma
 ritningsbegäran, utan modellanrop när inget den bygger på har ändrats.
 Dagens fulla Rita-granskning gäller oförändrad. Första kodvarianten av det
 allmänna [underlagspaketet](ask-bob-context.md#read-task-sources),
-`read_task_sources`, är publicerad avstängd. Återstår:
-
-- den lilla läsarmodellen för ostrukturerade källor
+`read_task_sources`, och den lilla
+[läsarmodellen](ask-bob-context.md#source-reader), `read_source_findings`, är
+publicerade avstängda. Läsarens fynd måste citera källan ordagrant och
+kontrolleras i kod. Återstår:
 - jämförande acceptans före aktivering CI-workflowets fokuserade
 manuella läge (`scope=saved-delivery`) kör tre skärmbredder; hela CI-jobbet körs
 endast med `scope=full`. 4b:s versionsbundna
