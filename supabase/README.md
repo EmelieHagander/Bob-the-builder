@@ -136,11 +136,13 @@ server code. A database definition cannot introduce an executable tool or grant
 access to a project.
 
 <a id="construction-work-release"></a>
-### Coherent Construction release — local preparation, 2026-10-28
+### Coherent Construction release — installed, 2026-10-28
 
-The owner approved local implementation without agent prompt edits. Follow
-the normal explicit release authorization before changing hosted runtime.
-Apply `20261028194859_construction_work_operations.sql`, deploy both complete
+The owner approved implementation without agent prompt edits and subsequently
+requested merge and testing. The [installation evidence](../Docs/foundation-verification.md#construction-work-2026-10-28)
+records the merged source, hosted versions, catalog comparison and rollback IDs;
+live model/cost acceptance remains open. Installation order: apply
+`20261028194859_construction_work_operations.sql`, deploy both complete
 `bob-worker` and `ask-bob` closures with their existing authentication, then
 activate `20261028200450_ai_construction_work_catalog.sql`. The generated
 publication changes only the read/parameter/part/check interfaces and

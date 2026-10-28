@@ -1079,7 +1079,7 @@ Drawing cards show source freshness independently of saved Concept/Measured/Buil
 Drawing request cards show shared Task/current Plan requirement names, responsibility and destination Step, with relevant measurement/Task/Step links, waiting/reconnect/budget states and the exact saved drawing link. Shared labels come only from canonical project records, never private conversation briefs or assessments. A missing canonical label is reported rather than replaced with private prose. Ask Bob actions reuse the current project's drawer and surface focus. See [the context owner](ask-bob-context.md#implemented-scope-and-remaining-target) for that boundary and [State](bob-delivery-flow.md#state) for remaining acceptance gates and [verification](foundation-verification.md#p3-hosted-technical-release--2026-09-30) for release proof.
 
 <a id="construction-work-check"></a>
-## Complete work checks — local implementation, 2026-10-28
+## Complete work checks — installed, 2026-10-28
 
 For new `construction_work_version=1` manifests, `check_construction_draft`
 returns all reported technical findings in one response when they fit its

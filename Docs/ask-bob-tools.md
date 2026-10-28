@@ -44,12 +44,13 @@ or oversized core list fails before a model request. Installation and measured
 limits belong to [verification](foundation-verification.md#bob-cost-controls-2026-10-28).
 
 <a id="coherent-construction-work"></a>
-### Coherent construction operations — local implementation, 2026-10-28
+### Coherent construction operations — installed, 2026-10-28
 
 New manifests pin `construction_work_version=1` on four tool interfaces and
 `bob.tools`. Agent instructions, model profiles and the six core names remain
 unchanged. Existing manifests retain their original schemas and execution path.
-These are source changes awaiting the [coordinated release](../supabase/README.md#construction-work-release).
+The [release evidence](foundation-verification.md#construction-work-2026-10-28)
+records installation and the remaining live delivery/cost acceptance.
 
 | Operation | Existing interface and new behavior |
 |---|---|

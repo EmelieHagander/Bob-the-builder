@@ -556,17 +556,14 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — granskning och release av sammanhängande operationer (2026-10-28):**
-ägaren har godkänt lokal implementation av de fyra förslagen från
-[helhetsanalysen](archive/bob-cost-and-retrieval-audit-2026-10-28.md), med
-agentprompterna orörda. Kvar är granskning, merge och uttryckligen beställd
-Supabase-installation enligt [releaseordningen](../supabase/README.md#construction-work-release).
-[Verktygsägaren](ask-bob-tools.md#coherent-construction-work) beskriver det
-implementerade läs-/ändrings-/kontrollflödet; [lokala bevis](foundation-verification.md#construction-work-2026-10-28)
-skiljer det från driftsättning och faktisk modellförmåga. Nano/Mini är uppskjutet.
-Efter godkänd installation behövs ett separat beställt modellprov av samma
-konstruktionsidentitet, ursprungliga krav, färdig leverans och faktisk kostnad.
-De tidigare betalda jämförelseproven ligger fortsatt pausade.
+**Aktivt nästa steg — ägarens prov av sammanhängande operationer (2026-10-28):**
+testa det installerade [läs-/ändrings-/kontrollflödet](ask-bob-tools.md#coherent-construction-work)
+med ett nytt meddelande till Bob. Kontrollera samma konstruktionsidentitet,
+ursprungliga krav, färdig leverans, faktiska verktygsanrop och kostnad.
+[Releasebevisen](foundation-verification.md#construction-work-2026-10-28) skiljer
+merge och teknisk installation från återstående modellförmåga. Agentprompterna
+är orörda och Nano/Mini är uppskjutet. De tidigare betalda jämförelseproven är
+fortsatt pausade; ett automatiserat modellprov behöver en egen beställning.
 
 Källavstämning på samma Construction, sex katalogägda kärnverktyg och
 GPT-5.4 medium är tekniskt installerade och återlästa och ligger kvar.
