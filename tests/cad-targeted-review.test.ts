@@ -18,14 +18,12 @@ const today=new Date().toISOString().slice(0,10)
 const feature={id:'f1',description:'Leave clear space in front of the drawer',basis:'user_request' as const,source_ref:null}
 const resultId='cs_'+'a'.repeat(64)
 
-/** A publication carrying the prepared role; production catalogs do not yet. */
+/** The inert publication with its role enabled, as the later approved
+ * enablement would publish it. The published role is disabled. */
 function targetedCatalog(){
  return catalogFixture(snapshot=>{
-  const role=snapshot.definitions.find(row=>row.prompt_key==='role.cad-reviewer')!
-  const schema=snapshot.definitions.find(row=>row.prompt_key==='schema.bob_cad_review')!
-  snapshot.definitions.push({...structuredClone(role),id:role.id+':targeted',prompt_key:CAD_TARGETED_REVIEW_ROLE,payload_hash:role.payload_hash+':targeted'})
-  snapshot.definitions.push({...structuredClone(schema),id:schema.id+':targeted',prompt_key:'schema.bob_cad_targeted_review',payload_hash:schema.payload_hash+':targeted',
-   definition:structuredClone(CAD_TARGETED_REVIEW_SCHEMA) as any,metadata:{...schema.metadata,migrated_from:'supabase/functions/_shared/cad-targeted-review.ts',label:'schema.bob_cad_targeted_review'}})
+  const role=snapshot.definitions.find(row=>row.prompt_key===CAD_TARGETED_REVIEW_ROLE)!
+  role.definition={...role.definition,enabled:true};role.id+=':enabled';role.payload_hash+=':enabled'
  })
 }
 
@@ -87,7 +85,7 @@ function runtime(opts:{targeted:boolean;stored?:(draft:any)=>any;readerFails?:bo
 }
 const request={request_id:null,brief:'Draw this exact bracket',handoff,artifact_id:artifact,area_id:null,component_id:null,step_id:null}
 
-test('without the prepared catalog role the full Rita review runs unchanged and stored checks are not read',async()=>{
+test('with the role absent or published disabled the full Rita review runs unchanged and stored checks are not read',async()=>{
  const f=runtime({targeted:false,stored:draft=>observation(draft,'failed')})
  const result=await f.assistant.consult(request)
  assert.equal(result.status,'ready',JSON.stringify(result))
@@ -169,10 +167,25 @@ test('packet keeps every requirement and the strict parser rejects omissions and
  assert.equal(parseTargetedCadReview({...base,verdict:'pass'},packet),null,'the model has no verdict field')
 })
 
-test('the CAD runtime includes the targeted reviewer only when a publication contains it',()=>{
- const legacy=drawingCatalogConfiguration(catalogFixture().manifest()),targeted=drawingCatalogConfiguration(targetedCatalog().manifest())
- assert(!legacy.definitions.some(row=>row.key===CAD_TARGETED_REVIEW_ROLE||row.key==='schema.bob_cad_targeted_review'))
- assert(targeted.definitions.some(row=>row.key===CAD_TARGETED_REVIEW_ROLE))
- assert(targeted.definitions.some(row=>row.key==='schema.bob_cad_targeted_review'))
- assert.deepEqual(targeted.definitions.filter(row=>!row.key.includes('targeted')),legacy.definitions)
+test('the inert publication changes no CAD runtime identity; only enabling the role adds it',()=>{
+ const published=catalogFixture().manifest()
+ const before=structuredClone(published);before.definitions=before.definitions.filter(row=>row.metadata.publication!=='targeted-cad-review-v1')
+ assert.equal(published.definitions.filter(row=>row.metadata.publication==='targeted-cad-review-v1').length,5)
+ assert.equal(published.definitions.find(row=>row.prompt_key===CAD_TARGETED_REVIEW_ROLE)!.definition.enabled,false)
+ assert.deepEqual(drawingCatalogConfiguration(published),drawingCatalogConfiguration(before),'applying the publication cannot restart a paid drawing attempt')
+ const enabled=drawingCatalogConfiguration(targetedCatalog().manifest()).definitions.map(row=>row.key)
+ for(const key of [CAD_TARGETED_REVIEW_ROLE,'schema.bob_cad_targeted_review','agent-contract.targeted-cad-review','targeted-cad-review.contract','targeted-cad-review.persona'])assert(enabled.includes(key),key)
+ assert.deepEqual(enabled.filter(key=>!key.includes('targeted')),drawingCatalogConfiguration(before).definitions.map(row=>row.key))
+})
+
+test('the published schema is the runtime schema and binds exact requirement keys',()=>{
+ const session=targetedCatalog()
+ assert.deepEqual(session.definition('schema.bob_cad_targeted_review').definition,CAD_TARGETED_REVIEW_SCHEMA)
+ const bound=session.schema('bob_cad_targeted_review',{requirement_ids:['a','intent_f1']}).schema as any
+ assert.deepEqual(bound.properties.requirements.required,['a','intent_f1'])
+ assert.deepEqual(Object.keys(bound.properties.requirements.properties.a.properties).sort(),['correction','evidence','status'])
+ const role=session.role('cad-targeted-reviewer')
+ assert.equal(role.definition.definition.response_schema_key,'schema.bob_cad_targeted_review')
+ assert.match(session.text('targeted-cad-review.contract'),/You do not decide the verdict/)
+ assert.throws(()=>catalogFixture().role('cad-targeted-reviewer'),/ai_function_disabled/,'published disabled')
 })

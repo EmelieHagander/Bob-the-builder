@@ -6,9 +6,14 @@ import type { ConstructionObservation } from './construction-views.ts'
 /** Prepared replacement for the mandatory full CAD review (FORM package 3).
  * Code assembles exact requirements, deterministic findings and evidence; a
  * reviewer answers concrete questions; code computes the verdict. The path is
- * inactive until the pinned catalog contains CAD_TARGETED_REVIEW_ROLE. */
+ * inactive until the pinned catalog enables CAD_TARGETED_REVIEW_ROLE. */
 export const CAD_TARGETED_REVIEW_VERSION = 'cad-targeted-review-v1'
 export const CAD_TARGETED_REVIEW_ROLE = 'role.cad-targeted-reviewer'
+/** The role is published disabled; only an explicitly enabled pinned role
+ * selects this path. A disabled or absent role keeps the full review. */
+export function targetedReviewEnabled(manifest: { definitions: { prompt_key: string; definition: Record<string, any> }[] }) {
+ return manifest.definitions.some(row => row.prompt_key === CAD_TARGETED_REVIEW_ROLE && row.definition?.enabled === true)
+}
 
 type Row = Record<string, any>
 type Status = 'met' | 'unresolved' | 'failed'

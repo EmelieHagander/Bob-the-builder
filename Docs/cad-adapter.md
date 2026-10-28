@@ -40,10 +40,11 @@ released. This documentation does not bypass it or publish a new catalog/runtime
 <a id="targeted-cad-review"></a>
 ## Targeted CAD review — prepared, inactive, 2026-10-28
 
-**Source implementation; not published or activated.** This is the first step of
+**Source and inert catalog definitions; not enabled.** This is the first step of
 FORM package 3 toward replacing the mandatory full Rita review. It runs only when
-the pinned catalog contains `role.cad-targeted-reviewer`. No catalog publication
-contains it yet, so every current turn keeps today's full review with an unchanged
+the pinned catalog contains `role.cad-targeted-reviewer` with `enabled: true`.
+The [catalog publication](../supabase/README.md#targeted-cad-review-publication)
+adds the role disabled, so every turn keeps today's full review with an unchanged
 call sequence, input and save gate. `cad-targeted-review.ts` owns the contract.
 
 When active, the gate keeps every check that runs before review today. These
@@ -75,15 +76,15 @@ records `basis: {mode: targeted, version, packet}`. The existing
 `reviewed_candidate` commitment, SQL save fences and Step-link receipts are
 unchanged.
 
-The existing `cad-reviewer` function switch governs both forms. When a publication
-adds the role and its `bob_cad_targeted_review` schema, the
-CAD runtime fingerprint (`drawing-runtime.ts`) includes them, so older in-flight
-requests do not mix review contracts.
+The existing `cad-reviewer` function switch governs both forms. Only an enabled
+role adds it, its contract and its `bob_cad_targeted_review` schema to the CAD
+runtime fingerprint (`drawing-runtime.ts`). Older in-flight requests therefore do
+not mix review contracts. The disabled publication changes no fingerprint.
 
 **Not yet covered:** these remain for the next increments:
 
 - reuse of an accepted review across turns for an unchanged accepted model
-- the catalog role, prompt and schema publication
+- the owner-approved publication that enables the role
 - the general [task source packet](ask-bob-context.md#task-source-packet)
 - the [comparative acceptance](bob-delivery-flow.md#form-next) that must precede activation and removal of the full review
 

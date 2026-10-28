@@ -833,6 +833,32 @@ validators capable of reading already saved concept revisions and paused jobs.
 Do not delete saved models or weaken construction validation to roll back UI.
 `build-ai-form-concept-catalog.ts --check` verifies publication against source.
 
+<a id="targeted-cad-review-publication"></a>
+## Targeted CAD review catalog — inert publication, 2026-10-28
+
+`20261028080000_ai_targeted_cad_review_catalog.sql` adds five definitions:
+
+- `role.cad-targeted-reviewer` (Rita in targeted mode), published with **`enabled: false`**
+- its persona and contract
+- `agent-contract.targeted-cad-review`
+- `schema.bob_cad_targeted_review`, the runtime `CAD_TARGETED_REVIEW_SCHEMA` with dynamic requirement keys
+
+The role reuses Rita's mini/high profile, routing, calculator tools and the
+`cad-reviewer` function settings. There are no new settings, models or tools.
+
+**Applying it changes no behaviour.** Current runtimes use the targeted path,
+and include it in the CAD runtime identity, only when the pinned role is
+enabled. The keys avoid the `cad-` prefix, so older runtimes also keep an
+identical CAD runtime fingerprint. No running review, request or paid retry
+restarts. No Edge deploy is required for this publication. It is not yet
+applied to the hosted project.
+
+Enabling the role is a separate, owner-approved publication after the
+[comparative acceptance](../Docs/bob-delivery-flow.md#form-next). The
+[CAD owner](../Docs/cad-adapter.md#targeted-cad-review) owns the contract. To
+withdraw the inert definitions, retire them in a new activation; immutable
+versions stay readable.
+
 <a id="form-delivery-readback-release"></a>
 ## Construction delivery reader — installed release, 2026-10-27
 
