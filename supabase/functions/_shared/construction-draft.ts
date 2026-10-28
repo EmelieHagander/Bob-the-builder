@@ -574,7 +574,9 @@ export type ConstructionTools=ReturnType<typeof createConstructionTools>
 /** The drawing desk uses the same checker and exact caller reads, without
  * trusting a model's earlier assertion that a checkpoint passed. */
 export async function checkedConstructionForDrawing(opts:Parameters<typeof createConstructionTools>[0],id:string,revision:number) {
- const tools=createConstructionTools({...opts,constructionViews:false,formEvidence:false})
+ // CAD performs a fresh whole-construction check, not the interactive work
+ // packet/output interface. Keep its schema and arguments on the same contract.
+ const tools=createConstructionTools({...opts,constructionViews:false,formEvidence:false,coherentWork:false})
  const checked=await tools.execute('check_construction_draft',{artifact_id:id,revision})
  if(checked.status!=='checked'||!checked.concept_ready)return {status:checked.status==='checked'?'needs_data':checked.status,checked}
  const draft=await opts.read(id,revision,null) as Record<string,any>

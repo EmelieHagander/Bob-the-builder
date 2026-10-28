@@ -1,0 +1,802 @@
+{
+  "run": {
+    "runId": 40784608141,
+    "jobId": 123154557672,
+    "commit": "9afdb053cbcae107e45485500171c17577bdb056",
+    "scenario": "box",
+    "config": "baseline",
+    "url": "https://github.com/EmelieHagander/Bob-the-builder/actions/runs/40784608141"
+  },
+  "project_id": "p_816e966c4610410eaf5c49a10a412d17",
+  "manifest_id": "c2c77a1f-21de-4221-b6a1-11fbdd602ccd",
+  "accounting": {
+    "delivery": [
+      {
+        "step": "concept",
+        "counts": {
+          "steps": 33,
+          "nudges": 0,
+          "end_reason": "answered",
+          "tool_calls": 49,
+          "cad_renders": 0,
+          "cad_reviews": 0,
+          "output_phase": "final_answer",
+          "saved_records": 8,
+          "deferred_calls": 0,
+          "cad_consultations": 0,
+          "cad_review_passed": false,
+          "completion_checks": 1,
+          "uncertain_resends": 0,
+          "reused_model_calls": 0,
+          "cad_input_corrections": 0,
+          "cad_review_rejections": 0,
+          "cad_review_unavailable": 0
+        },
+        "status": "partial",
+        "duration_ms": 614438
+      },
+      {
+        "step": "width_change",
+        "counts": {
+          "steps": 8,
+          "nudges": 0,
+          "end_reason": "answered",
+          "tool_calls": 10,
+          "cad_renders": 0,
+          "cad_reviews": 0,
+          "output_phase": "final_answer",
+          "saved_records": 3,
+          "deferred_calls": 0,
+          "cad_consultations": 0,
+          "cad_review_passed": false,
+          "completion_checks": 1,
+          "uncertain_resends": 0,
+          "reused_model_calls": 0,
+          "cad_input_corrections": 0,
+          "cad_review_rejections": 0,
+          "cad_review_unavailable": 0
+        },
+        "status": "saved",
+        "duration_ms": 158912
+      },
+      {
+        "step": "final_drawing",
+        "counts": {
+          "steps": 13,
+          "nudges": 0,
+          "end_reason": "answered",
+          "tool_calls": 17,
+          "cad_renders": 0,
+          "cad_reviews": 0,
+          "output_phase": "final_answer",
+          "saved_records": 0,
+          "deferred_calls": 0,
+          "cad_consultations": 0,
+          "cad_review_passed": false,
+          "completion_checks": 1,
+          "uncertain_resends": 0,
+          "reused_model_calls": 0,
+          "cad_input_corrections": 0,
+          "cad_review_rejections": 0,
+          "cad_review_unavailable": 0
+        },
+        "status": "partial",
+        "duration_ms": 317534
+      }
+    ],
+    "per_role": [
+      {
+        "role": "ask-bob",
+        "step": "final_drawing",
+        "calls": 16,
+        "model": "gpt-5.4",
+        "cost_usd": 0.59632,
+        "reasoning_effort": "medium"
+      },
+      {
+        "role": "ask-bob",
+        "step": "width_change",
+        "calls": 8,
+        "model": "gpt-5.4",
+        "cost_usd": 0.264087,
+        "reasoning_effort": "medium"
+      },
+      {
+        "role": "ask-bob",
+        "step": "concept",
+        "calls": 33,
+        "model": "gpt-5.4",
+        "cost_usd": 1.089639,
+        "reasoning_effort": "medium"
+      },
+      {
+        "role": "other",
+        "step": "final_drawing",
+        "calls": 1,
+        "model": "gpt-5.4-mini",
+        "cost_usd": 0.00169,
+        "reasoning_effort": "low"
+      }
+    ],
+    "per_step": [
+      {
+        "step": "final_drawing",
+        "turn_id": "73b37db9-c4e1-43af-b684-3d50148649f4",
+        "elapsed_ms": 317534,
+        "model_calls": 17,
+        "input_tokens": 374814,
+        "resent_calls": 0,
+        "output_tokens": 15677,
+        "known_cost_usd": 0.59801,
+        "unpriced_calls": 0,
+        "domain_tool_calls": 17,
+        "failed_model_calls": 0,
+        "cached_input_tokens": 253440,
+        "model_returned_tool_calls": 20
+      },
+      {
+        "step": "concept",
+        "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45",
+        "elapsed_ms": 614438,
+        "model_calls": 33,
+        "input_tokens": 860870,
+        "resent_calls": 0,
+        "output_tokens": 28697,
+        "known_cost_usd": 1.089639,
+        "unpriced_calls": 0,
+        "domain_tool_calls": 49,
+        "failed_model_calls": 0,
+        "cached_input_tokens": 663552,
+        "model_returned_tool_calls": 49
+      },
+      {
+        "step": "width_change",
+        "turn_id": "975bfad3-dc12-4cf2-a182-13b44f9ce66f",
+        "elapsed_ms": 158912,
+        "model_calls": 8,
+        "input_tokens": 148488,
+        "resent_calls": 0,
+        "output_tokens": 5837,
+        "known_cost_usd": 0.264087,
+        "unpriced_calls": 0,
+        "domain_tool_calls": 10,
+        "failed_model_calls": 0,
+        "cached_input_tokens": 86528,
+        "model_returned_tool_calls": 10
+      }
+    ],
+    "returned_tools": [
+      {
+        "n": 3,
+        "step": "width_change",
+        "tool": "read_construction_draft"
+      },
+      {
+        "n": 1,
+        "step": "width_change",
+        "tool": "search_project_data"
+      },
+      {
+        "n": 1,
+        "step": "concept",
+        "tool": "save_catalog_definition"
+      },
+      {
+        "n": 2,
+        "step": "width_change",
+        "tool": "describe_tool"
+      },
+      {
+        "n": 5,
+        "step": "concept",
+        "tool": "save_construction_draft"
+      },
+      {
+        "n": 1,
+        "step": "width_change",
+        "tool": "read_construction_changes"
+      },
+      {
+        "n": 4,
+        "step": "final_drawing",
+        "tool": "design_project_cad"
+      },
+      {
+        "n": 1,
+        "step": "width_change",
+        "tool": "read_solution_context"
+      },
+      {
+        "n": 4,
+        "step": "concept",
+        "tool": "read_construction_draft"
+      },
+      {
+        "n": 1,
+        "step": "concept",
+        "tool": "select_solution_alternative"
+      },
+      {
+        "n": 9,
+        "step": "concept",
+        "tool": "search_material_catalog"
+      },
+      {
+        "n": 6,
+        "step": "final_drawing",
+        "tool": "describe_tool"
+      },
+      {
+        "n": 1,
+        "step": "width_change",
+        "tool": "change_construction_parameters"
+      },
+      {
+        "n": 3,
+        "step": "concept",
+        "tool": "edit_project_record"
+      },
+      {
+        "n": 2,
+        "step": "final_drawing",
+        "tool": "check_construction_draft"
+      },
+      {
+        "n": 1,
+        "step": "width_change",
+        "tool": "check_construction_draft"
+      },
+      {
+        "n": 3,
+        "step": "final_drawing",
+        "tool": "get_work_history"
+      },
+      {
+        "n": 1,
+        "step": "concept",
+        "tool": "read_material_catalog"
+      },
+      {
+        "n": 2,
+        "step": "concept",
+        "tool": "read_project_edit_context"
+      },
+      {
+        "n": 9,
+        "step": "concept",
+        "tool": "describe_tool"
+      },
+      {
+        "n": 7,
+        "step": "concept",
+        "tool": "search_project_data"
+      },
+      {
+        "n": 1,
+        "step": "concept",
+        "tool": "create_solution_alternative"
+      },
+      {
+        "n": 1,
+        "step": "final_drawing",
+        "tool": "read_drawing_requests"
+      },
+      {
+        "n": 2,
+        "step": "final_drawing",
+        "tool": "read_construction_draft"
+      },
+      {
+        "n": 5,
+        "step": "concept",
+        "tool": "read_solution_context"
+      },
+      {
+        "n": 1,
+        "step": "final_drawing",
+        "tool": "read_drawing_request_work"
+      },
+      {
+        "n": 1,
+        "step": "concept",
+        "tool": "check_construction_draft"
+      },
+      {
+        "n": 1,
+        "step": "final_drawing",
+        "tool": "read_solution_context"
+      }
+    ]
+  },
+  "totals": {
+    "model_calls": 58,
+    "domain_tool_calls": 76,
+    "model_returned_tool_calls": 79,
+    "known_cost_usd": 1.951736,
+    "input_tokens": 1384172,
+    "output_tokens": 50211,
+    "cached_input_tokens": 1003520,
+    "elapsed_ms": 1090884,
+    "unpriced_calls": 0,
+    "failed_model_calls": 0,
+    "resent_calls": 0
+  },
+  "tool_events": [
+    {
+      "n": 9,
+      "tool": "describe_tool",
+      "status": "ok",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 1,
+      "tool": "search_project_data",
+      "status": "unavailable",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 3,
+      "tool": "search_project_data",
+      "status": "empty",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 4,
+      "tool": "read_construction_draft",
+      "status": "ok",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 5,
+      "tool": "read_solution_context",
+      "status": "ok",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 4,
+      "tool": "search_material_catalog",
+      "status": "invalid",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 3,
+      "tool": "search_material_catalog",
+      "status": "ok",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 2,
+      "tool": "search_material_catalog",
+      "status": "empty",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 1,
+      "tool": "read_material_catalog",
+      "status": "ok",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 1,
+      "tool": "create_solution_alternative",
+      "status": "saved",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 1,
+      "tool": "select_solution_alternative",
+      "status": "saved",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 3,
+      "tool": "search_project_data",
+      "status": "ok",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 1,
+      "tool": "save_catalog_definition",
+      "status": "saved",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 2,
+      "tool": "save_construction_draft",
+      "status": "needs_data",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 2,
+      "tool": "read_project_edit_context",
+      "status": "ok",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 1,
+      "tool": "edit_project_record",
+      "status": "invalid",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 2,
+      "tool": "edit_project_record",
+      "status": "saved",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 2,
+      "tool": "save_construction_draft",
+      "status": "invalid",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 1,
+      "tool": "save_construction_draft",
+      "status": "saved",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 1,
+      "tool": "check_construction_draft",
+      "status": "checked",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45"
+    },
+    {
+      "n": 6,
+      "tool": "describe_tool",
+      "status": "ok",
+      "turn_id": "73b37db9-c4e1-43af-b684-3d50148649f4"
+    },
+    {
+      "n": 2,
+      "tool": "read_construction_draft",
+      "status": "ok",
+      "turn_id": "73b37db9-c4e1-43af-b684-3d50148649f4"
+    },
+    {
+      "n": 2,
+      "tool": "check_construction_draft",
+      "status": "checked",
+      "turn_id": "73b37db9-c4e1-43af-b684-3d50148649f4"
+    },
+    {
+      "n": 1,
+      "tool": "read_solution_context",
+      "status": "ok",
+      "turn_id": "73b37db9-c4e1-43af-b684-3d50148649f4"
+    },
+    {
+      "n": 3,
+      "tool": "design_project_cad",
+      "status": "unavailable",
+      "turn_id": "73b37db9-c4e1-43af-b684-3d50148649f4"
+    },
+    {
+      "n": 1,
+      "tool": "design_project_cad",
+      "status": "existing_request",
+      "turn_id": "73b37db9-c4e1-43af-b684-3d50148649f4"
+    },
+    {
+      "n": 1,
+      "tool": "read_drawing_requests",
+      "status": "returned",
+      "turn_id": "73b37db9-c4e1-43af-b684-3d50148649f4"
+    },
+    {
+      "n": 1,
+      "tool": "read_drawing_request_work",
+      "status": "returned",
+      "turn_id": "73b37db9-c4e1-43af-b684-3d50148649f4"
+    },
+    {
+      "n": 3,
+      "tool": "read_construction_draft",
+      "status": "ok",
+      "turn_id": "975bfad3-dc12-4cf2-a182-13b44f9ce66f"
+    },
+    {
+      "n": 1,
+      "tool": "read_solution_context",
+      "status": "ok",
+      "turn_id": "975bfad3-dc12-4cf2-a182-13b44f9ce66f"
+    },
+    {
+      "n": 1,
+      "tool": "search_project_data",
+      "status": "empty",
+      "turn_id": "975bfad3-dc12-4cf2-a182-13b44f9ce66f"
+    },
+    {
+      "n": 2,
+      "tool": "describe_tool",
+      "status": "ok",
+      "turn_id": "975bfad3-dc12-4cf2-a182-13b44f9ce66f"
+    },
+    {
+      "n": 1,
+      "tool": "change_construction_parameters",
+      "status": "saved",
+      "turn_id": "975bfad3-dc12-4cf2-a182-13b44f9ce66f"
+    },
+    {
+      "n": 1,
+      "tool": "read_construction_changes",
+      "status": "complete",
+      "turn_id": "975bfad3-dc12-4cf2-a182-13b44f9ce66f"
+    },
+    {
+      "n": 1,
+      "tool": "check_construction_draft",
+      "status": "checked",
+      "turn_id": "975bfad3-dc12-4cf2-a182-13b44f9ce66f"
+    }
+  ],
+  "jobs": [
+    {
+      "id": "467425da-0aed-4873-bdb0-0b22da884617",
+      "status": "completed",
+      "turn_id": "31d106a9-d6ba-4e69-8483-8c2d06056a45",
+      "created_at": "2026-10-28T23:04:07.185155+00:00",
+      "updated_at": "2026-10-28T23:14:26.787998+00:00",
+      "ai_catalog_manifest_id": "c2c77a1f-21de-4221-b6a1-11fbdd602ccd"
+    },
+    {
+      "id": "4130c317-4678-4d64-9163-b6dd5c0ed785",
+      "status": "completed",
+      "turn_id": "975bfad3-dc12-4cf2-a182-13b44f9ce66f",
+      "created_at": "2026-10-28T23:14:31.411417+00:00",
+      "updated_at": "2026-10-28T23:17:14.159934+00:00",
+      "ai_catalog_manifest_id": "c2c77a1f-21de-4221-b6a1-11fbdd602ccd"
+    },
+    {
+      "id": "2049bafc-4f2c-4128-8d75-532ac4f43edb",
+      "status": "completed",
+      "turn_id": "73b37db9-c4e1-43af-b684-3d50148649f4",
+      "created_at": "2026-10-28T23:17:19.593573+00:00",
+      "updated_at": "2026-10-28T23:22:39.730192+00:00",
+      "ai_catalog_manifest_id": "c2c77a1f-21de-4221-b6a1-11fbdd602ccd"
+    }
+  ],
+  "cad_errors": [
+    {
+      "event_message": "[CAD design failed] {\"request_id\":\"f82e0d60-737c-4138-9a9a-9366b9d70879\",\"renders\":0,\"error\":\"Error: Cannot read properties of undefined (reading 'enum')\",\"at\":[\"at Object.run (file:///var/tmp/sb-compile-edge-runtime/source/supabase/functions/_shared/bob-job-journal.ts:326:28)\",\"at eventLoopTick (ext:core/01_core.js:175:7)\",\"at async refreshConstruction (file:///var/tmp/sb-compile-edge-runtime/source/supabase/functions/_shared/cad-assistant.ts:1093:29)\"]}\n",
+      "source": "function_logs",
+      "timestamp": "2026-10-28T23:19:52.643000"
+    },
+    {
+      "event_message": "[CAD design failed] {\"request_id\":\"f82e0d60-737c-4138-9a9a-9366b9d70879\",\"renders\":0,\"error\":\"Error: Cannot read properties of undefined (reading 'enum')\",\"at\":[\"at Object.run (file:///var/tmp/sb-compile-edge-runtime/source/supabase/functions/_shared/bob-job-journal.ts:326:28)\",\"at eventLoopTick (ext:core/01_core.js:175:7)\",\"at async refreshConstruction (file:///var/tmp/sb-compile-edge-runtime/source/supabase/functions/_shared/cad-assistant.ts:1093:29)\"]}\n",
+      "source": "function_logs",
+      "timestamp": "2026-10-28T23:18:30.087000"
+    },
+    {
+      "event_message": "[CAD design failed] {\"request_id\":\"f82e0d60-737c-4138-9a9a-9366b9d70879\",\"renders\":0,\"error\":\"Error: Cannot read properties of undefined (reading 'enum')\",\"at\":[\"at Object.run (file:///var/tmp/sb-compile-edge-runtime/source/supabase/functions/_shared/bob-job-journal.ts:326:28)\",\"at eventLoopTick (ext:core/01_core.js:175:7)\",\"at async refreshConstruction (file:///var/tmp/sb-compile-edge-runtime/source/supabase/functions/_shared/cad-assistant.ts:1093:29)\"]}\n",
+      "source": "function_logs",
+      "timestamp": "2026-10-28T23:20:36.901000"
+    }
+  ],
+  "acceptance": {
+    "scenario": "box",
+    "config": "baseline",
+    "commit": "9afdb053cbcae107e45485500171c17577bdb056",
+    "startedAt": "2026-10-28T23:04:01.094Z",
+    "projectId": "p_816e966c4610410eaf5c49a10a412d17",
+    "turns": [
+      {
+        "step": "concept",
+        "turn": "31d106a9-d6ba-4e69-8483-8c2d06056a45",
+        "jobId": "467425da-0aed-4873-bdb0-0b22da884617",
+        "status": "completed",
+        "wallMs": 624544
+      },
+      {
+        "step": "width_change",
+        "turn": "975bfad3-dc12-4cf2-a182-13b44f9ce66f",
+        "jobId": "4130c317-4678-4d64-9163-b6dd5c0ed785",
+        "status": "completed",
+        "wallMs": 167359
+      },
+      {
+        "step": "final_drawing",
+        "turn": "73b37db9-c4e1-43af-b684-3d50148649f4",
+        "jobId": "2049bafc-4f2c-4128-8d75-532ac4f43edb",
+        "status": "completed",
+        "wallMs": 326079
+      }
+    ],
+    "checks": [
+      {
+        "step": "concept",
+        "name": "one_construction",
+        "passed": true,
+        "detail": {
+          "count": 1
+        }
+      },
+      {
+        "step": "concept",
+        "name": "construction_concept_ready",
+        "passed": true
+      },
+      {
+        "step": "concept",
+        "name": "five_parts",
+        "passed": true,
+        "detail": {
+          "parts": 5
+        }
+      },
+      {
+        "step": "concept",
+        "name": "initial_size",
+        "passed": true,
+        "detail": [
+          400,
+          300,
+          250
+        ]
+      },
+      {
+        "step": "width_change",
+        "name": "one_construction",
+        "passed": true,
+        "detail": {
+          "count": 1
+        }
+      },
+      {
+        "step": "width_change",
+        "name": "construction_concept_ready",
+        "passed": true
+      },
+      {
+        "step": "width_change",
+        "name": "same_construction_artifact",
+        "passed": true,
+        "detail": {
+          "before": "12794dd4-772a-429b-b3e7-edbbeaa58230",
+          "after": "12794dd4-772a-429b-b3e7-edbbeaa58230"
+        }
+      },
+      {
+        "step": "width_change",
+        "name": "new_construction_revision",
+        "passed": true,
+        "detail": {
+          "before": 1,
+          "after": 2
+        }
+      },
+      {
+        "step": "width_change",
+        "name": "changed_size",
+        "passed": true,
+        "detail": [
+          500,
+          300,
+          250
+        ]
+      },
+      {
+        "step": "final_drawing",
+        "name": "one_construction",
+        "passed": true,
+        "detail": {
+          "count": 1
+        }
+      },
+      {
+        "step": "final_drawing",
+        "name": "construction_concept_ready",
+        "passed": true
+      },
+      {
+        "step": "final_drawing",
+        "name": "same_construction_artifact",
+        "passed": true,
+        "detail": {
+          "before": "12794dd4-772a-429b-b3e7-edbbeaa58230",
+          "after": "12794dd4-772a-429b-b3e7-edbbeaa58230"
+        }
+      },
+      {
+        "step": "final_drawing",
+        "name": "construction_revision_preserved",
+        "passed": true,
+        "detail": {
+          "before": 2,
+          "after": 2
+        }
+      },
+      {
+        "step": "final_drawing",
+        "name": "five_parts",
+        "passed": true,
+        "detail": {
+          "parts": 5
+        }
+      },
+      {
+        "step": "final_drawing",
+        "name": "changed_size",
+        "passed": true,
+        "detail": [
+          500,
+          300,
+          250
+        ]
+      },
+      {
+        "step": "final_drawing",
+        "name": "drawing_saved_for_latest_revision",
+        "passed": false,
+        "detail": {
+          "construction_revision": 2,
+          "drawings": 0,
+          "current_drawings": 0
+        }
+      }
+    ],
+    "observations": [
+      {
+        "step": "concept",
+        "name": "construction",
+        "value": {
+          "artifact_id": "12794dd4-772a-429b-b3e7-edbbeaa58230",
+          "revision": 1,
+          "parts": 5,
+          "joints": 8,
+          "size_mm": [
+            400,
+            300,
+            250
+          ]
+        }
+      },
+      {
+        "step": "width_change",
+        "name": "construction",
+        "value": {
+          "artifact_id": "12794dd4-772a-429b-b3e7-edbbeaa58230",
+          "revision": 2,
+          "parts": 5,
+          "joints": 8,
+          "size_mm": [
+            500,
+            300,
+            250
+          ]
+        }
+      },
+      {
+        "step": "final_drawing",
+        "name": "construction",
+        "value": {
+          "artifact_id": "12794dd4-772a-429b-b3e7-edbbeaa58230",
+          "revision": 2,
+          "parts": 5,
+          "joints": 8,
+          "size_mm": [
+            500,
+            300,
+            250
+          ]
+        }
+      },
+      {
+        "step": "final_drawing",
+        "name": "drawings",
+        "value": []
+      }
+    ],
+    "passed": false,
+    "notProven": [
+      "user judgement of 2D/3D form",
+      "fabrication or strength",
+      "cost (read with scripts/report-form-acceptance.sql)"
+    ],
+    "error": "Acceptance checks failed after final_drawing; later paid steps were not submitted.",
+    "finishedAt": "2026-10-28T23:22:49.698Z"
+  }
+}
