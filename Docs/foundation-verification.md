@@ -1,5 +1,49 @@
 # Foundation verification and rollout
 
+<a id="source-reader-2026-10-28"></a>
+## Small source reader — local verification, 2026-10-28
+
+The [source reader](ask-bob-context.md#source-reader) is published inactive by
+a generated migration. It is not applied to the hosted project.
+
+**Passed locally:**
+
+- **5 tests** in `source-reader.test.ts`:
+  - Only verbatim-quoted findings with known refs survive. An unmatched quote and an invented ref are reported as rejected, and conflicts with unknown refs are dropped.
+  - Exact pins, limits and the checkpointed call counter are returned.
+  - These cases make no model call: a disabled role, an exhausted budget, no text sources, and a denied read.
+  - A failed or malformed model reply returns `unavailable` without findings.
+  - Truncation is reported.
+  - The publication is disabled and generated from code. An enabled role resolves the runtime schema.
+  - The tool is offered only when both the role and the policy are enabled.
+- The 6 `task-sources.test.ts` tests still pass with the added Solution summary.
+- **1075 of 1075** tests pass across the 143 test files that use the catalog
+  fixtures, the seed, the tool session, the turn runtime or the CAD runtime.
+- `deno check` of `ask-bob` and `bob-worker` and the app `tsc` check pass.
+
+No hosted change, role or policy activation, model call or CAD job was run.
+
+<a id="task-sources-2026-10-28"></a>
+## Task source packet reader — local verification, 2026-10-28
+
+[`read_task_sources`](ask-bob-context.md#read-task-sources) is published inactive
+by a generated migration. It is not applied to the hosted project.
+
+**Passed locally:**
+
+- **6 tests** in `task-sources.test.ts`:
+  - One read returns the selected Solution, the Step requirements and the Construction state, with exact revisions, open items, pointers and a fixed read order.
+  - An Area inherits the project target and says so.
+  - A stale or differently pinned Construction gives four distinct conflicts.
+  - Denial stops the read. Other failures, a missing Step, a missing target and invalid input stay explicit.
+  - The policy published `active: false` is not offered and returns `unavailable`. With the policy enabled it is offered and executes.
+  - The migration matches `build-ai-task-sources-catalog.ts --check`.
+- **1051 of 1051** tests pass across the 139 test files that use the catalog
+  fixtures, the seed, the tool session, the database catalog or the CAD runtime.
+- `deno check` of `ask-bob` and `bob-worker` passes with the same local import map.
+
+No hosted change, policy activation, model call or CAD job was run.
+
 <a id="targeted-cad-review-reuse-2026-10-28"></a>
 ## Targeted CAD review reuse and budget binding — local verification, 2026-10-28
 

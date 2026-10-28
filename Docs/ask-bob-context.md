@@ -175,7 +175,63 @@ selection. A reader summary is not an independent verdict. Preserve the current
 member/project/private thread boundaries. Project-wide reuse must never expose
 private conversation text. The first such assessment packet, for the
 [targeted CAD review](cad-adapter.md#targeted-cad-review), is prepared in source
-but inactive. The general packet assembly and reader role above are not implemented.
+but inactive.
+
+<a id="read-task-sources"></a>
+**First code-only packet — `read_task_sources`, published inactive 2026-10-28.**
+One read of the governing evidence for the next piece of work. Input: the Area
+(or null for the project), the plan Step (or null) and the exact saved
+Construction revision (or null). It composes existing caller-scoped readers in a
+fixed order: `search_project_data` for the target and the approved plan, then
+the `read_construction_draft` overview. It returns:
+
+- **Solution:** the selected Solution id and revision, target revision, features
+  and choices with their status. An Area without its own target inherits the
+  project target, and the result says so.
+- **Step:** the requested Step's completion requirements with the plan revision.
+- **Construction:** revision, current revision, source state, archive state,
+  Solution pin, FORM scope counts and open-question count. A pointer to the
+  notes view gives the exact pending components.
+- **Open items:** deferred or open choices, open requirements, pending FORM
+  scope and open questions.
+- **Conflicts:** `construction_not_current`, `construction_solution_differs`,
+  `construction_target_differs` and `construction_scope_differs`.
+- **Coverage** per source, and **reopen pointers**.
+
+A denial stops the whole read. Other failures remain explicit coverage gaps. It
+interprets no free text and reads no private conversation or images. It writes
+nothing. The policy is published `active: false`, so Bob is not offered the tool
+until an owner-approved enablement after the
+[comparative acceptance](bob-delivery-flow.md#form-next).
+
+<a id="source-reader"></a>
+**Small source reader — `read_source_findings`, published inactive 2026-10-28.**
+It takes the same scope as `read_task_sources` plus one concrete question.
+
+- **Sources.** Code selects the exact text sources of that packet: the Solution
+  summary, features and choices, the Step requirements, and the Construction
+  description and open questions from the notes view. A single source is capped
+  at 2,000 characters and all sources together at 24,000; anything cut is
+  reported as truncated.
+- **The model.** The small role `source-reader` (Läsaren, the existing mini/low
+  context profile) answers with findings. Each finding names a source ref, a
+  kind and a certainty, and quotes the source verbatim.
+- **Code checks.** Code keeps a finding only when its quote occurs in the named
+  source, ignoring whitespace and case. Findings with unknown refs or unmatched
+  quotes are returned as `rejected_findings` with the reason. A model therefore
+  cannot invent a source or replace an exact value with prose. Conflicts must
+  name offered sources.
+- **Output.** Findings are marked `model_interpretation`. The result carries the
+  exact Solution, Step and Construction pins plus coverage.
+- **Limits.** It writes nothing and approves nothing. It reads no private
+  conversation or images. When there is no text source, it makes no model call.
+  At most three calls per turn are allowed, and that count is checkpointed.
+
+The role is published `enabled: false` and the policy `active: false`. The tool
+registers only with an enabled role, so neither Bob nor the model can use it
+before the [profile comparison](bob-delivery-flow.md#form-next). Durable
+cross-turn reuse of findings is not implemented; within a turn, the job journal
+replays an identical call.
 
 Reuse the observation for the same source identities/revisions, question and
 scope and interpretation contract; recheck current authorization before reuse

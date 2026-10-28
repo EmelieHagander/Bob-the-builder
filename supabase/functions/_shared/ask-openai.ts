@@ -53,6 +53,7 @@ import { createJournalledMemoryEmbedder } from './bob-memory-embedding.ts'
 import { createBobConversationStore, type BobTurnClaim } from './bob-conversation.ts'
 import { createProjectLookup, type LookupInput } from './project-lookup.ts'
 import { createPlanAssistant } from './plan-assistant.ts'
+import { createSourceReader } from './source-reader.ts'
 import type { BobAnswerState, ProjectAnswer, TurnProgress } from './project-answer.ts'
 import { compactReceipts, createProjectWriter } from './project-write.ts'
 import { prepareWorkingContext, restoreWorkingContext, type WorkingContextSession, type WorkingContextState } from './bob-working-context.ts'
@@ -620,6 +621,8 @@ export async function answerWithOpenAi(opts: {
       return {...data,source_state:article.data.source_state==='current'&&!article.data.catalog_changed?'current':'changed'}
     },
   }):undefined
+  // FORM package 3 reader: inactive until a publication enables its role and policy.
+  const sourceReader = createSourceReader({ aiCatalog, userId: opts.userId, projectId: opts.projectId, hasAccess, deadline, callModel })
   const planAssistant = createPlanAssistant({ unlimitedWork,
     aiCatalog,calculator,
     ...(contextStrategy ? { registerContextSurface: registerSpecialistContextSurface } : {}),
@@ -830,11 +833,11 @@ export async function answerWithOpenAi(opts: {
   const components: Record<string, { exportState(): unknown; restoreState(state: any): void } | undefined> = {
     projectLookup, groundingLookup, writer, projectContext, currentViewGuard, knowledgeReader, operationalReader,
     catalogReader, constructionTools, calculator, planAssistant, cadAssistant, imageTools, recordReader,
-    planLinks, buildingScope, workRecords, solutionActions, projectEdits, requestStore, modelBudget, contextContinuation, metrics,
+    planLinks, buildingScope, workRecords, solutionActions, projectEdits, requestStore, modelBudget, contextContinuation, metrics, sourceReader,
   }
   // Added after earlier checkpoints were written: absent state restores as an
   // unused component, and unused state is not saved.
-  const optionalComponents = new Set(['buildingScope'])
+  const optionalComponents = new Set(['buildingScope', 'sourceReader'])
   if (restart) {
     const state = restart.state
     if (state.version !== 1 || !state.answer || !state.components || typeof state.components !== 'object'
@@ -866,7 +869,7 @@ export async function answerWithOpenAi(opts: {
     save: async (answer: BobAnswerState) => {
       await checkpoint.commit({ version: 1, answer,
         components: Object.fromEntries(Object.entries(components).filter((entry): entry is [string, NonNullable<typeof entry[1]>] => !!entry[1])
-          .filter(([name]) => name !== 'buildingScope' || buildingScope.used).map(([name, component]) => [name, component.exportState()])),
+          .filter(([name]) => (name !== 'buildingScope' || buildingScope.used) && (name !== 'sourceReader' || sourceReader.used > 0)).map(([name, component]) => [name, component.exportState()])),
         workingContext: workingContext?.exportState(),
         runtime: { imageRefs: [...imageRefs], mainContextEpoch, priorDrawingAttemptUncertain, memoryEmbeddingOutcomeUncertain },
       })
@@ -898,7 +901,7 @@ export async function answerWithOpenAi(opts: {
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
-    ...opts, unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, calculator, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
+    ...opts, unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
     readToolPolicy,
     checkpoint: answerCheckpoint,
     // Older in-flight journals keep their recorded post-rollover requests.

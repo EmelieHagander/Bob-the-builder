@@ -51,8 +51,8 @@ test('prompt publication is slimmer, keeps exact routes and authority; only the 
  const method=(c:any)=>c.definition('bob.workflows').definition.workflows.find((w:any)=>w.name==='workflow_construction_drawing').method
  assert(countContextTokens(method(current))<countContextTokens(method(old)))
  for(const name of ['change_construction_parameters','change_construction_roles','edit_construction_parts','save_construction_draft','plan_cad_pieces','read_construction_draft','check_construction_draft','design_project_cad'])assert(method(current).includes(name),name)
- // Later building-scope, model-feedback and construction-delivery publications only append these tools.
- const scoped=['read_building_scope','change_building_scope','read_model_feedback','record_model_feedback','read_construction_delivery'],withoutScope=(d:any)=>({...d,catalog:d.catalog.filter((p:any)=>!scoped.includes(p.name)),
+ // Later building-scope, model-feedback, construction-delivery, task-source and source-reader publications only append these tools.
+ const scoped=['read_building_scope','change_building_scope','read_model_feedback','record_model_feedback','read_construction_delivery','read_task_sources','read_source_findings'],withoutScope=(d:any)=>({...d,catalog:d.catalog.filter((p:any)=>!scoped.includes(p.name)),
   contract_keys:d.contract_keys.filter((k:string)=>!scoped.some(n=>k==='tools.'+n)),shelves:d.shelves.map((s:any)=>({...s,tools:s.tools.filter((n:string)=>!scoped.includes(n))}))})
  assert.deepEqual(withoutScope(current.definition('bob.tools').definition),old.definition('bob.tools').definition)
  const {publication:_p,complete_request_version,result_reference_version,turn_usd_stop:_stop,...contract}=current.definition('agent-contract.ask-bob').metadata

@@ -993,5 +993,23 @@
     "always_load": false,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "read_task_sources",
+    "description": "Collect the governing sources for the next piece of work in one read.",
+    "how_to": "Pass the Area (null for the whole project), the plan Step whose completion requirements apply (or null) and the exact saved Construction revision when one exists. Returns the selected Solution's features and open choices, the Step requirements and the Construction's freshness, Solution pin and FORM scope, with exact revisions, open items, conflicts and coverage. Reopen originals through the returned pointers. Private conversation, images and the meaning of free text are not included; nothing here approves a design, measurement or fabrication.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": false
+  },
+  {
+    "name": "read_source_findings",
+    "description": "Ask a small reader one concrete question about the exact text sources of the next piece of work.",
+    "how_to": "Pass the same Area, Step and exact Construction revision as read_task_sources, plus one concrete question. Each finding names its source and quotes it verbatim; code discards findings whose quote is not in that source. Findings are interpretation, not project truth: reopen the originals before relying on one. Private conversation and images are not read.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": false
   }
 ]
