@@ -574,13 +574,15 @@ sökning på hela ord med hemmalager `null` när inget registrerats; utelämnade
 egenskaper gör en definition ofullständig. [Ändringar och releaseordning](foundation-verification.md#follow-ups-2026-10-29).
 Därefter kör ägaren lådprovet.
 
-**Planerat, inte byggt — materialtabellerna före första skrivväg (uppföljning 1):**
-den [fristående granskningen](archive/material-tables-review-2026-10-29.md)
-kräver behörighet bara för Bob-projektdeltagare, inget läckage från privata
-definitioner, versionerade kopplingar, en ägare per mått, hemmalager med
-historik, entydiga enheter och några småfel, innan Bobs nya material blir
-delade och ogranskade. Två ägarbeslut återstår: om projektlager pekar på
-hemmalager, och att bara specifikationen delas.
+**Förberett, ej migrerat — materialtabellerna och första skrivvägen (uppföljning 1):**
+efter den [fristående granskningen](archive/material-tables-review-2026-10-29.md):
+behörighet bara för Bob-projektdeltagare, inget läckage från privata
+definitioner, länkar som följer aktuell revision och passar definitionen,
+hemmalager med historik, projektlager som pekar på hemmalager utan att lova mer
+än som finns, entydiga priser och några småfel. Bobs nya material delas som
+ogranskade specifikationer, bara mått och material. [Databas](../db/README.md#material-hardening),
+[katalog](material-catalog.md#shared-specs). Bara migreringar, ingen
+driftsättning av funktioner. Därefter lådprovet.
 
 **Installerat — normaliserad materialmodell (ägarbeslut 2026-10-29):**
 standardmaterial, storlekar, alias, kombination (= Bobs materialdefinition),

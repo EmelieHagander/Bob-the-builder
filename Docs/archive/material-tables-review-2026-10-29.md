@@ -3,7 +3,8 @@
 > experiments and source. Owners: [material catalog](../material-catalog.md),
 > [database](../../db/README.md#material-model). Follow-ups: B1 and S5/S9 were
 > corrected before application ([verification](../foundation-verification.md#follow-ups-2026-10-29));
-> the rest is planned in [State](../bob-delivery-flow.md#state). Scratch scripts it
+> B2, S1–S4, S7, S8 and M5 are prepared in [follow-up 1](../foundation-verification.md#follow-up-1-2026-10-29);
+> S6, M2 and the household/store/price part of S9 remain open. Scratch scripts it
 > names (`exp1.mts` …) were not kept.
 
 # Material model review — 2026-10-29

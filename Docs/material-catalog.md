@@ -137,6 +137,23 @@ aliases) is generated from `scripts/data/standard-materials.json` into its own
 migration; the owner approved it and it was applied on 2026-10-29. It states no
 product, supplier, price or weight.
 
+<a id="shared-specs"></a>
+**Bob's new materials become shared, unreviewed specifications — prepared
+2026-10-29 (owner decision, follow-up 1), not applied.** The paid box run created
+12 mm plywood separately in four projects. Now every material Bob saves in a
+project is also linked to a shared standard material, created or reused,
+marked unreviewed. Only the specification is shared: the shared entry is named
+from the material category and the size (`Plywood 18 mm`, `Barrträ 45 × 95`),
+carries only dimensions and generic notes, and never Bob's name, aliases or
+notes, which stay in the project definition. A material is never guessed: 45 ×
+95 in softwood links to the generic `Barrträ` entry, not to the seeded C24 or
+pressure-treated timber, though it reuses the seeded 45 × 95 size. Unreviewed
+entries rank after reviewed ones in the lookup and say so. Incomplete
+definitions, parameterised or part-pinned ones, and tubes or dimensioned rolls
+(the size table cannot hold them) are not shared. [Database contract](../db/README.md#material-shared-specs);
+the [hardening](../db/README.md#material-hardening) the independent review asked
+for comes first.
+
 <a id="optional-dimensions"></a>
 **Every property may be left out — installed 2026-10-29 (owner decision;
 [evidence](foundation-verification.md#follow-ups-install-2026-10-29)).** Materials state different things: gravel has a material and a weight

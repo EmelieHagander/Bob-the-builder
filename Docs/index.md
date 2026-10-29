@@ -17,7 +17,8 @@
   [controlled completion, exact lookup and write state are installed](foundation-verification.md#controlled-completion-2026-10-29);
   [the seven remaining causes are closed and installed](foundation-verification.md#open-issues-closed-2026-10-29).
   [Owner follow-ups before the next paid run are installed](foundation-verification.md#follow-ups-2026-10-29), and an
-  [independent material-table review](archive/material-tables-review-2026-10-29.md) shapes follow-up 1.
+  [independent material-table review](archive/material-tables-review-2026-10-29.md) shaped
+  [follow-up 1, prepared](foundation-verification.md#follow-up-1-2026-10-29).
   [State](bob-delivery-flow.md#state) owns the next release
   and remaining acceptance. The retrieval helper remains deferred.
 

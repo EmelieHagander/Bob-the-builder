@@ -272,6 +272,54 @@ decision). `20261029210000_optional_catalog_dimensions.sql` patches
 profile `bulk` revision 1 (all optional) and category `mineral.aggregate`.
 Rationale and consumers: [material catalog](../Docs/material-catalog.md#optional-dimensions).
 
+<a id="material-hardening"></a>
+**Hardening before the first write path — prepared 2026-10-29, not applied**
+(owner decisions after the [independent review](../Docs/archive/material-tables-review-2026-10-29.md)).
+`20261029260000_material_tables_hardening.sql`:
+
+- `bob_private.is_bob_participant` admits Bob project participants only; an
+  active household from another app no longer suffices.
+- Aliases, store articles and household stock may name shared definitions only
+  (`bob_private.catalog_item_shared`); project aliases stay in the revision.
+- `store_article_prices` gains `review_status` (default `unreviewed`; the service
+  role reviews) and `price_basis` (`unit` | `pack`, pack needs article pack
+  content). The current price is the latest non-null one, reviewed before
+  unreviewed, in both `bob.current_store_prices` and the lookup row, which also
+  reports `price_unreviewed`, `price_basis` and `unreviewed_aliases` apart from
+  reviewed `aliases`. Matches that need an unreviewed alias, and unreviewed
+  definitions, rank after reviewed ones.
+- `bob.set_catalog_item_spec` takes `revision` (the current one, else `40001`),
+  keeps left-out keys, and refuses a material outside the definition's category
+  line, a size of another form or with conflicting dimensions, a unit that does
+  not fit the profile, and a weight without a non-kg unit (weight is per unit).
+  Reads of an older revision carry no `spec`.
+- `bob.household_stock_revisions` keeps every household-stock state, including
+  removal. Household stock names shared definitions, keeps their name, and needs
+  a unit with a quantity.
+- `bob.stock_revisions.household_stock_id` lets project stock point at
+  household stock through `bob.stock_command` (kept across revisions). The
+  household row must be visible to the caller, share the unit and cover every
+  active project promise (`household_stock_overpromised`); it cannot shrink
+  below them or be removed while referenced.
+- Sizes need a label and are unique by form, dimensions and label; material
+  names belong to one category; empty store articles are refused; linked
+  materials and sizes cannot be deleted from definitions.
+
+No runtime caller writes household stock, stores, prices or project-to-household
+links yet; Bob's own material saves are the first write path (below).
+
+<a id="material-shared-specs"></a>
+**Bob's materials shared as specifications — prepared 2026-10-29, not applied**
+(owner decision, follow-up 1). `20261029270000_material_shared_specs.sql` makes
+`bob_private.catalog_save` call `bob_private.share_material_spec` for every
+saved project material: a complete sheet, timber or fastener definition, or a
+dimension-less one (gravel), is linked to a shared, unreviewed combination named
+from the material category and size (`Plywood 18 mm`), holding only dimension
+properties and generic notes. Existing sizes with the same dimensions (reviewed
+first) and combinations are reused. Incomplete, parameterised, part-pinned and
+dimensioned-but-unsized definitions (tubes) are not shared; a revision whose
+dimensions no longer fit its size is relinked. [Rationale](../Docs/material-catalog.md#shared-specs).
+
 <a id="db-load-relief"></a>
 ## Database load relief — installed 2026-10-29
 

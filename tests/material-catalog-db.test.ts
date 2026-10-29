@@ -116,6 +116,7 @@ test('PVC sheet and tube share a material category but use different dynamic pro
   const tube=await write(c,payload(definition('pvc-tube',{name:'PVC-rör',categories:['plastic.pvc','tube'],profile_code:'tube_stock',properties:{outside_diameter:val('32'),wall_thickness:val('2')}})))
   const result=await read({categories:['plastic']});assert(result.items.some((i:any)=>i.id===sheet.recordId));assert(result.items.some((i:any)=>i.id===tube.recordId))
   const filtered=await read({categories:['plastic.pvc'],profile_code:'tube_stock',revision:1,properties:{outside_diameter:val('3.2','cm')}})
+  // Tubes have no size model, so a tube definition is not shared (owner decision 2026-10-29).
   assert.deepEqual(filtered.items.map((i:any)=>i.id),[tube.recordId])
   await assert.rejects(write(c,payload(definition('bad-tube',{categories:['plastic.pvc','tube'],profile_code:'tube_stock',properties:{outside_diameter:val('32'),wall_thickness:val('16')}}))),/catalog_rule_failed:hollow/)
  }finally{await fail(c)}

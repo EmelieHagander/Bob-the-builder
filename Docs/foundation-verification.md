@@ -1,5 +1,36 @@
 # Foundation verification and rollout
 
+<a id="follow-up-1-2026-10-29"></a>
+## Material tables hardened and Bob's materials shared — prepared, 2026-10-29
+
+**Source and local verification only; not migrated.** Owner decisions after the
+[independent review](archive/material-tables-review-2026-10-29.md): fix the
+tables before any write path, let project stock point at household stock, and
+share only the specification when Bob's new materials become shared and
+unreviewed.
+
+| Review finding | Change | Owner |
+|---|---|---|
+| B2 ungated shared writes, private text in shared rows | Bob project participants only; shared targets only | [Database](../db/README.md#material-hardening) |
+| B2 alias and price poisoning | Unreviewed aliases and prices are marked and rank after reviewed ones; a reviewed price beats a newer unreviewed one | [Database](../db/README.md#material-hardening) |
+| S1 unversioned links, no checks | Links change only against the current revision, must fit category, form, dimensions and unit; older revisions read without them | [Database](../db/README.md#material-hardening) |
+| S2 duplicated dimensions | A linked size must not contradict the revision's dimensions; the revision owns them | [Database](../db/README.md#material-hardening) |
+| S3 two stock registers, no history | Household history; project stock may point at household stock without over-promising | [Planning](material-planning.md) |
+| S4 ambiguous price units | `price_basis` unit or pack; weight is per unit; empty prices are never current | [Database](../db/README.md#material-hardening) |
+| S7, S8, M5 small defects | Name kept on household stock; labelled, unique sizes; one category per material name; no empty articles; linked rows cannot be deleted | [Database](../db/README.md#material-hardening) |
+| Follow-up 1 | Bob's saved materials link to shared, unreviewed, dimension-only standard materials | [Catalog](material-catalog.md#shared-specs) |
+
+Not addressed: S6 (lookup matching is not indexed; 15 ms live today) and M2
+(tubes cannot be a size). S9 remains for household stock, stores and prices: no
+screen or Bob tool writes them yet.
+
+Validation: `material-tables-hardening` (8) plus the touched material, catalog,
+cut-plan and stock suites pass. No production write, deploy, CI or model call.
+
+Release order with the owner's OK and no running Bob job: apply
+`20261029260000_material_tables_hardening.sql`, then
+`20261029270000_material_shared_specs.sql`. No function deployment.
+
 <a id="follow-ups-2026-10-29"></a>
 ## Owner follow-ups before the next paid run — installed, 2026-10-29
 
