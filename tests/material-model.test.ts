@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { projectSchema, asProjectUser } from './support/project-schema.ts'
 import type { PGlite } from './support/pglite.ts'
 import { standardMaterialsSeedSql, validateStandardMaterials, type StandardMaterials } from '../scripts/build-standard-materials-seed.ts'
-import { createMaterialCatalogReader } from '../supabase/functions/_shared/material-catalog.ts'
+import { createMaterialCatalogReader, catalogRejection } from '../supabase/functions/_shared/material-catalog.ts'
 import { catalogFixture, preMaterialLookupCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { MATERIAL_LOOKUP_NOTE } from '../scripts/build-material-lookup-catalog.ts'
 
@@ -155,7 +155,7 @@ test('the combined lookup returns one row per purchase place, null when unknown,
   const plywood = await shared('plywood_birch', 's12')
   const home = (await lookup(one, { id: plywood })).items[0]
   assert.deepEqual(home.stock_at_home.map((s: any) => [s.household, s.quantity, s.location]), [['Hemma A', 2, 'Garaget']])
-  assert.deepEqual((await lookup(two, { id: plywood }, 'B')).items[0].stock_at_home, [], 'another household never sees it')
+  assert.equal((await lookup(two, { id: plywood }, 'B')).items[0].stock_at_home, null, 'another household never sees it; nothing recorded is null, not none')
   // Several stores: one row each; a store article without a price keeps price null, never zero.
   const second = await call(one, 'bob.add_store', { name: 'Brädgården', city: null })
   const third = await call(one, 'bob.add_store', { name: 'Järnhandeln', city: 'Uppsala' })
@@ -180,7 +180,7 @@ test('the combined lookup returns one row per purchase place, null when unknown,
   await rejects(lookup(outsider, {}), '42501')
 })
 
-test('the lookup stays a single indexed read: alias lookups use their index and a page takes milliseconds', async () => {
+test('alias and price indexes exist and a lookup page takes milliseconds', async () => {
   const plan = await pg.transaction(async tx => {
     await tx.exec('set local enable_seqscan=off')
     return (await tx.query<any>("explain select id from bob.material_aliases where lower(btrim(alias))='2tum4'")).rows.map(r => r['QUERY PLAN']).join('\n')
@@ -195,6 +195,28 @@ test('the lookup stays a single indexed read: alias lookups use their index and 
   for (let i = 0; i < 5; i++) { const t = performance.now(); await lookup(one, { query: 'plywood' }); times.push(performance.now() - t) }
   times.sort((a, b) => a - b)
   assert(times[2] < 250, `median ${times[2].toFixed(1)} ms`)
+})
+
+test('the lookup matches whole words, finds compound words by their last part and lists exact hits first', async () => {
+  // Independent review 2026-10-29: these returned unrelated definitions when the query merely contained an alias.
+  const names = async (query: string, after: string | null = null) => (await lookup(one, { query, after })).items.map((r: any) => r.name)
+  assert.deepEqual((await names('utomhusskruv')).sort(), ['Utomhusskruv, C4/rostfri 4,2 × 55', 'Utomhusskruv, C4/rostfri 5,0 × 60'])
+  assert.deepEqual((await names('gipsskruv')).sort(), ['Gipsskruv 3,9 × 25', 'Gipsskruv 3,9 × 35'])
+  assert.deepEqual((await names('ankarspik')).sort(), ['Ankarspik, varmförzinkad 4,0 × 40', 'Ankarspik, varmförzinkad 4,0 × 50'])
+  assert.deepEqual(await names('takläkt'), ['Läkt, gran 25 × 38'])
+  assert.deepEqual(await names('12x45'), [])
+  assert.deepEqual((await names('45x95')).sort(), ['Konstruktionsvirke C24, gran/furu 45 × 95', 'Tryckimpregnerat virke, NTR/AB 45 × 95'])
+  // Decimal commas, "4,0" = "4", spacing and unit words are normalized.
+  for (const query of ['13 mm gips', '12,5 gips', '12.5 gips']) assert.deepEqual(await names(query), ['Gipsskiva, standard 12,5 × 1200 × 2400'], query)
+  assert.deepEqual(await names('träskruv 4x40'), ['Träskruv, förzinkad (inomhus) 4,0 × 40'])
+  // A general word still finds compound words; exact word hits come first.
+  const screws = await names('skruv')
+  assert.equal(screws.length, 10)
+  assert(screws.slice(0, 8).every(n => /^(Träskruv|Utomhusskruv)/.test(n)), JSON.stringify(screws))
+  assert(screws.slice(8).every(n => n.startsWith('Gipsskruv')), JSON.stringify(screws))
+  // A cursor whose definition no longer matches is rejected, never read as the end of the list.
+  await rejects(lookup(one, { query: 'gips', after: (await shared('plywood_birch', 's12')) + ':-' }), 'material_lookup_cursor_stale')
+  assert.deepEqual(catalogRejection('material_lookup_cursor_stale')?.fields, ['after'])
 })
 
 test('project definitions read unchanged; Bob\'s reads show the combination and its review status', async () => {

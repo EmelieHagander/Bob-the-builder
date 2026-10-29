@@ -241,9 +241,24 @@ the store, article number, latest price, currency, price unit, pack content,
 source and when the price changed. Material, size, aliases and stock repeat on
 every row of one combination. Input keys: `query`, `categories`, `after`, `id`.
 Pages hold 12 rows at that grain with cursor `<definition>:<article>` or
-`<definition>:-`, and the 30,000-byte envelope cap drops trailing rows. Alias
-and price lookups use their indexes (`material_aliases_alias_idx`,
-`store_article_prices_article_idx`); a seeded page takes milliseconds in PGlite.
+`<definition>:-`, and the 30,000-byte envelope cap drops trailing rows. The
+latest price uses `store_article_prices_article_idx`. Matching is not indexed:
+the review measured a per-definition scan of `material_aliases` (15 ms live on
+45 definitions, growing faster than linearly in PGlite), so a token index is a
+later step if the catalog grows.
+
+**Whole-word matching — prepared 2026-10-29 (owner decision), not applied.**
+`20261029240000_material_lookup_matching.sql` replaces substring matching, which
+also matched when the query merely contained an alias ("utomhusskruv" returned
+indoor screws through "skruv"). Every query word must equal a word of the
+definition's name, aliases, material, size label or their aliases, or be the
+last part of a compound word in it ("skruv" finds "träskruv"); decimal commas,
+`4,0` = `4` and `45x95` = `45 × 95` are normalized and `mm`, `cm`, `st` ignored
+(`bob_private.material_tokens`). Definitions whose words all match exactly come
+first. The cursor format is unchanged; a cursor whose definition no longer
+matches raises `material_lookup_cursor_stale` instead of ending the list.
+`stock_at_home` is null when nothing is recorded for the caller's households,
+never an empty list that reads as "none at home".
 `bob.catalog_read` also matches material, size and alias words, and adds a
 `spec` object only to definitions with these links, so other records keep their
 exact shape.
