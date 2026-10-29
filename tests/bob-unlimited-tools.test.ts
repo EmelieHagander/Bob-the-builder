@@ -175,8 +175,9 @@ test('unlimited writes still stop after an uncertain transport without repeating
   assert.equal(writes, 1)
 })
 
-test('both supported completion contracts refresh rejected task status through the real tool session', async () => {
-  for (const version of [undefined, 0, 1, 2, 3, '2']) {
+test('every supported completion contract refreshes rejected task status through the real tool session', async () => {
+  // 3 is the controlled-completion contract (2026-10-29); 99 stays unsupported.
+  for (const version of [undefined, 0, 1, 2, 3, 99, '2']) {
     let refreshes = 0
     const aiCatalog = catalogFixture(snapshot => {
       const contract = snapshot.definitions.find(row => row.prompt_key === 'agent-contract.ask-bob')!
@@ -195,7 +196,7 @@ test('both supported completion contracts refresh rejected task status through t
     await tools.prepare()
     const read = await tools.execute('read_work_context', readArgs('tasks')) as any
     const result = await tools.execute('change_work_state', { ref: read.entries[0].ref, action: 'status', value: 'done', reason: 'Requested update', request_quote: 'Update tasks' }) as any
-    const supported = version === 1 || version === 2
+    const supported = version === 1 || version === 2 || version === 3
     assert.equal(result.status, 'invalid')
     assert.equal(result.validation.code, 'task_required_checks')
     assert.equal(refreshes, supported ? 1 : 0, `completion version ${version}`)
