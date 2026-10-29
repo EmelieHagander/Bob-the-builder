@@ -92,7 +92,8 @@ loadable through `describe_tool`, and the server already binds every read to
 the current project. Older manifests keep their receipts, texts and loading.
 [Preparation record](foundation-verification.md#controlled-completion-2026-10-29).
 
-**Create and select in one call — prepared 2026-10-29, not deployed.** New
+**Create and select in one call — installed 2026-10-29** (`bob.tools` v26;
+[evidence](foundation-verification.md#open-issues-closed-install-2026-10-29)). New
 manifests pin `create_select_version: 1` on `tools.create_solution_alternative`
 and `bob.tools`. For an explicit request Bob reads the scope once and calls
 `create_solution_alternative` with `select=true` and the design intent (summary,

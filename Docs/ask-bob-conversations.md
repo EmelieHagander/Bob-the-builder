@@ -236,8 +236,8 @@ retention is unchanged. If the spending stop ends the completion review, Bob's
 reviewed answer is delivered as partial instead of the recovery template.
 
 <a id="result-window-v2"></a>
-**Result window version 2 — prepared 2026-10-29 (owner decision: Bob gets what
-he needs when he needs it; not deployed).** New manifests pin
+**Result window version 2 — installed 2026-10-29 (owner decision: Bob gets what
+he needs when he needs it; [evidence](foundation-verification.md#open-issues-closed-install-2026-10-29)).** New manifests pin
 `agent-contract.ask-bob` `result_window_version: 2` (publication
 `bob-result-window-v2`); new jobs record `resultWindowVersion: 2` in their
 execution identity, running and older jobs keep version 1. The 20,000-token

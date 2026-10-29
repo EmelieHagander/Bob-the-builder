@@ -737,7 +737,7 @@ The installed order was:
 
 ### In-turn lookup reuse and database load relief — source 2026-10-29
 
-**Prepared, not deployed.** New jobs pin `lookupReuseVersion: 1` (requires
+**Installed 2026-10-29** (`bob-worker` v153, `ask-bob` v185; [evidence](../Docs/foundation-verification.md#open-issues-closed-install-2026-10-29)). New jobs pin `lookupReuseVersion: 1` (requires
 `exactLookupVersion: 1`). `createLookupReuse` in `lookup-rpc.ts` reuses a
 successful identical lookup within one claim. It stops reusing when the turn
 writes (`writeRpc` and piece release) or after `READ_REUSE_MAX_AGE_MS` (120 s).

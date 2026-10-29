@@ -57,7 +57,7 @@ rewrite colleague text in that call), and Bob's chat answer on manifests pinned
 before 2026-10-29.
 
 <a id="answer-text"></a>
-**Chat answers — prepared 2026-10-29, not deployed (owner decision).** The paid
+**Chat answers — installed 2026-10-29 (owner decision; [evidence](foundation-verification.md#open-issues-closed-install-2026-10-29)).** The paid
 box run delivered "Artifact: `83e8bb90-…`, Revision: `2`" to the owner. New
 manifests (`agent-contract.ask-bob` `answer_text_version` 1, publication
 `bob-text-hygiene-v1`, requires `work_completion_version` 3) run the same
@@ -72,7 +72,7 @@ metric records only `answer_text` (`clean`, `rewritten`, `rewrite_unchanged`,
 `delivered_with_issues`) and `answer_text_issues`.
 
 <a id="rejection-reasons"></a>
-**Rejection reasons in logs — prepared 2026-10-29, not deployed.** Every
+**Rejection reasons in logs — installed 2026-10-29.** Every
 `invalid` or `conflict` tool result logs `[Bob tool rejection]` with the tool,
 status, a code and field paths only: the typed `validation.code`, `reason` or
 first issue code, else a stable code for the content editor's fixed messages
@@ -208,8 +208,8 @@ creating another alternative. The new catalog disables both legacy solution
 creation and target selection while preserving older pinned manifests.
 
 <a id="create-and-select"></a>
-**Create and select in one call — prepared 2026-10-29 (owner decision), not
-deployed.** On manifests pinned with `tools.create_solution_alternative`
+**Create and select in one call — installed 2026-10-29 (owner decision;
+[evidence](foundation-verification.md#open-issues-closed-install-2026-10-29)).** On manifests pinned with `tools.create_solution_alternative`
 `create_select_version: 1` (which requires `write_state_version: 1`), creation
 takes a required `select` boolean. With `select=true` the server saves the new
 alternative (`bound_solution_create`) and then selects that exact new revision

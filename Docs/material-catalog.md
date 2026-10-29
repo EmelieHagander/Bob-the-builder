@@ -115,9 +115,10 @@ Each property value is `{value, unit, truth, parameter, note}`. Stored numeric q
 Unknown is an explicit null with `truth=unknown` and a note, never zero or a search wildcard. Only part definitions may use a named parameter: null value, `truth=provided_spec`, and an explicit parameter name. A parameter is a design slot to bind in a future assembly, not a measured dimension or an automatic equation. Reusing a parameter name with incompatible types/units is rejected. Length parameters bind in mm after normalization, irrespective of the original input-unit label.
 
 <a id="normalized-material-model"></a>
-## Normalized material model — prepared 2026-10-29
+## Normalized material model — installed 2026-10-29
 
-**Prepared, not deployed or applied.** Owner decisions 2026-10-29: standard
+**Installed 2026-10-29 with the reviewed starting list** (21 materials, 30 sizes,
+45 combinations; [evidence](foundation-verification.md#open-issues-closed-install-2026-10-29)). Owner decisions 2026-10-29: standard
 materials, sizes and their combination are separate, and the database grows as
 people and Bob add entries. The combination is this catalog's material
 definition, so existing pins keep working; it now links to a material, a size
@@ -131,10 +132,10 @@ Sizes are in mm. For fasteners `width_mm` holds the nominal shank diameter,
 `width`. A required dimension the list does not state is saved as `unknown`
 with a note. Rolls (`roll_stock`) and single pieces (`piece`) use all-optional
 profiles, so roofing felt, membranes and tiles can be listed without invented
-measures. The seed's starting list (21 materials, 31 sizes, 45 combinations, 58
+measures. The seed's starting list (21 materials, 30 sizes, 45 combinations, 58
 aliases) is generated from `scripts/data/standard-materials.json` into its own
-migration for owner review before it is applied; it states no product, supplier,
-price or weight.
+migration; the owner approved it and it was applied on 2026-10-29. It states no
+product, supplier, price or weight.
 
 New manifests (`tools.search_material_catalog` `material_lookup_version` 1) send
 an untyped material search to the combined lookup: one row per combination and
