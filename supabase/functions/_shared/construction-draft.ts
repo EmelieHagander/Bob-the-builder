@@ -7,7 +7,7 @@ import { constructionCutFit } from './construction-cut-fit.ts'
 import { CAD_RECIPE_SCHEMA } from './cad-schema.ts'
 import { CAD_ARRAYS_SCHEMA, expandCadArrays } from './cad-arrays.ts'
 import { parseCadAssemblyRequest } from './cad-adapter.ts'
-import { CAD_PARAMETERS_SCHEMA, CadParameterBindingGap, CadParameterGap, compileCadParameters, parseParameterPlan, parameterSourcePins } from './cad-parameters.ts'
+import { CAD_PARAMETERS_SCHEMA, CadParameterBindingGap, CadParameterGap, CadParameterUnusedNodes, compileCadParameters, parseParameterPlan, parameterSourcePins } from './cad-parameters.ts'
 import {CONSTRUCTION_PARAMETER_CHANGES_SCHEMA,compileConstructionParameterChange} from './construction-parameters.ts'
 import { INSTANCE_POLICY_SCHEMA,constructionInstancePolicy } from './construction-instance-policy.ts'
 import { CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL } from './construction-consequences.ts'
@@ -23,6 +23,7 @@ import { REQUIREMENT_PROBES_SCHEMA, EVIDENCE_COMPONENTS_SCHEMA, checkConstructio
 import { withConstructionWorkRead, withConstructionWorkWrite, withConstructionWorkCheck, createConstructionWorkPackets, checkConstructionWorkOutputs, type ConstructionWorkSources } from './construction-work.ts'
 import type { ProjectEdits } from './project-edits.ts'
 import { countSerializedTokens } from './bob-token-budget.ts'
+import { compactConstructionCheck } from './write-state.ts'
 
 /** Reconstruct a historical tool check; a new check position still reads live.
  * CAD render/review gates use their independent fresh readers. Old executions
@@ -161,6 +162,9 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  constructionSourceRefresh?:boolean;
  coherentWork?:boolean;
  creationPreparation?:boolean;
+ /** Pinned per manifest (write_state_version 1): saved construction writes
+  * carry the check of their receipt revision; requires coherentWork. */
+ writeState?:boolean;
  readWorkSources?:(draft:Record<string,any>|null,stepId:string|null)=>Promise<ConstructionWorkSources>;
  prepareSolutionEdit?:ProjectEdits['prepare'];
  prepareWork?:(payload:WritePayload)=>Promise<Record<string,any>>;
@@ -239,7 +243,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   }
   return result
  }
- return {
+ const tools={
  exportState():ConstructionToolsState{return opts.constructionViews?{version:2,used,observations:views.exportState()}:{version:1,used}},
  restoreState(state:ConstructionToolsState){if(state?.version!==(opts.constructionViews?2:1)||!Number.isSafeInteger(state.used)||state.used<0)throw new Error('construction_tools_checkpoint_invalid');if(state.version===2)views.restoreState(state.observations);used=state.used},
  tools:[readTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.readDelivery?[CONSTRUCTION_DELIVERY_TOOL]:[]),...(opts.writer?[saveTool,editTool,parameterTool,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
@@ -573,6 +577,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   }catch(error){
    rethrowContinuation(error)
    if(error instanceof CadParameterGap)return {status:'needs_data',reason:'unknown_required_parameters',gaps:error.gaps,message:'No construction changed. Resolve these controlling values in the same request; no zero or invented value was saved.'}
+   if(opts.writeState&&error instanceof CadParameterUnusedNodes&&error.unused.length)return {status:'invalid',reason:'parameter_unused_node',unused_nodes:error.unused,
+    message:'No construction changed. These parameter nodes feed no binding, frame or other node: '+error.unused.join(', ')+'. Remove each orphaned node (and a formula that only fed it), or bind it to the path it was meant to control, then retry with a new key.'}
    if(error instanceof CadParameterBindingGap)return {status:'invalid',message:'Bind every path in unbound to a parameter node using these exact slash-separated paths. Keep the same construction IDs and correct the parameter plan; no source lookup retry is needed.',unbound:error.unbound}
    const message=error instanceof Error?error.message:''
    if(opts.constructionRepeats&&/^(invalid_cad_array|cad_array_[a-z_]+)(:.*)?$/.test(message))return {status:'invalid',reason:message.split(':')[0],message:'No construction saved. Correct array IDs/counts and bindings; generated instance/node IDs must be unique and fit the existing canonical limits.'}
@@ -586,7 +592,24 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    return {status:'unavailable',message:'Could not verify construction data. Read again; a failed lookup does not mean data is absent.'}
   }
  }}
+ if(!opts.writeState||!opts.coherentWork)return tools
+ // Owner decision 2026-10-29 (write_state_version 1): a construction write
+ // returns the check Bob would otherwise request next, through the same check
+ // path, persistence and reuse keys. A check that cannot run stays visible.
+ const executeOnce=tools.execute.bind(tools)
+ tools.execute=async(name:string,raw:unknown):Promise<Record<string,any>>=>{
+  const result=await executeOnce(name,raw)
+  if(!CHECKED_WRITES.has(name)||result?.status!=='saved')return result
+  const receipt=result.receipt
+  if(receipt?.dataset!=='artifacts'||typeof receipt.recordId!=='string'||!Number.isSafeInteger(receipt.revision))
+   return {...result,checked_concept_ready:null,check:compactConstructionCheck(undefined)}
+  const check=compactConstructionCheck(await executeOnce(CONSTRUCTION_CHECK_TOOL.function.name,{artifact_id:receipt.recordId,revision:receipt.revision,
+   outputs:[],...(opts.formEvidence?{component_ids:[],requirement_checks:[]}:{})}))
+  return {...result,checked_concept_ready:check.status==='checked'?check.concept_ready:null,check}
+ }
+ return tools
 }
+const CHECKED_WRITES=new Set(['save_construction_draft','edit_construction_parts','change_construction_parameters'])
 export type ConstructionTools=ReturnType<typeof createConstructionTools>
 
 /** The drawing desk uses the same checker and exact caller reads, without

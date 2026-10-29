@@ -133,6 +133,13 @@ export function createResumeProbe(options: ResumeProbeOptions) {
             usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } }
         }
         if (!options.checkpoint && options.yieldMode !== 'none' && c.modelDispatch >= 1) throw new BobContinuation('yield')
+        // v3 completion: the small gate names one gap, so the restored turn
+        // also crosses the targeted-note round before its final answer.
+        if (request.functionName === 'completion-gate') {
+          c.providerPosts++
+          return { success: true, model: 'gate-fixture', data: JSON.stringify({ work_remaining: true, reason: 'Synthetic gap.' }),
+            usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } }
+        }
         c.modelDispatch++
         const step = Number(identity.key.split(':').at(-1)) + 1
         if (step === options.waitModelAt) {

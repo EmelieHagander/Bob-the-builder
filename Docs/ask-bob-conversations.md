@@ -1194,6 +1194,34 @@ saved work, or carry unfinished facts, are always reviewed. Pinned manifests
 without the role keep their recorded review sequence. Metrics record
 `completion_gate: done | review`.
 
+<a id="controlled-completion"></a>
+**Controlled completion (owner decision 2026-10-29, publication
+`bob-controlled-completion-v1`) — supersedes "always reviewed" above for new
+manifests.** The paid box run on 2026-10-29 showed the cost of the full review
+after saved work: about 31 % of the run's model cost, and in the drawing turn a
+correct, saved answer was followed by re-reads of every record, a second drawing
+attempt and a 15-minute timeout. The owner wants control over what Bob is sent:
+Bob gets what he needs when he needs it, not an open-ended "compare with fresh
+records" round. `work_completion_version: 3` therefore:
+
+1. Uses facts only the server knows first (prepared-but-unsaved drawing/plan,
+   unresolved rejected writes). They produce the existing targeted
+   `bob.note.finish` note; the gate is not asked.
+2. Otherwise asks the small completion gate, now also for turns with saved work.
+   Its input adds `saved_work` (dataset, label, operation, revision) and
+   `attempted_actions` (tool, status, short message for non-saved outcomes). Its
+   contract treats an optional offer of further work as finished and names one
+   missing requested part in `reason`.
+3. Only `work_remaining: true` sends Bob one targeted note, `bob.note.gate-gap`,
+   which names that gap, asks him to do only that part and to reuse results
+   already in the chain. There is no second check.
+4. A failed gate call or an unreadable verdict delivers Bob's answer instead of
+   starting a review. Metrics record `completion_gate: unavailable`.
+
+Pinned v1/v2 manifests keep their recorded review sequence. The
+[preparation record](foundation-verification.md#controlled-completion-2026-10-29)
+owns validation and release status.
+
 Versioned method guidance integrates changes into complete Task instructions,
 preserves relevant sources and unknowns, and distinguishes planning progress
 from physical completion. Closing messages report saved and remaining work

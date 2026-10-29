@@ -88,7 +88,7 @@ export type ProjectAnswer =
   | { ok: true; answer: string; projectId: string; evidence: AnswerEvidence; providerResponseId?: string }
   | { ok: false; error: string }
 export type TurnEnd = 'answered' | 'asked' | 'step_budget' | 'time_budget' | 'refused' | 'commentary_limit'
-export interface TurnObservation { steps: number; tool_calls: number; deferred_calls: number; completion_checks: number; nudges: number; completion_gate?: 'done' | 'review'; end: TurnEnd | 'failed'; output_phase?: OpenAIServiceResponse['outputPhase'] }
+export interface TurnObservation { steps: number; tool_calls: number; deferred_calls: number; completion_checks: number; nudges: number; completion_gate?: 'done' | 'review' | 'unavailable'; end: TurnEnd | 'failed'; output_phase?: OpenAIServiceResponse['outputPhase'] }
 export interface TurnProgress { stage: 'thinking' | 'tool' | 'finishing'; tool?: string; step: number; saved: number }
 
 /** Embedded seed is for injected/offline callers only. Production supplies the
@@ -246,14 +246,18 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // undefined option or change the call sequence of an older running turn.
   const unlimitedWork = opts.unlimitedWork === true && contract.work_allowance_version === 1
   const completionV2 = contract.work_completion_version === 2
-  const completionAware = contract.work_completion_version === 1 || completionV2
+  // Owner decision 2026-10-29: saved work no longer triggers a full Bob review
+  // round. Gaps the server knows get a targeted note; otherwise the small gate
+  // judges the answer against the request and this turn's saved work.
+  const completionV3 = contract.work_completion_version === 3
+  const completionAware = contract.work_completion_version === 1 || completionV2 || completionV3
   const writeTools = new Set(completionAware ? opts.aiCatalog.manifest().definitions.filter(row => row.definition_kind === 'tool_contract'
     && Object.hasOwn((row.definition.parameters as any)?.properties ?? {}, 'request_quote')).map(row => row.definition.name as string) : [])
   const workResults: { tool: string; status: string; message?: string; refresh_status?: string; validation?: unknown }[] = structuredClone(restored?.workResults ?? [])
   // A read-only answer with nothing unfinished would otherwise be regenerated
   // by a full review. Manifests with the completion gate ask a small read-only
   // role first; no gate, a failed call or an invalid result keeps the review.
-  const completionGate = completionV2 && opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.completion-gate')
+  const completionGate = (completionV2 || completionV3) && opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.completion-gate')
   const workRemains = async (answer: string): Promise<boolean> => {
     if (!completionGate) return true
     const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'completion-gate', aiFunction: 'completion-gate', module: 'global',
@@ -266,6 +270,28 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     try { if (typeof verdict === 'string') verdict = JSON.parse(verdict) } catch { return true }
     observation.completion_gate = (verdict as { work_remaining?: unknown } | null)?.work_remaining === false ? 'done' : 'review'
     return !(result.success && (verdict as { work_remaining?: unknown } | null)?.work_remaining === false)
+  }
+  // v3 gate: the same small role also sees what this turn saved and attempted,
+  // so a claimed result without a saved record is visible. No verdict (failed
+  // call, invalid JSON) delivers Bob's answer instead of starting a review.
+  const gateVerdict = async (answer: string): Promise<{ remaining: boolean; reason: string } | null> => {
+    if (!completionGate) return null
+    const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'completion-gate', aiFunction: 'completion-gate', module: 'global',
+      userId: opts.userId, catalogRoleKey: 'completion-gate', catalogSchemaKey: 'bob_completion_gate',
+      messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, memory_summary: opts.context?.summary ?? null,
+        recent_conversation: (opts.context?.recent ?? []).slice(-6).map(({ role, text }) => ({ role, text: text.slice(0, 2000) })),
+        candidate_final_answer: answer,
+        saved_work: compactReceipts(opts.writer?.executedReceipts ?? []).slice(-32).map(({ dataset, label, operation, revision }) =>
+          ({ dataset, label, operation, ...(revision ? { revision } : {}) })),
+        attempted_actions: workResults.slice(-32).map(({ tool, status, message }) =>
+          ({ tool, status, ...(status !== 'saved' && message ? { message: message.slice(0, 200) } : {}) })) }) }],
+      timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, 30_000, deadline - Date.now()) })
+    let verdict: unknown = result.data
+    try { if (typeof verdict === 'string') verdict = JSON.parse(verdict) } catch { verdict = null }
+    const value = verdict as { work_remaining?: unknown; reason?: unknown } | null
+    if (!result.success || typeof value?.work_remaining !== 'boolean') { observation.completion_gate = 'unavailable'; return null }
+    observation.completion_gate = value.work_remaining ? 'review' : 'done'
+    return { remaining: value.work_remaining, reason: typeof value.reason === 'string' ? value.reason.trim().slice(0, 300) : '' }
   }
   let previousResponseId = restored ? restored.previousResponseId : opts.context || contextStrategy ? undefined : opts.previousResponseId
   const drawingRequests=restored ? restored.initial.drawingRequests : await opts.cadAssistant?.pending()
@@ -505,9 +531,23 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     // latest instruction refines that mandate rather than replacing its memory.
     // Bob decides; his words are never replaced by a server notice.
     const facts = unfinishedFacts(opts.aiCatalog, opts, saved)
+    if (completionV3 && !completionChecked && opts.writer && opts.writer.remaining > 0 && !opts.writer.uncertain
+      && canContinue && response.outputPhase !== 'refusal') {
+      // One targeted note at most: code-known facts first, else the gate's named gap.
+      const gate = facts.length ? null : await gateVerdict(answerText)
+      const note = facts.length ? opts.aiCatalog.text('bob.note.finish', { facts: facts.join(' ') })
+        : gate?.remaining ? opts.aiCatalog.text('bob.note.gate-gap', { reason: gate.reason }) : null
+      if (note) {
+        completionChecked = true; observation.completion_checks++; previousResponseId = response.responseId
+        reviewedAnswer = answerText
+        messages = [{ role: 'user', content: opts.aiCatalog.text('bob.note.prefix') + note }]
+        await next(step)
+        continue
+      }
+    }
     const attemptedWork = workResults.length > 0 || !!opts.writer?.executedReceipts.length
     const reviewWork = completionAware && (completionV2 || attemptedWork)
-    if ((facts.length || reviewWork) && !completionChecked && opts.writer && opts.writer.remaining > 0 && (!completionAware || !opts.writer.uncertain)
+    if (!completionV3 && (facts.length || reviewWork) && !completionChecked && opts.writer && opts.writer.remaining > 0 && (!completionAware || !opts.writer.uncertain)
       && canContinue && (!completionAware || response.outputPhase !== 'refusal')
       && (facts.length || attemptedWork || await workRemains(answerText))) {
       completionChecked = true; observation.completion_checks++; previousResponseId = response.responseId

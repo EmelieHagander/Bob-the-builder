@@ -67,7 +67,7 @@ authorization or the current request's offered-tool fence. Descriptions and
 schemas still come from the pinned catalog. Checkpoints retain loaded tools.
 This adds no seventh permanent core tool or new model helper.
 
-**Creation continuation — prepared, 2026-10-29.** The new-construction work
+**Creation continuation — installed, 2026-10-29.** The new-construction work
 packet reports `creation_state` from canonical readiness. Catalog followups
 expose creation/selection when no Solution exists, the content editor when
 issues remain, and construction/material tools when ready. An explicit scoped
@@ -76,6 +76,21 @@ choices remain open. These are tool availability changes, not auto-execution,
 approval or a substitute for save validation. No new core tool is added.
 [Preparation evidence and release order](foundation-verification.md#creation-preparation-2026-10-29)
 own the current source-only status.
+
+<a id="write-state"></a>
+**Writes return their state — prepared, 2026-10-29 (owner decision).** New
+manifests pin `bob.tools` `write_state_version: 1`. Construction saves, part
+edits and parameter changes return the check of their receipt revision
+(`check`, `checked_concept_ready`) through the ordinary check path, so Bob does
+not call the checker or re-read the result next; a check that cannot run is
+reported inside the saved result. Solution creation returns a usable reference;
+selection and selected-solution edits return construction readiness
+(`creation_state`) and a fresh edit reference. Followups after saves now load
+the drawing tool when concept-ready and the part editor otherwise, instead of
+the checker. `search_project_data` leaves the core list (five tools); it stays
+loadable through `describe_tool`, and the server already binds every read to
+the current project. Older manifests keep their receipts, texts and loading.
+[Preparation record](foundation-verification.md#controlled-completion-2026-10-29).
 
 The existing post-write completion review remains. A synthetic main-loop proof
 therefore uses three domain tool calls and five main requests: read, change,

@@ -61,7 +61,8 @@ test('last commentary request can deliver a final blocker without reopening tool
 })
 
 test('older pinned contracts retain their exact call options and completion behavior', async () => {
-  for (const version of [undefined, 3, '1']) {
+  // 3 is the controlled-completion contract (2026-10-29); 99 stays unknown.
+  for (const version of [undefined, 99, '1']) {
     let calls = 0
     const aiCatalog = preTaskWorkflowCatalogFixture(snapshot => { snapshot.definitions.find(row => row.prompt_key === 'agent-contract.ask-bob')!.metadata.work_completion_version = version })
     const result = await runProjectAnswer({ ...base(), aiCatalog, callModel: async options => {

@@ -117,13 +117,13 @@ Unknown is an explicit null with `truth=unknown` and a note, never zero or a sea
 ## Search → read → ensure/revise
 
 Catalog tools validate their declared argument shapes before database access.
-The prepared 2026-10-29 read contract allows omitted unused `profile_code` and
+The installed 2026-10-29 read contract (`tools.search_material_catalog` v3) allows omitted unused `profile_code` and
 `profile_revision`, which code supplies as null. Vocabulary browsing still uses
 `categories=[]`, `properties={}` and `query=null` for an unfiltered page. A profile
 revision requires its code; typed property filters require both exact fields.
 Writes never infer a profile or material identity. Unknown fields remain errors.
 [Publication and verification](foundation-verification.md#creation-preparation-2026-10-29)
-distinguish this prepared contract from the currently active all-fields contract.
+record its installation; manifests pinned before it keep the earlier all-fields contract.
 
 Rejected shapes return field paths; rejected filter combinations explain the
 correction. For definitions, copy published profile codes/revisions and category

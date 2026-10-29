@@ -1,10 +1,128 @@
 # Foundation verification and rollout
 
-<a id="creation-preparation-2026-10-29"></a>
-## Construction preparation and scoped read recovery — prepared, 2026-10-29
+<a id="construction-work-paid-run3-2026-10-29"></a>
+## Paid box run after #371 — 2026-10-29
 
-**Source/local verification only; not deployed or catalog-activated.** This
-continues the paid box findings; it does not claim a successful new paid run.
+**Partial result: the final drawing is saved for the first time, but the turn
+was cancelled; acceptance failed.** The owner authorized the run after the #371
+installation. [Run 40856013457](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/40856013457)
+ran once on `8dd251248c294d0a39de4dfb81f711e86a3eb718`, scenario `box`, label
+`baseline`, in synthetic project `p_ebb5e61855b0406fa9c63cccf9ec0c5f`. All
+three turns pinned the new manifest `a4765a36-0bcb-4848-87fd-382dda1e5eed`
+(`bob.tools` v24, creation preparation active).
+
+| Step | Model calls | Known model USD | Delivery elapsed | Result |
+|---|---:|---:|---:|---|
+| Create box | 27 | 0.980567 | 705.316 s | One checked Construction, revision 2, 400 × 300 × 250 mm |
+| Change width | 8 | 0.247952 | 229.463 s | Same identity, revision 3, 500 × 300 × 250 mm |
+| Final drawing | 23 | 1.050060 | cancelled at the runner's 15-minute step deadline | Drawing revision 1 saved, views front/right/top, linked to Construction revision 3; no delivered answer |
+| **Total** | **58** | **2.278579** | | **Acceptance failed** |
+
+Compared with the [first paid run](#construction-work-paid-2026-10-29) (58
+calls, USD 1.951736): invalid material searches fell from 4 to 0, invalid or
+needs-data saves from 4 to 0 and manual loads from 9 to 3, but Construction
+re-reads rose from 4 to 10, so the create turn only fell from 33 to 27 calls.
+The [content-free evidence](archive/form-box-paid-2026-10-29-run3.json) keeps
+turn/job IDs, per-role cost, tool outcomes and each call's returned tools.
+
+Root causes established from execution events, the cancelled job's checkpoints,
+live function definitions and read-only timing as the test owner:
+
+1. **Full review after saved work.** `work_completion_version: 2` always sends a
+   second full Bob round after work, whose note asks Bob to compare with fresh
+   records and execute remaining work. In the drawing turn Bob's correct answer
+   at call 11 was followed by eight more reads, a duplicate `design_project_cad`
+   (`already_saved`, then `needs_data`) and the timeout. The small
+   `role.completion-gate` exists but was skipped by design for work turns; the
+   source reader and targeted CAD reviewer are disabled. Rounds after the first
+   answer cost about USD 0.70 (31 %).
+2. **Artifact lookups time out.** `search_bob_project_data_v9` for an exact
+   artifact takes 3.3 s at idle as `authenticated` (v3 alone 37 ms) and hit the
+   8 s `statement_timeout` in every model-issued artifact lookup of the run. The
+   v4/v6/v7 enrichment layers join security-invoker views on
+   `artifact_id::text = …`, which prevents index use; each view filtered by
+   project and artifact takes 5–21 ms. Timeouts are not retried and mark reads
+   partial. Construction check and delivery reads also timed out once each on
+   the shared small instance.
+3. **Writes return only receipts.** Bob re-read the Construction after nearly
+   every save and needed separate check and result reads; older tool results
+   leave the bounded result window quickly.
+
+Smaller causes: four sequential solution steps for an explicit request, a first
+geometry mistake caught only by the later check, an invalid-edit message that
+did not name the unused parameter node, no shared standard materials (12 mm
+plywood created separately in four projects), stale dimensions in free-text
+titles copied to the drawing, and internal IDs in chat answers (the human-text
+rule covers saved records only). `search_project_data` cannot leave the current
+project; Bob used it only to confirm data he already had.
+
+The [controlled completion record](#controlled-completion-2026-10-29) owns the
+prepared corrections. [State](bob-delivery-flow.md#state) owns the next action.
+
+<a id="controlled-completion-2026-10-29"></a>
+## Controlled completion, exact lookup and write state — prepared, 2026-10-29
+
+**Source and local verification only; not deployed, migrated or catalog-
+activated.** Owner decisions the same day, after the
+[paid run](#construction-work-paid-run3-2026-10-29): Bob should get what he
+needs when he needs it rather than an open-ended review; `search_project_data`
+is not needed as a core tool because the server already binds the current
+project; fix the lookup timeouts; writes return the state they produced. All
+three parts are pinned so running and older jobs keep their behaviour.
+
+1. **Controlled completion** (`work_completion_version: 3`, publication
+   `bob-controlled-completion-v1`). Server-known gaps get the existing
+   targeted finish note; otherwise the small completion gate judges the answer
+   against the request, `saved_work` and `attempted_actions`, treating optional
+   offers as finished. Only a named gap sends one targeted note,
+   `bob.note.gate-gap`; a failed or unreadable verdict delivers the answer.
+   [Conversation owner](ask-bob-conversations.md#controlled-completion).
+2. **Exact lookup** (`exactLookupVersion: 1`, `search_bob_project_data_v10`).
+   Returns exactly what v9 returns; for artifacts it reads a heavy detail view
+   only for a record that has that detail. Read-only timings in production as
+   the test owner, run as an equivalent rolled-back block without creating the
+   function: exact box read v9 1.2–12.3 s → v10 39–276 ms; project listing
+   1.1–1.3 s → 42–48 ms; identical result hashes. A statement timeout is
+   retried once inside the same journaled read.
+   [Database contract](../db/README.md#room-dimensions--2026-10-26).
+3. **Write state** (`bob.tools` `write_state_version: 1`, publication
+   `write-state-v1`). Construction saves, part edits and parameter changes
+   carry the check of their receipt revision through the ordinary check path
+   (saved observation, reuse key; findings capped at about 1,500 tokens with an
+   omitted count). Solution creation returns a usable reference; selection and
+   selected-solution edits return construction readiness and a fresh edit
+   reference. An unused parameter node is named in the rejection.
+   `search_project_data` leaves the five core tools but stays loadable;
+   continuations follow `checked_concept_ready` and `creation_state`.
+
+Expected effect on the paid box create turn: about 6–8 fewer Bob calls from
+write state and 3 from completion, and no timed-out artifact reads. These are
+estimates from the recorded call sequence, not measured model behaviour.
+
+Validation: new focused suites `bob-controlled-completion` (6), `write-state`
+(6), `exact-lookup-sql` and `lookup-retry` pass, including PGlite publication,
+idempotent re-application, fixture-equals-database and v10 = v9 equivalence for
+plain, room-layout, multifloor, stair, paged, filtered, trimmed, denied and
+invalid reads. Existing tests that asserted the v2 review sequence now either
+pin the pre-publication fixtures or assert the v3 sequence. Strict `tsc` on the
+changed edge modules is clean; Deno is unavailable here. No full suite, CI,
+production write or model/CAD call ran.
+
+Release order, each step with the owner's explicit OK and no running Bob job:
+apply `20261029115500_bob_exact_lookup.sql`; deploy `bob-worker`, then
+`ask-bob`, from the merge commit; apply `20261029113000_bob_write_state_catalog.sql`
+and `20261029120000_bob_controlled_completion_catalog.sql`. Shared standard
+materials (owner decision: shared, marked unreviewed) follow in a separate
+change.
+
+<a id="creation-preparation-2026-10-29"></a>
+## Construction preparation and scoped read recovery — installed, 2026-10-29
+
+**Installed and catalog-activated.** The
+[paid run after installation](#construction-work-paid-run3-2026-10-29) failed
+acceptance. This record continues the earlier paid box findings. The
+[installation record](#creation-preparation-install-2026-10-29) follows the
+preparation notes below.
 
 The work reader already supports a new Construction (`artifact_id:null`). The
 missing step was showing the canonical construction-purpose readiness **before**
@@ -64,6 +182,46 @@ drawing → exact-version reopen run. Measure the whole outcome, invalid retries
 manual loads, model/tool calls, elapsed time and cost against the failed box
 baseline. Local availability and gate tests do not establish model choice or
 production savings. [State](bob-delivery-flow.md#state) owns the next action.
+
+<a id="creation-preparation-install-2026-10-29"></a>
+### Installation, 2026-10-29
+
+[PR #371](https://github.com/EmelieHagander/Bob-the-builder/pull/371) merged as
+`8dd251248c294d0a39de4dfb81f711e86a3eb718`; its tree
+`74f943b3de9b6428feb9ea15012cb7894e723127` equals the tested head tree. Before
+installation the focused `construction-preparation`, `project-lookup-recovery`
+and `material-catalog-shape` suites were rerun (**23/23 passed**) and the
+generator `--check` passed against the committed migration. No full suite,
+workflow, model or CAD call ran.
+
+One owner Bob job was running when installation was first prepared; it
+completed normally. Installation started only after a readback of zero queued,
+running or paused Bob jobs, and the same check was repeated before the catalog
+step. Order: worker, HTTP entrypoint, then catalog, in `yuobtgoidmmmwfqenkau`,
+using Supabase CLI 2.117.0 server-side bundling from the merge commit.
+
+| Function | Version | JWT verification | Bundle SHA-256 |
+|---|---|---|---|
+| `bob-worker` | 151 | existing custom authentication, `false` | `514d5b92c9f22d7ad29c814c28756b28ed94679699c7e26b8924700a13afa75a` |
+| `ask-bob` | 183 | `true` | `36f66b45fcab6511d3509288ca26fd4712c3ea4fd2c98a1dcd3752f71c27a2a8` |
+
+Readback matched **121/122** worker and **123/124** HTTP files byte for byte,
+including all #371 runtime files and the unchanged import map. The only
+difference is the established empty bundle for type-only `cad-intake.ts`.
+Unauthenticated POSTs returned **401** for both functions.
+
+The catalog migration was then applied and recorded as
+`20261029100828_bob_creation_preparation_catalog`. Active readback:
+`bob.tools` v24, `tools.edit_project_record` v4,
+`tools.read_construction_draft` v7 and `tools.search_material_catalog` v3, each
+with `publication=creation-preparation-v1`. The edit manual carries full
+`/design_intent/...` paths, the search schema no longer requires the profile
+fields, and `bob.tools` carries the four new work-view followups. Older jobs keep
+manifest `c2c77a1f-21de-4221-b6a1-11fbdd602ccd`; the next new job pins a fresh
+manifest. Prompts, model profiles and helper roles were not changed.
+
+This proves installation only. The separately authorized create → width
+change → final drawing run [followed the same day and failed acceptance](#construction-work-paid-run3-2026-10-29).
 
 <a id="cad-runtime-recovery-2026-10-29"></a>
 ## CAD schema correction and runtime-fault recovery installed — 2026-10-29
@@ -153,7 +311,7 @@ passing focused tests were not rerun for this identical-tree deployment.
 
 ### Initial creation and evidence findings before the prepared correction
 
-The observations below describe the #370 baseline. The [prepared correction](#creation-preparation-2026-10-29) above records the resulting changes and remaining acceptance.
+The observations below describe the #370 baseline. The [installed correction](#creation-preparation-2026-10-29) above records the resulting changes and remaining acceptance.
 
 Readback of active `tools.search_material_catalog` v2 confirms that
 `profile_code` is present, required and nullable, with explicit null guidance.

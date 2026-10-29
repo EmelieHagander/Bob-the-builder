@@ -214,7 +214,7 @@ part, joint, material and role records, notes and frame context. A nonempty
 the whole Construction. Missing IDs, source gaps and conflicting pins remain
 explicit. Without a Construction, the same source packet reports that absence.
 
-**New-construction preparation — prepared, 2026-10-29.** Catalog pin
+**New-construction preparation — installed, 2026-10-29.** Catalog pin
 `creation_preparation_version:1` adds the canonical construction-purpose
 readiness to this existing work packet before geometry is authored. It checks
 project/scope and exact Solution/selection revisions and exposes unresolved
@@ -224,7 +224,7 @@ save gate. Old manifests do not gain an extra journalled read. The
 [release record](foundation-verification.md#creation-preparation-2026-10-29)
 owns validation and installation status.
 
-Project lookup's prepared recovery tracks failed exact queries separately from
+Project lookup's installed recovery tracks failed exact queries separately from
 unscoped incompleteness. A complete successful reread with identical dataset,
 filters, record and page clears only that query. Unrelated success, truncated
 results and legacy checkpoints without scope never clear the warning. Every

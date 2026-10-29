@@ -1,6 +1,8 @@
 import { fingerprint, rethrowContinuation } from './bob-job-journal.ts'
 import { parseDesignIntent } from './project-design-intent.ts'
 import { evaluateConcept } from './solution-concept.ts'
+import type { DesignReadiness } from './project-design-intent.ts'
+import { constructionPurpose, constructionReadiness } from './write-state.ts'
 import { SOLUTION_PROSE, type ProjectWriter, type WritePayload, type WriteResult } from './project-write.ts'
 import { humanTextRejection, proseFields, type HumanTextRejection } from './human-text.ts'
 import type { ProjectSource } from '../../../src/data/provenance.ts'
@@ -20,7 +22,9 @@ export const PROJECT_EDIT_TOOLS = [
     reason: text, request_quote: text,
   }),
 ]
-PROJECT_EDIT_TOOLS[1].function.description += CONCEPT_EDIT_GUIDE
+/** Published with write_state_version 1 (2026-10-29); older manifests keep their own text. */
+export const WRITE_STATE_EDIT_NOTE = ' Saving a selected solution returns a fresh edit_ref for the saved revision and, for purpose=construction, construction_readiness; reuse them instead of reading again.'
+PROJECT_EDIT_TOOLS[1].function.description += CONCEPT_EDIT_GUIDE + WRITE_STATE_EDIT_NOTE
 
 type Resource = 'project_description' | 'selected_solutions' | 'solutions'
 export type EditSnapshot = {
@@ -159,7 +163,10 @@ export function displayEditSnapshot(snapshot: EditSnapshot) {
 export function createProjectEdits(opts: { projectId: string; read: ReadTransport;
   /** Exact selected scope, using the same caller-bound snapshot contract. */
   readSelected?: (areaId: string | null) => PromiseLike<{ data: unknown; error: unknown }>;
-  writer?: ProjectWriter; hasAccess: () => Promise<boolean>; sources?: ProjectSource[]; unlimitedWork?: boolean }) {
+  writer?: ProjectWriter; hasAccess: () => Promise<boolean>; sources?: ProjectSource[]; unlimitedWork?: boolean;
+  /** Pinned per manifest (write_state_version 1): a saved selected solution
+   * returns its fresh edit entry and, for purpose=construction, its readiness. */
+  writeState?: { readiness?: (targetRevision: number, areaId: string | null) => Promise<DesignReadiness> } }) {
   const contexts = new Map<string, EditSnapshot>()
   const pages = new Map<string, { resource: Resource; query: string | null; after: string }>()
   let reads = 0
@@ -191,28 +198,29 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
       return { status: 'ready', payload, snapshot: structuredClone(snapshot) }
     } catch (error) { rethrowContinuation(error); return fail(error instanceof Error ? error.message : 'Invalid content changes.') }
   }
+  async function readSelected(areaId: string | null): Promise<any> {
+    if (!await opts.hasAccess()) return { status: 'denied' }
+    if (!opts.readSelected) return unavailable()
+    if (!opts.unlimitedWork && reads >= 16) return { status: 'budget_exhausted' }
+    reads++
+    try {
+      const { data, error } = await opts.readSelected(areaId)
+      if (!await opts.hasAccess()) return { status: 'denied' }
+      if (error || !Array.isArray(data) || data.length > 1 || JSON.stringify(data).length > 240000) return unavailable()
+      if (!data.length) return { status: 'empty' }
+      const snapshot = data[0] as EditSnapshot
+      if (snapshot.resource !== 'selected_solutions' || !snapshot.target
+        || snapshot.target.area_id !== areaId || snapshot.target.solution_id !== snapshot.record?.id
+        || snapshot.target.solution_revision !== snapshot.record?.revision) return unavailable()
+      return { status: 'ok', entry: await remember(snapshot), target: structuredClone(snapshot.target) }
+    } catch (error) { rethrowContinuation(error); return unavailable() }
+  }
   return {
     tools: PROJECT_EDIT_TOOLS,
     /** Prepare exactly the ordinary content delta without writing. The caller
      * may compose it with a Construction change in one database transaction. */
     prepare:async(value:unknown)=>await opts.hasAccess()?prepare(value):{status:'denied' as const},
-    async readSelected(areaId: string | null): Promise<any> {
-      if (!await opts.hasAccess()) return { status: 'denied' }
-      if (!opts.readSelected) return unavailable()
-      if (!opts.unlimitedWork && reads >= 16) return { status: 'budget_exhausted' }
-      reads++
-      try {
-        const { data, error } = await opts.readSelected(areaId)
-        if (!await opts.hasAccess()) return { status: 'denied' }
-        if (error || !Array.isArray(data) || data.length > 1 || JSON.stringify(data).length > 240000) return unavailable()
-        if (!data.length) return { status: 'empty' }
-        const snapshot = data[0] as EditSnapshot
-        if (snapshot.resource !== 'selected_solutions' || !snapshot.target
-          || snapshot.target.area_id !== areaId || snapshot.target.solution_id !== snapshot.record?.id
-          || snapshot.target.solution_revision !== snapshot.record?.revision) return unavailable()
-        return { status: 'ok', entry: await remember(snapshot), target: structuredClone(snapshot.target) }
-      } catch (error) { rethrowContinuation(error); return unavailable() }
-    },
+    readSelected,
     exportState(): ProjectEditsState {
       return JSON.parse(JSON.stringify({ version: 1, projectId: opts.projectId, reads, partial, contexts: [...contexts], pages: [...pages], sources: opts.sources ?? [] }))
     },
@@ -264,6 +272,19 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
       if (prepared.status !== 'ready' && result.status === 'invalid') return prepared
       // The canonical receipt stays in the writer for delivery/recovery. The
       // model gets content and outcome, never a new set of IDs to transcribe.
+      if (result.status === 'saved' && opts.writeState && snapshot?.target && snapshot.resource !== 'project_description' && result.receipt) {
+        // The exact selected snapshot is read back through the ordinary reader,
+        // so a further edit binds the saved revision without a model round.
+        const selected = await readSelected(snapshot.target.area_id)
+        const fresh = selected.status === 'ok' && selected.target.solution_id === result.receipt.recordId && selected.target.solution_revision === result.receipt.revision ? selected : null
+        const readiness = constructionPurpose(result.receipt.record) ? await constructionReadiness(opts.writeState.readiness, opts.projectId,
+          fresh ? { ...fresh.target } : { revision: NaN, area_id: snapshot.target.area_id }) : null
+        return { status: 'saved', selected_updated: true,
+          message: fresh ? 'Saved the same record. Use the returned edit_ref for another change.' : 'Saved the same record. Read again before another edit.',
+          content: fresh ? fresh.entry.content : displayEditSnapshot({ ...snapshot, record: result.receipt.record }),
+          ...(fresh ? { edit_ref: fresh.entry.edit_ref } : {}),
+          ...(readiness ? { construction_readiness: readiness, ...(typeof readiness.creation_state === 'string' ? { creation_state: readiness.creation_state } : {}) } : {}) }
+      }
       return result.status === 'saved' ? { status: 'saved', selected_updated: snapshot?.target !== null && snapshot?.resource !== 'project_description', message: 'Saved the same record. Read again before another edit.', content: displayEditSnapshot({ ...snapshot!, record: result.receipt!.record }) } : result
     },
   }

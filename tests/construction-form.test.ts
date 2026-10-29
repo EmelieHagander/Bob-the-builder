@@ -12,7 +12,7 @@ import { createProjectWriter, type WritePayload } from '../supabase/functions/_s
 import { compileCadParameters } from '../supabase/functions/_shared/cad-parameters.ts'
 import { createConstructionViews } from '../supabase/functions/_shared/construction-views.ts'
 import { createAiCatalogSession } from '../supabase/functions/_shared/ai-catalog.ts'
-import { catalogFixture } from './support/ai-catalog-fixture.ts'
+import { preWriteStateCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { FORM_REFINEMENT_SCHEMA } from '../supabase/functions/_shared/construction-form.ts'
 
 
@@ -64,7 +64,7 @@ test('FORM checkpoints save, reopen and resume on the same artifact; whole deliv
     assert.equal(before.tool('save_construction_draft').function.parameters.properties.form_refinement,undefined)
     const row=manifest.definitions.find((r:any)=>r.prompt_key==='tools.save_construction_draft')
     assert.equal(row.metadata.form_refinement_version,1)
-    assert.deepEqual(catalogFixture().definition(row.prompt_key,row.definition_kind).definition,row.definition)
+    assert.deepEqual(preWriteStateCatalogFixture().definition(row.prompt_key,row.definition_kind).definition,row.definition)
     for(const previous of priorManifest.definitions.filter((r:any)=>r.prompt_key!=='tools.save_construction_draft')) assert.deepEqual(manifest.definitions.find((r:any)=>r.prompt_key===previous.prompt_key),previous)
   })
   await t.test('SQL and TypeScript scope/readiness agree without changing whole-purpose readiness',async()=>{
