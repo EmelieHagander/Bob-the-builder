@@ -25,6 +25,10 @@ export const SOLUTION_ACTION_TOOLS = [
     item_index: { type: ['integer', 'null'] }, role: { type: ['string', 'null'], enum: ['appearance', 'layout', 'context', null] }, note: nullable, reason: text, request_quote: text,
   }),
 ]
+/** Owner decision 2026-10-29 (create_select_version 1): one create call may
+ * also select the new alternative for its scope. Published schema only; the
+ * runtime registry above stays the original publication's contract. */
+export const CREATE_SELECT_PARAMETERS = object({ ...SOLUTION_ACTION_TOOLS[1].function.parameters.properties, select: { type: 'boolean' } })
 export type SolutionResource = 'solutions' | 'selected_solutions' | 'scopes' | 'measurements' | 'images'
 export type SolutionContext = { project_id: string; resource: SolutionResource; key: string; scope_label: string; record: Record<string, any>; target?: EditSnapshot['target']; measurements?: EditSnapshot['measurements']; measurement_evidence?: Record<string, unknown>[]; head_revision?: number }
 export type SolutionActionsState = {
@@ -44,7 +48,11 @@ export function createSolutionActions(opts: {
   /** Pinned per manifest (write_state_version 1): saved creations return their
    * solution_ref and selections their construction readiness and edit entry. */
   writeState?: { readiness?: (targetRevision: number, areaId: string | null) => Promise<DesignReadiness>; selectedEdit?: (areaId: string | null) => Promise<any> };
+  /** Pinned per manifest (create_select_version 1, requires writeState):
+   * create_solution_alternative accepts select and can select in the same call. */
+  createSelect?: boolean;
 }) {
+  const createSelect = !!opts.createSelect && !!opts.writeState
   const contexts = new Map<string, SolutionContext>(), pages = new Map<string, { resource: SolutionResource; query: string | null; after: string }>()
   let reads = 0, partial = false
   const unavailable = () => { partial = true; return { status: 'unavailable' } }
@@ -84,6 +92,21 @@ export function createSolutionActions(opts: {
       input = result.next_ref ? pages.get(result.next_ref) : undefined
     }
     return null
+  }
+  /** State of a saved selection: construction readiness for a construction-
+   * purpose solution and the selected edit entry, as the select action reports. */
+  const selectionState = async (record: Record<string, any>, scope: SolutionContext, targetRevision: number) => {
+    const areaId = (scope.record.area_id ?? null) as string | null, state: Record<string, unknown> = {}
+    if (constructionPurpose(record)) {
+      const readiness = await constructionReadiness(opts.writeState!.readiness, opts.projectId,
+        { revision: targetRevision, area_id: areaId, solution_id: record.id, solution_revision: record.revision })
+      // Top-level, like the work view, so catalog continuations can follow it.
+      state.construction_readiness = readiness
+      if (typeof readiness.creation_state === 'string') state.creation_state = readiness.creation_state
+    }
+    const edit = opts.writeState!.selectedEdit ? await opts.writeState!.selectedEdit(areaId) : undefined
+    if (edit?.status === 'ok' && edit.entry && edit.target?.solution_id === record.id && edit.target.solution_revision === record.revision) state.edit = edit.entry
+    return state
   }
   return {
     tools: [...SOLUTION_ACTION_TOOLS, ...(opts.modelFeedback ? MODEL_FEEDBACK_TOOLS : [])],
@@ -130,7 +153,9 @@ export function createSolutionActions(opts: {
         const common = { expected_updated_at: null, request_quote: v.request_quote }
         if (name === 'create_solution_alternative') {
           if (opts.writer.unresolvedTools.some(t => ['edit_project_record', 'change_solution_evidence', 'select_solution_alternative'].includes(t))) throw Error('Resolve the failed edit or selection before creating an alternative. Creation cannot repair it.')
-          if (!exact(v, ['scope_ref', 'base_ref', 'changes', 'reason', 'request_quote']) || scope?.resource !== 'scopes' || !(v.base_ref === null || solution(base))) throw Error('Read and choose the destination scope and optional existing base.')
+          if (createSelect && typeof v.select !== 'boolean') throw Error('Set select to true to select the new alternative for this scope, or false to keep the current selection.')
+          const { select: _select, ...createFields } = v
+          if (!exact(createSelect ? createFields : v, ['scope_ref', 'base_ref', 'changes', 'reason', 'request_quote']) || scope?.resource !== 'scopes' || !(v.base_ref === null || solution(base))) throw Error('Read and choose the destination scope and optional existing base.')
           if (solution(base) && base.head_revision !== undefined && base.head_revision !== base.record.revision) throw Error('The base is historical; read the latest solution before deriving an alternative.')
           const seed: EditSnapshot = solution(base) ? base : { project_id: opts.projectId, resource: 'solutions', key: 'new', scope_label: scope.scope_label, record: { title: '', description: '', assumptions: '', tradeoffs: '', source_media_id: null, design_intent: null }, measurements: [], target: null }
           const record = await applyProjectDelta(seed, v.changes, v.reason)
@@ -177,22 +202,32 @@ export function createSolutionActions(opts: {
       if (result.status === 'saved' && opts.writeState) {
         if (name === 'create_solution_alternative' && payload?.kind === 'bound_solution_create') {
           const receipt = result.receipt
-          const ref = receipt?.dataset === 'solutions' && typeof receipt.recordId === 'string' && typeof receipt.revision === 'number' && Number.isSafeInteger(receipt.revision)
-            ? await createdRef(receipt.recordId, receipt.revision, String((payload.data.solution as Record<string, unknown>).title ?? '')) : null
+          const created = receipt?.dataset === 'solutions' && typeof receipt.recordId === 'string' && typeof receipt.revision === 'number' && Number.isSafeInteger(receipt.revision)
+          const ref = created ? await createdRef(receipt!.recordId, receipt!.revision!, String((payload.data.solution as Record<string, unknown>).title ?? '')) : null
+          if (createSelect && v.select === true && scope) {
+            // The same request may select its new alternative. Creation and
+            // selection keep their own receipts; a failed selection leaves the
+            // saved alternative unselected and is reported, never hidden.
+            const notSelected = (status: string, message: string) => ({ status: 'saved', created: true, selected: false, selected_updated: false,
+              selection: { status, message }, ...(ref ? { solution_ref: ref } : {}),
+              message: 'Created a new alternative, but it is not selected: ' + message + (ref ? ' Retry select_solution_alternative with this solution_ref and a fresh scope read.' : ' Read solutions and scopes, then select it.') })
+            if (!created) return notSelected('unavailable', 'the new alternative could not be identified from its receipt.')
+            const record = { ...(payload.data.solution as Record<string, unknown>), id: receipt!.recordId, revision: receipt!.revision }
+            const target: WritePayload = { expected_updated_at: null, request_quote: v.request_quote, kind: 'bound_solution_target', record_id: receipt!.recordId,
+              expected_revision: scope.target?.revision ?? 0, data: { solution_revision: receipt!.revision, area_id: scope.record.area_id, reason: v.reason } }
+            const selected = await opts.writer.commitBound('select_solution_alternative', 'scope:' + scope.key, target)
+            if (selected.status !== 'saved') return notSelected(selected.status, selected.status === 'conflict' ? 'this scope\'s selection changed after it was read.' : (selected.message ?? 'the selection was not saved.'))
+            const targetRevision = selected.receipt?.dataset === 'target' && typeof selected.receipt.revision === 'number' ? selected.receipt.revision : NaN
+            const state = await selectionState(record, scope, targetRevision)
+            return { status: 'saved', created: true, selected: true, selected_updated: false, ...(ref ? { solution_ref: ref } : {}), ...state,
+              message: 'Created the new alternative and selected it for this scope.' + (state.edit ? ' Its edit entry is included for content changes.' : '') }
+          }
           return { status: 'saved', selected: false, selected_updated: false, ...(ref ? { solution_ref: ref } : {}),
             message: ref ? 'Created a new alternative; it is not selected. Use this solution_ref with select_solution_alternative and the same scope_ref.' : 'Created a new alternative; it is not selected. Read solutions to choose it.' }
         }
         if (name === 'select_solution_alternative' && solution(chosen) && scope) {
-          const areaId = (scope.record.area_id ?? null) as string | null, receipt = result.receipt, state: Record<string, unknown> = {}
-          if (constructionPurpose(chosen.record)) {
-            const readiness = await constructionReadiness(opts.writeState.readiness, opts.projectId,
-              { revision: receipt?.dataset === 'target' && typeof receipt.revision === 'number' ? receipt.revision : NaN, area_id: areaId, solution_id: chosen.record.id, solution_revision: chosen.record.revision })
-            // Top-level, like the work view, so catalog continuations can follow it.
-            state.construction_readiness = readiness
-            if (typeof readiness.creation_state === 'string') state.creation_state = readiness.creation_state
-          }
-          const edit = opts.writeState.selectedEdit ? await opts.writeState.selectedEdit(areaId) : undefined
-          if (edit?.status === 'ok' && edit.entry && edit.target?.solution_id === chosen.record.id && edit.target.solution_revision === chosen.record.revision) state.edit = edit.entry
+          const receipt = result.receipt
+          const state = await selectionState(chosen.record, scope, receipt?.dataset === 'target' && typeof receipt.revision === 'number' ? receipt.revision : NaN)
           return { status: 'saved', message: 'Selected the existing alternative for this scope.' + (state.edit ? ' Its edit entry is included for content changes.' : ''), selected_updated: false, ...state }
         }
       }

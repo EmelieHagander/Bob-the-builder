@@ -459,8 +459,11 @@ export async function answerWithOpenAi(opts: {
   // per manifest; older jobs keep receipts only and their original reads.
   const writeState = aiCatalog.manifest().definitions.some(row => row.prompt_key === 'bob.tools' && row.metadata?.write_state_version === 1)
   const constructionReadinessReader = (targetRevision: number, areaId: string | null) => readDesignReadiness(targetRevision, 'construction', areaId)
+  // Owner decision 2026-10-29: one create call may also select the new alternative.
+  const createSelect = writeState && aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.create_solution_alternative' && row.metadata?.create_select_version === 1)
   const solutionActions = createSolutionActions({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
     ...(writeState ? { writeState: { readiness: constructionReadinessReader, selectedEdit: (areaId: string | null) => projectEdits.readSelected(areaId) } } : {}),
+    ...(createSelect ? { createSelect: true } : {}),
     ...(claimedServer ? { modelFeedback: { message: opts.message, read: before => rpc('read_model_feedback', { ...binding, p_before: before }, AbortSignal.timeout(12000)) } } : {}),
     read: input => rpc('read_bob_solution_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
   })

@@ -181,6 +181,25 @@ Unresolved edits, evidence changes or selection failures cannot be repaired by
 creating another alternative. The new catalog disables both legacy solution
 creation and target selection while preserving older pinned manifests.
 
+<a id="create-and-select"></a>
+**Create and select in one call — prepared 2026-10-29 (owner decision), not
+deployed.** On manifests pinned with `tools.create_solution_alternative`
+`create_select_version: 1` (which requires `write_state_version: 1`), creation
+takes a required `select` boolean. With `select=true` the server saves the new
+alternative (`bound_solution_create`) and then selects that exact new revision
+for the read scope (`bound_solution_target`, expected target revision from the
+scope read). Both keep their own receipts and operation keys, so an exact retry
+replays them. The result reports `created`, `selected`, the selected edit entry
+and, for a construction-purpose solution, `construction_readiness` and
+`creation_state`. If the selection fails (for example the scope's target changed
+after its read) the alternative stays saved and unselected, `selection` names the
+outcome, no readiness is claimed and the rejected selection remains a known gap
+for the completion check. Content follows the existing paths, so an explicit
+construction request sets summary, purpose `construction` and alignment in the
+same call; `aligned` is Bob's honest judgement that the request states the needed
+choices, never a server approval. `select=false` keeps the current selection.
+Older manifests keep "creation never selects it".
+
 Selection binds the exact read solution and destination target revisions. A
 newer solution head or concurrent target change rejects the action. Evidence
 changes add/remove one measurement, set/clear the primary image, or add/remove

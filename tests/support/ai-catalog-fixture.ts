@@ -24,6 +24,7 @@ let preCostControlsRows:any[]|undefined,preCostControlsVersions:Map<string,numbe
 let preCreationRows:any[]|undefined,preCreationVersions:Map<string,number>|undefined
 let preControlledCompletionRows:any[]|undefined,preControlledCompletionVersions:Map<string,number>|undefined
 let preWriteStateRows:any[]|undefined,preWriteStateVersions:Map<string,number>|undefined
+let preCreateSelectRows:any[]|undefined,preCreateSelectVersions:Map<string,number>|undefined
 let preMaterialLookupRows:any[]|undefined,preMaterialLookupVersions:Map<string,number>|undefined
 let preResultWindowRows:any[]|undefined,preResultWindowVersions:Map<string,number>|undefined
 let preConstructionWorkRows:any[]|undefined,preConstructionWorkVersions:Map<string,number>|undefined
@@ -58,6 +59,22 @@ for(const migration of migrations){
    const row=seed.find(row=>row.key===spec.key),{seed_version,source_revision,...rest}=row.metadata??{}
    row.definition={...row.definition,description:row.definition.description+spec.append}
    row.metadata={...rest,publication:'material-lookup-v1',material_lookup_version:1}
+   versions.set(spec.key,versions.get(spec.key)!+1)
+  }
+ }
+ const createSelect=source.match(/\$create_select_spec\$([\s\S]+?)\$create_select_spec\$/)
+ if(createSelect){
+  preCreateSelectRows=structuredClone(seed);preCreateSelectVersions=new Map(versions)
+  for(const spec of JSON.parse(createSelect[1])){
+   const row=seed.find(row=>row.key===spec.key),{seed_version,source_revision,...rest}=row.metadata??{}
+   for(const [from,to] of spec.replacements){
+    const fields=['description','additional_description','card_description'].filter(field=>typeof row.definition[field]==='string'&&row.definition[field].includes(from))
+    if(!fields.length)throw Error('create_select_text_missing: '+spec.key)
+    for(const field of fields)row.definition[field]=row.definition[field].replaceAll(from,to)
+   }
+   if(spec.parameters)row.definition={...row.definition,parameters:spec.parameters,required_parameters:spec.parameters.required}
+   if(spec.add_followups)row.definition.operation_followups=[...row.definition.operation_followups,...spec.add_followups]
+   row.metadata={...rest,publication:'create-select-v1',create_select_version:1}
    versions.set(spec.key,versions.get(spec.key)!+1)
   }
  }
@@ -689,6 +706,10 @@ for(const row of preMaterialLookupRows??[])if(row.kind==='tier_binding'&&row.def
 const preMaterialLookupManifest=fixtureManifest(preMaterialLookupRows??seed,preMaterialLookupVersions??versions,'fixture-pre-material-lookup-manifest')
 /** Manifests pinned before 2026-10-29 keep the definition-only material search. */
 export function preMaterialLookupCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preMaterialLookupManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw Error('Pinned fixture')}},{app:'bob',manifest:snapshot})}
+for(const row of preCreateSelectRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preCreateSelectManifest=fixtureManifest(preCreateSelectRows??seed,preCreateSelectVersions??versions,'fixture-pre-create-select-manifest')
+/** Manifests pinned before 2026-10-29's create-select publication: creation never selects. */
+export function preCreateSelectCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preCreateSelectManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw Error('Pinned fixture')}},{app:'bob',manifest:snapshot})}
 for(const row of preWriteStateRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preWriteStateManifest=fixtureManifest(preWriteStateRows??seed,preWriteStateVersions??versions,'fixture-pre-write-state-manifest')
 /** Manifests pinned before writes returned their state (2026-10-29). */
