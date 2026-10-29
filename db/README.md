@@ -297,8 +297,14 @@ Owner follow-ups, not in this migration:
 - `bob_save_turn_checkpoint` was the largest total (467 s in `pg_stat_statements`;
   2,514 calls, mean 186 ms, max 4.4 s on 2026-10-29): it returns the full state
   packet on every save, which the worker only compares with what it sent.
-  Smaller responses change the worker contract. The response size cannot be read
-  after the fact (checkpoints are deleted with their job).
+  **Short receipt prepared 2026-10-29 (owner decision), not applied:**
+  `20261029230000_bob_checkpoint_receipt.sql` adds
+  `bob.bob_save_turn_checkpoint_receipt`, generated from the current private
+  save by replacing its three packet returns, so every check and write is
+  identical. It answers `{receipt_version, job_id, revision, unchanged}`; the
+  worker builds its checkpoint from what it sent. The old function stays for
+  older runtimes and the stored format is unchanged. Apply the migration before
+  deploying `bob-worker` and `ask-bob`; a runtime without it cannot save.
 - `cron.job_run_details` held 274,975 rows (76 MB) from 2026-07-10, shared with
   other apps. **Retention prepared 2026-10-29 (owner decision), not applied:**
   `20261029220000_cron_run_history_retention.sql` deletes run history older than
