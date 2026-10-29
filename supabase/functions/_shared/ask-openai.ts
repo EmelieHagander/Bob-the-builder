@@ -510,6 +510,7 @@ export async function answerWithOpenAi(opts: {
     formEvidence:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.check_construction_draft'&&row.metadata?.construction_evidence_version===1),
     constructionSourceRefresh:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.change_construction_parameters'&&row.metadata?.construction_source_refresh_version===1),
     coherentWork:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_draft'&&row.metadata?.construction_work_version===1),
+    creationPreparation:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_draft'&&row.metadata?.creation_preparation_version===1),
     prepareSolutionEdit:projectEdits.prepare,
     prepareWork:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_work',{...binding,p_payload:payload},AbortSignal.timeout(12000))

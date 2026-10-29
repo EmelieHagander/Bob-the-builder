@@ -15,14 +15,14 @@ import { runProjectAnswer } from '../supabase/functions/_shared/project-answer.t
 import { createToolSession, type ToolFollowup } from '../supabase/functions/_shared/project-tools/session.ts'
 import { readTaskSources } from '../supabase/functions/_shared/task-sources.ts'
 import { checkConstructionWorkOutputs, createConstructionWorkPackets } from '../supabase/functions/_shared/construction-work.ts'
-import { catalogFixture, preConstructionWorkCatalogFixture, catalogCall } from './support/ai-catalog-fixture.ts'
+import { preCreationCatalogFixture as catalogFixture, preConstructionWorkCatalogFixture, catalogCall } from './support/ai-catalog-fixture.ts'
 
 test('one work read → atomic Solution/Construction change → complete check, through the ordinary gates', async t => {
  const publication='20261028200450_ai_construction_work_catalog.sql'
  let beforeCatalog:any
  const pg=await projectSchema(async(db,name)=>{
   if(name===publication)beforeCatalog=(await db.query<any>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
- });t.after(()=>pg.close())
+ },publication);t.after(()=>pg.close())
  const rpc=async(uid:string|null,name:string,args:any[],role='authenticated'):Promise<any>=>
   ((await asProjectUser(pg,uid,`select ${name}(${args.map((_,n)=>'$'+(n+1)).join(',')}) result`,args,role)).rows[0] as any).result
  const owner=randomUUID(),outsider=randomUUID(),turn=randomUUID(),solution=randomUUID()

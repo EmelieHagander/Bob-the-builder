@@ -160,6 +160,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  formEvidence?:boolean;
  constructionSourceRefresh?:boolean;
  coherentWork?:boolean;
+ creationPreparation?:boolean;
  readWorkSources?:(draft:Record<string,any>|null,stepId:string|null)=>Promise<ConstructionWorkSources>;
  prepareSolutionEdit?:ProjectEdits['prepare'];
  prepareWork?:(payload:WritePayload)=>Promise<Record<string,any>>;
@@ -184,7 +185,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  const views=createConstructionViews(opts.projectId,opts.now)
  const workPackets=createConstructionWorkPackets(opts.projectId)
  const baseReadTool=opts.constructionViews?(opts.formEvidence?CONSTRUCTION_EVIDENCE_VIEW_TOOL:CONSTRUCTION_VIEW_TOOL):CONSTRUCTION_READ_TOOL
- const readTool=opts.coherentWork?withConstructionWorkRead(baseReadTool):baseReadTool
+ const readTool=opts.coherentWork?withConstructionWorkRead(baseReadTool,opts.creationPreparation):baseReadTool
  const baseCheckTool=opts.formEvidence?CONSTRUCTION_EVIDENCE_CHECK_TOOL:CONSTRUCTION_CHECK_TOOL
  const checkTool=opts.coherentWork?withConstructionWorkCheck(baseCheckTool):baseCheckTool
  const baseSaveTool=opts.constructionRepeats?CONSTRUCTION_REPEAT_SAVE_TOOL:CONSTRUCTION_SAVE_TOOL
@@ -384,6 +385,23 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
       if(v.artifact_id===null&&(v.revision!==null||v.ids.length))return {status:'invalid'}
       if(draft&&(draft.projectId!==opts.projectId||draft.status!=='ok'||draft.artifact_id!==v.artifact_id||v.revision!==null&&draft.revision!==v.revision))return {status:'unavailable'}
       const sources=await opts.readWorkSources(draft,v.step_id)
+      if(!draft&&opts.creationPreparation){
+       const selected=sources.packet.solution,areaId=sources.packet.scope?.area_id??null
+       if(selected?.status==='ok'){
+        if(!opts.readDesignReadiness||!Number.isSafeInteger(selected.target_revision))return {status:'unavailable',reason:'construction_preparation_unavailable'}
+        const readiness=parseDesignReadiness(await opts.readDesignReadiness(selected.target_revision,'construction',areaId))
+        if(!await opts.hasAccess())return {status:'denied'}
+        if(!readiness||readiness.project_id!==opts.projectId||readiness.area_id!==areaId||readiness.purpose!=='construction')return {status:'unavailable',reason:'construction_preparation_unavailable'}
+        if(readiness.target_revision!==selected.target_revision||readiness.solution_id!==selected.solution_id||readiness.solution_revision!==selected.solution_revision)
+         return {status:'conflict',reason:'work_sources_changed'}
+        // The same canonical gate used at save, shown before authoring geometry.
+        // Readiness is evidence at this read; save still checks it afresh.
+        const scoped=!!(opts.formRefinement&&readiness.design_intent?.model&&['ready','needs_data'].includes(readiness.status))
+        sources.packet={...sources.packet,creation_state:readiness.status,scoped_refinement_available:scoped,
+         preparation:{...readiness,design_intent:undefined,pin:undefined,scope:'whole_solution',
+          scoped_refinement:scoped?'Explicit form_refinement may defer unrelated choices; the save gate checks that exact scope.':null}}
+       }else sources.packet={...sources.packet,creation_state:['empty','no_selected_solution'].includes(selected?.status)?'no_selected_solution':'unavailable'}
+      }
       if(draft){
        const current=await (opts.readCurrent?.(v.artifact_id)??opts.read(v.artifact_id,null,null)) as Record<string,any>
        if(!await opts.hasAccess())return {status:'denied'}

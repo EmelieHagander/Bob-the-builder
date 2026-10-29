@@ -41,6 +41,9 @@ export interface ProjectLookupState {
   used: number
   incomplete: boolean
   sources: ProjectSource[]
+  /** New checkpoints distinguish unresolved exact reads from unscoped gaps. */
+  unresolvedReads?: string[]
+  unscopedIncomplete?: boolean
 }
 
 export function parseLookup(value: unknown): LookupInput | null {
@@ -95,10 +98,12 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
   let used = 0
   const sources: ProjectSource[] = []
   let incomplete = false
+  const unresolvedReads = new Set<string>()
+  const readKey = (input: LookupInput) => JSON.stringify([input.dataset, input.query, input.status, input.area_id, input.record_id, input.after_id ?? null])
   return {
     sources,
     exportState(): ProjectLookupState {
-      return structuredClone({ version: 1, projectId, used, incomplete, sources })
+      return structuredClone({ version: 1, projectId, used, incomplete: incomplete || unresolvedReads.size > 0, sources, unresolvedReads: [...unresolvedReads], unscopedIncomplete: incomplete })
     },
     restoreState(state: ProjectLookupState): void {
       if (!state || state.version !== 1 || state.projectId !== projectId
@@ -109,7 +114,16 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
           || source.updatedAt !== null && typeof source.updatedAt !== 'string'
           || !['measured', 'provided_spec', 'estimated', 'ai_assessment', 'unknown'].includes(source.truth))) throw new Error('lookup_checkpoint_invalid')
       const restored = structuredClone(state)
-      used = restored.used; incomplete = restored.incomplete
+      const scoped = restored.unresolvedReads !== undefined || restored.unscopedIncomplete !== undefined
+      if (scoped && (!Array.isArray(restored.unresolvedReads) || typeof restored.unscopedIncomplete !== 'boolean'
+        || restored.unresolvedReads.some(key => {
+          try {
+            const a = JSON.parse(key)
+            return !Array.isArray(a) || a.length !== 6 || !parseLookup({dataset:a[0],query:a[1],status:a[2],area_id:a[3],record_id:a[4],after_id:a[5]})
+          } catch { return true }
+        }) || restored.incomplete !== (restored.unscopedIncomplete || restored.unresolvedReads.length > 0))) throw new Error('lookup_checkpoint_invalid')
+      used = restored.used; incomplete = scoped ? restored.unscopedIncomplete! : restored.incomplete
+      unresolvedReads.clear(); for (const key of restored.unresolvedReads ?? []) unresolvedReads.add(key)
       // Image context and other readers share this exact source-array instance.
       sources.splice(0, sources.length, ...restored.sources)
     },
@@ -151,7 +165,7 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
       }catch{return {status:'invalid',message:'Cannot project these inputs in the saved frame. No change saved.'}}
     },
     get remaining() { return Math.max(0, budget - used) },
-    get partial() { return incomplete },
+    get partial() { return incomplete || unresolvedReads.size > 0 },
     async search(value: unknown): Promise<LookupResult> {
       const retrievedAt = options.observationTime ? await options.observationTime(value) : new Date().toISOString()
       if (typeof retrievedAt !== 'string' || !Number.isFinite(Date.parse(retrievedAt))) throw new Error('lookup_observation_unavailable')
@@ -161,6 +175,7 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
       if (++used > budget) { incomplete = true; return { ...base, status: 'budget_exhausted' } }
       const input = parseLookup(value)
       if (!input) { incomplete = true; return base }
+      const key = readKey(input)
       base.dataset = input.dataset
       const controller = new AbortController()
       let timer: ReturnType<typeof setTimeout> | undefined
@@ -172,7 +187,7 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
           new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); if(!transport.checkpointed)reject(new Error('timeout')) }, timeoutMs) }),
         ])
         if (error) {
-          incomplete = true
+          unresolvedReads.add(key)
           return { ...base, status: error.code === '42501' ? 'denied' : error.code === '22023' ? 'invalid' : 'unavailable' }
         }
         const payload = data as LookupPayload
@@ -208,6 +223,7 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
         }
         result.status = result.records.length || result.truncated ? 'ok' : 'empty'
         incomplete ||= result.truncated
+        if (!result.truncated) unresolvedReads.delete(key)
         for (const [row, dataset] of [...result.records.map(row => [row, input.dataset] as const), ...result.related.map(row => [row, typeof row.kind === 'string' ? row.kind : input.dataset] as const)]) {
           const label = String(row.name ?? row.subject ?? row.title ?? row.text ?? row.id).slice(0, 120)
           sources.push({ projectId, dataset, recordId: row.id, label, retrievedAt: result.retrievedAt, updatedAt: row.updated_at ?? null, truth: 'unknown' })
@@ -215,7 +231,7 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
         return result
       } catch (error) {
         rethrowContinuation(error)
-        incomplete = true
+        unresolvedReads.add(key)
         return { ...base, status: 'unavailable' }
       } finally { clearTimeout(timer) }
     },

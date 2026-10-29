@@ -556,19 +556,21 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — återhämtning och nyskapande (2026-10-29):** granska,
-merga och driftsätt den förberedda rättningen som avslutar samma tur vid internt
-CAD-kodfel. Schemavalet från PR #369 är redan installerat; upprepa inte den
-releasen. [Releasebevis och nya fynd](foundation-verification.md#cad-runtime-recovery-2026-10-29)
-skiljer installerad rättning från den nya, lokalt verifierade återhämtningen.
-Undersök sedan om den befintliga arbetsvyn för nyskapande ger design intent,
-alignment, exakta redigeringsvägar och materialbindningar före första sparandet.
-Materialschemat har redan det rapporterade saknade fältet. `partial` är
-ackumulerad läsevidens och får inte nollställas enbart av godkänd konstruktion.
-Ett separat godkänt leveransprov återstår: spara och återöppna ritningen för
-samma Construction-revision. [Det tidigare provet](foundation-verification.md#construction-work-paid-2026-10-29)
-är underkänt trots fungerande breddändring. Agentprompterna är orörda,
-läsarmodellen uppskjuten och inga ytterligare betalprov startade.
+**Aktivt nästa steg — förberedelser inför leveransprovet (2026-10-29):** granska
+och merga den lokalt verifierade rättningen för nyskapande; installera båda
+Edge-funktionerna före katalogaktiveringen
+`20261029093710_bob_creation_preparation_catalog.sql`.
+[Ändringar, kontrollbevis och releaseordning](foundation-verification.md#creation-preparation-2026-10-29)
+ägs där. #369/#370 är redan installerade och ska inte driftsättas igen.
+
+Därefter återstår ett separat godkänt prov av skapa → ändra bredd → ritning →
+återöppna exakt sparad version. Behåll samma Construction-identitet, kontrollera
+mått och resultat och jämför hela kedjans anrop, kostnad och tid med
+[det tidigare underkända provet](foundation-verification.md#construction-work-paid-2026-10-29).
+Ingen verklig leverans eller kostnadsminskning är bevisad av de lokala testerna.
+Kvarvarande statusluckor måste knytas till exakt källa/urval; godkänd konstruktion
+får aldrig nollställa alla `partial`-flaggor. Agentprompter och modellval är
+orörda och läsarmodellen fortsatt uppskjuten.
 
 Källavstämning på samma Construction, sex katalogägda kärnverktyg och
 GPT-5.4 medium är tekniskt installerade och återlästa och ligger kvar.

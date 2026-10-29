@@ -81,8 +81,7 @@ test('captured K2 catalog mistakes return actionable fields and repair within th
  const sources:any[]=[],reader=createMaterialCatalogReader('A',async()=>{calls++;return {data:{status:'ok',projectId:'A',items:[],truncated:false,next_cursor:null},error:null}},async()=>true,sources)
  const missing:any={...query(),entity:'profiles',query:'sheet'};delete missing.profile_code
  const shape:any=await reader.read('search_material_catalog',missing)
- assert.equal(shape.status,'invalid');assert(shape.issues.some((i:any)=>i.path==='$.profile_code'))
- assert.match(shape.message,/every required field/i)
+ assert.equal(shape.status,'ok');assert.equal(calls,1)
  const dictionary:any=await reader.read('search_material_catalog',{...query(),entity:'profiles',categories:['sheet']})
  assert.equal(dictionary.status,'invalid');assert.deepEqual(dictionary.validation.fields,['categories','profile_code','profile_revision','properties'])
  assert.match(dictionary.message,/categories=\[\].*profile_code=null.*profile_revision=null.*properties=\{\}/)
@@ -90,7 +89,23 @@ test('captured K2 catalog mistakes return actionable fields and repair within th
  assert.equal(empty.status,'invalid');assert.deepEqual(empty.validation.fields,['query']);assert.match(empty.message,/query=null/)
  const filter:any=await reader.read('search_material_catalog',{...query(),properties:{thickness:value('18')}})
  assert.equal(filter.status,'invalid');assert.match(filter.message,/profile_code.*profile_revision/)
- assert.equal(calls,0);assert.equal(sources.length,0);assert.equal(reader.remaining,8)
+ assert.equal(calls,1);assert.equal(sources.length,0);assert.equal(reader.remaining,8)
  assert.equal((await reader.read('search_material_catalog',{...query(),entity:'profiles'})).status,'ok')
- assert.equal(calls,1);assert.equal(reader.remaining,7)
+ assert.equal(calls,2);assert.equal(reader.remaining,7)
+})
+
+
+test('omitted unused profile filters are canonical nulls; typed searches and writes never infer profiles',async()=>{
+ const input:any=query();delete input.profile_code;delete input.profile_revision
+ const canonical=parseCatalogRead('search_material_catalog',query())
+ assert.deepEqual(parseCatalogRead('search_material_catalog',input),canonical)
+ assert.equal(parseCatalogRead('search_material_catalog',{...input,properties:{thickness:value('18')}}),null)
+ assert.equal(parseCatalogRead('search_material_catalog',{...input,profile_code:'sheet_stock',properties:{thickness:value('18')}}),null)
+ assert.equal(parseCatalogRead('search_material_catalog',{...input,profile_code:''}),null)
+ assert.equal(parseCatalogRead('search_material_catalog',{...input,profile_revision:1}),null)
+ assert.equal(parseCatalogRead('search_material_catalog',{...input,unknown_filter:null}),null)
+ const material:any=write();delete material.profile_code;assert.equal(parseCatalogWrite(material),null)
+ let dispatched:any
+ const r=createMaterialCatalogReader('A',async v=>{dispatched=v;return {data:{status:'empty',projectId:'A',items:[],next_cursor:null,truncated:false},error:null}},async()=>true,[])
+ assert.equal((await r.read('search_material_catalog',input)).status,'empty');assert.deepEqual(dispatched,canonical);assert(!r.partial)
 })
