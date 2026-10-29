@@ -294,11 +294,16 @@ does not depend on an Edge deploy.
 
 Owner follow-ups, not in this migration:
 
-- `bob_save_turn_checkpoint` was the largest total (467 s in `pg_stat_statements`):
-  it returns the full state packet on every save. Smaller responses change the
-  worker contract.
-- `cron.job_run_details` holds about 141,000 rows (76 MB) shared with other apps.
-  Retention is an owner decision.
+- `bob_save_turn_checkpoint` was the largest total (467 s in `pg_stat_statements`;
+  2,514 calls, mean 186 ms, max 4.4 s on 2026-10-29): it returns the full state
+  packet on every save, which the worker only compares with what it sent.
+  Smaller responses change the worker contract. The response size cannot be read
+  after the fact (checkpoints are deleted with their job).
+- `cron.job_run_details` held 274,975 rows (76 MB) from 2026-07-10, shared with
+  other apps. **Retention prepared 2026-10-29 (owner decision), not applied:**
+  `20261029220000_cron_run_history_retention.sql` deletes run history older than
+  7 days once and then daily at 03:23 UTC (`cron-run-history-retention`). It
+  prunes every app's run log in this project, nothing else.
 
 ## Manual material planning foundation (4B2a)
 
