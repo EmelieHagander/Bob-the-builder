@@ -162,7 +162,9 @@ test('a new project material is shared as a dimension-only, unreviewed standard 
   for (const id of [unknown.record.id, tube.record.id])
     assert.deepEqual((await pg.query<any>('select material_type_id,material_size_id from bob.catalog_items where id=$1', [id])).rows[0], { material_type_id: null, material_size_id: null })
   // Shared entries rank after reviewed ones in the lookup.
+  // Rows within one rank follow their ids, so only the order of reviewed before unreviewed is fixed.
   const plywood18 = (await lookup(one, 'plywood 18')).items.map((r: any) => [r.name, r.unreviewed])
-  assert.equal(plywood18.at(-1)[1], true, JSON.stringify(plywood18))
-  assert(plywood18.slice(0, -1).every((r: any) => r[1] === false || r[0] === 'Plywood till sängen'), JSON.stringify(plywood18))
+  const firstUnreviewed = plywood18.findIndex((r: any) => r[1] === true)
+  assert(firstUnreviewed > 0 && plywood18.slice(firstUnreviewed).every((r: any) => r[1] === true), JSON.stringify(plywood18))
+  assert(plywood18.some((r: any) => r[0] === 'Plywood 18 mm' && r[1] === true), JSON.stringify(plywood18))
 })
