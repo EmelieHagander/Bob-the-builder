@@ -718,6 +718,23 @@ Rollback: reactivate the previous catalog for new jobs first. A runtime from
 before this change cannot restore a turn checkpoint that used these tools, so
 let such jobs finish before rolling either runtime back.
 
+### Exact lookup and controlled completion — source 2026-10-29
+
+**Prepared, not deployed.** New jobs pin `exactLookupVersion: 1` in
+`ask-openai.ts`: lookups read `search_bob_project_data_v10` through
+`lookup-rpc.ts`, and a statement timeout (57014) is retried once inside the same
+journaled read (26 s allowance). Journals without the pin keep v8/v9 and one
+attempt. New manifests with `work_completion_version: 3` replace the full review
+after saved work with server facts, the small completion gate and at most one
+targeted note ([conversation owner](../Docs/ask-bob-conversations.md#controlled-completion)).
+[Database contract](../db/README.md#room-dimensions--2026-10-26) lists v10.
+Each step needs the owner's explicit OK, in this order:
+
+1. Apply `20261029115500_bob_exact_lookup.sql` (adds v10 only).
+2. Deploy `bob-worker`, then `ask-bob`, from the same merge commit.
+3. Apply `20261029120000_bob_controlled_completion_catalog.sql` and the other
+   catalog publications of the same release.
+
 ### Room dimensions — source 2026-10-26
 
 **Deployed 2026-10-26** (`bob-worker` v139, `ask-bob` v171; [evidence](../Docs/foundation-verification.md#room-dimensions-and-human-text--2026-10-26)). New jobs pin
