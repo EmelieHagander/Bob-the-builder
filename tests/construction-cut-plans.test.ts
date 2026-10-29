@@ -129,10 +129,10 @@ test('versioned stock/catalog formats bind plans with current whole-sheet capaci
   const receipt=await f.write(catalogPlan);const plan=await f.read(receipt.recordId)
   assert.equal(receipt.revision,3);assert.equal(plan.capacity[0].kind,'catalog_part');assert.equal(plan.capacity[0].available_sheets,null);assert.equal(plan.input_evidence_verified,false)
   await assert.rejects(f.rpc('bob.material_requirement_command',[f.project,'publish',f.needs[0].recordId,1,'{}']),/construction_cut_fit_required/)
-  // Owner decision 2026-10-29: panel dimensions are optional in the catalog, but a cut plan still needs the whole format.
+  // Owner decision 2026-10-29: a panel may be saved without a dimension, but it is incomplete and a cut plan refuses it.
   const narrow=await f.write({...f.base,kind:'catalog',data:{action:'ensure',key:'panel-no-width',kind:'part',name:'Fixture panel without width',aliases:[],profile_code:'panel',profile_revision:1,categories:['wood.plywood','sheet'],properties:{length:{value:'2440',unit:'mm',truth:'provided_spec',parameter:null,note:''}},material_id:f.material.recordId,material_revision:1,notes:'Width not stated',source_kind:'design_choice',source_quote:'existing blanks',source_seq:null}})
   const stored=(await f.pg.query('select has_unknown,properties from bob.catalog_item_revisions where item_id=$1',[narrow.recordId])).rows[0]
-  assert.equal(stored.has_unknown,false);assert.equal(stored.properties.width,undefined)
+  assert.equal(stored.has_unknown,true);assert.equal(stored.properties.width,undefined)
   const incomplete=structuredClone(catalogPlan);incomplete.expected_revision=3;incomplete.data.key='incomplete-plan';incomplete.data.candidate_sources[0]={candidate_id:'sheet',kind:'catalog_part',record_id:narrow.recordId,revision:1}
   await assert.rejects(f.write(incomplete),/cut_plan_format_mismatch/)
  })

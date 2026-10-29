@@ -14,7 +14,7 @@ The proposed separate material/part tables are refined to **one versioning mecha
 | `bob.catalog_units` | Input/display unit code, physical dimension and exact multiplier to a dimensional basis. Length has the fixed basis mm. |
 | `bob.catalog_categories` | Material, form and function axes, stable category codes, labels, aliases and same-axis parent links. |
 | `bob.catalog_property_definitions` | Stable property meanings, value type and canonical unit; all length properties must use mm. |
-| `bob.catalog_profiles`, `catalog_profile_revisions`, `catalog_profile_fields`, `catalog_profile_rules` | Published immutable field/rule revisions (a field may only become optional in place, [owner decision 2026-10-29](#optional-dimensions)), required flags, range bounds, ordering and supported declarative relations. |
+| `bob.catalog_profiles`, `catalog_profile_revisions`, `catalog_profile_fields`, `catalog_profile_rules` | Published immutable field/rule revisions, required fields ([a left-out required field marks the definition incomplete](#optional-dimensions)), range bounds, ordering and supported declarative relations. |
 | `bob.catalog_items`, `catalog_item_revisions` | Stable identity, project/shared scope, kind `material` or `part`, exact version, dynamic properties, source class, optional named parameters and exact material revision for parts. |
 | `bob.catalog_item_categories` | Category links tied to an exact item revision. |
 | `bob_private.catalog_item_provenance` | Private current/earlier user-message quote, thread/sequence and actor for newly written revisions; not ordinary collaborator-readable catalog content. |
@@ -129,38 +129,36 @@ Sizes are in mm. For fasteners `width_mm` holds the nominal shank diameter,
 `length_mm` the length and `depth_mm` stays null; the seed maps them onto the
 `fastener` profile's `diameter` and `length`. Sheets map `depth_mm` to
 `thickness`; rectangular profiles map `depth_mm` to `thickness` and `width_mm` to
-`width`. A dimension the list does not state is left out: every profile field
-is [optional](#optional-dimensions). Rolls (`roll_stock`), single pieces
-(`piece`) and loose goods (`bulk`) have no dimension fields at all, so roofing
-felt, membranes, tiles and gravel can be listed without invented measures. The seed's starting list (21 materials, 30 sizes, 45 combinations, 58
+`width`. A required dimension the list does not state is saved as `unknown`
+with a note. Rolls (`roll_stock`) and single pieces (`piece`) use all-optional
+profiles, so roofing felt, membranes and tiles can be listed without invented
+measures. The seed's starting list (21 materials, 30 sizes, 45 combinations, 58
 aliases) is generated from `scripts/data/standard-materials.json` into its own
 migration; the owner approved it and it was applied on 2026-10-29. It states no
 product, supplier, price or weight.
 
 <a id="optional-dimensions"></a>
-**Every profile field is optional — prepared 2026-10-29 (owner decision), not
+**Every property may be left out — prepared 2026-10-29 (owner decision), not
 applied.** Materials state different things: gravel has a material and a weight
-but no width or length; a plank has length and width but no weight. A forced
-required field made the starting list store an `unknown` placeholder (the
-profiled roof sheet's thickness) and gave it no identity.
-`20261029210000_optional_catalog_dimensions.sql` makes every field of every
-published profile optional **in place**. It does not publish a revision 2:
-filtered searches and identity fingerprints pin the profile revision, so a new
-revision would hide every saved and seeded definition from filtered searches and
-stop equal definitions from being reused. Relaxing a requirement never
-invalidates a saved definition; the immutability trigger now allows exactly that
-one change and still rejects tightening, bounds, rules, inserts and deletes on a
-published revision. A stated value is validated as before (unit, range, note on
-an unknown). The migration also adds the form `bulk` (Lösvikt) with an
+but no width or length; a plank has length and width but no weight.
+`20261029210000_optional_catalog_dimensions.sql` changes one rule in
+`bob_private.catalog_normalize`: a profile field marked required no longer stops
+a save. Leaving it out marks the definition incomplete (`has_unknown`), exactly
+like an explicit unknown, so it gets no identity fingerprint. Two separately
+requested incomplete definitions ("OSB for the floor" and "OSB for the roof",
+thickness not yet known) are therefore never merged or silently reused, and
+consumers that need the dimension still refuse it: the box construction check
+reports the missing thickness or part dimension, and cut plans reject an
+incomplete panel part. Profiles, their published revisions and the immutability
+rule are unchanged, so saved and seeded definitions keep their identities and
+filtered searches. A first draft relaxed the profiles themselves; an independent
+review showed that let incomplete definitions merge, and it was replaced before
+application. The migration also adds the form `bulk` (Lösvikt) with an
 all-optional `bulk` profile and the material category `mineral.aggregate`
 (Ballast: grus, sand, makadam). Weight stays on the combination
-(`catalog_items.weight_kg`) and lengths on the size row. Shared seed definitions
-whose only gap was such a placeholder get one new revision without it and an
-identity; project definitions keep their recorded unknowns. Where a dimension is
-needed it is still checked by the consumer: the box construction check reports
-a missing material thickness or part dimension, and cut plans reject a panel
-part or stock sheet whose format is incomplete. No runtime or catalog
-publication changes.
+(`catalog_items.weight_kg`), and a plank's length on its size row
+(`rectangular_profile` has no length field). No runtime or catalog publication
+changes.
 
 New manifests (`tools.search_material_catalog` `material_lookup_version` 1) send
 an untyped material search to the combined lookup: one row per combination and

@@ -575,10 +575,10 @@ uppslagning med en rad per inköpsplats. Den godkända startlistan (21 material,
 delade och ogranskade är ett föreslaget uppföljningssteg.
 [Modell och åtkomst](material-catalog.md#normalized-material-model).
 
-**Förberett, ej migrerat — alla mått valfria (ägarbeslut 2026-10-29):** varje
-profilfält blir valfritt på plats, så att till exempel grus (material och vikt)
-och plank (längd och bredd, ingen vikt) passar. Lösvikt och ballast läggs till,
-och takplåten får en identitet. Bara en migrering, ingen driftsättning av
+**Förberett, ej migrerat — alla egenskaper får utelämnas (ägarbeslut 2026-10-29):**
+ett utelämnat mått stoppar inte längre en sparning, men definitionen blir
+ofullständig och slås aldrig ihop med en annan. Lösvikt och ballast läggs till,
+så att till exempel grus passar. Bara en migrering, ingen driftsättning av
 funktioner. [Beslut och konsekvenser](material-catalog.md#optional-dimensions).
 
 Därefter återstår ett nytt separat godkänt prov av skapa → ändra bredd → ritning →

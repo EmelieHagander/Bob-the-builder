@@ -131,30 +131,28 @@ test('new operator-published profiles work without new API code and all length s
   const saved=await write(c,payload(definition('custom',{profile_code:'custom_fixture',categories:['wood.softwood','rectangular_profile'],properties:{test_span:val('12','cm')}})))
   assert.equal(saved.record.properties.test_span.value,'120');assert.equal(saved.record.properties.test_span.unit,'mm')
  }finally{await fail(c)}
- // Owner decision 2026-10-29: a published field may only become optional in place.
- await assert.rejects(pg.exec("update bob.catalog_profile_fields set required=false,max_value=20000 where profile_code='custom_fixture'"),/requires_new_revision/)
- await pg.exec("update bob.catalog_profile_fields set required=false where profile_code='custom_fixture'")
- await assert.rejects(pg.exec("update bob.catalog_profile_fields set required=true where profile_code='custom_fixture'"),/requires_new_revision/)
- await assert.rejects(pg.exec("update bob.catalog_profile_fields set max_value=20000 where profile_code='custom_fixture'"),/requires_new_revision/)
- await assert.rejects(pg.exec("delete from bob.catalog_profile_fields where profile_code='custom_fixture'"),/requires_new_revision/)
+ await assert.rejects(pg.exec("update bob.catalog_profile_fields set required=false where profile_code='custom_fixture'"),/requires_new_revision/)
  await assert.rejects(pg.exec("update bob.catalog_property_definitions set canonical_unit='mm' where key='test_span'"),/requires_new_identity/)
 })
 
-test('every profile field is optional: gravel, a plank without weight and a sheet without thickness save once with an identity',async()=>{
- // Owner decision 2026-10-29: the table must fit gravel (material and weight, no width or length) and a plank (length and width, no weight).
- assert.equal((await pg.query('select count(*)::int n from bob.catalog_profile_fields where required')).rows[0].n,0)
+test('every property may be left out: gravel saves complete, a sheet or plank without a required dimension saves incomplete and is never merged',async()=>{
+ // Owner decision 2026-10-29: the table must fit gravel (material and weight, no width or length) and a plank without weight.
  const profiles=await read({action:'profiles'});assert(profiles.items.some((p:any)=>p.code==='bulk'))
+ assert((await pg.query('select count(*)::int n from bob.catalog_profile_fields where required')).rows[0].n>0,'profiles and their revisions are unchanged')
  const c=await claim();try{
   const gravel=definition('gravel',{name:'Grus 0–8',profile_code:'bulk',categories:['mineral.aggregate','bulk'],properties:{}})
   const g=await write(c,payload(gravel));assert.equal(g.operation,'created');assert.equal(g.record.has_unknown,false);assert.deepEqual(g.record.properties,{})
   const again=await write(c,payload({...gravel,key:'gravel-again',name:'Grus'}));assert.equal(again.operation,'reused');assert.equal(again.recordId,g.recordId)
+  // A left-out required dimension behaves like an explicit unknown: saved, incomplete, no identity, never reused.
+  const floor=await write(c,payload(definition('osb-floor',{name:'OSB till golvet',properties:{}})))
+  const roof=await write(c,payload(definition('osb-roof',{name:'OSB till taket',properties:{}})))
+  assert.equal(floor.operation,'created');assert.equal(roof.operation,'created');assert.notEqual(floor.recordId,roof.recordId)
+  assert.equal(floor.record.has_unknown,true);assert.deepEqual(floor.record.properties,{})
   const plank=await write(c,payload(definition('plank',{name:'Plank',profile_code:'rectangular_profile',categories:['wood.softwood','rectangular_profile'],properties:{width:val('120')}})))
-  assert.equal(plank.record.has_unknown,false);assert.deepEqual(Object.keys(plank.record.properties),['width'])
-  const sheet=await write(c,payload(definition('sheet-no-thickness',{name:'Takplåt',properties:{}})))
-  assert.equal(sheet.record.has_unknown,false);assert.notEqual(sheet.recordId,g.recordId)
-  const fingerprints=(await pg.query('select identity_hash from bob.catalog_items where id=any($1::uuid[])',[[g.recordId,plank.recordId,sheet.recordId]])).rows
-  assert(fingerprints.every((r:any)=>r.identity_hash!==null),'complete optional definitions are reusable')
-  // A stated value is still validated: an optional field never accepts a wrong unit or a placeholder without a note.
+  assert.equal(plank.record.has_unknown,true);assert.deepEqual(Object.keys(plank.record.properties),['width'])
+  const ids=(await pg.query('select id,identity_hash from bob.catalog_items where id=any($1::uuid[])',[[g.recordId,floor.recordId,roof.recordId,plank.recordId]])).rows
+  assert.deepEqual(Object.fromEntries(ids.map((r:any)=>[r.id,r.identity_hash!==null])),{[g.recordId]:true,[floor.recordId]:false,[roof.recordId]:false,[plank.recordId]:false})
+  // A stated value is still validated.
   await assert.rejects(write(c,payload(definition('bad-optional',{properties:{thickness:val('18','kg')}}))),/catalog_/)
   await assert.rejects(write(c,payload(definition('bad-unknown',{properties:{thickness:val(null,'mm','unknown',null,'')}}))),/catalog_unknown_requires_note/)
  }finally{await fail(c)}
