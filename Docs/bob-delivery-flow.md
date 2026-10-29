@@ -567,6 +567,21 @@ steg, upprepade serverläsningar, resultatfönstret, databaslast och loggade
 avvisningsorsaker). Nu körs `bob-worker` v153 och `ask-bob` v185.
 #369–#373 ska inte driftsättas igen.
 
+**Förberett, ej driftsatt — ägarens uppföljningar före lådprovet (2026-10-29):**
+6 fasta verktyg plus 4 efter projektfas och kort som säger när varje annat
+verktyg används; kort kvitto vid checkpoint-sparning; 7 dagars cron-historik;
+sökning på hela ord med hemmalager `null` när inget registrerats; utelämnade
+egenskaper gör en definition ofullständig. [Ändringar och releaseordning](foundation-verification.md#follow-ups-2026-10-29).
+Därefter kör ägaren lådprovet.
+
+**Planerat, inte byggt — materialtabellerna före första skrivväg (uppföljning 1):**
+den [fristående granskningen](archive/material-tables-review-2026-10-29.md)
+kräver behörighet bara för Bob-projektdeltagare, inget läckage från privata
+definitioner, versionerade kopplingar, en ägare per mått, hemmalager med
+historik, entydiga enheter och några småfel, innan Bobs nya material blir
+delade och ogranskade. Två ägarbeslut återstår: om projektlager pekar på
+hemmalager, och att bara specifikationen delas.
+
 **Installerat — normaliserad materialmodell (ägarbeslut 2026-10-29):**
 standardmaterial, storlekar, alias, kombination (= Bobs materialdefinition),
 hushållslager, delade butiker och priser med historik och en samlad

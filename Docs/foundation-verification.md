@@ -1,5 +1,41 @@
 # Foundation verification and rollout
 
+<a id="follow-ups-2026-10-29"></a>
+## Owner follow-ups before the next paid run — prepared, 2026-10-29
+
+**Source and local verification only; not migrated, deployed or activated.**
+After the [#373 installation](#open-issues-closed-install-2026-10-29) the owner
+took four follow-ups and an independent review of the new material tables before
+the next paid box run. Each change is pinned or backward compatible.
+
+| Change | Evidence that motivated it | Owner |
+|---|---|---|
+| Six permanent tools plus four by phase, loaded in full and fixed for the turn; every other card says "Use when … Gives …" | `describe_tool` in half of 159 turns since 15 October; after each call the next request lost the provider cache, about USD 0.36 of the last paid run's 2.28, plus about eight model rounds only for manuals | [Tools](ask-bob-tools.md#phase-tools) |
+| Checkpoint saves answer with a short receipt | `bob_save_turn_checkpoint` was the largest database total (2,514 calls, mean 186 ms, 467 s) and echoed the whole state | [Database](../db/README.md#db-load-relief) |
+| pg_cron run history kept 7 days | 274,975 rows (76 MB) since July, every app in the project | [Database](../db/README.md#db-load-relief) |
+| Material lookup matches whole words; stock at home is null when unrecorded | The review: "utomhusskruv" returned indoor screws, "12x45" returned 45 × 95, an empty list read as "none at home" | [Database](../db/README.md#material-model) |
+| A left-out required catalog field marks the definition incomplete instead of blocking the save; loose goods (`bulk`) | Owner decision: every property may be left out. A first draft that relaxed the profiles let incomplete definitions merge; the review caught it before application | [Catalog](material-catalog.md#optional-dimensions) |
+
+The [independent review](archive/material-tables-review-2026-10-29.md) also found
+gaps that matter before anyone may write to the new material tables (contributor
+authority, private-text leakage, unversioned links, duplicated facts, stock and
+units). They are planned with [follow-up 1](bob-delivery-flow.md#state), not
+built; the tables hold no written rows today.
+
+Validation: new suites `bob-phase-tools` (6), `bob-checkpoint-receipt` (3) and the
+lookup, optional-property and retention cases pass, with publication idempotency,
+fixture-equals-database and pinned-manifest behaviour; existing failures are the
+known ones on main. `tsc -b` is clean. No production write, deploy, CI or model call.
+
+Release order with the owner's OK and no running Bob job: apply
+`20261029210000_optional_catalog_dimensions.sql`,
+`20261029220000_cron_run_history_retention.sql`,
+`20261029230000_bob_checkpoint_receipt.sql` and
+`20261029240000_material_lookup_matching.sql`; deploy `bob-worker`, then
+`ask-bob`, from the merge commit (a runtime without the receipt function cannot
+save checkpoints); then apply the catalog publication
+`20261029250000_bob_phase_tools_catalog.sql`.
+
 <a id="construction-work-paid-run3-2026-10-29"></a>
 ## Paid box run after #371 — 2026-10-29
 

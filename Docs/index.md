@@ -16,6 +16,8 @@
   [the paid run after it failed acceptance](foundation-verification.md#construction-work-paid-run3-2026-10-29) and
   [controlled completion, exact lookup and write state are installed](foundation-verification.md#controlled-completion-2026-10-29);
   [the seven remaining causes are closed and installed](foundation-verification.md#open-issues-closed-2026-10-29).
+  [Owner follow-ups before the next paid run are prepared](foundation-verification.md#follow-ups-2026-10-29), and an
+  [independent material-table review](archive/material-tables-review-2026-10-29.md) shapes follow-up 1.
   [State](bob-delivery-flow.md#state) owns the next release
   and remaining acceptance. The retrieval helper remains deferred.
 
@@ -225,6 +227,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 ## Archives — historical evidence, not active work
 
+- [Material tables review, 2026-10-29](archive/material-tables-review-2026-10-29.md) — independent findings on the new material tables; corrections before application are in [verification](foundation-verification.md#follow-ups-2026-10-29), the remainder in [State](bob-delivery-flow.md#state).
 - [Project context and small-model audit, 2026-10-26](archive/bob-project-context-audit-2026-10-26.md) — existing helpers, active models, usage and remaining reader/review gaps; [project context](ask-bob-context.md) owns the current contract and [State](bob-delivery-flow.md#state) owns remaining implementation work.
 - [K2 live acceptance report, 2026-10-04](archive/k2-live-acceptance-2026-10-04.json) — synthetic saved revisions from the successful three-turn concept test; [verification](foundation-verification.md#k2-live-construction-acceptance--2026-10-04) owns release evidence and limits, and [State](bob-delivery-flow.md#state) owns remaining work.
 - [Delivery-flow review, 2026-09-29](archive/bob-delivery-flow-review-2026-09-29.md) — dated code/data findings, verification limits and the superseded handoff snapshot. Open actions remain in [State](bob-delivery-flow.md#state); archiving this record does not close them.

@@ -20,7 +20,7 @@ import { runProjectAnswer } from '../supabase/functions/_shared/project-answer.t
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createMediaAdapter } from '../supabase/functions/_shared/project-context/media.ts'
 import { createProjectContext } from './support/colleague-catalog-fixture.ts'
-import { catalogFixture, preWriteStateCatalogFixture, preTextHygieneCatalogFixture, catalogCall } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, preWriteStateCatalogFixture, preTextHygieneCatalogFixture, prePhaseToolsCatalogFixture, catalogCall } from './support/ai-catalog-fixture.ts'
 
 const publication = '20261029113000_bob_write_state_catalog.sql'
 const changedKeys = ['tools.save_construction_draft', 'tools.edit_construction_parts', 'tools.change_construction_parameters', 'tools.check_construction_draft',
@@ -214,8 +214,9 @@ test('a check that cannot complete is reported inside the saved result, never as
   assert.equal(compact.coverage_complete, false); assert.equal(compact.concept_ready, false); assert.equal(compact.details_read.result_id, 'cs_x')
 })
 
-test('the first request offers the five-tool bench; project search stays loadable, not preloaded', async () => {
-  const catalog = catalogFixture(), core = catalogCoreTools(catalog)!
+test('manifests pinned before the phase tools offer the five-tool bench; project search stays loadable, not preloaded', async () => {
+  // The 2026-10-29 phase-tools publication returns search_project_data to the bench (tests/bob-phase-tools.test.ts).
+  const catalog = prePhaseToolsCatalogFixture(), core = catalogCoreTools(catalog)!
   assert(!core.includes('search_project_data'))
   const projectId = 'p', message = 'Read the saved project', hasAccess = async () => true
   const lookup = createProjectLookup(projectId, async (_project, input) => ({ data: { records: input.dataset === 'project' ? [{ id: projectId, name: 'Fixture', description: 'Saved project' }] : [], related: [], truncated: false }, error: null }), undefined, undefined, undefined, { unlimitedWork: true })
