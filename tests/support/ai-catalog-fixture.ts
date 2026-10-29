@@ -25,6 +25,7 @@ let preCreationRows:any[]|undefined,preCreationVersions:Map<string,number>|undef
 let preControlledCompletionRows:any[]|undefined,preControlledCompletionVersions:Map<string,number>|undefined
 let preWriteStateRows:any[]|undefined,preWriteStateVersions:Map<string,number>|undefined
 let preMaterialLookupRows:any[]|undefined,preMaterialLookupVersions:Map<string,number>|undefined
+let preResultWindowRows:any[]|undefined,preResultWindowVersions:Map<string,number>|undefined
 let preConstructionWorkRows:any[]|undefined,preConstructionWorkVersions:Map<string,number>|undefined
 // Materialise the explicit immutable publication patches in migration order.
 // The historical seed stays available for pinned-manifest compatibility tests.
@@ -42,6 +43,13 @@ for(const migration of migrations){
    if(edit.definition)row.definition={...row.definition,...edit.definition}
    versions.set(edit.key,versions.get(edit.key)!+1)
   }
+ }
+ const resultWindow=source.match(/\$result_window_spec\$([\s\S]+?)\$result_window_spec\$/)
+ if(resultWindow){
+  preResultWindowRows=structuredClone(seed);preResultWindowVersions=new Map(versions)
+  const spec=JSON.parse(resultWindow[1]),row=seed.find(row=>row.key===spec.key),{seed_version,source_revision,...rest}=row.metadata??{}
+  row.metadata={...rest,...spec.metadata,publication:'bob-result-window-v2'}
+  versions.set(spec.key,versions.get(spec.key)!+1)
  }
  const materialLookup=source.match(/\$material_lookup_spec\$([\s\S]+?)\$material_lookup_spec\$/)
  if(materialLookup){
@@ -673,6 +681,10 @@ export function preControlledCompletionCatalogFixture(update?:(snapshot:AiCatalo
 for(const row of preCreationRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preCreationManifest=fixtureManifest(preCreationRows??seed,preCreationVersions??versions,'fixture-pre-creation-manifest')
 export function preCreationCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preCreationManifest)})}
+for(const row of preResultWindowRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preResultWindowManifest=fixtureManifest(preResultWindowRows??seed,preResultWindowVersions??versions,'fixture-pre-result-window-manifest')
+/** Manifests pinned before 2026-10-29 keep result window version 1. */
+export function preResultWindowCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preResultWindowManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw Error('Pinned fixture')}},{app:'bob',manifest:snapshot})}
 for(const row of preMaterialLookupRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preMaterialLookupManifest=fixtureManifest(preMaterialLookupRows??seed,preMaterialLookupVersions??versions,'fixture-pre-material-lookup-manifest')
 /** Manifests pinned before 2026-10-29 keep the definition-only material search. */

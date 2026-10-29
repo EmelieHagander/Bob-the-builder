@@ -4,7 +4,7 @@ import { runProjectAnswer } from '../supabase/functions/_shared/project-answer.t
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { checkedToolSnapshot } from '../supabase/functions/_shared/project-tools/session.ts'
-import { catalogFixture, preControlledCompletionCatalogFixture } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, preControlledCompletionCatalogFixture, preResultWindowCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { CONTROLLED_COMPLETION_GATE_CONTRACT, CONTROLLED_COMPLETION_GATE_GAP } from '../scripts/build-bob-controlled-completion-catalog.ts'
 
 // Paid box run 2026-10-29: after a saved drawing and a correct answer, the
@@ -124,7 +124,8 @@ test('the publication versions only the completion contract, gate and one new no
     assert.equal(live.text('completion-gate.contract'), CONTROLLED_COMPLETION_GATE_CONTRACT)
     assert.equal(live.text('bob.note.gate-gap', { reason: 'R.' }), CONTROLLED_COMPLETION_GATE_GAP.replace('{{reason}}', 'R.'))
     assert.equal(live.role('completion-gate').tier, 'mini')
-    const fixture = catalogFixture()
+    // The later result-window publication adds one metadata pin to the main contract.
+    const fixture = preResultWindowCatalogFixture()
     for (const key of ['agent-contract.ask-bob', 'bob.note.gate-gap', 'completion-gate.contract', 'role.completion-gate']) {
       assert.deepEqual(fixture.definition(key).definition, live.definition(key).definition, key)
       assert.equal(fixture.definition(key).content, live.definition(key).content, key)

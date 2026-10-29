@@ -235,6 +235,39 @@ pin `resultWindowVersion: 1`: older results stay whole, newest first, up to
 retention is unchanged. If the spending stop ends the completion review, Bob's
 reviewed answer is delivered as partial instead of the recovery template.
 
+<a id="result-window-v2"></a>
+**Result window version 2 — prepared 2026-10-29 (owner decision: Bob gets what
+he needs when he needs it; not deployed).** New manifests pin
+`agent-contract.ask-bob` `result_window_version: 2` (publication
+`bob-result-window-v2`); new jobs record `resultWindowVersion: 2` in their
+execution identity, running and older jobs keep version 1. The 20,000-token
+ceiling is unchanged and the last two exchanges stay whole.
+
+- While the older results fit the ceiling, nothing is demoted, as before.
+- Above it, an older read of the same record that Bob read again later is
+  *superseded* and leaves first. The record key is the read tool plus its
+  arguments; a revision field counts as the same record, a page cursor or
+  another view does not; writes and checks are never superseded. Its
+  reference names the newer call (`superseded_by`) and keeps `get_work_history`
+  recall of the exact original.
+- The remaining older results are kept down to 75 % of the ceiling: state reads
+  (`read_*`), writes and checks before discovery reads (`search_*`, `list_*`,
+  `open_*`, `get_work_history`), newest first within each group. The latest
+  construction work packet therefore survives a run of material searches that
+  ages it out in version 1. Dropping to 75 % at once means the transcript
+  prefix changes in fewer steps instead of once per request, which keeps the
+  provider's prompt cache valid longer.
+
+Synthetic measurements of model-visible message tokens (tool surface excluded):
+the 2026-10-29 create-turn order never filled the window, so version 2 is
+identical there; 30 distinct 2,500-token reads send 63 % fewer uncached tokens
+(21 → 7 prefix changes); a packet re-read among 14 searches 52 % fewer, with
+the latest packet whole and the earlier copy superseded; a packet followed by
+10 searches stays whole instead of aging out. The paid create turn's re-reads
+followed writes and the completion review, both addressed separately, so no
+call reduction is claimed for that recorded turn.
+[Verification](foundation-verification.md#controlled-completion-2026-10-29) owns release status.
+
 **Larger read pages and cache routing (2026-10-22, owner decision A; deployed as
 `ask-bob` v165 / `bob-worker` v133, not yet measured).** Measured read-only from `bob.execution_events` and edge logs:
 one drawing run read a construction in 9 sequential ~2,000-token pages, each a
