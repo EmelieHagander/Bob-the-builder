@@ -14,7 +14,7 @@ import { createProjectWriter } from '../supabase/functions/_shared/project-write
 import { createProjectEdits } from '../supabase/functions/_shared/project-edits.ts'
 import { readTaskSources } from '../supabase/functions/_shared/task-sources.ts'
 import { recipeSize, sizeStatements, staleSizeText, withConstructionText } from '../supabase/functions/_shared/construction-text.ts'
-import { catalogFixture, preTextHygieneCatalogFixture } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, preTextHygieneCatalogFixture, preResultWindowCatalogFixture } from './support/ai-catalog-fixture.ts'
 
 // Paid box run 2026-10-29: the title kept "400x300x250" after the width became
 // 500 and the drawing copied it. A change may no longer leave a stated size wrong.
@@ -165,7 +165,8 @@ test('the publication versions two construction tools, the answer contract and t
     const was = byKey(before), now = byKey(current)
     assert.deepEqual([...now.keys()].filter(k => JSON.stringify(now.get(k)) !== JSON.stringify(was.get(k))).sort(),
       ['agent-contract.ask-bob', 'bob.note.answer-text', 'bob.note.answer-text-also', 'tools.change_construction_parameters', 'tools.edit_construction_parts'])
-    const fixture = catalogFixture()
+    // The later result-window publication (20261029200500) adds one pin to the main contract.
+    const fixture = preResultWindowCatalogFixture()
     for (const key of ['agent-contract.ask-bob', 'bob.note.answer-text', 'bob.note.answer-text-also', 'tools.change_construction_parameters', 'tools.edit_construction_parts']) {
       assert.deepEqual(fixture.definition(key).definition, now.get(key).definition, key); assert.equal(fixture.definition(key).content, now.get(key).content, key)
       assert.deepEqual(fixture.definition(key).metadata, now.get(key).metadata, key)
