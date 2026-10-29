@@ -138,8 +138,8 @@ migration; the owner approved it and it was applied on 2026-10-29. It states no
 product, supplier, price or weight.
 
 <a id="optional-dimensions"></a>
-**Every property may be left out — prepared 2026-10-29 (owner decision), not
-applied.** Materials state different things: gravel has a material and a weight
+**Every property may be left out — installed 2026-10-29 (owner decision;
+[evidence](foundation-verification.md#follow-ups-install-2026-10-29)).** Materials state different things: gravel has a material and a weight
 but no width or length; a plank has length and width but no weight.
 `20261029210000_optional_catalog_dimensions.sql` changes one rule in
 `bob_private.catalog_normalize`: a profile field marked required no longer stops

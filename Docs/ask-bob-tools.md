@@ -44,8 +44,8 @@ or oversized core list fails before a model request. Installation and measured
 limits belong to [verification](foundation-verification.md#bob-cost-controls-2026-10-28).
 
 <a id="phase-tools"></a>
-**Six permanent and four phase tools — prepared 2026-10-29 (owner decision), not
-applied.** In the previous paid box run Bob called `describe_tool` nine times,
+**Six permanent and four phase tools — installed 2026-10-29 (owner decision;
+`bob.tools` v27, [evidence](foundation-verification.md#follow-ups-install-2026-10-29)).** In the previous paid box run Bob called `describe_tool` nine times,
 and each time the next request lost the provider cache (sorted tool lists change
 from the insertion point): about USD 0.36 of 2.28, plus about eight model rounds
 spent only on loading manuals. Since 15 October `describe_tool` appeared in half

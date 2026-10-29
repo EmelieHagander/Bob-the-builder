@@ -247,7 +247,7 @@ the review measured a per-definition scan of `material_aliases` (15 ms live on
 45 definitions, growing faster than linearly in PGlite), so a token index is a
 later step if the catalog grows.
 
-**Whole-word matching — prepared 2026-10-29 (owner decision), not applied.**
+**Whole-word matching — installed 2026-10-29 (owner decision; [evidence](../Docs/foundation-verification.md#follow-ups-install-2026-10-29)).**
 `20261029240000_material_lookup_matching.sql` replaces substring matching, which
 also matched when the query merely contained an alias ("utomhusskruv" returned
 indoor screws through "skruv"). Every query word must equal a word of the
@@ -263,7 +263,7 @@ never an empty list that reads as "none at home".
 `spec` object only to definitions with these links, so other records keep their
 exact shape.
 
-**Optional catalog properties — prepared 2026-10-29, not applied** (owner
+**Optional catalog properties — installed 2026-10-29** (owner
 decision). `20261029210000_optional_catalog_dimensions.sql` patches
 `bob_private.catalog_normalize` in place: a missing required field sets
 `has_unknown` (no identity fingerprint) instead of raising
@@ -310,7 +310,7 @@ Owner follow-ups, not in this migration:
 - `bob_save_turn_checkpoint` was the largest total (467 s in `pg_stat_statements`;
   2,514 calls, mean 186 ms, max 4.4 s on 2026-10-29): it returns the full state
   packet on every save, which the worker only compares with what it sent.
-  **Short receipt prepared 2026-10-29 (owner decision), not applied:**
+  **Short receipt installed 2026-10-29 (owner decision; `bob-worker` v154, `ask-bob` v186):**
   `20261029230000_bob_checkpoint_receipt.sql` adds
   `bob.bob_save_turn_checkpoint_receipt`, generated from the current private
   save by replacing its three packet returns, so every check and write is
@@ -319,7 +319,7 @@ Owner follow-ups, not in this migration:
   older runtimes and the stored format is unchanged. Apply the migration before
   deploying `bob-worker` and `ask-bob`; a runtime without it cannot save.
 - `cron.job_run_details` held 274,975 rows (76 MB) from 2026-07-10, shared with
-  other apps. **Retention prepared 2026-10-29 (owner decision), not applied:**
+  other apps. **Retention installed 2026-10-29 (owner decision):**
   `20261029220000_cron_run_history_retention.sql` deletes run history older than
   7 days once and then daily at 03:23 UTC (`cron-run-history-retention`). It
   prunes every app's run log in this project, nothing else.

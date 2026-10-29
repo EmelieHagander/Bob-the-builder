@@ -567,7 +567,7 @@ steg, upprepade serverläsningar, resultatfönstret, databaslast och loggade
 avvisningsorsaker). Nu körs `bob-worker` v153 och `ask-bob` v185.
 #369–#373 ska inte driftsättas igen.
 
-**Förberett, ej driftsatt — ägarens uppföljningar före lådprovet (2026-10-29):**
+**Installerat — ägarens uppföljningar före lådprovet (2026-10-29; `bob-worker` v154, `ask-bob` v186, [bevis](foundation-verification.md#follow-ups-install-2026-10-29)):**
 6 fasta verktyg plus 4 efter projektfas och kort som säger när varje annat
 verktyg används; kort kvitto vid checkpoint-sparning; 7 dagars cron-historik;
 sökning på hela ord med hemmalager `null` när inget registrerats; utelämnade
