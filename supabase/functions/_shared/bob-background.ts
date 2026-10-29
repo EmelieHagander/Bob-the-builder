@@ -146,7 +146,7 @@ export async function serveBobWorker(req: Request): Promise<Response> {
       if (job.checkpointVersion !== undefined && job.checkpointVersion !== 0 && job.checkpointVersion !== 1) throw new Error('turn_checkpoint_version_invalid')
       const checkpoint = job.checkpointVersion === 1 ? createBobTurnCheckpoint({ jobId: job.id, turnId: job.clientTurnId,
         catalogManifestId: job.catalogManifestId, checkpoint: job.checkpoint, journal,
-        save: write => s.rpc('bob_save_turn_checkpoint', { ...args, p_expected_revision: write.expectedRevision,
+        save: write => s.rpc('bob_save_turn_checkpoint_receipt', { ...args, p_expected_revision: write.expectedRevision,
           p_state: write.state, p_journal_state: write.journalState }),
       }) : undefined
       phase = 'answer'

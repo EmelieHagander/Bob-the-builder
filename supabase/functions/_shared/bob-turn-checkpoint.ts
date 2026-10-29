@@ -28,6 +28,21 @@ export function validateBobTurnCheckpoint(value: unknown, binding: BobTurnCheckp
   return { ...stableJsonValue(checkpoint as BobTurnCheckpoint), journalState: validateBobJournalState(checkpoint.journalState) }
 }
 
+/** Short save answer (owner decision 2026-10-29): the server confirms the
+ * revision it stored, and whether the head already equalled this write, instead
+ * of echoing the whole state back. */
+export type BobTurnCheckpointReceipt = { receipt_version: 1; job_id: string; revision: number; unchanged: boolean }
+function checkpointFromReceipt(value: unknown, binding: BobTurnCheckpointBinding, write: BobTurnCheckpointWrite): BobTurnCheckpoint | null {
+  const receipt = value as Partial<BobTurnCheckpointReceipt> | null
+  if (!receipt || typeof receipt !== 'object' || !('receipt_version' in receipt)) return null
+  if (receipt.receipt_version !== 1 || receipt.job_id !== binding.jobId || !Number.isSafeInteger(receipt.revision) || typeof receipt.unchanged !== 'boolean')
+    throw new Error('invalid_turn_checkpoint')
+  const saved = receipt.revision === write.expectedRevision + 1 && !receipt.unchanged
+  const kept = receipt.revision === write.expectedRevision && receipt.unchanged && write.expectedRevision >= 1
+  if (!saved && !kept) throw new Error('invalid_checkpoint_revision')
+  return validateBobTurnCheckpoint({ ...binding, version: 1, revision: receipt.revision, state: write.state, journalState: write.journalState }, binding)
+}
+
 const KNOWN_CHECKPOINT_ERRORS = ['job_not_claimed', 'checkpoint_conflict', 'checkpoint_cursor_regression', 'invalid_turn_checkpoint',
   'invalid_journal_state', 'invalid_checkpoint_revision']
 /** A bounded class for logs: a known server code, a timeout, a JS error name, or 'other'. */
@@ -83,9 +98,10 @@ export function createBobTurnCheckpoint(options: BobTurnCheckpointBinding & {
           && JSON.stringify(stableJsonValue(snapshot.journalState)) === JSON.stringify(stableJsonValue(journalState))
         if (current && same(current)) return stableJsonValue(current)
         phase = 'save'
-        const saved = await options.save({ expectedRevision, state: nextState, journalState })
+        const write = { expectedRevision, state: nextState, journalState }
+        const saved = await options.save(write)
         phase = 'validate'
-        const next = validateBobTurnCheckpoint(saved, options)
+        const next = checkpointFromReceipt(saved, options, write) ?? validateBobTurnCheckpoint(saved, options)
         if (next.revision !== expectedRevision + 1 && !(next.revision === expectedRevision && same(next))) throw new Error('invalid_checkpoint_revision')
         current = next
         return stableJsonValue(next)

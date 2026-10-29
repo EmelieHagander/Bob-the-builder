@@ -556,28 +556,45 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — nytt lådprov efter styrd färdigkontroll (2026-10-29):**
+**Aktivt nästa steg — nytt lådprov efter #373 (2026-10-29):**
 det betalda lådprovet efter #371 [sparade ritningen men underkändes](foundation-verification.md#construction-work-paid-run3-2026-10-29)
-(58 anrop, USD 2,28, avbrutet ritsteg). Rotorsakerna är rättade och
-[installerade](foundation-verification.md#controlled-completion-install-2026-10-29):
-styrd färdigkontroll i stället för full granskning, snabb exakt läsning (v10)
-och skrivningar som returnerar sitt läge (`bob-worker` v152, `ask-bob` v184).
-#369–#372 ska inte driftsättas igen.
+(58 anrop, USD 2,28, avbrutet ritsteg). Rotorsakerna är rättade och installerade
+i två steg: [#372](foundation-verification.md#controlled-completion-install-2026-10-29)
+(styrd färdigkontroll, snabb exakt läsning v10, skrivningar som returnerar sitt
+läge) och [#373](foundation-verification.md#open-issues-closed-install-2026-10-29)
+(sju kvarvarande orsaker: inaktuella mått i titlar, ID:n i svar, lösning i ett
+steg, upprepade serverläsningar, resultatfönstret, databaslast och loggade
+avvisningsorsaker). Nu körs `bob-worker` v153 och `ask-bob` v185.
+#369–#373 ska inte driftsättas igen.
 
-**Förberett, ej driftsatt — normaliserad materialmodell (ägarbeslut 2026-10-29):**
+**Förberett, ej driftsatt — ägarens uppföljningar före lådprovet (2026-10-29):**
+6 fasta verktyg plus 4 efter projektfas och kort som säger när varje annat
+verktyg används; kort kvitto vid checkpoint-sparning; 7 dagars cron-historik;
+sökning på hela ord med hemmalager `null` när inget registrerats; utelämnade
+egenskaper gör en definition ofullständig. [Ändringar och releaseordning](foundation-verification.md#follow-ups-2026-10-29).
+Därefter kör ägaren lådprovet.
+
+**Planerat, inte byggt — materialtabellerna före första skrivväg (uppföljning 1):**
+den [fristående granskningen](archive/material-tables-review-2026-10-29.md)
+kräver behörighet bara för Bob-projektdeltagare, inget läckage från privata
+definitioner, versionerade kopplingar, en ägare per mått, hemmalager med
+historik, entydiga enheter och några småfel, innan Bobs nya material blir
+delade och ogranskade. Två ägarbeslut återstår: om projektlager pekar på
+hemmalager, och att bara specifikationen delas.
+
+**Installerat — normaliserad materialmodell (ägarbeslut 2026-10-29):**
 standardmaterial, storlekar, alias, kombination (= Bobs materialdefinition),
 hushållslager, delade butiker och priser med historik och en samlad
-uppslagning med en rad per inköpsplats. Startlistan (21 material, 30
-storlekar, 45 kombinationer) ligger i en egen migrering för ägarens granskning.
-Att Bobs egna nya material blir delade och ogranskade är ett föreslaget
-uppföljningssteg. [Modell och åtkomst](material-catalog.md#normalized-material-model).
+uppslagning med en rad per inköpsplats. Den godkända startlistan (21 material,
+30 storlekar, 45 kombinationer) är inlagd. Att Bobs egna nya material blir
+delade och ogranskade är ett föreslaget uppföljningssteg.
+[Modell och åtkomst](material-catalog.md#normalized-material-model).
 
-**Förberett, ej driftsatt — sju kvarvarande orsaker stängda (ägarbeslut 2026-10-29):**
-inaktuella mått i titlar, ID:n i svar, lösning i ett steg, upprepade
-serverläsningar, resultatfönstret, databaslast och loggade avvisningsorsaker.
-[Ändringar, bevis och releaseordning](foundation-verification.md#open-issues-closed-2026-10-29).
-Driftsättning kräver ägarens ja och en Supabase-nyckel med åtkomst till Bobs
-projekt i miljön; nyckeln gav den 2026-10-29 bara åtkomst till ett annat projekt.
+**Förberett, ej migrerat — alla egenskaper får utelämnas (ägarbeslut 2026-10-29):**
+ett utelämnat mått stoppar inte längre en sparning, men definitionen blir
+ofullständig och slås aldrig ihop med en annan. Lösvikt och ballast läggs till,
+så att till exempel grus passar. Bara en migrering, ingen driftsättning av
+funktioner. [Beslut och konsekvenser](material-catalog.md#optional-dimensions).
 
 Därefter återstår ett nytt separat godkänt prov av skapa → ändra bredd → ritning →
 återöppna exakt sparad version. Behåll samma Construction-identitet, kontrollera
@@ -587,7 +604,7 @@ mått och resultat och jämför hela kedjans anrop, kostnad och tid med
 Ingen verklig leverans eller kostnadsminskning är bevisad av de lokala testerna.
 Kvarvarande statusluckor måste knytas till exakt källa/urval; godkänd konstruktion
 får aldrig nollställa alla `partial`-flaggor. Bobs huvudprompt och modellval är
-orörda; Färdigkollens kontrakt ändras i den förberedda ändringen. Läsarmodellen
+orörda; Färdigkollens kontrakt ändrades i #372. Läsarmodellen
 är fortsatt uppskjuten.
 
 Källavstämning på samma Construction, sex katalogägda kärnverktyg och

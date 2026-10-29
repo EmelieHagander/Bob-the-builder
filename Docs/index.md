@@ -15,7 +15,9 @@
   [Creation preparation and scoped read recovery are installed](foundation-verification.md#creation-preparation-2026-10-29);
   [the paid run after it failed acceptance](foundation-verification.md#construction-work-paid-run3-2026-10-29) and
   [controlled completion, exact lookup and write state are installed](foundation-verification.md#controlled-completion-2026-10-29);
-  [the seven remaining causes are closed in prepared source](foundation-verification.md#open-issues-closed-2026-10-29).
+  [the seven remaining causes are closed and installed](foundation-verification.md#open-issues-closed-2026-10-29).
+  [Owner follow-ups before the next paid run are prepared](foundation-verification.md#follow-ups-2026-10-29), and an
+  [independent material-table review](archive/material-tables-review-2026-10-29.md) shapes follow-up 1.
   [State](bob-delivery-flow.md#state) owns the next release
   and remaining acceptance. The retrieval helper remains deferred.
 
@@ -58,8 +60,8 @@
 | dynamic project Steps, completion requirements, responsibility, evidence and replanning | `Docs/living-project-plan.md` — implemented foundation plus remaining product direction; hierarchy refinement in `Docs/domain-dictionary.md` |
 | material-led assemblies, tools/model roles and linked drawing/cut/assembly/Shopping implementation plan | [Material assembly use case](material-assembly-use-case.md#assembly-chain-plan) — K2–K5 revised 2026-10-03: measured context, construction checks, exact-revision outputs and recovery; active next action in [State](bob-delivery-flow.md#state), not a complete implementation |
 | reusable material/part definitions, dynamic profiles and catalog tools | `Docs/material-catalog.md` — slice A deployed 2026-09-22; live versioned material/part definitions and tools, no assembly geometry yet |
-| standard materials, sizes, aliases, household stock, stores and price history, Bob's combined material lookup | [Normalized material model](material-catalog.md#normalized-material-model) — prepared 2026-10-29, not deployed; seed list awaits owner review |
-| database load, statement timeouts, repeated Bob lookups | [Database load relief](../db/README.md#db-load-relief) and [in-turn lookup reuse](../supabase/README.md#in-turn-lookup-reuse-and-database-load-relief--source-2026-10-29) — prepared 2026-10-29, not applied or deployed |
+| standard materials, sizes, aliases, household stock, stores and price history, Bob's combined material lookup | [Normalized material model](material-catalog.md#normalized-material-model) — installed 2026-10-29 with the owner-approved seed list; [optional properties](material-catalog.md#optional-dimensions) are prepared, not applied |
+| database load, statement timeouts, repeated Bob lookups | [Database load relief](../db/README.md#db-load-relief) and [in-turn lookup reuse](../supabase/README.md#in-turn-lookup-reuse-and-database-load-relief--source-2026-10-29) — installed 2026-10-29 |
 | generic CAD engine adapter / construction geometry seam | `Docs/cad-adapter.md` — hosted build123d/Open Cascade service, whole drawing intake, complements and versioned Artifact persistence; live design acceptance tracked separately |
 | persistent site/building/space context and chat-driven narrative capture | `Docs/building-model.md` |
 | function difficulty / scope buckets / first vertical slice | `Docs/function-scope.md` |
@@ -225,6 +227,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 ## Archives — historical evidence, not active work
 
+- [Material tables review, 2026-10-29](archive/material-tables-review-2026-10-29.md) — independent findings on the new material tables; corrections before application are in [verification](foundation-verification.md#follow-ups-2026-10-29), the remainder in [State](bob-delivery-flow.md#state).
 - [Project context and small-model audit, 2026-10-26](archive/bob-project-context-audit-2026-10-26.md) — existing helpers, active models, usage and remaining reader/review gaps; [project context](ask-bob-context.md) owns the current contract and [State](bob-delivery-flow.md#state) owns remaining implementation work.
 - [K2 live acceptance report, 2026-10-04](archive/k2-live-acceptance-2026-10-04.json) — synthetic saved revisions from the successful three-turn concept test; [verification](foundation-verification.md#k2-live-construction-acceptance--2026-10-04) owns release evidence and limits, and [State](bob-delivery-flow.md#state) owns remaining work.
 - [Delivery-flow review, 2026-09-29](archive/bob-delivery-flow-review-2026-09-29.md) — dated code/data findings, verification limits and the superseded handoff snapshot. Open actions remain in [State](bob-delivery-flow.md#state); archiving this record does not close them.

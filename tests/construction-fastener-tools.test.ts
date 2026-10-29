@@ -10,7 +10,7 @@ import {constructionLists} from '../supabase/functions/_shared/construction-list
 import {parseFastenerSchedule,storedJoints,withRuleFasteners,withoutJointFasteners} from '../supabase/functions/_shared/construction-fasteners.ts'
 import {CONSTRUCTION_EDIT_TOOL} from '../supabase/functions/_shared/construction-edits.ts'
 import {projectSchema} from './support/project-schema.ts'
-import {catalogFixture} from './support/ai-catalog-fixture.ts'
+import {catalogFixture,prePhaseToolsCatalogFixture} from './support/ai-catalog-fixture.ts'
 import {listFixture} from './construction-lists.test.ts'
 
 const artifact='11111111-1111-4111-8111-111111111111'
@@ -143,7 +143,10 @@ test('the latest catalog says fastener and glue needs are exact; the publication
  for(const [key,row] of after)if(key!=='tools.derive_cad_material_requirement')assert.deepEqual(row,before.get(key),key)
  const old=before.get('tools.derive_cad_material_requirement'),next=after.get('tools.derive_cad_material_requirement')
  assert.equal(next.version,old.version+1);assert.equal(old.definition.additional_description.includes(note),false)
- assert.deepEqual(next.definition,derive.definition);assert.deepEqual(next.metadata,derive.metadata)
+ // The 2026-10-29 phase-tools publication later rewrote only this tool's card; compare at the boundary before it.
+ const boundary=prePhaseToolsCatalogFixture().definition('tools.derive_cad_material_requirement')
+ assert.deepEqual(next.definition,boundary.definition);assert.deepEqual(next.metadata,boundary.metadata)
+ assert.deepEqual({...derive.definition,card_description:boundary.definition.card_description},boundary.definition)
  assert.deepEqual(next.available_variables,old.available_variables);assert.deepEqual(next.flow,old.flow)
  assert.deepEqual(((await pg.query("select shared.resolve_ai_catalog('bob',$1) m",[prior.manifest_id])).rows[0] as any).m,prior)
  const active=async()=>((await pg.query("select active_version_id from shared.ai_prompts where app='bob' and prompt_key='tools.derive_cad_material_requirement'")).rows[0] as any).active_version_id

@@ -215,7 +215,7 @@ test('deployed wiring uses caller-JWT writes and fenced commit, not service-role
   assert.match(source,/\['bound_project', 'bound_solution'\]\.includes\(payload\.kind\) \? 'bob_project_write_v17' : 'bob_project_write_v16'/)
   // Writes retry once only when the database cancelled them (nothing saved).
   assert.match(source,/withStatementRetry\(name, attempt => client\.rpc\(name, args\)\.abortSignal\(attempt\), signal,\s*\{ label: 'Write', slowMs: 3000 \}\)/)
-  assert.match(source,/writeRpc\(payload\.kind === 'form_feedback' \? 'record_model_feedback' : payload\.kind === 'bound_building_scope' \? 'bob_project_write_v21' : payload\.kind === 'bound_plan_link' \? 'bob_project_write_v20' : payload\.kind === 'bound_work' \? 'bob_project_write_v19' : \['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'\]\.includes\(payload\.kind\) \? 'bob_project_write_v18'/)
+  assert.match(source,/writeRpc\(payload\.kind === 'construction_work' \? 'commit_construction_work' : payload\.kind === 'form_feedback' \? 'record_model_feedback' : payload\.kind === 'bound_building_scope' \? 'bob_project_write_v21' : payload\.kind === 'bound_plan_link' \? 'bob_project_write_v20' : payload\.kind === 'bound_work' \? 'bob_project_write_v19' : \['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'\]\.includes\(payload\.kind\) \? 'bob_project_write_v18'/)
   assert.match(source,/rpc\('read_bob_plan_link_context'/)
   assert.match(source,/rpc\('read_bob_solution_context'/)
   assert.match(source,/rpc\('read_bob_edit_context'/)

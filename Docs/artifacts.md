@@ -1079,7 +1079,9 @@ Drawing cards show source freshness independently of saved Concept/Measured/Buil
 Drawing request cards show shared Task/current Plan requirement names, responsibility and destination Step, with relevant measurement/Task/Step links, waiting/reconnect/budget states and the exact saved drawing link. Shared labels come only from canonical project records, never private conversation briefs or assessments. A missing canonical label is reported rather than replaced with private prose. Ask Bob actions reuse the current project's drawer and surface focus. See [the context owner](ask-bob-context.md#implemented-scope-and-remaining-target) for that boundary and [State](bob-delivery-flow.md#state) for remaining acceptance gates and [verification](foundation-verification.md#p3-hosted-technical-release--2026-09-30) for release proof.
 
 <a id="construction-text"></a>
-## Stated sizes stay true after changes — prepared 2026-10-29, not deployed
+## Stated sizes stay true after changes — installed 2026-10-29
+
+**Installed 2026-10-29** ([evidence](foundation-verification.md#open-issues-closed-install-2026-10-29)).
 
 Owner decision after the paid box run, where the Construction title kept
 "400x300x250" after the width became 500 and the drawing copied it. The
