@@ -54,6 +54,7 @@ import { createMemoryRetrieval, journalMemoryStore } from './bob-memory-retrieva
 import { createJournalledMemoryEmbedder } from './bob-memory-embedding.ts'
 import { createBobConversationStore, type BobTurnClaim } from './bob-conversation.ts'
 import { createProjectLookup, type LookupInput } from './project-lookup.ts'
+import { createLookupTransport, lookupPin, type LookupPin } from './lookup-rpc.ts'
 import { createPlanAssistant } from './plan-assistant.ts'
 import { createSourceReader } from './source-reader.ts'
 import type { BobAnswerState, ProjectAnswer, TurnProgress } from './project-answer.ts'
@@ -273,12 +274,10 @@ export async function answerWithOpenAi(opts: {
     }
   }
   // Jobs pinned with roomDimensionsVersion read v9 (adds room_dimensions); other journals keep v8.
-  let lookupRpc: 'search_bob_project_data_v8' | 'search_bob_project_data_v9' = 'search_bob_project_data_v8'
-  const lookupTransport = checkpointed((projectId: string, input: LookupInput, signal: AbortSignal) =>
-    rpc(lookupRpc, {
-      p_project_id: projectId, p_dataset: input.dataset, p_query: input.query,
-      p_status: input.status, p_area_id: input.area_id, p_record_id: input.record_id, p_after_id: input.after_id ?? null,
-    }, signal))
+  // Jobs pinned with exactLookupVersion read v10 and retry a statement timeout once (2026-10-29).
+  let lookupPinned: LookupPin = lookupPin({})
+  const lookupTransport = checkpointed(createLookupTransport(() => lookupPinned,
+    (name, args, signal) => client.rpc(name, args).abortSignal(signal), memo))
   const readAccess = async () => {
     const { data, error } = await client.from('projects').select('id').eq('id', opts.projectId)
       .abortSignal(AbortSignal.timeout(10_000)).maybeSingle()
@@ -318,7 +317,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; turnUsdStop?: number } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; turnUsdStop?: number } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -331,6 +330,8 @@ export async function answerWithOpenAi(opts: {
       roomDimensionsVersion: 1 as const,
       // Pure project facts at turn start and the compact construction table (2026-10-26). Jobs without this pin keep both as before.
       projectFactsVersion: 1 as const,
+      // Search v10 (exact artifact reads) with one statement-timeout retry (2026-10-29). Jobs without this pin keep v8/v9.
+      exactLookupVersion: 1 as const,
       ...(checkpoint ? { groundingReadOrderVersion: 1 as const, modelDeadlineVersion: 1 as const } : {}),
       ...bobCompleteRequestVersions(!!checkpoint, contract),
       ...(checkpoint && contract.result_reference_version === 1 ? { resultWindowVersion: 1 as const } : {}),
@@ -353,7 +354,8 @@ export async function answerWithOpenAi(opts: {
   if (execution.buildingLinkVersion !== undefined && execution.buildingLinkVersion !== 1) throw new Error('building_link_version_invalid')
   if (execution.roomDimensionsVersion !== undefined && execution.roomDimensionsVersion !== 1) throw new Error('room_dimensions_version_invalid')
   if (execution.projectFactsVersion !== undefined && execution.projectFactsVersion !== 1) throw new Error('project_facts_version_invalid')
-  if (execution.roomDimensionsVersion === 1) lookupRpc = 'search_bob_project_data_v9'
+  if (execution.exactLookupVersion !== undefined && execution.exactLookupVersion !== 1) throw new Error('exact_lookup_version_invalid')
+  lookupPinned = lookupPin(execution)
   const lookupOptions = { unlimitedWork,
     // Existing in-flight journals retain their recorded clock policy. New
     // work pins each observation, including invalid/failed reads, before its
@@ -361,8 +363,8 @@ export async function answerWithOpenAi(opts: {
     ...(execution.lookupObservationVersion === 1 ? { observationTime: (input: unknown) =>
       memo('lookup:observed_at', { projectId: opts.projectId, input }, async () => new Date().toISOString()) } : {}),
   }
-  const projectLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 32, undefined, lookupOptions)
-  const groundingLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 48, undefined, lookupOptions)
+  const projectLookup = createProjectLookup(opts.projectId, lookupTransport, lookupPinned.timeoutMs, 32, undefined, lookupOptions)
+  const groundingLookup = createProjectLookup(opts.projectId, lookupTransport, lookupPinned.timeoutMs, 48, undefined, lookupOptions)
   const lookup = { ...projectLookup, get remaining() { return projectLookup.remaining }, get partial() { return projectLookup.partial || groundingLookup.partial }, sources: projectLookup.sources }
   const imageGrounding = { async search(input: LookupInput) {
     const result = await groundingLookup.search(input)
@@ -630,7 +632,7 @@ export async function answerWithOpenAi(opts: {
         const {data,error}=await client.from('current_measurements').select('*').eq('project_id',opts.projectId).in('id',pins.project.map(p=>p.id)).abortSignal(AbortSignal.timeout(10000))
         if(error)throw new Error('construction_source_unavailable');for(const row of data??[])project.set(row.id,row)
       }
-      const physical=await readPhysicalCadSources(()=>createProjectLookup(opts.projectId,lookupTransport,10000,64,undefined,{unlimitedWork}),pins.physical,lookup.sources,{unlimitedWork})
+      const physical=await readPhysicalCadSources(()=>createProjectLookup(opts.projectId,lookupTransport,lookupPinned.timeoutMs,64,undefined,{unlimitedWork}),pins.physical,lookup.sources,{unlimitedWork})
       return {project,physical}
     },
   }
@@ -664,7 +666,7 @@ export async function answerWithOpenAi(opts: {
       if(input.dataset!=='plan')return lookupTransport(projectId,input,signal)
       const {data,error}=await rpc('project_plan_read',{p_project:projectId,p_revision:null},signal)
       return {data:{records:data?.record?[data.record]:[],related:[],truncated:false},error}
-    }), 10_000, 128, 512*1024, lookupOptions),
+    }), lookupPinned.timeoutMs, 128, 512*1024, lookupOptions),
     callModel,
   })
   const drawingRequestCall=async(raw:Record<string,unknown>)=>{
@@ -717,7 +719,7 @@ export async function answerWithOpenAi(opts: {
     // Used only by the catalog-gated targeted review; the full review never reads it.
     readConstructionObservations:constructionOptions.readObservations,
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
-    makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40,undefined,lookupOptions),
+    makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,lookupPinned.timeoutMs,40,undefined,lookupOptions),
     callModel,
     render:(recipe,source,beforeDispatch)=>{
      if(!source)throw new Error('checked_construction_source_required')
