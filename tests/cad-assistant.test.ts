@@ -4,6 +4,7 @@ import {createCadAssistant} from './support/colleague-catalog-fixture.ts'
 import {fixtureConstructionId,checkedCadFixture} from './support/checked-cad-fixture.ts'
 import {handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
+import {withConstructionWorkRead} from '../supabase/functions/_shared/construction-work.ts'
 const recipe:any={contract_version:1,units:'mm',assembly_id:'panel',definitions:[{id:'panel',primitive:'box',material_ref:null,x_mm:18,y_mm:80,z_mm:200}],instances:[{id:'panel',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front','top']}
 const request={request_id:null,brief:'Draw the saved panel',handoff,area_id:null,component_id:null,step_id:null,artifact_id:fixtureConstructionId,construction_revision:1}
 function fixture(extra:any={}){
@@ -50,6 +51,36 @@ test('missing source material/joint checks cannot fall back to free design or co
 test('unavailable infrastructure and revoked authority spend no model/render operation',async()=>{
  const unavailable=fixture({available:false});assert.equal((await unavailable.assistant.consult(request)).stage,'cad_engine');assert.equal(unavailable.counts().models,0);assert.equal(unavailable.counts().renders,0)
  const denied=fixture({hasAccess:async()=>false});await assert.rejects(denied.assistant.consult(request),/project_denied/);assert.deepEqual(denied.counts(),{reads:0,models:0,renders:0})
+})
+test('a construction schema fault stops same-turn retries, survives checkpoints and retains access checks',async()=>{
+ for(const parameters of [{properties:{},required:[]},{properties:{view:{enum:['overview']}}}]){
+  let checks=0,allowed=true
+  const f=fixture({unlimitedWork:true,hasAccess:async()=>allowed,checkConstruction:async()=>{checks++;return withConstructionWorkRead({function:{parameters}} as any)}})
+  const first=await f.assistant.consult(request)
+  assert.equal(first.reason,'design_runtime_error');assert.equal(first.retryable,false)
+  assert.equal(first.saved,false);assert.equal(f.assistant.remaining,0)
+  assert.equal(f.assistant.candidate,null);assert.equal(f.counts().models,0);assert.equal(f.counts().renders,0)
+  assert(!JSON.stringify(first).includes('construction_tool_contract_invalid'))
+  const state=f.assistant.exportState(),before=f.counts()
+  assert.deepEqual(await f.assistant.consult({...request,views:['left']}),first)
+  assert.deepEqual(f.counts(),before);assert.equal(checks,1)
+  const resumed=fixture({unlimitedWork:true,hasAccess:async()=>allowed,checkConstruction:async()=>{throw Error('must not retry')}})
+  resumed.assistant.restoreState(state)
+  assert.deepEqual(await resumed.assistant.consult(request),first)
+  assert.deepEqual(resumed.counts(),{reads:0,models:0,renders:0})
+  allowed=false
+  await assert.rejects(resumed.assistant.consult(request),/project_denied/)
+ }
+ assert.equal((await fixture().assistant.consult(request)).status,'ready','a new turn after repair may deliver')
+})
+test('ordinary unavailable checks and non-programming exceptions retain their existing recovery path',async()=>{
+ for(const unavailable of [async()=>({status:'unavailable'}),async()=>{throw Error('temporary transport error')},async()=>{throw new TypeError('fetch failed')}]){
+  let checks=0
+  const f=fixture({unlimitedWork:true,checkConstruction:async()=>{checks++;return unavailable()}})
+  await f.assistant.consult(request);await f.assistant.consult(request)
+  assert.equal(checks,2);assert.equal(f.assistant.failure,null)
+  assert.equal(f.counts().models,0);assert.equal(f.counts().renders,0)
+ }
 })
 test('an older unbound request cannot silently acquire a construction source',async()=>{
  const id='33333333-3333-4333-8333-333333333333'

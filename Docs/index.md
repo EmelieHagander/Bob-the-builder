@@ -10,8 +10,10 @@
   — dated findings behind the owner-approved [coherent construction operations](ask-bob-tools.md#coherent-construction-work).
   [Technical installation](foundation-verification.md#construction-work-2026-10-28)
   and [one paid test](foundation-verification.md#construction-work-paid-2026-10-29)
-  are separate: width change passes, final drawing fails. [State](bob-delivery-flow.md#state)
-  owns the CAD correction and remaining acceptance. The retrieval helper remains deferred.
+  are separate: width change passes, final drawing fails. The
+  [CAD schema correction is installed; runtime-fault recovery is prepared](foundation-verification.md#cad-runtime-recovery-2026-10-29).
+  [State](bob-delivery-flow.md#state) owns the next release, creation investigation
+  and remaining acceptance. The retrieval helper remains deferred.
 
 - [Bob cost corrections, 2026-10-28](foundation-verification.md#bob-cost-controls-2026-10-28)
   — approved six catalog-owned core tools, GPT-5.4 medium and same-construction
