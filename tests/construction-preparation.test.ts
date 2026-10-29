@@ -6,7 +6,7 @@ import { createToolSession, type ToolFollowup } from '../supabase/functions/_sha
 import { applyProjectDelta, createProjectEdits, type EditSnapshot } from '../supabase/functions/_shared/project-edits.ts'
 import { constructionFormFixture } from './support/construction-form-fixture.ts'
 import { designIntent, designIntentPin } from './support/design-intent-fixture.ts'
-import { catalogFixture, preCreationCatalogFixture } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, preCreationCatalogFixture, preWriteStateCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { projectSchema } from './support/project-schema.ts'
 const solution='10000000-0000-4000-8000-000000000001'
 const query={artifact_id:null,revision:null,after:null,view:'work',ids:[],result_id:null,section:null,step_id:null,work_kind:'inspect'}
@@ -74,7 +74,7 @@ test('publication updates four interfaces/continuations only, retains pinned man
  let before:any
  const pg=await projectSchema(async(db,name)=>{if(name===publication)before=(await db.query<any>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result},publication)
  try{
-  const current=(await pg.query<any>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result,fixture=catalogFixture()
+  const current=(await pg.query<any>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result,fixture=preWriteStateCatalogFixture()
   const changed=['tools.edit_project_record','tools.search_material_catalog','tools.read_construction_draft','bob.tools']
   for(const prior of before.definitions){
    const row=current.definitions.find((r:any)=>r.prompt_key===prior.prompt_key)

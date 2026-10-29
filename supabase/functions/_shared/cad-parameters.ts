@@ -27,6 +27,12 @@ export class CadParameterGap extends Error {
 export class CadParameterBindingGap extends Error {
  constructor(readonly unbound:string[]){super('parameter_gaps:'+JSON.stringify({unbound}))}
 }
+/** Same message as before, so existing handlers are unchanged; the IDs let a
+ * newer manifest say which node is orphaned instead of only that one is. */
+export class CadParameterUnusedNodes extends Error {
+ constructor(readonly unused:string[]){super('parameter_unused_node')}
+}
+const unusedNodes=(nodes:{id:string}[],used:Map<string,unknown>)=>new CadParameterUnusedNodes(nodes.map(n=>n.id).filter(id=>!used.has(id)))
 function decimal(v:unknown):bigint{
  if(typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>1e9||Number(v.toFixed(6))!==v)throw new Error('parameter_precision')
  const [whole,fraction]=Math.abs(v).toFixed(6).split('.')
@@ -144,7 +150,7 @@ export function compileParameterGraph(projectId:string,nodes:unknown,outputs:str
  if(unknown.length)throw new CadParameterGap(unknown.map(({id,unit,reason})=>({id,unit,reason})))
  const {evaluate,result}=parameterEvaluator(projectId,plan.nodes,project,physical)
  const values=outputs.map(evaluate)
- if(result.size!==plan.nodes.length)throw new Error('parameter_unused_node')
+ if(result.size!==plan.nodes.length)throw unusedNodes(plan.nodes,result)
  return {nodes:[...result.values()],outputs:values}
 }
 
@@ -167,7 +173,7 @@ export function compileCadParameters(projectId:string,recipe:CadAssemblyRequest,
   writes.push({set:t.set,value:n.normalized.value})
  }
  const frames=compileCadFrames(plan.frames,evaluate,images)
- if(result.size!==plan.nodes.length)throw new Error('parameter_unused_node')
+ if(result.size!==plan.nodes.length)throw unusedNodes(plan.nodes,result)
  for(const write of writes)write.set(write.value)
  return {version:1,project_id:projectId,coverage:'complete',precision:'decimal_6',coordinate_system:cadCoordinateSystem(recipe),frames,nodes:[...result.values()],bindings:plan.bindings}
 }

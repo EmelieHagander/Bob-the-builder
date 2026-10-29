@@ -4,6 +4,8 @@ import { applyProjectDelta, changeProseRejection, displayEditSnapshot, PROJECT_E
 import { humanTextRejection, type HumanTextRejection } from './human-text.ts'
 import { parseDesignIntent } from './project-design-intent.ts'
 import type { ProjectWriter, WritePayload } from './project-write.ts'
+import type { DesignReadiness } from './project-design-intent.ts'
+import { constructionPurpose, constructionReadiness } from './write-state.ts'
 
 const object = (properties: Record<string, unknown>) => ({ type: 'object', additionalProperties: false, properties, required: Object.keys(properties) })
 const text = { type: 'string' }, nullable = { type: ['string', 'null'] }
@@ -39,10 +41,50 @@ export function createSolutionActions(opts: {
   modelFeedback?: Omit<ModelFeedbackOptions, 'projectId' | 'writer'>;
   projectId: string; writer?: ProjectWriter; hasAccess: () => Promise<boolean>; unlimitedWork?: boolean;
   read: (input: { resource: SolutionResource; query: string | null; after: string | null }) => PromiseLike<{ data: unknown; error: unknown }>;
+  /** Pinned per manifest (write_state_version 1): saved creations return their
+   * solution_ref and selections their construction readiness and edit entry. */
+  writeState?: { readiness?: (targetRevision: number, areaId: string | null) => Promise<DesignReadiness>; selectedEdit?: (areaId: string | null) => Promise<any> };
 }) {
   const contexts = new Map<string, SolutionContext>(), pages = new Map<string, { resource: SolutionResource; query: string | null; after: string }>()
   let reads = 0, partial = false
   const unavailable = () => { partial = true; return { status: 'unavailable' } }
+  const readPage = async (input: { resource: SolutionResource; query: string | null; after: string | null }): Promise<any> => {
+    reads++
+    try {
+      const { data, error } = await opts.read(input)
+      if (error || !Array.isArray(data) || data.length > 3 || JSON.stringify(data).length > 240000) return unavailable()
+      const entries = []
+      for (const s of data.slice(0, 2) as SolutionContext[]) {
+        if (s.project_id !== opts.projectId || s.resource !== input.resource || !s.record || !nonempty(s.key, 250) || !nonempty(s.record.id, 200)) return unavailable()
+        if (['solutions', 'selected_solutions'].includes(s.resource) && (!solution(s) || !Number.isSafeInteger(s.record.revision))) return unavailable()
+        const ref = 'choice_' + await fingerprint(s); contexts.set(ref, structuredClone(s))
+        const content = solution(s) ? displayEditSnapshot(s) : s.resource === 'scopes' ? { name: s.record.name, selected_title: s.record.selected_title, has_selection: !!s.target?.solution_id }
+          : s.resource === 'measurements' ? Object.fromEntries(['subject', 'value', 'unit', 'truth', 'source', 'notes', 'required'].map(k => [k, s.record[k]]))
+          : { title: s.record.title, purpose: s.record.purpose, width: s.record.width, height: s.record.height, note: 'Image metadata only; not inspected pixels.' }
+        entries.push({ ref, scope: s.scope_label, content, ...(solution(s) ? { selected: s.target !== null, selected_version_is_current: s.head_revision === undefined || s.head_revision === s.record.revision } : {}), id: s.record.id, revision: s.record.revision })
+      }
+      let next_ref: string | null = null
+      if (data.length > 2) { const cursor = { ...input, after: data[1].key }; next_ref = 'page_' + await fingerprint({ project: opts.projectId, ...cursor }); pages.set(next_ref, cursor) }
+      // Record identities stay server-side; the model receives refs and content.
+      return { status: 'ok', entries: entries.map(({ id: _id, revision: _revision, ...entry }) => entry), next_ref, located: entries.map(({ id, revision, ref }) => ({ id, revision, ref })) }
+    } catch (error) { rethrowContinuation(error); return unavailable() }
+  }
+  /** Bounded server-side lookup of the alternative just created, through the
+   * ordinary read and its ref registry; a miss leaves Bob's normal read path. */
+  const createdRef = async (id: string, revision: number, title: string): Promise<string | null> => {
+    const query = title.trim().slice(0, 200)
+    if (!query) return null
+    let input: { resource: SolutionResource; query: string | null; after: string | null } | undefined = { resource: 'solutions', query, after: null }
+    for (let page = 0; page < 3 && input; page++) {
+      if (!opts.unlimitedWork && reads >= 16) return null
+      const result = await readPage(input)
+      if (result.status !== 'ok') return null
+      const hit = result.located.find((e: { id: string; revision: number }) => e.id === id && e.revision === revision)
+      if (hit) return hit.ref
+      input = result.next_ref ? pages.get(result.next_ref) : undefined
+    }
+    return null
+  }
   return {
     tools: [...SOLUTION_ACTION_TOOLS, ...(opts.modelFeedback ? MODEL_FEEDBACK_TOOLS : [])],
     exportState(): SolutionActionsState {
@@ -73,24 +115,8 @@ export function createSolutionActions(opts: {
         if (!opts.unlimitedWork && reads >= 16) return { status: 'budget_exhausted' }
         const input = value.next_ref === null ? { resource: value.resource as SolutionResource, query: value.query, after: null } : pages.get(value.next_ref)
         if (!input || input.resource !== value.resource || input.query !== value.query) return { status: 'invalid' }
-        reads++
-        try {
-          const { data, error } = await opts.read(input)
-          if (error || !Array.isArray(data) || data.length > 3 || JSON.stringify(data).length > 240000) return unavailable()
-          const entries = []
-          for (const s of data.slice(0, 2) as SolutionContext[]) {
-            if (s.project_id !== opts.projectId || s.resource !== input.resource || !s.record || !nonempty(s.key, 250) || !nonempty(s.record.id, 200)) return unavailable()
-            if (['solutions', 'selected_solutions'].includes(s.resource) && (!solution(s) || !Number.isSafeInteger(s.record.revision))) return unavailable()
-            const ref = 'choice_' + await fingerprint(s); contexts.set(ref, structuredClone(s))
-            const content = solution(s) ? displayEditSnapshot(s) : s.resource === 'scopes' ? { name: s.record.name, selected_title: s.record.selected_title, has_selection: !!s.target?.solution_id }
-              : s.resource === 'measurements' ? Object.fromEntries(['subject', 'value', 'unit', 'truth', 'source', 'notes', 'required'].map(k => [k, s.record[k]]))
-              : { title: s.record.title, purpose: s.record.purpose, width: s.record.width, height: s.record.height, note: 'Image metadata only; not inspected pixels.' }
-            entries.push({ ref, scope: s.scope_label, content, ...(solution(s) ? { selected: s.target !== null, selected_version_is_current: s.head_revision === undefined || s.head_revision === s.record.revision } : {}) })
-          }
-          let next_ref: string | null = null
-          if (data.length > 2) { const cursor = { ...input, after: data[1].key }; next_ref = 'page_' + await fingerprint({ project: opts.projectId, ...cursor }); pages.set(next_ref, cursor) }
-          return { status: 'ok', entries, next_ref }
-        } catch (error) { rethrowContinuation(error); return unavailable() }
+        const { located: _located, ...page } = await readPage(input)
+        return page
       }
       if (!opts.writer || !SOLUTION_ACTION_TOOLS.some(t => t.function.name === name)) return { status: 'denied' }
       const v = value as Record<string, any>, chosen = contexts.get(v?.solution_ref), scope = contexts.get(v?.scope_ref), base = contexts.get(v?.base_ref)
@@ -148,6 +174,28 @@ export function createSolutionActions(opts: {
       } catch (error) { rethrowContinuation(error); issue = error instanceof Error ? error.message : 'Invalid action.' }
       const result = await opts.writer.commitBound(name, key, payload)
       if (issue && result.status === 'invalid') return { status: 'invalid', message: 'No change made. ' + issue, ...(humanText ? { validation: { code: 'human_text', fields: humanText.fields } } : {}) }
+      if (result.status === 'saved' && opts.writeState) {
+        if (name === 'create_solution_alternative' && payload?.kind === 'bound_solution_create') {
+          const receipt = result.receipt
+          const ref = receipt?.dataset === 'solutions' && typeof receipt.recordId === 'string' && typeof receipt.revision === 'number' && Number.isSafeInteger(receipt.revision)
+            ? await createdRef(receipt.recordId, receipt.revision, String((payload.data.solution as Record<string, unknown>).title ?? '')) : null
+          return { status: 'saved', selected: false, selected_updated: false, ...(ref ? { solution_ref: ref } : {}),
+            message: ref ? 'Created a new alternative; it is not selected. Use this solution_ref with select_solution_alternative and the same scope_ref.' : 'Created a new alternative; it is not selected. Read solutions to choose it.' }
+        }
+        if (name === 'select_solution_alternative' && solution(chosen) && scope) {
+          const areaId = (scope.record.area_id ?? null) as string | null, receipt = result.receipt, state: Record<string, unknown> = {}
+          if (constructionPurpose(chosen.record)) {
+            const readiness = await constructionReadiness(opts.writeState.readiness, opts.projectId,
+              { revision: receipt?.dataset === 'target' && typeof receipt.revision === 'number' ? receipt.revision : NaN, area_id: areaId, solution_id: chosen.record.id, solution_revision: chosen.record.revision })
+            // Top-level, like the work view, so catalog continuations can follow it.
+            state.construction_readiness = readiness
+            if (typeof readiness.creation_state === 'string') state.creation_state = readiness.creation_state
+          }
+          const edit = opts.writeState.selectedEdit ? await opts.writeState.selectedEdit(areaId) : undefined
+          if (edit?.status === 'ok' && edit.entry && edit.target?.solution_id === chosen.record.id && edit.target.solution_revision === chosen.record.revision) state.edit = edit.entry
+          return { status: 'saved', message: 'Selected the existing alternative for this scope.' + (state.edit ? ' Its edit entry is included for content changes.' : ''), selected_updated: false, ...state }
+        }
+      }
       // Receipts remain server-owned; a fresh read supplies another usable ref.
       return result.status === 'saved' ? { status: 'saved', message: name === 'select_solution_alternative' ? 'Selected the existing alternative for this scope.' : 'Saved. Read the same solution before further changes.', selected_updated: name === 'change_solution_evidence' && chosen?.target !== null } : result
     },

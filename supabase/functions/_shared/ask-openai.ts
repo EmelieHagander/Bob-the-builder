@@ -453,11 +453,17 @@ export async function answerWithOpenAi(opts: {
     readSnapshot: input => rpc('read_bob_work_snapshot', { p_project: opts.projectId, p_resource: input.resource, p_id: input.key }, AbortSignal.timeout(12000)),
     read: input => rpc('read_bob_work_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
   })
+  // Owner decision 2026-10-29: writes return the state they produced. Pinned
+  // per manifest; older jobs keep receipts only and their original reads.
+  const writeState = aiCatalog.manifest().definitions.some(row => row.prompt_key === 'bob.tools' && row.metadata?.write_state_version === 1)
+  const constructionReadinessReader = (targetRevision: number, areaId: string | null) => readDesignReadiness(targetRevision, 'construction', areaId)
   const solutionActions = createSolutionActions({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
+    ...(writeState ? { writeState: { readiness: constructionReadinessReader, selectedEdit: (areaId: string | null) => projectEdits.readSelected(areaId) } } : {}),
     ...(claimedServer ? { modelFeedback: { message: opts.message, read: before => rpc('read_model_feedback', { ...binding, p_before: before }, AbortSignal.timeout(12000)) } } : {}),
     read: input => rpc('read_bob_solution_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
   })
   const projectEdits = createProjectEdits({ unlimitedWork, projectId: opts.projectId, writer, hasAccess, sources: lookup.sources,
+    ...(writeState ? { writeState: { readiness: constructionReadinessReader } } : {}),
     read: input => rpc('read_bob_edit_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
     readSelected: areaId => rpc('read_bob_selected_edit_context', { p_project: opts.projectId, p_area: areaId }, AbortSignal.timeout(12000)),
   })
@@ -513,6 +519,7 @@ export async function answerWithOpenAi(opts: {
     constructionSourceRefresh:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.change_construction_parameters'&&row.metadata?.construction_source_refresh_version===1),
     coherentWork:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_draft'&&row.metadata?.construction_work_version===1),
     creationPreparation:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_draft'&&row.metadata?.creation_preparation_version===1),
+    writeState,
     prepareSolutionEdit:projectEdits.prepare,
     prepareWork:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_work',{...binding,p_payload:payload},AbortSignal.timeout(12000))

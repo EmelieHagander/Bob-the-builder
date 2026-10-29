@@ -23,6 +23,7 @@ let preBuildingScopeRows:any[]|undefined,preBuildingScopeVersions:Map<string,num
 let preCostControlsRows:any[]|undefined,preCostControlsVersions:Map<string,number>|undefined
 let preCreationRows:any[]|undefined,preCreationVersions:Map<string,number>|undefined
 let preControlledCompletionRows:any[]|undefined,preControlledCompletionVersions:Map<string,number>|undefined
+let preWriteStateRows:any[]|undefined,preWriteStateVersions:Map<string,number>|undefined
 let preConstructionWorkRows:any[]|undefined,preConstructionWorkVersions:Map<string,number>|undefined
 // Materialise the explicit immutable publication patches in migration order.
 // The historical seed stays available for pinned-manifest compatibility tests.
@@ -39,6 +40,32 @@ for(const migration of migrations){
    if(edit.content!==undefined)row.content=edit.content
    if(edit.definition)row.definition={...row.definition,...edit.definition}
    versions.set(edit.key,versions.get(edit.key)!+1)
+  }
+ }
+ const writeState=source.match(/\$write_state_spec\$([\s\S]+?)\$write_state_spec\$/)
+ if(writeState){
+  preWriteStateRows=structuredClone(seed);preWriteStateVersions=new Map(versions)
+  for(const spec of JSON.parse(writeState[1])){
+   const row=seed.find(row=>row.key===spec.key),{seed_version,source_revision,...rest}=row.metadata??{}
+   for(const [from,to] of spec.replacements){
+    const fields=['description','additional_description','card_description'].filter(field=>typeof row.definition[field]==='string'&&row.definition[field].includes(from))
+    if(!fields.length)throw Error('write_state_text_missing: '+spec.key)
+    for(const field of fields)row.definition[field]=row.definition[field].replaceAll(from,to)
+   }
+   if(spec.append)row.definition.description+=spec.append
+   if(spec.core_tools){
+    if(JSON.stringify(row.definition.core_tools)!==JSON.stringify(spec.core_tools_before))throw Error('write_state_core_tools_changed')
+    row.definition.core_tools=spec.core_tools
+   }
+   if(spec.remove_followups){
+    // jsonb equality: key order is irrelevant, array order is not.
+    const stable=(v:any):string=>Array.isArray(v)?'['+v.map(stable).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v)
+    const same=(a:any,b:any)=>stable(a)===stable(b)
+    for(const f of spec.remove_followups)if(!row.definition.operation_followups.some((g:any)=>same(g,f)))throw Error('write_state_followup_missing')
+    row.definition.operation_followups=[...row.definition.operation_followups.filter((g:any)=>!spec.remove_followups.some((f:any)=>same(g,f))),...spec.add_followups]
+   }
+   row.metadata={...rest,publication:'write-state-v1',write_state_version:1}
+   versions.set(spec.key,versions.get(spec.key)!+1)
   }
  }
  const creation=source.match(/\$creation_preparation_spec\$([\s\S]+?)\$creation_preparation_spec\$/)
@@ -635,6 +662,10 @@ export function preControlledCompletionCatalogFixture(update?:(snapshot:AiCatalo
 for(const row of preCreationRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preCreationManifest=fixtureManifest(preCreationRows??seed,preCreationVersions??versions,'fixture-pre-creation-manifest')
 export function preCreationCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preCreationManifest)})}
+for(const row of preWriteStateRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preWriteStateManifest=fixtureManifest(preWriteStateRows??seed,preWriteStateVersions??versions,'fixture-pre-write-state-manifest')
+/** Manifests pinned before writes returned their state (2026-10-29). */
+export function preWriteStateCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preWriteStateManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw Error('Pinned fixture')}},{app:'bob',manifest:snapshot})}
 for(const row of preConstructionWorkRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preConstructionWorkManifest=fixtureManifest(preConstructionWorkRows??seed,preConstructionWorkVersions??versions,'fixture-pre-construction-work-manifest')
 export function preConstructionWorkCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preConstructionWorkManifest)})}

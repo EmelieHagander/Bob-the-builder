@@ -9,12 +9,13 @@ import { createSolutionActions } from '../supabase/functions/_shared/project-sol
 import { createBuildingScope } from '../supabase/functions/_shared/project-building-scope.ts'
 import { createMediaAdapter } from '../supabase/functions/_shared/project-context/media.ts'
 import { createProjectContext } from './support/colleague-catalog-fixture.ts'
-import { catalogFixture, preCostControlsCatalogFixture, catalogCall } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, preCostControlsCatalogFixture, preWriteStateCatalogFixture, catalogCall } from './support/ai-catalog-fixture.ts'
 
 test('six catalog-bound core tools are callable in the first medium request and survive later steps', async () => {
-  const core = catalogCoreTools(catalogFixture())!
+  // This publication's six-tool bench; write state (2026-10-29) later drops the project search.
+  const core = catalogCoreTools(preWriteStateCatalogFixture())!
   assert.equal(core.length, 6)
-  const catalog = catalogFixture(manifest => {
+  const catalog = preWriteStateCatalogFixture(manifest => {
     for (const name of core) {
       const definition = manifest.definitions.find(r => r.prompt_key === 'tools.' + name)!.definition
       definition.description = definition.card_description = 'Catalogue description for ' + name
