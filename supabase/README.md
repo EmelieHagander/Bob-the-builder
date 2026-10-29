@@ -720,7 +720,7 @@ let such jobs finish before rolling either runtime back.
 
 ### Exact lookup and controlled completion — source 2026-10-29
 
-**Prepared, not deployed.** New jobs pin `exactLookupVersion: 1` in
+**Installed 2026-10-29** (`bob-worker` v152, `ask-bob` v184; [evidence](../Docs/foundation-verification.md#controlled-completion-install-2026-10-29)). New jobs pin `exactLookupVersion: 1` in
 `ask-openai.ts`: lookups read `search_bob_project_data_v10` through
 `lookup-rpc.ts`, and a statement timeout (57014) is retried once inside the same
 journaled read (26 s allowance). Journals without the pin keep v8/v9 and one
@@ -728,12 +728,34 @@ attempt. New manifests with `work_completion_version: 3` replace the full review
 after saved work with server facts, the small completion gate and at most one
 targeted note ([conversation owner](../Docs/ask-bob-conversations.md#controlled-completion)).
 [Database contract](../db/README.md#room-dimensions--2026-10-26) lists v10.
-Each step needs the owner's explicit OK, in this order:
+The installed order was:
 
 1. Apply `20261029115500_bob_exact_lookup.sql` (adds v10 only).
 2. Deploy `bob-worker`, then `ask-bob`, from the same merge commit.
 3. Apply `20261029120000_bob_controlled_completion_catalog.sql` and the other
    catalog publications of the same release.
+
+### In-turn lookup reuse and database load relief — source 2026-10-29
+
+**Prepared, not deployed.** New jobs pin `lookupReuseVersion: 1` (requires
+`exactLookupVersion: 1`). `createLookupReuse` in `lookup-rpc.ts` reuses a
+successful identical lookup within one claim. It stops reusing when the turn
+writes (`writeRpc` and piece release) or after `READ_REUSE_MAX_AGE_MS` (120 s).
+A reused result keeps its original `retrievedAt`, and callers still check access.
+
+Reuse happens inside the journaled read, so journal positions and fingerprints
+never depend on it. A resumed worker simply starts with an empty store. Jobs
+without the pin read every time; an older runtime ignores the field, so rollback
+is safe. The replayed drawing turn of 2026-10-29 goes from 26 to 22 lookups, and
+one CAD design claim from 9 to 7 (`tests/lookup-reuse.test.ts`). Each claim
+starts empty because every model call yields.
+
+The database half is the [load relief migration](../db/README.md#db-load-relief).
+Each step needs the owner's explicit OK:
+
+1. Apply `20261029190000_bob_db_load_relief.sql`. It is independent of the
+   runtime and returns identical results.
+2. Deploy `bob-worker`, then `ask-bob`, from the same commit, for the reuse pin.
 
 ### Room dimensions — source 2026-10-26
 

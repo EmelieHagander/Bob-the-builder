@@ -3,6 +3,7 @@ import { before, after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from './support/pglite.ts'
+import { assertSourceAssessmentEquivalent } from './support/source-assessment-equivalence.ts'
 
 const pg = new PGlite()
 const one = '00000000-0000-0000-0000-000000000001'
@@ -261,4 +262,10 @@ test('4B2b keeps explicit estimated geometry visibly concept-level in its persis
   assert.equal(row.source_kind,'deterministic')
   assert.match(row.basis,/Drawing status: concept/)
   assert.match(row.basis,/contains explicit estimate/)
+})
+
+test('load relief: generated stud walls keep the full source assessment, with the same result', async () => {
+  const relief = await assertSourceAssessmentEquivalent(pg, 'generated walls')
+  assert.deepEqual(relief, { revisions: 7, slim: 0, states: ['changed:measurements_changed,physical_source_changed', 'changed:physical_source_changed', 'current:'] },
+    'every generation dispatches to the full assessment, including physical changes')
 })

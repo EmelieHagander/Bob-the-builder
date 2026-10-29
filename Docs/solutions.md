@@ -36,6 +36,11 @@ decision. Selection requires both the expected target decision and current solut
 revision. Concurrent changes fail with a reload instruction. A selected solution
 must be replaced or the target cleared before archiving it.
 
+Bob may create and select a new alternative in one command (prepared
+2026-10-29, [writer contract](ask-bob-writes.md#create-and-select)). It is still
+two append-only records, a solution revision and a target decision, each with its
+own receipt; a concurrent target change leaves the new solution unselected.
+
 The selected state expresses project intent, not engineering approval. Downstream
 consumers must store this exact solution/decision revision when they are built.
 No current task, shopping item or drawing is recalculated by this milestone.

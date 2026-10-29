@@ -17,6 +17,10 @@ export const BOB_RESULT_PAGE_TOKENS = 3000
 export const BOB_CONSTRUCTION_RESULT_TOKENS = 8000
 /** Recent results kept whole across exchanges before older ones become references. */
 export const BOB_RESULT_WINDOW_TOKENS = 20000
+/** Window version 2: when the whole older results exceed the ceiling, keep
+ * them down to this share of it, so the transcript prefix changes in fewer,
+ * larger steps instead of one demotion per request (prompt cache). */
+export const BOB_RESULT_WINDOW_TARGET_SHARE = 0.75
 
 const sources = new WeakMap<BobArchivedOperation, string[]>()
 const firstPages = new WeakMap<BobArchivedOperation, string>()
@@ -87,6 +91,67 @@ export function projectBobResult(operation: BobArchivedOperation, older: boolean
     firstPages.set(operation, page)
   }
   return page
+}
+
+const READ_TOOL = /^(read_|search_|list_|open_|get_work_history$)/
+const DISCOVERY_TOOL = /^(search_|list_|open_|get_work_history$)/
+/** Fields that name a version of the same record rather than another record. */
+const VERSION_FIELDS = new Set(['revision', 'expected_revision', 'target_revision', 'construction_revision'])
+const sortedJson = (value: unknown): unknown => Array.isArray(value) ? value.map(sortedJson)
+  : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, sortedJson((value as Record<string, unknown>)[key])])) : value
+
+/** The record a read result shows: same read tool and the same arguments,
+ * where a revision field counts as the same record and a page cursor does
+ * not. Writes, checks and unparseable calls have no key and are never
+ * superseded. */
+export function bobResultRecordKey(operation: Pick<BobArchivedOperation, 'tool_name' | 'arguments'>): string | null {
+  if (!READ_TOOL.test(operation.tool_name)) return null
+  let value: unknown
+  try { value = JSON.parse(operation.arguments) } catch { return null }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = Object.fromEntries(Object.entries(value).filter(([key]) => !VERSION_FIELDS.has(key)))
+  return operation.tool_name + '\u0000' + JSON.stringify(sortedJson(record))
+}
+
+export interface BobWindowResult { call_id: string; tool_name: string; arguments: string; tokens: number }
+/** Window version 2 (owner decision 2026-10-29: Bob gets what he needs when
+ * he needs it). Input is every tool result in transcript order; `older` marks
+ * those beyond the always-whole last two exchanges. While the older results
+ * fit the same ceiling as version 1, nothing changes, so the cached prompt
+ * prefix stays valid. Above it, an older read repeated later (superseded)
+ * leaves first; the rest are kept down to the target share, state reads,
+ * writes and checks before discovery searches, newest first within each
+ * group. Pure: the same transcript gives the same window on every resumed
+ * worker. `supersededBy` names only demoted superseded reads. */
+export function selectBobResultWindow(results: (BobWindowResult & { older: boolean })[], ceiling: number,
+  target = Math.floor(ceiling * BOB_RESULT_WINDOW_TARGET_SHARE)): { whole: Set<string>; supersededBy: Map<string, string> } {
+  const older = results.filter(result => result.older)
+  if (older.reduce((sum, result) => sum + result.tokens, 0) <= ceiling)
+    return { whole: new Set(older.map(result => result.call_id)), supersededBy: new Map() }
+  const supersededBy = new Map<string, string>(), latest = new Map<string, string>()
+  for (let i = results.length - 1; i >= 0; i--) {
+    const key = bobResultRecordKey(results[i])
+    if (key === null) continue
+    const newer = latest.get(key)
+    if (newer === undefined) latest.set(key, results[i].call_id)
+    else if (results[i].older) supersededBy.set(results[i].call_id, newer)
+  }
+  const candidates = older.filter(result => !supersededBy.has(result.call_id))
+  const whole = new Set<string>()
+  let used = 0
+  for (const discovery of [false, true]) for (let i = candidates.length - 1; i >= 0; i--) {
+    const result = candidates[i]
+    if (DISCOVERY_TOOL.test(result.tool_name) !== discovery || used + result.tokens > target) continue
+    used += result.tokens; whole.add(result.call_id)
+  }
+  return { whole, supersededBy }
+}
+
+/** An older read whose record was read again later. The newer result is in
+ * the transcript; the exact original stays recoverable. */
+export function supersededBobResult(operation: BobArchivedOperation, newer: string): string {
+  return JSON.stringify({ observed_result: observed(operation), content_omitted: true, superseded_by: newer,
+    reopen: { tool: 'get_work_history', arguments: { call_id: operation.call_id, after: null } } })
 }
 
 /** Persist the small projections at first observation. A resumed worker must

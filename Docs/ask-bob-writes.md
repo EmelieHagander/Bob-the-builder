@@ -53,7 +53,33 @@ no existing row is rewritten.
 
 Not checked: plan-link reasons (not saved), building scope (no prose), a plan
 compiled by the plan colleague and a reviewed CAD candidate (Bob cannot
-rewrite colleague text in that call), and Bob's chat answer.
+rewrite colleague text in that call), and Bob's chat answer on manifests pinned
+before 2026-10-29.
+
+<a id="answer-text"></a>
+**Chat answers — prepared 2026-10-29, not deployed (owner decision).** The paid
+box run delivered "Artifact: `83e8bb90-…`, Revision: `2`" to the owner. New
+manifests (`agent-contract.ask-bob` `answer_text_version` 1, publication
+`bob-text-hygiene-v1`, requires `work_completion_version` 3) run the same
+`humanTextIssues` detector on Bob's final answer before delivery. A violation
+sends Bob one targeted note (`bob.note.answer-text`) quoting at most four
+fragments and asking for the same reply in plain words without reading or
+changing anything. When the completion check also sends a note in that round,
+the text request rides it (`bob.note.answer-text-also`), so completion and text
+together add at most one round per turn. The server never replaces Bob's words:
+a rewrite that still contains references is delivered as written. The delivery
+metric records only `answer_text` (`clean`, `rewritten`, `rewrite_unchanged`,
+`delivered_with_issues`) and `answer_text_issues`.
+
+<a id="rejection-reasons"></a>
+**Rejection reasons in logs — prepared 2026-10-29, not deployed.** Every
+`invalid` or `conflict` tool result logs `[Bob tool rejection]` with the tool,
+status, a code and field paths only: the typed `validation.code`, `reason` or
+first issue code, else a stable code for the content editor's fixed messages
+(`edit_ref_required`, `edit_path_unsupported`, `edit_alignment_operation` and
+others in `tool-rejection.ts`; a test fails when a new message has none). On
+`work_completion_version` 3 manifests the same code reaches the execution
+event's `validation_code`. Message text, values and prose are never logged.
 
 **Server-written text.** Drawing-event replies no longer show the outcome code
 or the catalog `next_action` guidance; that guidance stays in model-facing
@@ -180,6 +206,25 @@ the database generates the new solution identity. Creation never selects it.
 Unresolved edits, evidence changes or selection failures cannot be repaired by
 creating another alternative. The new catalog disables both legacy solution
 creation and target selection while preserving older pinned manifests.
+
+<a id="create-and-select"></a>
+**Create and select in one call — prepared 2026-10-29 (owner decision), not
+deployed.** On manifests pinned with `tools.create_solution_alternative`
+`create_select_version: 1` (which requires `write_state_version: 1`), creation
+takes a required `select` boolean. With `select=true` the server saves the new
+alternative (`bound_solution_create`) and then selects that exact new revision
+for the read scope (`bound_solution_target`, expected target revision from the
+scope read). Both keep their own receipts and operation keys, so an exact retry
+replays them. The result reports `created`, `selected`, the selected edit entry
+and, for a construction-purpose solution, `construction_readiness` and
+`creation_state`. If the selection fails (for example the scope's target changed
+after its read) the alternative stays saved and unselected, `selection` names the
+outcome, no readiness is claimed and the rejected selection remains a known gap
+for the completion check. Content follows the existing paths, so an explicit
+construction request sets summary, purpose `construction` and alignment in the
+same call; `aligned` is Bob's honest judgement that the request states the needed
+choices, never a server approval. `select=false` keeps the current selection.
+Older manifests keep "creation never selects it".
 
 Selection binds the exact read solution and destination target revisions. A
 newer solution head or concurrent target change rejects the action. Evidence

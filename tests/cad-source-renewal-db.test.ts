@@ -8,6 +8,7 @@ import {checkedConstructionForDrawing} from '../supabase/functions/_shared/const
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {catalogFixture} from './support/ai-catalog-fixture.ts'
 import {handoff,reviewReply} from './support/cad-review-fixture.ts'
+import {assertSourceAssessmentEquivalent} from './support/source-assessment-equivalence.ts'
 
 test('stalled request renews the same source identity through caller reads, checked CAD, atomic save and exact readback',async t=>{
  const f=await cutPlanFixture(t),id=randomUUID(),binding={p_project:f.project,p_thread:f.claim.thread_id,p_turn:f.turn,p_generation:f.claim.generation}
@@ -58,4 +59,25 @@ test('stalled request renews the same source identity through caller reads, chec
  assert.equal(historical.current_revision,2)
  assert.equal((await f.pg.query('select count(*)::integer n from bob_private.project_drawing_requests where project_id=$1',[f.project])).rows[0].n,1)
  await assert.rejects(f.rpc('bob.check_drawing_request',[f.project,id],f.other),/drawing_request_denied|project_denied/)
+ // Load relief: the slim assessments equal the full ones for a construction
+ // and its pinned drawing, current and after the source changes.
+ const saved=await assertSourceAssessmentEquivalent(f.pg,'saved drawing')
+ assert(saved.slim>=3,'construction revisions and the saved drawing take the slim form')
+ await f.rpc('bob.artifact_command',[f.project,'archive',f.construction.recordId,2,'{}'])
+ const changed=await assertSourceAssessmentEquivalent(f.pg,'archived source')
+ assert.deepEqual(changed,{revisions:4,slim:4,states:['current:']})
+ // A newer material revision reaches the construction layer of the assessment.
+ await f.pg.query(`insert into bob.catalog_item_revisions select (jsonb_populate_record(r,jsonb_build_object('revision',r.revision+1))).*
+  from bob.catalog_item_revisions r where r.item_id=$1 and r.revision=1`,[f.material.recordId])
+ await f.pg.query('update bob.catalog_items set current_revision=2 where id=$1',[f.material.recordId])
+ const catalog=await assertSourceAssessmentEquivalent(f.pg,'newer material')
+ assert(catalog.states.some(s=>s.includes('construction_catalog_changed')),JSON.stringify(catalog.states))
+ // A pinned CAD ancestor reaches the drawing-source terms. Publishing no
+ // longer makes one, so the archive copy is pointed at its own first revision.
+ await f.rpc('bob.artifact_command',[f.project,'archive',receipt.recordId,1,'{}'])
+ await f.pg.exec('alter table bob.artifact_cad_revisions disable trigger user')
+ await f.pg.query('update bob.artifact_cad_revisions set source_artifact_id=$1,source_revision=1 where artifact_id=$1 and artifact_revision=2',[receipt.recordId])
+ await f.pg.exec('alter table bob.artifact_cad_revisions enable trigger user')
+ const ancestor=await assertSourceAssessmentEquivalent(f.pg,'pinned ancestor')
+ assert(ancestor.states.some(s=>s.includes('drawing_source_changed')),JSON.stringify(ancestor.states))
 })

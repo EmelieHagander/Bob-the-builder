@@ -20,7 +20,7 @@ import { runProjectAnswer } from '../supabase/functions/_shared/project-answer.t
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createMediaAdapter } from '../supabase/functions/_shared/project-context/media.ts'
 import { createProjectContext } from './support/colleague-catalog-fixture.ts'
-import { catalogFixture, preWriteStateCatalogFixture, catalogCall } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, preWriteStateCatalogFixture, preTextHygieneCatalogFixture, catalogCall } from './support/ai-catalog-fixture.ts'
 
 const publication = '20261029113000_bob_write_state_catalog.sql'
 const changedKeys = ['tools.save_construction_draft', 'tools.edit_construction_parts', 'tools.change_construction_parameters', 'tools.check_construction_draft',
@@ -63,7 +63,8 @@ test('writes return the state they produced on new manifests; pinned manifests k
   }
 
   await t.test('publication versions only the eight write interfaces/continuations, retains pinned manifests and is idempotent', async () => {
-    const current = (await pg.query<any>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result, latest = catalogFixture()
+    // The 2026-10-29 text-hygiene publication later adds text to two of these tools.
+    const current = (await pg.query<any>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result, latest = preTextHygieneCatalogFixture()
     for (const prior of beforeCatalog.definitions) {
       const row = current.definitions.find((r: any) => r.prompt_key === prior.prompt_key)
       if (!changedKeys.includes(prior.prompt_key)) assert.deepEqual(row, prior, prior.prompt_key)

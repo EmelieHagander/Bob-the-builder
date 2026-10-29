@@ -23,12 +23,33 @@ let preBuildingScopeRows:any[]|undefined,preBuildingScopeVersions:Map<string,num
 let preCostControlsRows:any[]|undefined,preCostControlsVersions:Map<string,number>|undefined
 let preCreationRows:any[]|undefined,preCreationVersions:Map<string,number>|undefined
 let preControlledCompletionRows:any[]|undefined,preControlledCompletionVersions:Map<string,number>|undefined
+let preTextHygieneRows:any[]|undefined,preTextHygieneVersions:Map<string,number>|undefined
 let preWriteStateRows:any[]|undefined,preWriteStateVersions:Map<string,number>|undefined
+let preCreateSelectRows:any[]|undefined,preCreateSelectVersions:Map<string,number>|undefined
+let preMaterialLookupRows:any[]|undefined,preMaterialLookupVersions:Map<string,number>|undefined
+let preResultWindowRows:any[]|undefined,preResultWindowVersions:Map<string,number>|undefined
 let preConstructionWorkRows:any[]|undefined,preConstructionWorkVersions:Map<string,number>|undefined
 // Materialise the explicit immutable publication patches in migration order.
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const textHygiene=source.match(/\$text_hygiene_spec\$([\s\S]+?)\$text_hygiene_spec\$/)
+ if(textHygiene){
+  preTextHygieneRows=structuredClone(seed);preTextHygieneVersions=new Map(versions)
+  const spec=JSON.parse(textHygiene[1]),marker={publication:'bob-text-hygiene-v1',text_hygiene_version:1}
+  for(const {variables,...addition} of spec.additions){seed.push({definition:{},...addition,variables,metadata:{...marker}});versions.set(addition.key,1)}
+  for(const edit of spec.edits){
+   const row=seed.find(row=>row.key===edit.key),{seed_version,source_revision,...rest}=row.metadata??{}
+   row.metadata={...rest,...edit.metadata,...marker}
+   if(edit.description_append)row.definition={...row.definition,description:row.definition.description+edit.description_append}
+   if(edit.add_property){
+    const p=row.definition.parameters,name=edit.add_property.name
+    row.definition={...row.definition,parameters:{...p,properties:{...p.properties,[name]:edit.add_property.schema},required:[...p.required,name]},
+     required_parameters:[...row.definition.required_parameters,name]}
+   }
+   versions.set(edit.key,versions.get(edit.key)!+1)
+  }
+ }
  const controlledCompletion=source.match(/\$controlled_completion_spec\$([\s\S]+?)\$controlled_completion_spec\$/)
  if(controlledCompletion){
   preControlledCompletionRows=structuredClone(seed);preControlledCompletionVersions=new Map(versions)
@@ -40,6 +61,39 @@ for(const migration of migrations){
    if(edit.content!==undefined)row.content=edit.content
    if(edit.definition)row.definition={...row.definition,...edit.definition}
    versions.set(edit.key,versions.get(edit.key)!+1)
+  }
+ }
+ const resultWindow=source.match(/\$result_window_spec\$([\s\S]+?)\$result_window_spec\$/)
+ if(resultWindow){
+  preResultWindowRows=structuredClone(seed);preResultWindowVersions=new Map(versions)
+  const spec=JSON.parse(resultWindow[1]),row=seed.find(row=>row.key===spec.key),{seed_version,source_revision,...rest}=row.metadata??{}
+  row.metadata={...rest,...spec.metadata,publication:'bob-result-window-v2'}
+  versions.set(spec.key,versions.get(spec.key)!+1)
+ }
+ const materialLookup=source.match(/\$material_lookup_spec\$([\s\S]+?)\$material_lookup_spec\$/)
+ if(materialLookup){
+  preMaterialLookupRows=structuredClone(seed);preMaterialLookupVersions=new Map(versions)
+  for(const spec of JSON.parse(materialLookup[1])){
+   const row=seed.find(row=>row.key===spec.key),{seed_version,source_revision,...rest}=row.metadata??{}
+   row.definition={...row.definition,description:row.definition.description+spec.append}
+   row.metadata={...rest,publication:'material-lookup-v1',material_lookup_version:1}
+   versions.set(spec.key,versions.get(spec.key)!+1)
+  }
+ }
+ const createSelect=source.match(/\$create_select_spec\$([\s\S]+?)\$create_select_spec\$/)
+ if(createSelect){
+  preCreateSelectRows=structuredClone(seed);preCreateSelectVersions=new Map(versions)
+  for(const spec of JSON.parse(createSelect[1])){
+   const row=seed.find(row=>row.key===spec.key),{seed_version,source_revision,...rest}=row.metadata??{}
+   for(const [from,to] of spec.replacements){
+    const fields=['description','additional_description','card_description'].filter(field=>typeof row.definition[field]==='string'&&row.definition[field].includes(from))
+    if(!fields.length)throw Error('create_select_text_missing: '+spec.key)
+    for(const field of fields)row.definition[field]=row.definition[field].replaceAll(from,to)
+   }
+   if(spec.parameters)row.definition={...row.definition,parameters:spec.parameters,required_parameters:spec.parameters.required}
+   if(spec.add_followups)row.definition.operation_followups=[...row.definition.operation_followups,...spec.add_followups]
+   row.metadata={...rest,publication:'create-select-v1',create_select_version:1}
+   versions.set(spec.key,versions.get(spec.key)!+1)
   }
  }
  const writeState=source.match(/\$write_state_spec\$([\s\S]+?)\$write_state_spec\$/)
@@ -655,6 +709,10 @@ function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):Ai
 const preConstructionEditsManifest=fixtureManifest(preConstructionEditsRows??seed,preConstructionEditsVersions??versions,'fixture-pre-construction-edits-manifest')
 export function preConstructionEditsCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw new Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preConstructionEditsManifest)})}
 const manifest=fixtureManifest(seed,versions,'fixture-manifest')
+for(const row of preTextHygieneRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preTextHygieneManifest=fixtureManifest(preTextHygieneRows??seed,preTextHygieneVersions??versions,'fixture-pre-text-hygiene-manifest')
+/** Manifests pinned before the 2026-10-29 text-hygiene publication. */
+export function preTextHygieneCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preTextHygieneManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 for(const row of preControlledCompletionRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preControlledCompletionManifest=fixtureManifest(preControlledCompletionRows??seed,preControlledCompletionVersions??versions,'fixture-pre-controlled-completion-manifest')
 /** Manifests pinned before 2026-10-29 keep the v2 full review after saved work. */
@@ -662,6 +720,18 @@ export function preControlledCompletionCatalogFixture(update?:(snapshot:AiCatalo
 for(const row of preCreationRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preCreationManifest=fixtureManifest(preCreationRows??seed,preCreationVersions??versions,'fixture-pre-creation-manifest')
 export function preCreationCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preCreationManifest)})}
+for(const row of preResultWindowRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preResultWindowManifest=fixtureManifest(preResultWindowRows??seed,preResultWindowVersions??versions,'fixture-pre-result-window-manifest')
+/** Manifests pinned before 2026-10-29 keep result window version 1. */
+export function preResultWindowCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preResultWindowManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw Error('Pinned fixture')}},{app:'bob',manifest:snapshot})}
+for(const row of preMaterialLookupRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preMaterialLookupManifest=fixtureManifest(preMaterialLookupRows??seed,preMaterialLookupVersions??versions,'fixture-pre-material-lookup-manifest')
+/** Manifests pinned before 2026-10-29 keep the definition-only material search. */
+export function preMaterialLookupCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preMaterialLookupManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw Error('Pinned fixture')}},{app:'bob',manifest:snapshot})}
+for(const row of preCreateSelectRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preCreateSelectManifest=fixtureManifest(preCreateSelectRows??seed,preCreateSelectVersions??versions,'fixture-pre-create-select-manifest')
+/** Manifests pinned before 2026-10-29's create-select publication: creation never selects. */
+export function preCreateSelectCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preCreateSelectManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw Error('Pinned fixture')}},{app:'bob',manifest:snapshot})}
 for(const row of preWriteStateRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preWriteStateManifest=fixtureManifest(preWriteStateRows??seed,preWriteStateVersions??versions,'fixture-pre-write-state-manifest')
 /** Manifests pinned before writes returned their state (2026-10-29). */

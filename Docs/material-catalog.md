@@ -20,7 +20,7 @@ The proposed separate material/part tables are refined to **one versioning mecha
 | `bob_private.catalog_item_provenance` | Private current/earlier user-message quote, thread/sequence and actor for newly written revisions; not ordinary collaborator-readable catalog content. |
 | `bob.current_catalog_items` | Security-invoker current-version view; explicit project pinning is also enforced by the application RPC. |
 
-`bob.materials` is still Shopping. `bob.stock_items` and existing requirements/allocations remain unchanged. A catalog create never asserts stock exists. A part definition currently contains **parameterized specifications only**, with `geometry_status=definition_only`; no local geometric recipe, anchors, machining operations, placed instances or reference-to-Building is claimed yet. Those extend the exact identity/revision in slice B.
+`bob.materials` is still Shopping. `bob.stock_items` and existing requirements/allocations remain unchanged; household stock at home is the separate [normalized material model](#normalized-material-model). A catalog create never asserts stock exists. A part definition currently contains **parameterized specifications only**, with `geometry_status=definition_only`; no local geometric recipe, anchors, machining operations, placed instances or reference-to-Building is claimed yet. Those extend the exact identity/revision in slice B.
 
 ## Canonical working units — owner decision 2026-09-21
 
@@ -46,7 +46,7 @@ The existing unit dictionary now includes **`in`, length, multiplier 25.4**.
 It means the modern international inch, exactly 25.4 mm, not a historical local
 inch or a product designation. The definition is checked against
 [NIST — SI Units: Length](https://www.nist.gov/pml/owm/si-units-length).
-No global mapping such as `2x4 = 45x95` is seeded or executed.
+No unit conversion such as `2x4 = 45x95` is executed. **Owner decision 2026-10-29 (supersedes the earlier "no mapping is seeded" rule):** the reviewed starting list attaches trade aliases such as `2x4` and `2tum4` to the specific 45 × 95 size as search words. They find that size; Bob still reports and saves the actual mm dimensions, and an alias never changes a numeric value. [Normalized material model](#normalized-material-model).
 
 In ordinary chat the user may write tum, inches or an inch mark. Bob separates
 the unit from the value: `¾ tum` becomes `{value: "¾", unit: "in", ...}`;
@@ -113,6 +113,38 @@ Each property value is `{value, unit, truth, parameter, note}`. Stored numeric q
 18 mm and 1.8 cm normalize identically. Inner diameter, outer diameter and nominal designation are different keys. A supplied tube wall/radius relation is geometric validation only, not pressure/temperature certification. Optional fields may be omitted; critical unstated suitability must not be inferred from a successful schema validation.
 
 Unknown is an explicit null with `truth=unknown` and a note, never zero or a search wildcard. Only part definitions may use a named parameter: null value, `truth=provided_spec`, and an explicit parameter name. A parameter is a design slot to bind in a future assembly, not a measured dimension or an automatic equation. Reusing a parameter name with incompatible types/units is rejected. Length parameters bind in mm after normalization, irrespective of the original input-unit label.
+
+<a id="normalized-material-model"></a>
+## Normalized material model — prepared 2026-10-29
+
+**Prepared, not deployed or applied.** Owner decisions 2026-10-29: standard
+materials, sizes and their combination are separate, and the database grows as
+people and Bob add entries. The combination is this catalog's material
+definition, so existing pins keep working; it now links to a material, a size
+(both nullable), a unit and a weight. Shared entries added by people or Bob are
+marked `unreviewed` until an operator reviews them. Unknown values stay null.
+
+Sizes are in mm. For fasteners `width_mm` holds the nominal shank diameter,
+`length_mm` the length and `depth_mm` stays null; the seed maps them onto the
+`fastener` profile's `diameter` and `length`. Sheets map `depth_mm` to
+`thickness`; rectangular profiles map `depth_mm` to `thickness` and `width_mm` to
+`width`. A required dimension the list does not state is saved as `unknown`
+with a note. Rolls (`roll_stock`) and single pieces (`piece`) use all-optional
+profiles, so roofing felt, membranes and tiles can be listed without invented
+measures. The seed's starting list (21 materials, 31 sizes, 45 combinations, 58
+aliases) is generated from `scripts/data/standard-materials.json` into its own
+migration for owner review before it is applied; it states no product, supplier,
+price or weight.
+
+New manifests (`tools.search_material_catalog` `material_lookup_version` 1) send
+an untyped material search to the combined lookup: one row per combination and
+purchase place with household stock at home and the latest shared price. Typed
+property searches, parts and older manifests keep the definition-only search.
+[Database contract](../db/README.md#material-model).
+
+Bob's `save_catalog_definition` still creates project definitions; saving new
+definitions directly as shared and unreviewed is a separate follow-up because it
+changes the write authority and identity scope.
 
 ## Search → read → ensure/revise
 

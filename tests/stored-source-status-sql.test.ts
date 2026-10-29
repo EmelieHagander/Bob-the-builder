@@ -8,6 +8,7 @@ import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 import {sourceAssessmentInputs} from './support/source-status-inputs.ts'
+import {assertSourceAssessmentEquivalent} from './support/source-assessment-equivalence.ts'
 
 // Shared physical-model tables. A project that references any of them is
 // never stored, so their writes need no change signal.
@@ -66,6 +67,9 @@ test('stored status equals the live assessment, is used only while fresh, and ev
  const changed=await f.view()
  assert.deepEqual(changed,await f.live())
  assert.equal(changed.find((r:any)=>r.artifact_id===f.pinned)?.source_state,'changed')
+ const slim=await assertSourceAssessmentEquivalent(f.pg,'remeasured')
+ assert.equal(slim.slim,slim.revisions,'plain drawings take the slim assessment')
+ assert.deepEqual(slim.states,['changed:measurements_changed','current:'])
  assert(await f.assessments()>0,'stale rows are assessed live')
  await f.drain()
  assert.equal(await f.fresh(),await f.revisions())
@@ -75,6 +79,7 @@ test('stored status equals the live assessment, is used only while fresh, and ev
  // New revisions and lifecycle copies are answered live until stored.
  await f.call(f.owner,'bob.artifact_command',[f.project,'archive',f.plain,1,'{}'])
  await f.call(f.owner,'bob.artifact_command',[f.project,'restore',f.plain,2,'{}'])
+ assert.equal((await assertSourceAssessmentEquivalent(f.pg,'archive and restore')).revisions,await f.revisions())
  assert.equal(await f.fresh(),0)
  assert.deepEqual(await f.view(),await f.live())
  await f.drain()

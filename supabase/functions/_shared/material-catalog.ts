@@ -53,6 +53,8 @@ export const CATALOG_WRITE_TOOL = tool('save_catalog_definition',
 const code = /^[a-z][a-z0-9_]{0,63}$/
 const category = /^[a-z][a-z0-9_.]{0,63}$/
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+/** Combined material lookup cursor: '<combination>:<store article>' or '<combination>:-'. */
+const lookupCursor = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(:([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|-))?$/i
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 const text = (v: unknown, max: number, empty = false): v is string => typeof v === 'string' && v.length <= max && (empty || v.trim().length > 0)
 const revision = (v: unknown): v is number => Number.isSafeInteger(v) && Number(v) > 0 && Number(v) < 1_000_000_000
@@ -104,7 +106,7 @@ export function parseCatalogWrite(value: unknown): WritePayload | null {
   return { kind: 'catalog', record_id: record_id as string | null, expected_revision: expected_revision as number,
     expected_updated_at: null, request_quote: request_quote as string, data }
 }
-export function parseCatalogRead(name: string, value: unknown): Record<string, unknown> | null {
+export function parseCatalogRead(name: string, value: unknown, options: { lookupCursor?: boolean } = {}): Record<string, unknown> | null {
   if (!isObject(value)) return null
   const base = { action: '', kind: null as string | null, query: null as string | null, after: null as string | null,
     id: null as string | null, revision: null as number | null, profile_code: null as string | null, categories: [] as string[], properties: {} as CatalogProperties }
@@ -124,7 +126,7 @@ export function parseCatalogRead(name: string, value: unknown): Record<string, u
     || !propertiesValid(v.properties, false, true)) return null
   const dictionary = v.entity === 'categories' || v.entity === 'profiles'
   if (dictionary && (v.profile_code !== null || v.profile_revision !== null || v.categories.length || Object.keys(v.properties).length)) return null
-  if (!dictionary && v.after !== null && !uuid.test(v.after as string)) return null
+  if (!dictionary && v.after !== null && !(options.lookupCursor ? lookupCursor : uuid).test(v.after as string)) return null
   if (Object.keys(v.properties).length && (v.profile_code === null || v.profile_revision === null)) return null
   return { ...base, action: dictionary ? v.entity : 'search', kind: dictionary ? null : v.entity === 'materials' ? 'material' : 'part',
     query: v.query, after: v.after, profile_code: v.profile_code, revision: v.profile_revision, categories: v.categories, properties: v.properties }
@@ -153,7 +155,12 @@ export function catalogRejection(message = ''): { fields: string[]; message: str
 }
 export type CatalogTransport = ((input: Record<string, unknown>, signal: AbortSignal) => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>) & { checkpointed?: boolean }
 export type MaterialCatalogReaderState = { version: 1; projectId: string; used: number; partial: boolean; sources: ProjectSource[] }
-export function createMaterialCatalogReader(projectId: string, transport: CatalogTransport, hasAccess: () => Promise<boolean>, sources: ProjectSource[], timeoutMs = 10000, options: { unlimitedWork?: boolean } = {}) {
+/** Pinned per manifest (tools.search_material_catalog material_lookup_version 1):
+ * an untyped material search reads bob.material_lookup, one row per combination
+ * and purchase place with household stock and latest prices. Older manifests
+ * keep the definition-only catalog_read search. */
+export type MaterialLookupInput = { query: string | null; categories: string[]; after: string | null; id: null }
+export function createMaterialCatalogReader(projectId: string, transport: CatalogTransport, hasAccess: () => Promise<boolean>, sources: ProjectSource[], timeoutMs = 10000, options: { unlimitedWork?: boolean; lookup?: CatalogTransport } = {}) {
   let used = 0, partial = false
   return {
     tools: [CATALOG_SEARCH_TOOL, CATALOG_READ_TOOL],
@@ -170,15 +177,20 @@ export function createMaterialCatalogReader(projectId: string, transport: Catalo
     get remaining() { return options.unlimitedWork ? Infinity : Math.max(0, 12 - used) }, get partial() { return partial },
     async read(name: string, value: unknown): Promise<Record<string, unknown>> {
       if (++used > 12 && !options.unlimitedWork) { partial = true; return { status: 'budget_exhausted' } }
-      const input = parseCatalogRead(name, value)
+      const input = parseCatalogRead(name, value, { lookupCursor: !!options.lookup })
       if (!input) { partial = true; return catalogReadIssue(name, value) }
       if (!await hasAccess()) return { status: 'denied' }
+      const combined = !!options.lookup && input.action === 'search' && input.kind === 'material' && input.profile_code === null
+        && Object.keys(input.properties as Record<string, unknown>).length === 0
+      const reader = combined ? options.lookup! : transport
+      const request: Record<string, unknown> = combined
+        ? { query: input.query, categories: input.categories, after: input.after, id: null } satisfies MaterialLookupInput : input
       const controller = new AbortController()
       let timer: ReturnType<typeof setTimeout> | undefined
       try {
         const { data, error } = await Promise.race([
-          Promise.resolve(transport(input, controller.signal)),
-          new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); if(!transport.checkpointed)reject(new Error('unavailable')) }, timeoutMs) }),
+          Promise.resolve(reader(request, controller.signal)),
+          new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); if(!reader.checkpointed)reject(new Error('unavailable')) }, timeoutMs) }),
         ])
         if (!await hasAccess()) return { status: 'denied' }
         if (error?.code === '42501') return { status: 'denied' }

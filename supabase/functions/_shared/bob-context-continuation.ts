@@ -4,7 +4,7 @@ import { contextTokenPrefix, countContextTokens, countSerializedTokens } from '.
 import { stableJsonValue } from './bob-job-journal.ts'
 import { buildBobRequest } from './bob-complete-request.ts'
 import { readResponseItems } from './openai-content.ts'
-import { bobResultPage, projectBobResult, prepareBobResult, BOB_RESULT_PAGE_TOKENS, type BobArchivedOperation } from './bob-result-references.ts'
+import { bobResultPage, projectBobResult, prepareBobResult, selectBobResultWindow, supersededBobResult, BOB_RESULT_PAGE_TOKENS, type BobArchivedOperation } from './bob-result-references.ts'
 
 type Message = NonNullable<OpenAIServiceOptions['messages']>[number]
 type ToolCall = NonNullable<OpenAIServiceResponse['toolCalls']>[number]
@@ -39,6 +39,11 @@ const clone = <T>(value: T): T => structuredClone(value)
  * output, so a long chain is not deep-cloned twice per step. */
 const copyChain = (chain: Chain): Chain => ({ ...clone({ ...chain, operations: undefined }), operations: new Map(chain.operations) })
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
+/** A result already replaced by a historical reference in the transcript. */
+const omittedContent = (content: unknown): boolean => {
+  if (typeof content !== 'string' || !content.startsWith('{')) return false
+  try { return (JSON.parse(content) as { content_omitted?: unknown }).content_omitted === true } catch { return false }
+}
 
 /** Count text separately from native image transport. Base64/URL spelling is
  * not visual token usage. Reserve a conservative per-image allowance until
@@ -203,6 +208,10 @@ export function createBobContextContinuation(opts: {
    * many tokens before they become references. A fixed two-exchange window
    * hid results Bob had just reopened, so he reopened them again (2026-10-20). */
   resultWindowTokens?: number
+  /** Pinned per execution with resultWindowTokens. 2 (2026-10-29): an older
+   * read repeated later leaves first and the latest result per record stays
+   * whole; see selectBobResultWindow. Absent keeps the version 1 window. */
+  resultWindowVersion?: 2
   /** Per-tool literal size for a recent result, pinned per job. Tools not
    * named here keep BOB_RESULT_PAGE_TOKENS. */
   literalResultTokens?: Record<string, number>
@@ -416,8 +425,24 @@ export function createBobContextContinuation(opts: {
         // Original results live once in the private operation archive. Keep
         // only bounded projections in the model transcript/checkpoint; native
         // assistant items, images and user constraints remain literal.
-        const whole = new Set<string>()
-        if (opts.resultWindowTokens) {
+        let whole = new Set<string>()
+        let supersededBy = new Map<string, string>()
+        if (opts.resultWindowTokens && opts.resultWindowVersion === 2) {
+          const results: Parameters<typeof selectBobResultWindow>[0] = []
+          chain.groups.forEach((group, index) => {
+            for (const message of group) {
+              if (message.role !== 'tool' || !message.tool_call_id) continue
+              const operation = chain.operations.get(message.tool_call_id)
+              if (!operation) throw new Error('context_operation_unavailable')
+              const key = message.tool_call_id + '\u0000' + (typeof message.content === 'string' ? message.content.length : 'parts')
+              let size = resultTokens.get(key)
+              if (size === undefined) resultTokens.set(key, size = countSerializedTokens(message.content))
+              results.push({ call_id: message.tool_call_id, tool_name: operation.tool_name, arguments: operation.arguments, tokens: size,
+                older: index < chain.groups.length - 2 })
+            }
+          })
+          ;({ whole, supersededBy } = selectBobResultWindow(results, opts.resultWindowTokens))
+        } else if (opts.resultWindowTokens) {
           // Newest first and contiguous: a demoted result is never restored.
           let used = 0
           window: for (let i = chain.groups.length - 3; i >= 0; i--) for (const message of [...chain.groups[i]].reverse()) {
@@ -443,6 +468,9 @@ export function createBobContextContinuation(opts: {
           if (message.role !== 'tool' || !message.tool_call_id) return message
           const operation = chain.operations.get(message.tool_call_id)
           if (!operation) throw new Error('context_operation_unavailable')
+          const newer = supersededBy.get(message.tool_call_id)
+          // An already demoted reference stays byte-stable for the prompt cache.
+          if (newer !== undefined && index < chain.groups.length - 2) return omittedContent(message.content) ? message : { ...message, content: supersededBobResult(operation, newer) }
           return index < chain.groups.length - 2 && !whole.has(message.tool_call_id) ? { ...message, content: projectBobResult(operation, true) } : message
         }))
       }

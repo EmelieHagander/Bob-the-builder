@@ -78,7 +78,7 @@ approval or a substitute for save validation. No new core tool is added.
 own the current source-only status.
 
 <a id="write-state"></a>
-**Writes return their state — prepared, 2026-10-29 (owner decision).** New
+**Writes return their state — installed, 2026-10-29 (owner decision).** New
 manifests pin `bob.tools` `write_state_version: 1`. Construction saves, part
 edits and parameter changes return the check of their receipt revision
 (`check`, `checked_concept_ready`) through the ordinary check path, so Bob does
@@ -91,6 +91,16 @@ the checker. `search_project_data` leaves the core list (five tools); it stays
 loadable through `describe_tool`, and the server already binds every read to
 the current project. Older manifests keep their receipts, texts and loading.
 [Preparation record](foundation-verification.md#controlled-completion-2026-10-29).
+
+**Create and select in one call — prepared 2026-10-29, not deployed.** New
+manifests pin `create_select_version: 1` on `tools.create_solution_alternative`
+and `bob.tools`. For an explicit request Bob reads the scope once and calls
+`create_solution_alternative` with `select=true` and the design intent (summary,
+purpose `construction`, alignment) in the same changes. The saved result carries
+`creation_state`; continuations then load the construction and material tools
+when ready, or the content editor when data is missing. The paid box run's
+create → read → select → read → edit → edit sequence becomes read → create.
+[Writer contract](ask-bob-writes.md#create-and-select).
 
 The existing post-write completion review remains. A synthetic main-loop proof
 therefore uses three domain tool calls and five main requests: read, change,

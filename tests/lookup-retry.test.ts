@@ -20,9 +20,9 @@ function harness(pin: LookupPin, results: { data: unknown; error: { code?: strin
 }
 
 test('pins: no pin v8, room dimensions v9, exact lookup v10 with retry and a longer allowance', () => {
-  assert.deepEqual(lookupPin({}), { rpc: 'search_bob_project_data_v8', retry: false, timeoutMs: LIMITS.timeoutMs })
-  assert.deepEqual(lookupPin({ roomDimensionsVersion: 1 }), { rpc: 'search_bob_project_data_v9', retry: false, timeoutMs: LIMITS.timeoutMs })
-  assert.deepEqual(lookupPin({ roomDimensionsVersion: 1, exactLookupVersion: 1 }), { rpc: 'search_bob_project_data_v10', retry: true, timeoutMs: RETRY_LOOKUP_TIMEOUT_MS })
+  assert.deepEqual(lookupPin({}), { rpc: 'search_bob_project_data_v8', retry: false, timeoutMs: LIMITS.timeoutMs, reuse: false })
+  assert.deepEqual(lookupPin({ roomDimensionsVersion: 1 }), { rpc: 'search_bob_project_data_v9', retry: false, timeoutMs: LIMITS.timeoutMs, reuse: false })
+  assert.deepEqual(lookupPin({ roomDimensionsVersion: 1, exactLookupVersion: 1 }), { rpc: 'search_bob_project_data_v10', retry: true, timeoutMs: RETRY_LOOKUP_TIMEOUT_MS, reuse: false })
   assert.throws(() => lookupPin({ exactLookupVersion: 1 }), /exact_lookup_version_invalid/)
 })
 

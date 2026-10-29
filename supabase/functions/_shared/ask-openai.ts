@@ -54,7 +54,7 @@ import { createMemoryRetrieval, journalMemoryStore } from './bob-memory-retrieva
 import { createJournalledMemoryEmbedder } from './bob-memory-embedding.ts'
 import { createBobConversationStore, type BobTurnClaim } from './bob-conversation.ts'
 import { createProjectLookup, type LookupInput } from './project-lookup.ts'
-import { createLookupTransport, lookupPin, type LookupPin } from './lookup-rpc.ts'
+import { createLookupReuse, createLookupTransport, lookupPin, type LookupPin } from './lookup-rpc.ts'
 import { createPlanAssistant } from './plan-assistant.ts'
 import { createSourceReader } from './source-reader.ts'
 import type { BobAnswerState, ProjectAnswer, TurnProgress } from './project-answer.ts'
@@ -71,6 +71,8 @@ import { createAiCatalogSession, applyCatalogModelOptions, type AiCatalogSession
  * Reuse a successful live answer for a few seconds; a failure is never reused,
  * and writes stay enforced by RLS and the domain commands at their boundary. */
 const FRESH_MS = 3000
+/** Drawing-store calls that only read; every other one ends lookup reuse. */
+const DRAWING_STORE_READS = new Set(['project_drawing_requests', 'drawing_request_work', 'check_drawing_request'])
 function reuseFresh<A extends unknown[], T>(read: (...args: A) => Promise<T>, reusable: (value: T) => boolean, key: (...args: A) => string = () => '') {
   const seen = new Map<string, { at: number; value: T }>()
   return async (...args: A): Promise<T> => {
@@ -141,11 +143,20 @@ export async function answerWithOpenAi(opts: {
   // Project writes keep their journal stream and recorded { data, error }. A
   // write the database cancelled at the statement timeout saved nothing, so it
   // is sent once more inside the same recorded operation.
+  // Identical project reads within this turn (lookupReuseVersion). Every
+  // write of this turn, replayed or live, ends all reuse before and after it.
+  const lookupReuse = createLookupReuse()
+  // Image descriptions, construction observations and drawing-request packets
+  // live in tables the lookup never reads, so they keep reuse.
+  const writing = async <T>(work: () => Promise<T>): Promise<T> => {
+    lookupReuse.invalidate()
+    try { return await work() } finally { lookupReuse.invalidate() }
+  }
   const writeRpc = async (name: string, args: Record<string, unknown>) => {
     const { p_generation: _generation, ...stable } = args
     const signal = AbortSignal.timeout(26000)
-    return memo('rpc:' + name, stable, () => withStatementRetry(name, attempt => client.rpc(name, args).abortSignal(attempt), signal,
-      { label: 'Write', slowMs: 3000 }).then(({ data, error }) => ({ data, error })), 0, signal)
+    return writing(() => memo('rpc:' + name, stable, () => withStatementRetry(name, attempt => client.rpc(name, args).abortSignal(attempt), signal,
+      { label: 'Write', slowMs: 3000 }).then(({ data, error }) => ({ data, error })), 0, signal))
   }
   let metrics:ReturnType<typeof createExecutionMetrics>|undefined
   const mediaTransport = createMediaTransport(client, { ...opts, url, key })
@@ -277,7 +288,7 @@ export async function answerWithOpenAi(opts: {
   // Jobs pinned with exactLookupVersion read v10 and retry a statement timeout once (2026-10-29).
   let lookupPinned: LookupPin = lookupPin({})
   const lookupTransport = checkpointed(createLookupTransport(() => lookupPinned,
-    (name, args, signal) => client.rpc(name, args).abortSignal(signal), memo))
+    (name, args, signal) => client.rpc(name, args).abortSignal(signal), memo, lookupReuse))
   const readAccess = async () => {
     const { data, error } = await client.from('projects').select('id').eq('id', opts.projectId)
       .abortSignal(AbortSignal.timeout(10_000)).maybeSingle()
@@ -317,7 +328,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; turnUsdStop?: number } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -332,9 +343,12 @@ export async function answerWithOpenAi(opts: {
       projectFactsVersion: 1 as const,
       // Search v10 (exact artifact reads) with one statement-timeout retry (2026-10-29). Jobs without this pin keep v8/v9.
       exactLookupVersion: 1 as const,
+      // Identical reads reused within the turn until it writes (2026-10-29). Jobs without this pin read every time.
+      lookupReuseVersion: 1 as const,
       ...(checkpoint ? { groundingReadOrderVersion: 1 as const, modelDeadlineVersion: 1 as const } : {}),
       ...bobCompleteRequestVersions(!!checkpoint, contract),
-      ...(checkpoint && contract.result_reference_version === 1 ? { resultWindowVersion: 1 as const } : {}),
+      // Window 2 (2026-10-29): superseded repeat reads leave first; the latest result per record stays whole.
+      ...(checkpoint && contract.result_reference_version === 1 ? { resultWindowVersion: contract.result_window_version === 2 ? 2 as const : 1 as const } : {}),
       // Owner-set spending stop, pinned when the job starts (2026-10-20).
       ...(typeof contract.turn_usd_stop === 'number' && Number.isFinite(contract.turn_usd_stop) && contract.turn_usd_stop > 0 ? { turnUsdStop: contract.turn_usd_stop } : {}),
       memoryManagementVersion: contract.context_strategy_version === 1 ? 2 as const : 1 as const,
@@ -348,7 +362,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.modelDeadlineVersion !== undefined && execution.modelDeadlineVersion !== 1) throw new Error('model_deadline_version_invalid')
   if (execution.completeRequestVersion !== undefined && execution.completeRequestVersion !== 1) throw new Error('complete_request_version_invalid')
   if (execution.resultReferenceVersion !== undefined && (execution.resultReferenceVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('result_reference_version_invalid')
-  if (execution.resultWindowVersion !== undefined && (execution.resultWindowVersion !== 1 || execution.resultReferenceVersion !== 1)) throw new Error('result_window_version_invalid')
+  if (execution.resultWindowVersion !== undefined && (![1, 2].includes(execution.resultWindowVersion) || execution.resultReferenceVersion !== 1)) throw new Error('result_window_version_invalid')
   if (execution.constructionPageVersion !== undefined && execution.constructionPageVersion !== 1) throw new Error('construction_page_version_invalid')
   if (execution.corePreloadVersion !== undefined && execution.corePreloadVersion !== 1) throw new Error('core_preload_version_invalid')
   if (execution.buildingLinkVersion !== undefined && execution.buildingLinkVersion !== 1) throw new Error('building_link_version_invalid')
@@ -375,6 +389,7 @@ export async function answerWithOpenAi(opts: {
   if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel,
     ...(execution.resultReferenceVersion === 1 ? { mainResultReferences: 1 } : {}),
     ...(execution.resultWindowVersion === 1 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS } : {}),
+    ...(execution.resultWindowVersion === 2 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS, resultWindowVersion: 2 as const } : {}),
     ...(execution.constructionPageVersion === 1 ? { literalResultTokens: { [CONSTRUCTION_VIEW_TOOL.function.name]: BOB_CONSTRUCTION_RESULT_TOKENS } } : {}),
     ...(execution.rolloverVersion === 1 ? { rolloverVersion: 1 as const } : {}),
     // Older in-flight journals keep their recorded call sequence and re-page.
@@ -457,8 +472,11 @@ export async function answerWithOpenAi(opts: {
   // per manifest; older jobs keep receipts only and their original reads.
   const writeState = aiCatalog.manifest().definitions.some(row => row.prompt_key === 'bob.tools' && row.metadata?.write_state_version === 1)
   const constructionReadinessReader = (targetRevision: number, areaId: string | null) => readDesignReadiness(targetRevision, 'construction', areaId)
+  // Owner decision 2026-10-29: one create call may also select the new alternative.
+  const createSelect = writeState && aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.create_solution_alternative' && row.metadata?.create_select_version === 1)
   const solutionActions = createSolutionActions({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
     ...(writeState ? { writeState: { readiness: constructionReadinessReader, selectedEdit: (areaId: string | null) => projectEdits.readSelected(areaId) } } : {}),
+    ...(createSelect ? { createSelect: true } : {}),
     ...(claimedServer ? { modelFeedback: { message: opts.message, read: before => rpc('read_model_feedback', { ...binding, p_before: before }, AbortSignal.timeout(12000)) } } : {}),
     read: input => rpc('read_bob_solution_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
   })
@@ -495,9 +513,13 @@ export async function answerWithOpenAi(opts: {
   }
   const knowledgeReader = createKnowledgeReader(hasAccess, undefined, { unlimitedWork })
   const operationalReader = createOperationalReader(opts.projectId, input=>rpc('read_project_work', {p_project:opts.projectId,p_input:input}, AbortSignal.timeout(12000)),hasAccess,lookup.sources,{unlimitedWork})
+  // Pinned per manifest (material_lookup_version 1): untyped material searches
+  // return the combined lookup with household stock and latest store prices.
+  const materialLookup = aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.search_material_catalog' && row.metadata?.material_lookup_version === 1)
   const catalogReader = createMaterialCatalogReader(opts.projectId,
     checkpointed((input:Record<string,unknown>, signal:AbortSignal) => rpc('catalog_read', { p_project: opts.projectId, p_input: input }, signal)),
-    hasAccess, lookup.sources, undefined, { unlimitedWork })
+    hasAccess, lookup.sources, undefined, { unlimitedWork,
+      ...(materialLookup ? { lookup: checkpointed((input:Record<string,unknown>, signal:AbortSignal) => rpc('material_lookup', { p_project: opts.projectId, p_input: input }, signal)) } : {}) })
   const readDesignReadiness=async(targetRevision:number,purpose:DesignPurpose|null,areaId:string|null=null,fresh=false):Promise<DesignReadiness>=>{
     const args={p_project:opts.projectId,p_area:areaId,p_target_revision:targetRevision,p_purpose:purpose}
     // Replaying a recorded gate reconstructs an earlier completed operation.
@@ -520,6 +542,8 @@ export async function answerWithOpenAi(opts: {
     coherentWork:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_draft'&&row.metadata?.construction_work_version===1),
     creationPreparation:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_draft'&&row.metadata?.creation_preparation_version===1),
     writeState,
+    // Owner decision 2026-10-29: changes carry corrected title/description; stale stated sizes are rejected.
+    constructionText:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.change_construction_parameters'&&row.metadata?.construction_text_version===1),
     prepareSolutionEdit:projectEdits.prepare,
     prepareWork:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_work',{...binding,p_payload:payload},AbortSignal.timeout(12000))
@@ -695,15 +719,20 @@ export async function answerWithOpenAi(opts: {
       privateCall:drawingRequestCall,
       // One stable id per piece key; the unkeyed id keeps its existing journal identity.
       newId:key=>memo('cad:project_request_id',key?{key}:{},async()=>crypto.randomUUID()),
-      release:async ids=>{
+      release:ids=>writing(async()=>{
         const {data,error}=await internal.rpc('release_drawing_pieces',{...binding,p_user:opts.userId,p_ids:ids}).abortSignal(AbortSignal.timeout(12000))
         if(error)throw new Error(error.message?.includes('project_denied')?'project_denied':'drawing_pieces_unavailable')
         return {released:Array.isArray(data?.released)?data.released:[]}
-      },
-      caller:async(name,args)=>{
-        const {data,error}=await client.rpc(name,args).abortSignal(AbortSignal.timeout(10000))
-        if(error)throw new Error(drawingErrorCode(error)??'drawing_request_unavailable')
-        return data
+      }),
+      // Gap Tasks, links, restore and cancel change what lookups return; the
+      // three reads do not.
+      caller:(name,args)=>{
+        const call=async()=>{
+          const {data,error}=await client.rpc(name,args).abortSignal(AbortSignal.timeout(10000))
+          if(error)throw new Error(drawingErrorCode(error)??'drawing_request_unavailable')
+          return data
+        }
+        return DRAWING_STORE_READS.has(name)?call():writing(call)
       },
     }) : undefined
 
