@@ -556,14 +556,12 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — förberedelser inför leveransprovet (2026-10-29):** granska
-och merga den lokalt verifierade rättningen för nyskapande; installera båda
-Edge-funktionerna före katalogaktiveringen
-`20261029093710_bob_creation_preparation_catalog.sql`.
-[Ändringar, kontrollbevis och releaseordning](foundation-verification.md#creation-preparation-2026-10-29)
-ägs där. #369/#370 är redan installerade och ska inte driftsättas igen.
+**Aktivt nästa steg — leveransprovet (2026-10-29):** rättningen för nyskapande
+(#371) är mergad, installerad (`bob-worker` v151, `ask-bob` v183) och
+katalogaktiverad. [Installationsbevis](foundation-verification.md#creation-preparation-install-2026-10-29)
+ägs där. #369/#370/#371 ska inte driftsättas igen.
 
-Därefter återstår ett separat godkänt prov av skapa → ändra bredd → ritning →
+Nu återstår ett separat godkänt prov av skapa → ändra bredd → ritning →
 återöppna exakt sparad version. Behåll samma Construction-identitet, kontrollera
 mått och resultat och jämför hela kedjans anrop, kostnad och tid med
 [det tidigare underkända provet](foundation-verification.md#construction-work-paid-2026-10-29).

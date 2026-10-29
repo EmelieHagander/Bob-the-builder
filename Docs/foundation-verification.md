@@ -1,10 +1,12 @@
 # Foundation verification and rollout
 
 <a id="creation-preparation-2026-10-29"></a>
-## Construction preparation and scoped read recovery — prepared, 2026-10-29
+## Construction preparation and scoped read recovery — installed, 2026-10-29
 
-**Source/local verification only; not deployed or catalog-activated.** This
-continues the paid box findings; it does not claim a successful new paid run.
+**Installed and catalog-activated; no new paid run.** This continues the paid
+box findings; it does not claim a successful model outcome. The
+[installation record](#creation-preparation-install-2026-10-29) follows the
+preparation notes below.
 
 The work reader already supports a new Construction (`artifact_id:null`). The
 missing step was showing the canonical construction-purpose readiness **before**
@@ -64,6 +66,46 @@ drawing → exact-version reopen run. Measure the whole outcome, invalid retries
 manual loads, model/tool calls, elapsed time and cost against the failed box
 baseline. Local availability and gate tests do not establish model choice or
 production savings. [State](bob-delivery-flow.md#state) owns the next action.
+
+<a id="creation-preparation-install-2026-10-29"></a>
+### Installation, 2026-10-29
+
+[PR #371](https://github.com/EmelieHagander/Bob-the-builder/pull/371) merged as
+`8dd251248c294d0a39de4dfb81f711e86a3eb718`; its tree
+`74f943b3de9b6428feb9ea15012cb7894e723127` equals the tested head tree. Before
+installation the focused `construction-preparation`, `project-lookup-recovery`
+and `material-catalog-shape` suites were rerun (**23/23 passed**) and the
+generator `--check` passed against the committed migration. No full suite,
+workflow, model or CAD call ran.
+
+One owner Bob job was running when installation was first prepared; it
+completed normally. Installation started only after a readback of zero queued,
+running or paused Bob jobs, and the same check was repeated before the catalog
+step. Order: worker, HTTP entrypoint, then catalog, in `yuobtgoidmmmwfqenkau`,
+using Supabase CLI 2.117.0 server-side bundling from the merge commit.
+
+| Function | Version | JWT verification | Bundle SHA-256 |
+|---|---|---|---|
+| `bob-worker` | 151 | existing custom authentication, `false` | `514d5b92c9f22d7ad29c814c28756b28ed94679699c7e26b8924700a13afa75a` |
+| `ask-bob` | 183 | `true` | `36f66b45fcab6511d3509288ca26fd4712c3ea4fd2c98a1dcd3752f71c27a2a8` |
+
+Readback matched **121/122** worker and **123/124** HTTP files byte for byte,
+including all #371 runtime files and the unchanged import map. The only
+difference is the established empty bundle for type-only `cad-intake.ts`.
+Unauthenticated POSTs returned **401** for both functions.
+
+The catalog migration was then applied and recorded as
+`20261029100828_bob_creation_preparation_catalog`. Active readback:
+`bob.tools` v24, `tools.edit_project_record` v4,
+`tools.read_construction_draft` v7 and `tools.search_material_catalog` v3, each
+with `publication=creation-preparation-v1`. The edit manual carries full
+`/design_intent/...` paths, the search schema no longer requires the profile
+fields, and `bob.tools` carries the four new work-view followups. Older jobs keep
+manifest `c2c77a1f-21de-4221-b6a1-11fbdd602ccd`; the next new job pins a fresh
+manifest. Prompts, model profiles and helper roles were not changed.
+
+This proves installation only. The create → width change → final drawing →
+exact-version reopen run remains separately authorized acceptance.
 
 <a id="cad-runtime-recovery-2026-10-29"></a>
 ## CAD schema correction and runtime-fault recovery installed — 2026-10-29
@@ -153,7 +195,7 @@ passing focused tests were not rerun for this identical-tree deployment.
 
 ### Initial creation and evidence findings before the prepared correction
 
-The observations below describe the #370 baseline. The [prepared correction](#creation-preparation-2026-10-29) above records the resulting changes and remaining acceptance.
+The observations below describe the #370 baseline. The [installed correction](#creation-preparation-2026-10-29) above records the resulting changes and remaining acceptance.
 
 Readback of active `tools.search_material_catalog` v2 confirms that
 `profile_code` is present, required and nullable, with explicit null guidance.

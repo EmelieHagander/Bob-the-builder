@@ -67,7 +67,7 @@ authorization or the current request's offered-tool fence. Descriptions and
 schemas still come from the pinned catalog. Checkpoints retain loaded tools.
 This adds no seventh permanent core tool or new model helper.
 
-**Creation continuation — prepared, 2026-10-29.** The new-construction work
+**Creation continuation — installed, 2026-10-29.** The new-construction work
 packet reports `creation_state` from canonical readiness. Catalog followups
 expose creation/selection when no Solution exists, the content editor when
 issues remain, and construction/material tools when ready. An explicit scoped
