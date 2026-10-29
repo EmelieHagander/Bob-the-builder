@@ -59,6 +59,41 @@ project; Bob used it only to confirm data he already had.
 The [controlled completion record](#controlled-completion-2026-10-29) owns the
 prepared corrections. [State](bob-delivery-flow.md#state) owns the next action.
 
+<a id="open-issues-closed-2026-10-29"></a>
+## Seven remaining paid-run causes closed — prepared, 2026-10-29
+
+**Source and local verification only; not migrated, deployed or activated.**
+Owner decision: close the remaining causes from the
+[paid run](#construction-work-paid-run3-2026-10-29) before the next paid test.
+Every runtime change is pinned so running and older jobs keep their behaviour.
+
+| # | Cause | Prepared correction | Owner |
+|---|---|---|---|
+| 1 | Stale dimensions in free-text titles copied to the drawing | Size-changing construction writes take corrected `text`; text that states the old overall size is rejected (`stale_construction_text`); the server never writes prose | [Artifacts](artifacts.md#construction-text) |
+| 2 | Internal IDs and revision numbers in chat answers | The final answer runs the existing human-text check; a violation sends one rewrite note, folded into the completion note so text and completion add at most one round; Bob's words are never replaced | [Writes](ask-bob-writes.md#answer-text) |
+| 3 | Four sequential solution steps for an explicit request | `create_solution_alternative` with `select=true` creates, aligns (only when the request states the choices) and selects in one call, with honest partial success | [Writes](ask-bob-writes.md#create-and-select) |
+| 4 | Identical server-side lookups repeated in one turn | Identical successful lookups are reused within a claim until the next relevant write or 120 s (26 → 22 in the replayed drawing turn) | [Runtime](../supabase/README.md#in-turn-lookup-reuse-and-database-load-relief--source-2026-10-29) |
+| 5 | Older results leave the window by age | When over the window, superseded reads of the same record leave first and state reads stay before discovery; the ceiling is unchanged. The recorded create turn never filled the window, so no call saving is claimed for it | [Conversations](ask-bob-conversations.md#result-window-v2) |
+| 6 | Database stalls and timeouts on the shared small instance | Journal pages built in one query (460–645 → ~50 ms per claim); source assessment and drawing checks skip heavy views when a revision has none of those sources (~150 → ~20 ms); a compute upgrade does not currently look necessary | [Database](../db/README.md#db-load-relief) |
+| 7 | Rejected writes without a logged reason | Every invalid/conflict result logs tool, status, code and field paths only; v3 manifests record the code in execution events | [Writes](ask-bob-writes.md#rejection-reasons) |
+
+Validation: new focused suites for each item plus the touched suites pass,
+including PGlite publication/idempotency, fixture-equals-database, old-vs-new SQL
+equivalence and old-pin replay; existing failures are the pre-existing ones on
+main. Strict `tsc` on changed modules and `tsc -b` are clean; Deno is
+unavailable here. No production write, deploy, CI or model/CAD call ran.
+
+Release order with the owner's OK and no running Bob job: apply
+`20261029160000_material_model.sql`, `20261029170000_construction_text_updates.sql`
+and `20261029190000_bob_db_load_relief.sql`; deploy `bob-worker`, then
+`ask-bob`, from the merge commit; then apply the catalog publications
+`20261029160200_material_lookup_catalog.sql`,
+`20261029170100_bob_text_hygiene_catalog.sql`,
+`20261029180000_bob_create_select_catalog.sql` and
+`20261029200500_bob_result_window_catalog.sql`. The standard material seed
+`20261029160100_standard_materials_seed.sql` is applied only after the owner
+approves the list.
+
 <a id="controlled-completion-2026-10-29"></a>
 ## Controlled completion, exact lookup and write state — installed, 2026-10-29
 

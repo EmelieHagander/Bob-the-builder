@@ -14,7 +14,8 @@
   [CAD schema correction and runtime-fault recovery are installed](foundation-verification.md#cad-runtime-recovery-2026-10-29).
   [Creation preparation and scoped read recovery are installed](foundation-verification.md#creation-preparation-2026-10-29);
   [the paid run after it failed acceptance](foundation-verification.md#construction-work-paid-run3-2026-10-29) and
-  [controlled completion, exact lookup and write state are installed](foundation-verification.md#controlled-completion-2026-10-29).
+  [controlled completion, exact lookup and write state are installed](foundation-verification.md#controlled-completion-2026-10-29);
+  [the seven remaining causes are closed in prepared source](foundation-verification.md#open-issues-closed-2026-10-29).
   [State](bob-delivery-flow.md#state) owns the next release
   and remaining acceptance. The retrieval helper remains deferred.
 

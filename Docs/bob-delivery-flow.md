@@ -572,6 +572,13 @@ storlekar, 45 kombinationer) ligger i en egen migrering för ägarens granskning
 Att Bobs egna nya material blir delade och ogranskade är ett föreslaget
 uppföljningssteg. [Modell och åtkomst](material-catalog.md#normalized-material-model).
 
+**Förberett, ej driftsatt — sju kvarvarande orsaker stängda (ägarbeslut 2026-10-29):**
+inaktuella mått i titlar, ID:n i svar, lösning i ett steg, upprepade
+serverläsningar, resultatfönstret, databaslast och loggade avvisningsorsaker.
+[Ändringar, bevis och releaseordning](foundation-verification.md#open-issues-closed-2026-10-29).
+Driftsättning kräver ägarens ja och en Supabase-nyckel med åtkomst till Bobs
+projekt i miljön; nyckeln gav den 2026-10-29 bara åtkomst till ett annat projekt.
+
 Därefter återstår ett nytt separat godkänt prov av skapa → ändra bredd → ritning →
 återöppna exakt sparad version. Behåll samma Construction-identitet, kontrollera
 mått och resultat och jämför hela kedjans anrop, kostnad och tid med
