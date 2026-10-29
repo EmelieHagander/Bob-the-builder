@@ -30,7 +30,7 @@ import type { ContextSurface } from './bob-context-continuation.ts'
 import type { CurrentView } from '../../../src/domain/bobScreen.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { BOB_WRITE_LIMIT } from '../../../src/data/bobEvidence.ts'
-import { BUILDING_SCOPE_PRELOAD, createBobToolSession, catalogCoreTools, CORE_READ_PRELOAD, DRAWING_CONTINUATION_PRELOAD, sortToolbox } from './project-tools/bob-tools.ts'
+import { BUILDING_SCOPE_PRELOAD, createBobToolSession, catalogCoreTools, catalogPhaseTools, CORE_READ_PRELOAD, DRAWING_CONTINUATION_PRELOAD, sortToolbox } from './project-tools/bob-tools.ts'
 import type { BuildingLinks } from './project-building-scope.ts'
 import type { ProjectFacts } from './project-facts.ts'
 import type { ProjectCalculator } from './project-calculator.ts'
@@ -226,7 +226,17 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // Set once the pending drawing requests are known below; prepare() reads it at the first model step.
   const coreTools = catalogCoreTools(opts.aiCatalog)
   let preloadTools: string[] = coreTools ?? [...(opts.corePreload ? CORE_READ_PRELOAD : []), ...(opts.buildingLinks && !opts.buildingLinks.whole ? BUILDING_SCOPE_PRELOAD : [])]
-  const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: () => preloadTools,
+  const phaseTools = catalogPhaseTools(opts.aiCatalog, coreTools)
+  // The flexible set is chosen at the turn's first tool step and kept, so the
+  // offered tool list (and the provider cache) stays stable for the turn.
+  // Pending drawing work counts as work in progress and wins over the phase.
+  let drawingWork = false, flexiblePhase: string | null | undefined
+  const turnPreload = (phase: string | null) => {
+    if (!phaseTools) return preloadTools
+    if (flexiblePhase === undefined) flexiblePhase = drawingWork ? 'design' : phase
+    return [...preloadTools, ...(flexiblePhase ? phaseTools[flexiblePhase] ?? [] : [])]
+  }
+  const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: turnPreload,
     ...(boundedOrientation ? { orientationReader: { tools: [ORIENTATION_DIRECTORY_TOOL], execute: (raw: unknown) => {
       if (!orientationReader) throw new Error('context_unavailable')
       return orientationReader.execute(raw)
@@ -302,6 +312,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   let previousResponseId = restored ? restored.previousResponseId : opts.context || contextStrategy ? undefined : opts.previousResponseId
   const drawingRequests=restored ? restored.initial.drawingRequests : await opts.cadAssistant?.pending()
   if (!coreTools && Array.isArray(drawingRequests) && drawingRequests.length) preloadTools = [...preloadTools, ...DRAWING_CONTINUATION_PRELOAD]
+  if (phaseTools && Array.isArray(drawingRequests) && drawingRequests.length) drawingWork = true
   const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
   if (restored?.initial.directory) {
     const directory = restoreOrientationDirectory(restored.initial.directory as Parameters<typeof restoreOrientationDirectory>[0], { projectId: opts.projectId, hasAccess: opts.hasAccess })

@@ -25,6 +25,7 @@ let preCreationRows:any[]|undefined,preCreationVersions:Map<string,number>|undef
 let preControlledCompletionRows:any[]|undefined,preControlledCompletionVersions:Map<string,number>|undefined
 let preTextHygieneRows:any[]|undefined,preTextHygieneVersions:Map<string,number>|undefined
 let preWriteStateRows:any[]|undefined,preWriteStateVersions:Map<string,number>|undefined
+let prePhaseToolsRows:any[]|undefined,prePhaseToolsVersions:Map<string,number>|undefined
 let preCreateSelectRows:any[]|undefined,preCreateSelectVersions:Map<string,number>|undefined
 let preMaterialLookupRows:any[]|undefined,preMaterialLookupVersions:Map<string,number>|undefined
 let preResultWindowRows:any[]|undefined,preResultWindowVersions:Map<string,number>|undefined
@@ -93,6 +94,23 @@ for(const migration of migrations){
    if(spec.parameters)row.definition={...row.definition,parameters:spec.parameters,required_parameters:spec.parameters.required}
    if(spec.add_followups)row.definition.operation_followups=[...row.definition.operation_followups,...spec.add_followups]
    row.metadata={...rest,publication:'create-select-v1',create_select_version:1}
+   versions.set(spec.key,versions.get(spec.key)!+1)
+  }
+ }
+ const phaseTools=source.match(/\$phase_tools_spec\$([\s\S]+?)\$phase_tools_spec\$/)
+ if(phaseTools){
+  prePhaseToolsRows=structuredClone(seed);prePhaseToolsVersions=new Map(versions)
+  for(const spec of JSON.parse(phaseTools[1])){
+   const row=seed.find(row=>row.key===spec.key),{seed_version,source_revision,...rest}=row.metadata??{}
+   if(spec.card!==undefined){
+    if(row.definition.card_description!==spec.card_before)throw Error('phase_tools_card_changed: '+spec.key)
+    row.definition={...row.definition,card_description:spec.card}
+   }
+   if(spec.core_tools){
+    if(JSON.stringify(row.definition.core_tools)!==JSON.stringify(spec.core_tools_before))throw Error('phase_tools_core_tools_changed')
+    row.definition={...row.definition,core_tools:spec.core_tools,phase_tools:spec.phase_tools}
+   }
+   row.metadata={...rest,publication:'phase-tools-v1',phase_tools_version:1}
    versions.set(spec.key,versions.get(spec.key)!+1)
   }
  }
@@ -711,6 +729,10 @@ export function preConstructionEditsCatalogFixture(){return createAiCatalogSessi
 const manifest=fixtureManifest(seed,versions,'fixture-manifest')
 for(const row of preTextHygieneRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preTextHygieneManifest=fixtureManifest(preTextHygieneRows??seed,preTextHygieneVersions??versions,'fixture-pre-text-hygiene-manifest')
+for(const row of prePhaseToolsRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const prePhaseToolsManifest=fixtureManifest(prePhaseToolsRows??seed,prePhaseToolsVersions??versions,'fixture-pre-phase-tools-manifest')
+/** Manifests pinned before the 2026-10-29 phase-tools publication: five permanent tools, earlier cards. */
+export function prePhaseToolsCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(prePhaseToolsManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 /** Manifests pinned before the 2026-10-29 text-hygiene publication. */
 export function preTextHygieneCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preTextHygieneManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 for(const row of preControlledCompletionRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'

@@ -64,6 +64,21 @@ export function catalogCoreTools(catalog: AiCatalogSession): string[] | null {
     throw new Error('core_tool_catalog_invalid')
   return names as string[]
 }
+/** Owner decision 2026-10-29: besides the six permanent tools, up to four tools
+ * chosen by where the project is (its phase, or design while drawing work is
+ * pending) are loaded in full from the first step and kept for the whole turn,
+ * so Bob rarely needs describe_tool and the provider cache stays warm. */
+export const TOOL_PHASES = ['concept', 'design', 'planning', 'build', 'complete'] as const
+export function catalogPhaseTools(catalog: AiCatalogSession, core: string[] | null): Record<string, string[]> | null {
+  const value = catalog.definition('bob.tools', 'tool_contract').definition.phase_tools
+  if (value === undefined) return null // Older pinned manifests keep the permanent bench only.
+  const known = (name: unknown) => typeof name === 'string' && catalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + name && row.definition_kind === 'tool_contract')
+  if (!core || !value || typeof value !== 'object' || Array.isArray(value)
+    || Object.keys(value).some(phase => !(TOOL_PHASES as readonly string[]).includes(phase))
+    || Object.values(value).some(names => !Array.isArray(names) || names.length < 1 || names.length > 4 || new Set(names).size !== names.length
+      || names.some(name => !known(name) || core.includes(name as string)))) throw new Error('phase_tool_catalog_invalid')
+  return structuredClone(value) as Record<string, string[]>
+}
 /** Loaded from the first step when the project links no whole building
  * (2026-10-25: Bob answered from project data alone and missed the house). */
 export const BUILDING_SCOPE_PRELOAD = ['read_building_scope', 'change_building_scope']
@@ -74,7 +89,7 @@ export const DRAWING_CONTINUATION_PRELOAD = ['read_construction_draft', 'check_c
 export function createBobToolSession(opts: {
   aiCatalog?: AiCatalogSession;
   /** Tools of work already in progress, loaded without a describe_tool round. */
-  preloadTools?: () => string[];
+  preloadTools?: (phase: string | null) => string[];
   calculator?: ProjectCalculator;
   orientationReader?: OrientationDirectoryReader;
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter;

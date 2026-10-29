@@ -112,7 +112,7 @@ export interface ToolSessionState {
 
 export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; selectiveTools?: boolean;
   autoLoadReady?:boolean; followups?:ToolFollowup[];
-  /** Tools of work already in progress, loaded without a describe_tool round (lazy loading only). */ preloadTools?: () => string[]; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; catalogWorkflows?: () => WorkflowCard[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
+  /** Tools of work already in progress, loaded without a describe_tool round (lazy loading only). */ preloadTools?: (phase: string | null) => string[]; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; catalogWorkflows?: () => WorkflowCard[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
   const lazy = opts.toolInstructions === 'lazy'
   const selective = lazy && opts.selectiveTools === true
   const workflows = new Set<string>()
@@ -222,7 +222,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
       // miss that every change to the native tool list causes (2026-10-20:
       // 42 post-manual steps hit the cache 9% of the time against 81%).
       // Same gate as describe_tool by name; authority is still checked at execution.
-      if (lazy) for (const name of opts.preloadTools?.() ?? []) {
+      if (lazy) for (const name of opts.preloadTools?.(current.phase) ?? []) {
         if (loaded.has(name)) continue
         const row = current.tools.find(r => r.name === name)
         const resolved = row ? resolve(row) : null
