@@ -1078,6 +1078,27 @@ Drawing cards show source freshness independently of saved Concept/Measured/Buil
 
 Drawing request cards show shared Task/current Plan requirement names, responsibility and destination Step, with relevant measurement/Task/Step links, waiting/reconnect/budget states and the exact saved drawing link. Shared labels come only from canonical project records, never private conversation briefs or assessments. A missing canonical label is reported rather than replaced with private prose. Ask Bob actions reuse the current project's drawer and surface focus. See [the context owner](ask-bob-context.md#implemented-scope-and-remaining-target) for that boundary and [State](bob-delivery-flow.md#state) for remaining acceptance gates and [verification](foundation-verification.md#p3-hosted-technical-release--2026-09-30) for release proof.
 
+<a id="construction-text"></a>
+## Stated sizes stay true after changes — prepared 2026-10-29, not deployed
+
+Owner decision after the paid box run, where the Construction title kept
+"400x300x250" after the width became 500 and the drawing copied it. The
+drawing still takes its title and description from the exact Construction
+revision; the fix is at the Construction. New manifests
+(`construction_text_version` 1 on `tools.change_construction_parameters` and
+`tools.edit_construction_parts`) add `text`: `null` keeps the saved title and
+description, or an object with the complete corrected `title` and
+`description` (checked by the human-text rule). Before saving, the runtime
+compares size statements in the text that will be saved (`400x300x250`,
+`400 × 300 × 250 mm`, `400 mm bred`, `höjd 25 cm`) with the overall size of the
+visible parts before and after the change. A statement that matched the old
+size and does not match the new one rejects the change with the fragments and
+the new size; nothing is saved and Bob resends it with corrected text. The
+server never writes or guesses prose. Material sizes such as `12 mm plywood`
+or `45x95` are not overall sizes and pass. `20261029170000_construction_text_updates.sql`
+lets both database commands accept the optional text; older payloads and
+pinned runtimes are unchanged.
+
 <a id="construction-work-check"></a>
 ## Complete work checks — installed, 2026-10-28
 

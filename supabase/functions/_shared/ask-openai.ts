@@ -529,6 +529,8 @@ export async function answerWithOpenAi(opts: {
     coherentWork:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_draft'&&row.metadata?.construction_work_version===1),
     creationPreparation:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_draft'&&row.metadata?.creation_preparation_version===1),
     writeState,
+    // Owner decision 2026-10-29: changes carry corrected title/description; stale stated sizes are rejected.
+    constructionText:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.change_construction_parameters'&&row.metadata?.construction_text_version===1),
     prepareSolutionEdit:projectEdits.prepare,
     prepareWork:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_work',{...binding,p_payload:payload},AbortSignal.timeout(12000))

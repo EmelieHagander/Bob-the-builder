@@ -1,6 +1,8 @@
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { TurnObservation } from './project-answer.ts'
 import { TASK_WORK_VALIDATION_CODES } from './project-write.ts'
+import { ANSWER_TEXT_OUTCOMES } from './answer-text.ts'
+import { TOOL_REJECTION_CODES } from './tool-rejection.ts'
 
 export type ExecutionEvent = {
   run_id: string; turn_id: string; event_key: string; kind: 'model' | 'delivery' | 'tool'; role: string; status: string;
@@ -22,7 +24,9 @@ function workCounts(value:WorkDiagnostics|undefined):Record<string,number|boolea
 const roles=new Set(['ask-bob','cad-research','cad-designer','cad-reviewer','context-summary','plan-compiler','plan-reviewer','bob-delivery-language'])
 const outputPhases=new Set(['commentary','final_answer','legacy','tool_calls','refusal','incomplete'])
 const phaseCounts=(phase:unknown):Record<string,string>=>typeof phase==='string'&&outputPhases.has(phase)?{output_phase:phase}:{}
-const validationCodes=new Set<string>([...TASK_WORK_VALIDATION_CODES,'tool_shape','request_quote','field_value','task_location','domain_fields','human_text'])
+const validationCodes=new Set<string>([...TASK_WORK_VALIDATION_CODES,'tool_shape','request_quote','field_value','task_location','domain_fields','human_text',
+  // Rejection reasons recorded for new manifests (2026-10-29): typed tool codes and the content editor's fixed messages.
+  ...TOOL_REJECTION_CODES,'stale_construction_text','parameter_unused_node','invalid_recipe','computed_geometry_invalid','unsupported_image_frame','request_quote_required'])
 const validationCounts=(value:unknown):Record<string,string>=>typeof value==='string'&&validationCodes.has(value)?{validation_code:value}:{}
 const number=(n:unknown)=>typeof n==='number'&&Number.isFinite(n)&&n>=0?n:0
 const code=(s:unknown,fallback:string)=>typeof s==='string'&&/^[a-z][a-z0-9_]{0,39}$/.test(s)?s:fallback
@@ -49,6 +53,8 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
         ||state.observation!==null&&(!state.observation||!['steps','tool_calls','deferred_calls','completion_checks','nudges'].every(key=>Number.isSafeInteger(state.observation![key as keyof TurnObservation])&&Number(state.observation![key as keyof TurnObservation])>=0)
           ||!['answered','asked','step_budget','time_budget','refused','commentary_limit','failed'].includes(state.observation.end)
           ||state.observation.completion_gate!==undefined&&!['done','review','unavailable'].includes(state.observation.completion_gate)
+          ||state.observation.answer_text!==undefined&&!ANSWER_TEXT_OUTCOMES.includes(state.observation.answer_text)
+          ||state.observation.answer_text_issues!==undefined&&!(Number.isSafeInteger(state.observation.answer_text_issues)&&state.observation.answer_text_issues>=0)
           ||state.observation.output_phase!==undefined&&!outputPhases.has(state.observation.output_phase)))throw new Error('metrics_checkpoint_invalid')
       turn=state.observation===null?undefined:structuredClone(state.observation)
       startedAt=state.startedAt
@@ -85,7 +91,8 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
           completion_checks:turn?.completion_checks??null,nudges:turn?.nudges??null,saved_records:number(input.writes),
           cad_consultations:input.cad?.consultations??0,cad_renders:input.cad?.renders??0,cad_input_corrections:input.cad?.input_corrections??0,
           cad_reviews:input.cad?.reviews??0,cad_review_rejections:input.cad?.review_rejections??0,cad_review_unavailable:input.cad?.review_unavailable??0,cad_review_passed:input.cad?.review_passed??false,
-          uncertain_resends:number(input.uncertainResends),reused_model_calls:number(input.reusedModelCalls)}})
+          uncertain_resends:number(input.uncertainResends),reused_model_calls:number(input.reusedModelCalls),
+          ...(turn?.answer_text?{answer_text:turn.answer_text,answer_text_issues:number(turn.answer_text_issues)}:{})}})
     },
   }
 }

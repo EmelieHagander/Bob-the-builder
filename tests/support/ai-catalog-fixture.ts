@@ -23,6 +23,7 @@ let preBuildingScopeRows:any[]|undefined,preBuildingScopeVersions:Map<string,num
 let preCostControlsRows:any[]|undefined,preCostControlsVersions:Map<string,number>|undefined
 let preCreationRows:any[]|undefined,preCreationVersions:Map<string,number>|undefined
 let preControlledCompletionRows:any[]|undefined,preControlledCompletionVersions:Map<string,number>|undefined
+let preTextHygieneRows:any[]|undefined,preTextHygieneVersions:Map<string,number>|undefined
 let preWriteStateRows:any[]|undefined,preWriteStateVersions:Map<string,number>|undefined
 let preCreateSelectRows:any[]|undefined,preCreateSelectVersions:Map<string,number>|undefined
 let preMaterialLookupRows:any[]|undefined,preMaterialLookupVersions:Map<string,number>|undefined
@@ -32,6 +33,23 @@ let preConstructionWorkRows:any[]|undefined,preConstructionWorkVersions:Map<stri
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const textHygiene=source.match(/\$text_hygiene_spec\$([\s\S]+?)\$text_hygiene_spec\$/)
+ if(textHygiene){
+  preTextHygieneRows=structuredClone(seed);preTextHygieneVersions=new Map(versions)
+  const spec=JSON.parse(textHygiene[1]),marker={publication:'bob-text-hygiene-v1',text_hygiene_version:1}
+  for(const {variables,...addition} of spec.additions){seed.push({definition:{},...addition,variables,metadata:{...marker}});versions.set(addition.key,1)}
+  for(const edit of spec.edits){
+   const row=seed.find(row=>row.key===edit.key),{seed_version,source_revision,...rest}=row.metadata??{}
+   row.metadata={...rest,...edit.metadata,...marker}
+   if(edit.description_append)row.definition={...row.definition,description:row.definition.description+edit.description_append}
+   if(edit.add_property){
+    const p=row.definition.parameters,name=edit.add_property.name
+    row.definition={...row.definition,parameters:{...p,properties:{...p.properties,[name]:edit.add_property.schema},required:[...p.required,name]},
+     required_parameters:[...row.definition.required_parameters,name]}
+   }
+   versions.set(edit.key,versions.get(edit.key)!+1)
+  }
+ }
  const controlledCompletion=source.match(/\$controlled_completion_spec\$([\s\S]+?)\$controlled_completion_spec\$/)
  if(controlledCompletion){
   preControlledCompletionRows=structuredClone(seed);preControlledCompletionVersions=new Map(versions)
@@ -691,6 +709,10 @@ function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):Ai
 const preConstructionEditsManifest=fixtureManifest(preConstructionEditsRows??seed,preConstructionEditsVersions??versions,'fixture-pre-construction-edits-manifest')
 export function preConstructionEditsCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw new Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preConstructionEditsManifest)})}
 const manifest=fixtureManifest(seed,versions,'fixture-manifest')
+for(const row of preTextHygieneRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preTextHygieneManifest=fixtureManifest(preTextHygieneRows??seed,preTextHygieneVersions??versions,'fixture-pre-text-hygiene-manifest')
+/** Manifests pinned before the 2026-10-29 text-hygiene publication. */
+export function preTextHygieneCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preTextHygieneManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 for(const row of preControlledCompletionRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preControlledCompletionManifest=fixtureManifest(preControlledCompletionRows??seed,preControlledCompletionVersions??versions,'fixture-pre-controlled-completion-manifest')
 /** Manifests pinned before 2026-10-29 keep the v2 full review after saved work. */

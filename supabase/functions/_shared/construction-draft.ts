@@ -24,6 +24,7 @@ import { withConstructionWorkRead, withConstructionWorkWrite, withConstructionWo
 import type { ProjectEdits } from './project-edits.ts'
 import { countSerializedTokens } from './bob-token-budget.ts'
 import { compactConstructionCheck } from './write-state.ts'
+import { recipeSize, staleSizeText, staleTextRejection, withConstructionText } from './construction-text.ts'
 
 /** Reconstruct a historical tool check; a new check position still reads live.
  * CAD render/review gates use their independent fresh readers. Old executions
@@ -128,8 +129,8 @@ export const CONSTRUCTION_CUT_SAVE_TOOL=tool('save_construction_cut_plan','Save 
 const CONSTRUCTION_PROSE:Record<string,readonly string[]>={
  save_construction_draft:['title','description','change_note','parameter_plan.frames.*.reason','parameter_plan.nodes.*.reason','instance_policy.instances.*.reason','joints.*.reason','joints.*.fastener.reason','open_questions.*'],
  transition_legacy_drawing:['change_note','joints.*.reason','joints.*.fastener.reason','open_questions.*'],
- change_construction_parameters:['change_note','changes.*.reason'],
- edit_construction_parts:['change_note','changes.nodes.upsert.*.reason','changes.joints.upsert.*.reason','changes.joints.upsert.*.fastener.reason','changes.roles.upsert.*.reason'],
+ change_construction_parameters:['change_note','changes.*.reason','text.title','text.description'],
+ edit_construction_parts:['change_note','changes.nodes.upsert.*.reason','changes.joints.upsert.*.reason','changes.joints.upsert.*.fastener.reason','changes.roles.upsert.*.reason','text.title','text.description'],
  change_construction_roles:['change_note','changes.*.reason'],
  continue_construction_change:['change_note','review_note'],
  save_construction_cut_plan:['change_note','candidates.*.note'],
@@ -165,6 +166,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  /** Pinned per manifest (write_state_version 1): saved construction writes
   * carry the check of their receipt revision; requires coherentWork. */
  writeState?:boolean;
+ /** Pinned per manifest (construction_text_version 1): parameter changes and
+  * part edits carry corrected title/description text and are rejected when
+  * they would leave a stated overall size wrong; requires coherentWork. */
+ constructionText?:boolean;
  readWorkSources?:(draft:Record<string,any>|null,stepId:string|null)=>Promise<ConstructionWorkSources>;
  prepareSolutionEdit?:ProjectEdits['prepare'];
  prepareWork?:(payload:WritePayload)=>Promise<Record<string,any>>;
@@ -195,8 +200,9 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  const baseSaveTool=opts.constructionRepeats?CONSTRUCTION_REPEAT_SAVE_TOOL:CONSTRUCTION_SAVE_TOOL
  const saveTool=opts.formRefinement?withFormRefinement(baseSaveTool):baseSaveTool
  const baseParameterTool=opts.constructionSourceRefresh?CONSTRUCTION_PARAMETER_REFRESH_TOOL:CONSTRUCTION_PARAMETER_TOOL
- const parameterTool=opts.coherentWork?withConstructionWorkWrite(baseParameterTool):baseParameterTool
- const editTool=opts.coherentWork?withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL):CONSTRUCTION_EDIT_TOOL
+ const withText=(tool:typeof CONSTRUCTION_EDIT_TOOL)=>opts.constructionText?withConstructionText(tool):tool
+ const parameterTool=opts.coherentWork?withText(withConstructionWorkWrite(baseParameterTool)):baseParameterTool
+ const editTool=opts.coherentWork?withText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL)):CONSTRUCTION_EDIT_TOOL
  const prepareChange=async(v:Record<string,any>,domain:WritePayload,prepare:(p:WritePayload)=>Promise<Record<string,any>>)=>{
   let payload=domain
   if(opts.coherentWork&&v.solution_edit!==null){
@@ -257,7 +263,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    const input=raw as Record<string,unknown>
    if(name===CONSTRUCTION_READ_TOOL.function.name)raw={step_id:null,work_kind:null,...input}
    if(name===CONSTRUCTION_CHECK_TOOL.function.name)raw={outputs:[],...input}
-   if(name===CONSTRUCTION_EDIT_TOOL.function.name||name===CONSTRUCTION_PARAMETER_TOOL.function.name)raw={target_revision:null,solution_edit:null,...input}
+   if(name===CONSTRUCTION_EDIT_TOOL.function.name||name===CONSTRUCTION_PARAMETER_TOOL.function.name)raw={target_revision:null,solution_edit:null,...(opts.constructionText?{text:null}:{}),...input}
   }
   // An older pinned catalog may omit this new field. Preserve its uncertainty;
   // the database inherits an existing policy rather than erasing it.
@@ -337,7 +343,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {status:'invalid',issues:[{code:'request_quote',path:'request_quote'}]}
     const change=await prepareChange(v,{kind:'construction_edit',record_id:v.record_id,expected_revision:v.expected_revision,expected_updated_at:null,request_quote:v.request_quote,
      data:{key:v.key,change_note:v.change_note,changes:v.changes?.joints?{...v.changes,joints:{...v.changes.joints,upsert:storedJoints(v.changes.joints.upsert)}}:v.changes,computed:null,
-      ...(opts.coherentWork?{target_revision:v.target_revision}:{})}},opts.prepareEdit)
+      ...(opts.coherentWork?{target_revision:v.target_revision}:{}),...(opts.constructionText&&v.text?{text:v.text}:{})}},opts.prepareEdit)
     if(change.error)return change.error
     const {payload,domain,prepared}=change
     if(!await opts.hasAccess())return {status:'denied'}
@@ -356,6 +362,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
      const sources=await opts.readSources(parameterSourcePins(plan))
      const parameters=compileCadParameters(opts.projectId,recipe,plan,sources.project,sources.physical)
      if(!parseCadAssemblyRequest(recipe))return {status:'invalid',issues:[{code:'computed_geometry_invalid',path:'changes'}]}
+     if(opts.constructionText){
+      const after=recipeSize(recipe,next.instance_policy),stale=staleSizeText(v.text??draft,recipeSize(draft.recipe,draft.instance_policy),after)
+      if(stale.length)return staleTextRejection(stale,after!,!!v.text)
+     }
      domain.data.computed={recipe,parameters}
     }
     if(!await opts.hasAccess())return {status:'denied'}
@@ -366,7 +376,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {status:'invalid',message:'Use an exact quote from the current request.'}
     if(opts.constructionSourceRefresh&&!v.changes.length&&v.target_revision===null&&!(opts.coherentWork&&v.solution_edit))return {status:'invalid',message:'Name changed inputs or an explicit current target revision.'}
     const change=await prepareChange(v,{kind:'construction_parameters',record_id:v.record_id,expected_revision:v.expected_revision,expected_updated_at:null,request_quote:v.request_quote,
-     data:{key:v.key,change_note:v.change_note,changes:v.changes,computed:null,...(opts.constructionSourceRefresh||opts.coherentWork?{target_revision:v.target_revision}:{})}},opts.prepareParameterChange)
+     data:{key:v.key,change_note:v.change_note,changes:v.changes,computed:null,...(opts.constructionSourceRefresh||opts.coherentWork?{target_revision:v.target_revision}:{}),...(opts.constructionText&&v.text?{text:v.text}:{})}},opts.prepareParameterChange)
     if(change.error)return change.error
     const {payload,domain,prepared}=change
     if(!await opts.hasAccess())return {status:'denied'}
@@ -375,7 +385,12 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
      const draft=prepared.draft
      if(draft?.projectId!==opts.projectId||draft.artifact_id!==v.record_id)return {status:'unavailable'}
      if(draft.revision!==v.expected_revision||draft.current_revision!==v.expected_revision||draft.archived)return {status:'conflict'}
-     domain.data.computed=await compileConstructionParameterChange(opts.projectId,draft,v.changes,opts.readSources)
+     const computed=await compileConstructionParameterChange(opts.projectId,draft,v.changes,opts.readSources)
+     domain.data.computed=computed
+     if(opts.constructionText){
+      const after=recipeSize((computed as Record<string,any>).recipe,draft.instance_policy),stale=staleSizeText(v.text??draft,recipeSize(draft.recipe,draft.instance_policy),after)
+      if(stale.length)return staleTextRejection(stale,after!,!!v.text)
+     }
     }
     if(!await opts.hasAccess())return {status:'denied'}
     return changed(await opts.writer.commit(payload),prepared,v.expected_revision)

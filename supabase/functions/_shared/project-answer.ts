@@ -18,6 +18,9 @@ import type { createProjectLookup } from './project-lookup.ts'
 import { buildBobHands, buildBobCompleteHands } from './bob-prompt.ts'
 import type { AiCatalogSession } from './ai-catalog.ts'
 import { compactReceipts, type ProjectWriter } from './project-write.ts'
+import { humanTextIssues } from './human-text.ts'
+import { answerTextFragments, type AnswerTextOutcome } from './answer-text.ts'
+import { toolRejection } from './tool-rejection.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
@@ -88,7 +91,7 @@ export type ProjectAnswer =
   | { ok: true; answer: string; projectId: string; evidence: AnswerEvidence; providerResponseId?: string }
   | { ok: false; error: string }
 export type TurnEnd = 'answered' | 'asked' | 'step_budget' | 'time_budget' | 'refused' | 'commentary_limit'
-export interface TurnObservation { steps: number; tool_calls: number; deferred_calls: number; completion_checks: number; nudges: number; completion_gate?: 'done' | 'review' | 'unavailable'; end: TurnEnd | 'failed'; output_phase?: OpenAIServiceResponse['outputPhase'] }
+export interface TurnObservation { steps: number; tool_calls: number; deferred_calls: number; completion_checks: number; nudges: number; completion_gate?: 'done' | 'review' | 'unavailable'; answer_text?: AnswerTextOutcome; answer_text_issues?: number; end: TurnEnd | 'failed'; output_phase?: OpenAIServiceResponse['outputPhase'] }
 export interface TurnProgress { stage: 'thinking' | 'tool' | 'finishing'; tool?: string; step: number; saved: number }
 
 /** Embedded seed is for injected/offline callers only. Production supplies the
@@ -251,6 +254,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // judges the answer against the request and this turn's saved work.
   const completionV3 = contract.work_completion_version === 3
   const completionAware = contract.work_completion_version === 1 || completionV2 || completionV3
+  // Owner decision 2026-10-29: the chat answer holds no IDs, codes, tool names or
+  // revision numbers either. One rewrite note on violation, never a loop.
+  const answerTextV1 = completionV3 && contract.answer_text_version === 1
   const writeTools = new Set(completionAware ? opts.aiCatalog.manifest().definitions.filter(row => row.definition_kind === 'tool_contract'
     && Object.hasOwn((row.definition.parameters as any)?.properties ?? {}, 'request_quote')).map(row => row.definition.name as string) : [])
   const workResults: { tool: string; status: string; message?: string; refresh_status?: string; validation?: unknown }[] = structuredClone(restored?.workResults ?? [])
@@ -460,9 +466,15 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         try { result = await toolbox.execute(call.function.name, args) }
         catch (error) { rethrowContinuation(error); observe('failed'); return { ok: false, error: toolFailureCode(error) } }
         observation.tool_calls++
+        // Content-free reason for every rejected call: codes and field paths only.
+        const rejection = ['invalid', 'conflict'].includes(result?.status) ? toolRejection(result) : null
+        if (rejection) console.warn('[Bob tool rejection]', JSON.stringify({ tool: /^[a-z][a-z0-9_]{0,63}$/.test(call.function.name) ? call.function.name : 'invalid_name',
+          status: result.status, code: rejection.code, fields: rejection.fields }))
+        const validationCode = completionV3 && rejection ? rejection.code
+          : completionAware && typeof result?.validation?.code === 'string' ? result.validation.code : undefined
         try { opts.onTool?.({ name: call.function.name, status: String(result?.status ?? 'returned'), step: step + 1, index, ms: Date.now() - began,
           ...(result?.diagnostics?{diagnostics:result.diagnostics}:{}),
-          ...(completionAware && typeof result?.validation?.code === 'string' ? { validation_code: result.validation.code } : {}) }) } catch { /* diagnostics only */ }
+          ...(validationCode !== undefined ? { validation_code: validationCode } : {}) }) } catch { /* diagnostics only */ }
         // Cache hits are worker-local telemetry. Their loss on resume must not
         // change model/journal bytes for the same exact source result.
         if (['work_read','work_change','work_check'].includes(result?.diagnostics?.operation)) {
@@ -531,16 +543,23 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     // latest instruction refines that mandate rather than replacing its memory.
     // Bob decides; his words are never replaced by a server notice.
     const facts = unfinishedFacts(opts.aiCatalog, opts, saved)
-    if (completionV3 && !completionChecked && opts.writer && opts.writer.remaining > 0 && !opts.writer.uncertain
-      && canContinue && response.outputPhase !== 'refusal') {
-      // One targeted note at most: code-known facts first, else the gate's named gap.
-      const gate = facts.length ? null : await gateVerdict(answerText)
-      const note = facts.length ? opts.aiCatalog.text('bob.note.finish', { facts: facts.join(' ') })
+    if (completionV3 && !completionChecked && response.outputPhase !== 'refusal') {
+      // One targeted note at most per turn: code-known facts first, else the
+      // gate's named gap; internal references in the answer ride the same note.
+      const workEligible = !!opts.writer && opts.writer.remaining > 0 && !opts.writer.uncertain && canContinue
+      const gate = !workEligible || facts.length ? null : await gateVerdict(answerText)
+      const workNote = !workEligible ? null : facts.length ? opts.aiCatalog.text('bob.note.finish', { facts: facts.join(' ') })
         : gate?.remaining ? opts.aiCatalog.text('bob.note.gate-gap', { reason: gate.reason }) : null
-      if (note) {
-        completionChecked = true; observation.completion_checks++; previousResponseId = response.responseId
+      const textIssues = answerTextV1 ? humanTextIssues(answerText) : []
+      const textEligible = textIssues.length > 0 && !!response.responseId
+        && (unlimitedWork ? Date.now() < deadline : step < steps - 1 && Date.now() + 20000 < deadline)
+      const textNote = textEligible ? opts.aiCatalog.text(workNote ? 'bob.note.answer-text-also' : 'bob.note.answer-text', { fragments: answerTextFragments(textIssues) }) : null
+      if (workNote || textNote) {
+        completionChecked = true; previousResponseId = response.responseId
+        if (workNote) observation.completion_checks++
+        if (textNote) { observation.answer_text = 'rewrite_requested'; observation.answer_text_issues = textIssues.length }
         reviewedAnswer = answerText
-        messages = [{ role: 'user', content: opts.aiCatalog.text('bob.note.prefix') + note }]
+        messages = [{ role: 'user', content: opts.aiCatalog.text('bob.note.prefix') + [workNote, textNote].filter(Boolean).join(' ') }]
         await next(step)
         continue
       }
@@ -568,6 +587,12 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
     progress({ stage: 'finishing', step: step + 1 })
     if (opts.validateCurrentView && !await opts.validateCurrentView()) return { ok: false, error: 'context_unavailable' }
+    if (answerTextV1) {
+      // Content-free outcome: the delivered words are Bob's, never replaced.
+      const remaining = humanTextIssues(answerText).length
+      observation.answer_text = observation.answer_text === 'rewrite_requested' ? (remaining ? 'rewrite_unchanged' : 'rewritten') : remaining ? 'delivered_with_issues' : 'clean'
+      observation.answer_text_issues = remaining
+    }
     observe(completionAware && response.outputPhase === 'refusal' ? 'refused' : closedByCommentary ? 'commentary_limit' : closedByLimit && step > 0 ? (lastStep ? 'step_budget' : 'time_budget') : /\?\s*$/.test(answerText) ? 'asked' : 'answered')
     return answered(answerText, response.responseId, completionAware && response.outputPhase === 'refusal' || facts.length > 0)
   }
