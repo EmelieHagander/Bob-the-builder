@@ -248,6 +248,17 @@ and price lookups use their indexes (`material_aliases_alias_idx`,
 `spec` object only to definitions with these links, so other records keep their
 exact shape.
 
+**Optional catalog dimensions — prepared 2026-10-29, not applied** (owner
+decision). `20261029210000_optional_catalog_dimensions.sql` sets
+`required=false` on every `bob.catalog_profile_fields` row in place, and
+`bob_private.catalog_profile_immutable` now permits exactly that change on a
+published revision (tightening, bounds, inserts, deletes and rules still need a
+new revision). It adds form `bulk`, profile `bulk` revision 1 (all optional) and
+category `mineral.aggregate`, and appends one revision without the `unknown`
+placeholder to each shared seed definition that had one (live: the profiled
+roof sheet), giving it an identity. Rationale and consumers:
+[material catalog](../Docs/material-catalog.md#optional-dimensions).
+
 <a id="db-load-relief"></a>
 ## Database load relief — installed 2026-10-29
 

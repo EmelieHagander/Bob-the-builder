@@ -140,6 +140,8 @@ test('catalog dimensions, material applicability, unknowns and stale sources fai
  for(const [code,change] of [
   ['material_thickness_mismatch',(m:any)=>{m.properties.thickness.value='21'}],
   ['material_dimension_unknown',(m:any)=>{m.properties.thickness.truth='estimated'}],
+  // Owner decision 2026-10-29: thickness is optional in the catalog; an unstated one still blocks the construction check.
+  ['material_dimension_unknown',(m:any)=>{delete m.properties.thickness}],
   ['joint_material_not_supported',(m:any)=>{m.categories=['steel','sheet']}],
   ['unsupported_material_profile',(m:any)=>{m.profile_code='liquid'}],
   ['material_unavailable_or_changed',(m:any)=>{m.current_revision=2}],

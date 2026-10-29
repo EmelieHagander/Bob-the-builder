@@ -56,7 +56,7 @@ test('the seed holds the reviewed starting list once, through the catalog identi
   assert(items.every(i => (i.identity_hash === null) === i.has_unknown), 'unknown specifications never get an identity')
 })
 
-test('dimensions map onto existing profiles; unknown required values stay unknown and size-less combinations are valid', async () => {
+test('dimensions map onto existing profiles; unstated optional values stay absent and size-less combinations are valid', async () => {
   const props = async (material: string, size: string | null) => (await pg.query<any>(`select r.profile_code,r.properties,i.material_size_id,i.unit_code
     from bob.catalog_items i join bob.catalog_item_revisions r on r.item_id=i.id and r.revision=i.current_revision where i.id=$1`, [await shared(material, size)])).rows[0]
   const sheet = await props('plywood_birch', 's12')
@@ -70,7 +70,11 @@ test('dimensions map onto existing profiles; unknown required values stay unknow
   const felt = await props('underlay_felt', null)
   assert.equal(felt.material_size_id, null); assert.equal(felt.profile_code, 'roll_stock'); assert.deepEqual(felt.properties, {}); assert.equal(felt.unit_code, 'm2')
   const roofSteel = await props('roof_steel', null)
-  assert.equal(roofSteel.properties.thickness.truth, 'unknown'); assert.equal(roofSteel.properties.thickness.value, null)
+  // Owner decision 2026-10-29: thickness is optional, so the unstated value is absent, not an "unknown" placeholder.
+  assert.deepEqual(roofSteel.properties, {})
+  const roofHistory = (await pg.query<any>(`select r.revision,r.has_unknown,r.properties ? 'thickness' as had_thickness,i.identity_hash is not null as identified
+    from bob.catalog_items i join bob.catalog_item_revisions r on r.item_id=i.id where i.id=$1 order by r.revision`, [await shared('roof_steel', null)])).rows
+  assert.deepEqual(roofHistory.map(r => [r.revision, r.has_unknown, r.had_thickness, r.identified]), [[1, true, true, true], [2, false, false, true]])
   assert.equal((await props('concrete_tile', null)).profile_code, 'piece')
   const fastener = (await pg.query<any>("select width_mm,length_mm,depth_mm from bob.material_sizes where seed_key='f50x80'")).rows[0]
   assert.equal(Number(fastener.width_mm), 5); assert.equal(Number(fastener.length_mm), 80); assert.equal(fastener.depth_mm, null)
