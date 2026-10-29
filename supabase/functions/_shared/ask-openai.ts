@@ -495,9 +495,13 @@ export async function answerWithOpenAi(opts: {
   }
   const knowledgeReader = createKnowledgeReader(hasAccess, undefined, { unlimitedWork })
   const operationalReader = createOperationalReader(opts.projectId, input=>rpc('read_project_work', {p_project:opts.projectId,p_input:input}, AbortSignal.timeout(12000)),hasAccess,lookup.sources,{unlimitedWork})
+  // Pinned per manifest (material_lookup_version 1): untyped material searches
+  // return the combined lookup with household stock and latest store prices.
+  const materialLookup = aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.search_material_catalog' && row.metadata?.material_lookup_version === 1)
   const catalogReader = createMaterialCatalogReader(opts.projectId,
     checkpointed((input:Record<string,unknown>, signal:AbortSignal) => rpc('catalog_read', { p_project: opts.projectId, p_input: input }, signal)),
-    hasAccess, lookup.sources, undefined, { unlimitedWork })
+    hasAccess, lookup.sources, undefined, { unlimitedWork,
+      ...(materialLookup ? { lookup: checkpointed((input:Record<string,unknown>, signal:AbortSignal) => rpc('material_lookup', { p_project: opts.projectId, p_input: input }, signal)) } : {}) })
   const readDesignReadiness=async(targetRevision:number,purpose:DesignPurpose|null,areaId:string|null=null,fresh=false):Promise<DesignReadiness>=>{
     const args={p_project:opts.projectId,p_area:areaId,p_target_revision:targetRevision,p_purpose:purpose}
     // Replaying a recorded gate reconstructs an earlier completed operation.

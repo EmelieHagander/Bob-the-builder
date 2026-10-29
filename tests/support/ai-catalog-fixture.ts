@@ -24,6 +24,7 @@ let preCostControlsRows:any[]|undefined,preCostControlsVersions:Map<string,numbe
 let preCreationRows:any[]|undefined,preCreationVersions:Map<string,number>|undefined
 let preControlledCompletionRows:any[]|undefined,preControlledCompletionVersions:Map<string,number>|undefined
 let preWriteStateRows:any[]|undefined,preWriteStateVersions:Map<string,number>|undefined
+let preMaterialLookupRows:any[]|undefined,preMaterialLookupVersions:Map<string,number>|undefined
 let preConstructionWorkRows:any[]|undefined,preConstructionWorkVersions:Map<string,number>|undefined
 // Materialise the explicit immutable publication patches in migration order.
 // The historical seed stays available for pinned-manifest compatibility tests.
@@ -40,6 +41,16 @@ for(const migration of migrations){
    if(edit.content!==undefined)row.content=edit.content
    if(edit.definition)row.definition={...row.definition,...edit.definition}
    versions.set(edit.key,versions.get(edit.key)!+1)
+  }
+ }
+ const materialLookup=source.match(/\$material_lookup_spec\$([\s\S]+?)\$material_lookup_spec\$/)
+ if(materialLookup){
+  preMaterialLookupRows=structuredClone(seed);preMaterialLookupVersions=new Map(versions)
+  for(const spec of JSON.parse(materialLookup[1])){
+   const row=seed.find(row=>row.key===spec.key),{seed_version,source_revision,...rest}=row.metadata??{}
+   row.definition={...row.definition,description:row.definition.description+spec.append}
+   row.metadata={...rest,publication:'material-lookup-v1',material_lookup_version:1}
+   versions.set(spec.key,versions.get(spec.key)!+1)
   }
  }
  const writeState=source.match(/\$write_state_spec\$([\s\S]+?)\$write_state_spec\$/)
@@ -662,6 +673,10 @@ export function preControlledCompletionCatalogFixture(update?:(snapshot:AiCatalo
 for(const row of preCreationRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preCreationManifest=fixtureManifest(preCreationRows??seed,preCreationVersions??versions,'fixture-pre-creation-manifest')
 export function preCreationCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preCreationManifest)})}
+for(const row of preMaterialLookupRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preMaterialLookupManifest=fixtureManifest(preMaterialLookupRows??seed,preMaterialLookupVersions??versions,'fixture-pre-material-lookup-manifest')
+/** Manifests pinned before 2026-10-29 keep the definition-only material search. */
+export function preMaterialLookupCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preMaterialLookupManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw Error('Pinned fixture')}},{app:'bob',manifest:snapshot})}
 for(const row of preWriteStateRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preWriteStateManifest=fixtureManifest(preWriteStateRows??seed,preWriteStateVersions??versions,'fixture-pre-write-state-manifest')
 /** Manifests pinned before writes returned their state (2026-10-29). */
