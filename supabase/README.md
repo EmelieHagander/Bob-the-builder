@@ -735,6 +735,28 @@ The installed order was:
 3. Apply `20261029120000_bob_controlled_completion_catalog.sql` and the other
    catalog publications of the same release.
 
+### In-turn lookup reuse and database load relief — source 2026-10-29
+
+**Prepared, not deployed.** New jobs pin `lookupReuseVersion: 1` (requires
+`exactLookupVersion: 1`). `createLookupReuse` in `lookup-rpc.ts` reuses a
+successful identical lookup within one claim. It stops reusing when the turn
+writes (`writeRpc` and piece release) or after `READ_REUSE_MAX_AGE_MS` (120 s).
+A reused result keeps its original `retrievedAt`, and callers still check access.
+
+Reuse happens inside the journaled read, so journal positions and fingerprints
+never depend on it. A resumed worker simply starts with an empty store. Jobs
+without the pin read every time; an older runtime ignores the field, so rollback
+is safe. The replayed drawing turn of 2026-10-29 goes from 26 to 22 lookups, and
+one CAD design claim from 9 to 7 (`tests/lookup-reuse.test.ts`). Each claim
+starts empty because every model call yields.
+
+The database half is the [load relief migration](../db/README.md#db-load-relief).
+Each step needs the owner's explicit OK:
+
+1. Apply `20261029190000_bob_db_load_relief.sql`. It is independent of the
+   runtime and returns identical results.
+2. Deploy `bob-worker`, then `ask-bob`, from the same commit, for the reuse pin.
+
 ### Room dimensions — source 2026-10-26
 
 **Deployed 2026-10-26** (`bob-worker` v139, `ask-bob` v171; [evidence](../Docs/foundation-verification.md#room-dimensions-and-human-text--2026-10-26)). New jobs pin

@@ -33,7 +33,7 @@ export interface LookupResult {
   truth: 'unknown'
 }
 export type LookupTransport = ((projectId: string, input: LookupInput, signal: AbortSignal) =>
-  PromiseLike<{ data: unknown; error: { code?: string } | null }>) & { checkpointed?: boolean }
+  PromiseLike<{ data: unknown; error: { code?: string } | null; observedAt?: string }>) & { checkpointed?: boolean }
 
 export interface ProjectLookupState {
   version: 1
@@ -180,12 +180,14 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
       const controller = new AbortController()
       let timer: ReturnType<typeof setTimeout> | undefined
       try {
-        const { data, error } = await Promise.race([
+        const { data, error, observedAt } = await Promise.race([
           Promise.resolve(transport(projectId, input, controller.signal)),
           // A journaled transport seals abort and saves that outcome before
           // returning. Do not race its checkpoint with a different result.
           new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); if(!transport.checkpointed)reject(new Error('timeout')) }, timeoutMs) }),
         ])
+        // A result reused within the turn reports when it was actually read.
+        if (!error && typeof observedAt === 'string' && Number.isFinite(Date.parse(observedAt))) base.retrievedAt = new Date(observedAt).toISOString()
         if (error) {
           unresolvedReads.add(key)
           return { ...base, status: error.code === '42501' ? 'denied' : error.code === '22023' ? 'invalid' : 'unavailable' }

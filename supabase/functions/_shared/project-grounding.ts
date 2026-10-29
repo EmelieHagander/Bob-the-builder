@@ -36,7 +36,9 @@ export function createGroundedModelCall(opts: {
     let groundedMessages: OpenAIServiceOptions['messages'] = options.messages
     if (hasPixels) {
       if (!await opts.hasAccess()) throw new Error('project_denied')
-      // Fresh for every image-bearing call, including after a same-turn write/reopen.
+      // Read for every image-bearing call, including after a same-turn write/reopen.
+      // With lookupReuseVersion an identical read since the turn's last write
+      // (at most READ_REUSE_MAX_AGE_MS old) is reused; access is checked again.
       const results = opts.readOrder === 'serial'
         ? [await opts.lookup.search(input('project')), await opts.lookup.search(input('measurements'))]
         : await Promise.all([opts.lookup.search(input('project')), opts.lookup.search(input('measurements'))])

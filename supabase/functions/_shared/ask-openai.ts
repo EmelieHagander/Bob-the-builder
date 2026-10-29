@@ -54,7 +54,7 @@ import { createMemoryRetrieval, journalMemoryStore } from './bob-memory-retrieva
 import { createJournalledMemoryEmbedder } from './bob-memory-embedding.ts'
 import { createBobConversationStore, type BobTurnClaim } from './bob-conversation.ts'
 import { createProjectLookup, type LookupInput } from './project-lookup.ts'
-import { createLookupTransport, lookupPin, type LookupPin } from './lookup-rpc.ts'
+import { createLookupReuse, createLookupTransport, lookupPin, type LookupPin } from './lookup-rpc.ts'
 import { createPlanAssistant } from './plan-assistant.ts'
 import { createSourceReader } from './source-reader.ts'
 import type { BobAnswerState, ProjectAnswer, TurnProgress } from './project-answer.ts'
@@ -71,6 +71,8 @@ import { createAiCatalogSession, applyCatalogModelOptions, type AiCatalogSession
  * Reuse a successful live answer for a few seconds; a failure is never reused,
  * and writes stay enforced by RLS and the domain commands at their boundary. */
 const FRESH_MS = 3000
+/** Drawing-store calls that only read; every other one ends lookup reuse. */
+const DRAWING_STORE_READS = new Set(['project_drawing_requests', 'drawing_request_work', 'check_drawing_request'])
 function reuseFresh<A extends unknown[], T>(read: (...args: A) => Promise<T>, reusable: (value: T) => boolean, key: (...args: A) => string = () => '') {
   const seen = new Map<string, { at: number; value: T }>()
   return async (...args: A): Promise<T> => {
@@ -141,11 +143,20 @@ export async function answerWithOpenAi(opts: {
   // Project writes keep their journal stream and recorded { data, error }. A
   // write the database cancelled at the statement timeout saved nothing, so it
   // is sent once more inside the same recorded operation.
+  // Identical project reads within this turn (lookupReuseVersion). Every
+  // write of this turn, replayed or live, ends all reuse before and after it.
+  const lookupReuse = createLookupReuse()
+  // Image descriptions, construction observations and drawing-request packets
+  // live in tables the lookup never reads, so they keep reuse.
+  const writing = async <T>(work: () => Promise<T>): Promise<T> => {
+    lookupReuse.invalidate()
+    try { return await work() } finally { lookupReuse.invalidate() }
+  }
   const writeRpc = async (name: string, args: Record<string, unknown>) => {
     const { p_generation: _generation, ...stable } = args
     const signal = AbortSignal.timeout(26000)
-    return memo('rpc:' + name, stable, () => withStatementRetry(name, attempt => client.rpc(name, args).abortSignal(attempt), signal,
-      { label: 'Write', slowMs: 3000 }).then(({ data, error }) => ({ data, error })), 0, signal)
+    return writing(() => memo('rpc:' + name, stable, () => withStatementRetry(name, attempt => client.rpc(name, args).abortSignal(attempt), signal,
+      { label: 'Write', slowMs: 3000 }).then(({ data, error }) => ({ data, error })), 0, signal))
   }
   let metrics:ReturnType<typeof createExecutionMetrics>|undefined
   const mediaTransport = createMediaTransport(client, { ...opts, url, key })
@@ -277,7 +288,7 @@ export async function answerWithOpenAi(opts: {
   // Jobs pinned with exactLookupVersion read v10 and retry a statement timeout once (2026-10-29).
   let lookupPinned: LookupPin = lookupPin({})
   const lookupTransport = checkpointed(createLookupTransport(() => lookupPinned,
-    (name, args, signal) => client.rpc(name, args).abortSignal(signal), memo))
+    (name, args, signal) => client.rpc(name, args).abortSignal(signal), memo, lookupReuse))
   const readAccess = async () => {
     const { data, error } = await client.from('projects').select('id').eq('id', opts.projectId)
       .abortSignal(AbortSignal.timeout(10_000)).maybeSingle()
@@ -317,7 +328,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; turnUsdStop?: number } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -332,6 +343,8 @@ export async function answerWithOpenAi(opts: {
       projectFactsVersion: 1 as const,
       // Search v10 (exact artifact reads) with one statement-timeout retry (2026-10-29). Jobs without this pin keep v8/v9.
       exactLookupVersion: 1 as const,
+      // Identical reads reused within the turn until it writes (2026-10-29). Jobs without this pin read every time.
+      lookupReuseVersion: 1 as const,
       ...(checkpoint ? { groundingReadOrderVersion: 1 as const, modelDeadlineVersion: 1 as const } : {}),
       ...bobCompleteRequestVersions(!!checkpoint, contract),
       // Window 2 (2026-10-29): superseded repeat reads leave first; the latest result per record stays whole.
@@ -706,15 +719,20 @@ export async function answerWithOpenAi(opts: {
       privateCall:drawingRequestCall,
       // One stable id per piece key; the unkeyed id keeps its existing journal identity.
       newId:key=>memo('cad:project_request_id',key?{key}:{},async()=>crypto.randomUUID()),
-      release:async ids=>{
+      release:ids=>writing(async()=>{
         const {data,error}=await internal.rpc('release_drawing_pieces',{...binding,p_user:opts.userId,p_ids:ids}).abortSignal(AbortSignal.timeout(12000))
         if(error)throw new Error(error.message?.includes('project_denied')?'project_denied':'drawing_pieces_unavailable')
         return {released:Array.isArray(data?.released)?data.released:[]}
-      },
-      caller:async(name,args)=>{
-        const {data,error}=await client.rpc(name,args).abortSignal(AbortSignal.timeout(10000))
-        if(error)throw new Error(drawingErrorCode(error)??'drawing_request_unavailable')
-        return data
+      }),
+      // Gap Tasks, links, restore and cancel change what lookups return; the
+      // three reads do not.
+      caller:(name,args)=>{
+        const call=async()=>{
+          const {data,error}=await client.rpc(name,args).abortSignal(AbortSignal.timeout(10000))
+          if(error)throw new Error(drawingErrorCode(error)??'drawing_request_unavailable')
+          return data
+        }
+        return DRAWING_STORE_READS.has(name)?call():writing(call)
       },
     }) : undefined
 

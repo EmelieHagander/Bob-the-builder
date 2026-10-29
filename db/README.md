@@ -248,6 +248,47 @@ and price lookups use their indexes (`material_aliases_alias_idx`,
 `spec` object only to definitions with these links, so other records keep their
 exact shape.
 
+<a id="db-load-relief"></a>
+## Database load relief — prepared 2026-10-29
+
+**Prepared, not applied.** Source: `supabase/migrations/20261029190000_bob_db_load_relief.sql`.
+The paid box run hit the 8 s statement timeout while the shared instance stalled
+(a one-line cron job took 4–7 s at those moments). Bob's own statements caused
+the load; measured read-only as the test owner:
+
+| Statement | Before | After |
+|---|---|---|
+| `bob.bob_checkpoint_steps_page` / `bob_job_steps_page`, 1.8 MB journal, every claim | 460–645 ms (quadratic jsonb append) | ~50 ms (one `jsonb_agg` with a running byte sum) |
+| `bob_private.artifact_source_assessment_before_physical`, construction or plain drawing, fresh connection | 100–165 ms planning (1,015-line plan) + 16–40 ms | ~14 ms planning + ~7 ms |
+
+Every function keeps its name, arguments, settings, grants and result:
+
+- The journal pages return the same entries, order, 100-row and 2,000,000-byte
+  cut and `next` cursor as the loop they replace.
+- `before_physical` and `before_parameters` now dispatch. Revisions with a
+  generation, room layout, multifloor plan, stair study or space-measurement
+  lineage use the original statements, kept as `..._full`. Every other revision
+  uses a slim statement without those detail joins, whose terms are all false
+  there.
+- `before_construction_drawings` checks physical sources only when the
+  construction has a space-measurement source node.
+
+No runtime pin is needed; running and older jobs replay unchanged. Tests:
+`tests/bob-db-load-relief.test.ts` (old vs new page for every cursor, size cut,
+bootstrap and archived epoch; same signature, settings and grants) and
+`tests/support/source-assessment-equivalence.ts`, which compares slim and full for
+every revision at fixture states in the stored-status, exact-lookup,
+artifact-generation and CAD source-renewal tests. Apply with the owner's OK; it
+does not depend on an Edge deploy.
+
+Owner follow-ups, not in this migration:
+
+- `bob_save_turn_checkpoint` was the largest total (467 s in `pg_stat_statements`):
+  it returns the full state packet on every save. Smaller responses change the
+  worker contract.
+- `cron.job_run_details` holds about 141,000 rows (76 MB) shared with other apps.
+  Retention is an owner decision.
+
 ## Manual material planning foundation (4B2a)
 
 [`Docs/material-planning.md`](../Docs/material-planning.md) owns revisioned manual requirements, material stock/reuse allocations, deterministic allowance/shortfall/purchase rounding and explicit Shopping handoff. Source migrations and hosted registry entries are:

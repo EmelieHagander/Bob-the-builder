@@ -5,6 +5,7 @@ import { PGlite } from './support/pglite.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
 import { makePlan } from './support/multifloor-fixture.ts'
 import { makeStair } from './support/stair-fixture.ts'
+import { assertSourceAssessmentEquivalent } from './support/source-assessment-equivalence.ts'
 
 // Search v10 must return exactly what v9 returns; only the artifact detail
 // reads are keyed per record (2026-10-29).
@@ -154,4 +155,10 @@ test('denied and invalid calls fail exactly like v9', async () => {
     assert.equal(await failure('v10', args, uid, role), expected.replaceAll('search_bob_project_data_v9', 'search_bob_project_data_v10'), JSON.stringify([args, uid, role]))
   }
   assert.match(await failure('v10', lookup('artifacts'), two), /^42501:/)
+})
+
+test('load relief: the slim and full source assessments agree for every detail kind', async () => {
+  const relief = await assertSourceAssessmentEquivalent(pg, 'detail kinds')
+  assert.equal(relief.revisions, 28)
+  assert.equal(relief.slim, 25, 'boxes take the slim form; the room layout, plan and stair keep the full one')
 })
