@@ -562,8 +562,15 @@ det betalda lådprovet efter #371 [sparade ritningen men underkändes](foundatio
 [installerade](foundation-verification.md#controlled-completion-install-2026-10-29):
 styrd färdigkontroll i stället för full granskning, snabb exakt läsning (v10)
 och skrivningar som returnerar sitt läge (`bob-worker` v152, `ask-bob` v184).
-#369–#372 ska inte driftsättas igen. Gemensamma standardmaterial (delade,
-märkta ogranskade) kommer i en egen ändring.
+#369–#372 ska inte driftsättas igen.
+
+**Förberett, ej driftsatt — normaliserad materialmodell (ägarbeslut 2026-10-29):**
+standardmaterial, storlekar, alias, kombination (= Bobs materialdefinition),
+hushållslager, delade butiker och priser med historik och en samlad
+uppslagning med en rad per inköpsplats. Startlistan (21 material, 30
+storlekar, 45 kombinationer) ligger i en egen migrering för ägarens granskning.
+Att Bobs egna nya material blir delade och ogranskade är ett föreslaget
+uppföljningssteg. [Modell och åtkomst](material-catalog.md#normalized-material-model).
 
 Därefter återstår ett nytt separat godkänt prov av skapa → ändra bredd → ritning →
 återöppna exakt sparad version. Behåll samma Construction-identitet, kontrollera

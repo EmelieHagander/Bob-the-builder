@@ -52,7 +52,6 @@
   {"key":"f39x35","form":"fastener","label":"3,9 × 35","depth_mm":null,"width_mm":3.9,"length_mm":35,"aliases":[]},
   {"key":"n75x28","form":"fastener","label":"75 × 2,8","depth_mm":null,"width_mm":2.8,"length_mm":75,"aliases":["75x28"]},
   {"key":"n100x34","form":"fastener","label":"100 × 3,4","depth_mm":null,"width_mm":3.4,"length_mm":100,"aliases":["100x34"]},
-  {"key":"a40x40","form":"fastener","label":"4,0 × 40","depth_mm":null,"width_mm":4.0,"length_mm":40,"aliases":[]},
   {"key":"a40x50","form":"fastener","label":"4,0 × 50","depth_mm":null,"width_mm":4.0,"length_mm":50,"aliases":[]},
   {"key":"p25x38","form":"rectangular_profile","label":"25 × 38","depth_mm":25,"width_mm":38,"length_mm":null,"aliases":["takläkt"]}
  ],
@@ -93,7 +92,7 @@
   {"material":"drywall_screw","size":"f39x35","unit":"pcs"},
   {"material":"wire_nail_zinc","size":"n75x28","unit":"pcs"},
   {"material":"wire_nail_zinc","size":"n100x34","unit":"pcs"},
-  {"material":"anchor_nail","size":"a40x40","unit":"pcs"},
+  {"material":"anchor_nail","size":"f40x40","unit":"pcs"},
   {"material":"anchor_nail","size":"a40x50","unit":"pcs"},
   {"material":"roof_boarding","size":"p22x95","unit":"m"},
   {"material":"underlay_felt","size":null,"unit":"m2","form":"roll"},

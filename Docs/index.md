@@ -57,6 +57,7 @@
 | dynamic project Steps, completion requirements, responsibility, evidence and replanning | `Docs/living-project-plan.md` — implemented foundation plus remaining product direction; hierarchy refinement in `Docs/domain-dictionary.md` |
 | material-led assemblies, tools/model roles and linked drawing/cut/assembly/Shopping implementation plan | [Material assembly use case](material-assembly-use-case.md#assembly-chain-plan) — K2–K5 revised 2026-10-03: measured context, construction checks, exact-revision outputs and recovery; active next action in [State](bob-delivery-flow.md#state), not a complete implementation |
 | reusable material/part definitions, dynamic profiles and catalog tools | `Docs/material-catalog.md` — slice A deployed 2026-09-22; live versioned material/part definitions and tools, no assembly geometry yet |
+| standard materials, sizes, aliases, household stock, stores and price history, Bob's combined material lookup | [Normalized material model](material-catalog.md#normalized-material-model) — prepared 2026-10-29, not deployed; seed list awaits owner review |
 | generic CAD engine adapter / construction geometry seam | `Docs/cad-adapter.md` — hosted build123d/Open Cascade service, whole drawing intake, complements and versioned Artifact persistence; live design acceptance tracked separately |
 | persistent site/building/space context and chat-driven narrative capture | `Docs/building-model.md` |
 | function difficulty / scope buckets / first vertical slice | `Docs/function-scope.md` |
