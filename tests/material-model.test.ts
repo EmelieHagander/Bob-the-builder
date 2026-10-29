@@ -50,7 +50,7 @@ test('the seed holds the reviewed starting list once, through the catalog identi
   execFileSync(process.execPath, ['--import', 'tsx', 'scripts/build-standard-materials-seed.ts', SEED, '--check'])
   // Every combination is an ordinary catalog material definition Bob can pin.
   const items = (await pg.query<any>(`select r.name,r.profile_code,r.properties,r.source_kind,i.unit_code,i.weight_kg,i.identity_hash,r.has_unknown,
-    (select array_agg(category_code order by category_code) from bob.catalog_item_categories c where c.item_id=i.id) cats
+    (select array_agg(category_code order by category_code) from bob.catalog_item_categories c where c.item_id=i.id and c.item_revision=i.current_revision) cats
     from bob.catalog_items i join bob.catalog_item_revisions r on r.item_id=i.id and r.revision=i.current_revision where i.project_id is null`)).rows
   assert(items.every(i => i.source_kind === 'seed' && i.weight_kg === null && i.cats.length === 2))
   assert(items.every(i => (i.identity_hash === null) === i.has_unknown), 'unknown specifications never get an identity')
