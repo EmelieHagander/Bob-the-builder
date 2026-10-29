@@ -1,4 +1,5 @@
 import {type ProjectCalculator} from './project-calculator.ts'
+import { ConstructionToolContractError } from './construction-work.ts'
 import {callWithCalculator,type SpecialistContextSurfaceRegistrar} from './calculator-model-call.ts'
 import { BobBudgetError, budgetStopMessage, budgetResumeAction, readBudgetStop, withoutBudgetDetails } from './bob-budget-stop.ts'
 import {createDrawingDependencies} from './drawing-dependencies.ts'
@@ -192,7 +193,10 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
   return {status:'ready',candidate:structuredClone({...held,packet})}
  },
  async consult(raw:unknown){
-  if(terminalFailure)return withoutBudgetDetails(terminalFailure)
+  if(terminalFailure){
+   if(!await opts.hasAccess())throw new Error('project_denied')
+   return withoutBudgetDetails(terminalFailure)
+  }
   candidate=null;acceptedReview=null;requiredTools=[];savedRequest=null
   if(!object(raw)||Object.keys(raw).filter(k=>k!=='request_id'&&k!=='requirement_changes'&&k!=='construction_revision'&&k!=='views').sort().join(',')!=='area_id,artifact_id,brief,component_id,handoff,step_id'||!text(raw.brief,6000)
     ||[raw.area_id,raw.component_id,raw.step_id,raw.artifact_id].some(v=>v!==null&&!text(v,200)))return {status:'invalid',saved:false}
@@ -683,13 +687,19 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
     return {status:'stopped',saved:false,request_id:request?.id??null,reason:error.message,next_action:catalogText("feedback.cad-assistant.next-action.8837171e5549")}
    }
    if(error instanceof Error&&error.message.startsWith('drawing_request_reuse:'))return {status:'existing_request',saved:false,request_id:error.message.split(':')[1],next_action:catalogText("feedback.cad-assistant.next-action.9c82aa7ab11b")}
-   const reason=error instanceof Error&&['provider_retry_exhausted','turn_budget_exhausted','model_output_limit','model_reasoning_only','model_unavailable','deadline','too_many_tool_calls'].includes(error.message)?error.message:'design_failed'
+   const runtimeFault=error instanceof ConstructionToolContractError
+   const reason=runtimeFault?'design_runtime_error':error instanceof Error&&['provider_retry_exhausted','turn_budget_exhausted','model_output_limit','model_reasoning_only','model_unavailable','deadline','too_many_tool_calls'].includes(error.message)?error.message:'design_failed'
    // 2026-10-20: a live request failed here after one render with no
    // recorded cause. Log the internal error so the next one is diagnosable.
-   if(reason==='design_failed')console.error('[CAD design failed]',JSON.stringify({request_id:request?.id??null,renders:metrics.renders,
+   if(reason==='design_failed'||runtimeFault)console.error('[CAD design failed]',JSON.stringify({request_id:request?.id??null,renders:metrics.renders,
     error:(error instanceof Error?error.name+': '+error.message:String(error)).slice(0,300),at:error instanceof Error?error.stack?.split('\n').slice(1,4).map(line=>line.trim()):undefined}))
    if(request&&!retryInputs&&(!renewingConstruction||renewalAccepted))await persist('retrieval_failed')
    const failure={status:'unavailable',stage:error instanceof BobBudgetError?error.stage:'design',saved:false,reason,renders:metrics.renders,...(reason==='turn_budget_exhausted'?{budget_stop:readBudgetStop(error),next_action:budgetResumeAction(readBudgetStop(error),opts.aiCatalog)}:{})}
+   // A code/schema fault cannot be repaired by changing views or repeating the
+   // same CAD call. The existing checkpoint and server reply end this turn;
+   // ordinary unavailable reads retain their separate recovery path.
+   if(runtimeFault)return terminalFailure={...failure,request_id:request?.id??null,retryable:false,
+    user_message:'Ett internt fel stoppade ritningsarbetet. Ingen ny ritning sparades. Det sparade konstruktionsunderlaget finns kvar, men felet behöver rättas innan ritningen kan tas fram.'}
    if(['model_output_limit','model_reasoning_only','model_unavailable','provider_retry_exhausted','turn_budget_exhausted'].includes(reason)){
     const message=reason==='turn_budget_exhausted'
      ?budgetStopMessage(readBudgetStop(error))

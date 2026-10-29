@@ -1,5 +1,100 @@
 # Foundation verification and rollout
 
+<a id="cad-runtime-recovery-2026-10-29"></a>
+## CAD schema correction installed; runtime-fault recovery prepared — 2026-10-29
+
+**The merged #369 correction is installed. The additional recovery change below
+is source-only. No new paid acceptance run has been started.**
+
+### Installation of the existing correction
+
+[PR #369](https://github.com/EmelieHagander/Bob-the-builder/pull/369) merged as
+`14dbdb7409b071873271833b40f37f11e307ce2a`. Comparing both installed closures
+with that commit found only the intended executable change in
+`construction-draft.ts`; the empty type-only `cad-intake.ts` is established
+bundler behavior. The internal CAD check now explicitly disables the interactive
+`coherentWork` interface alongside `constructionViews` and `formEvidence`.
+Its source, geometry, authority and final-revision checks remain in force.
+
+The focused `checked-construction-drawing` and `construction-work` suites were
+rerun: **37/37 passed**. Strict TypeScript for `construction-draft.ts` passed.
+Both Edge entrypoints passed Deno checking with the exact Supabase 2.49.8 npm
+declarations mapped locally because esm.sh was unreachable; the uploaded import
+maps remain unchanged. No full suite or GitHub workflow was run.
+
+The authorized continuation installed worker first, then HTTP entrypoint in
+`yuobtgoidmmmwfqenkau`. No queued, running or paused Bob job existed immediately
+before installation or at the post-install check.
+
+| Function | Version | JWT verification | Bundle SHA-256 |
+|---|---|---|---|
+| `bob-worker` | 149 | existing custom authentication, `false` | `7de282f5ccf5feb994d77f99814de23847721ac6fcc030c9aab27e0ee9be5b99` |
+| `ask-bob` | 181 | `true` | `89199583f934d577796bd37e6e7772fcf95e21b38a1cc5db5954b0d8e8781165` |
+
+Readback matched all **122/124** returned files, including the correction and
+both import maps, except the expected type erasure above. The bundler omitted
+only the type-only provenance module and the worker's type-only HTTP boundary.
+Unauthenticated POSTs returned **401** for both functions. No migration,
+catalog/model/prompt update or owner-project write was performed. Existing
+security/performance advisories were read before installation; this runtime-only
+release does not resolve those unrelated findings. No successful live drawing
+is claimed by source readback or synthetic tests.
+
+### Prepared same-turn recovery correction
+
+The work-view schema composer assumed a paged `view.enum` contract. A legacy
+read schema therefore threw a generic `TypeError`, which the CAD catch classified
+as `design_failed` / `unavailable`. Unlike provider exhaustion, this did
+not populate the existing terminal-failure checkpoint. Bob could therefore
+repeat the same broken check, change views or spend another model call explaining
+the failure. The new regression fails on the unchanged code.
+
+The prepared change validates that server-owned schema composition and raises
+a typed `ConstructionToolContractError`. CAD marks this fault `design_runtime_error`,
+`retryable:false`, and uses the existing terminal checkpoint and server answer.
+It prevents further CAD/model dispatch in the same turn, retains saved receipts,
+and rechecks access before returning a checkpointed failure. Internal exception
+details remain in diagnostic logging. Ordinary unavailable reads (including network `TypeError`), domain
+validation, authority errors and continuation exceptions keep their existing
+paths. A later owner turn can proceed after a repair; this introduces neither
+a permanent request quarantine nor a new work quota.
+
+**67/67 focused cases pass** across `cad-assistant`, `bob-drawing-delivery`,
+`checked-construction-drawing` and `construction-work`. The three new schema-fault
+regressions also fail against unchanged main before passing with this correction. They cover checkpoint restoration, changed-view
+retries, revoked access, transient recovery, successful new work, and committing
+the failure without a second main-model call both with and without earlier
+write receipts. Both Edge entrypoints pass Deno checking. Standalone Node `tsc`
+on `cad-assistant.ts` cannot resolve the Deno global/HTTPS SDK imports; it is not
+reported as a passing check. The affected runtime is checked in Deno instead.
+
+### Remaining creation and evidence findings
+
+Readback of active `tools.search_material_catalog` v2 confirms that
+`profile_code` is present, required and nullable, with explicit null guidance.
+Its parser and field-specific error response agree. The incident's missing
+field is not evidence of a missing published parameter. The provider adapter
+offers tool schemas with `strict:false` unless explicitly opted in; blindly
+switching every tool is unsafe because some contain dynamic property maps.
+This is a code-path observation, not a measured explanation of every omission.
+
+The new-construction work view already supports `artifact_id:null` and reads
+governing sources. Do not build a duplicate preparation reader. Next inspect
+whether its actual output and tool availability supply the selected design
+intent, alignment, exact editable paths and material bindings before the first
+save. The `/purpose` rejection does not authorize a new arbitrary edit path.
+
+`project-lookup.ts` retains an accumulated `incomplete` flag after a failed read;
+`project-answer.ts` and `project-turn.ts` propagate it to evidence, and metrics
+use it for `partial`. A later successful construction check does not clear that
+flag. This explains how successful artifact acceptance can coexist with partial
+turn evidence, but does not prove that every earlier source gap was recovered.
+Any future recovery accounting must identify the exact resolved read/scope;
+clearing all evidence warnings on a successful save would be incorrect.
+
+Documentation was reviewed directly using Archie's ownership and State rules.
+[State](bob-delivery-flow.md#state) owns remaining source release and acceptance.
+
 <a id="construction-work-paid-2026-10-29"></a>
 ## Coherent Construction operations — one paid box test, 2026-10-29
 
@@ -58,7 +153,8 @@ delivered, so this does not establish cost per accepted delivery.
   contract. The source correction explicitly disables `coherentWork` for this
   internal fresh whole-construction check, preserving its existing access,
   source, geometry and final revision gates. It changes no catalog or prompt.
-  **Source correction only; merge, deployment and live delivery remain open.**
+  **Merged and installed subsequently; [installation evidence](#cad-runtime-recovery-2026-10-29).
+  Live delivery remains open.**
 - **Failure recovery still wastes calls:** four `design_project_cad` calls
   produced three `unavailable` results and one `existing_request`; three history
   reads and a changed side view did not repair the same runtime exception.

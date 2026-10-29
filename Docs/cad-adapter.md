@@ -6,6 +6,22 @@ Every project CAD drawing requires one saved, checked construction revision with
 
 Bob never sends Python, SQL, URLs or arbitrary CAD code to the geometry engine. Bob produces a bounded, versioned construction request. The adapter validates it and a separate stateless worker translates it to build123d/Open Cascade.
 
+<a id="runtime-fault-recovery"></a>
+## Internal runtime faults — prepared, 2026-10-29
+
+An incompatible server-owned Construction work-view schema raises the typed
+`ConstructionToolContractError`. At the CAD attempt boundary this becomes
+`design_runtime_error`, not a missing measurement or a geometry correction.
+The prepared handler uses the existing terminal-failure checkpoint and server
+reply to finish that turn without further paid CAD/explanation calls. Repeated
+views and restored checkpoints cannot restart it, and access is checked before
+returning the retained failure. Earlier write receipts remain available.
+Ordinary unavailable reads, including network `TypeError`, and domain-validation corrections retain their
+existing recovery behavior. A later owner turn may retry after repair; there is
+no persistent quarantine or new work quota. Internal error details stay out of
+the user reply. [Verification and deployment status](foundation-verification.md#cad-runtime-recovery-2026-10-29)
+separate this prepared change from the already installed schema correction.
+
 <a id="form-preview-and-export"></a>
 ## FORM preview and final export — specified decision 2026-10-27
 

@@ -12,6 +12,7 @@ import { runClaimedProjectTurn } from './support/main-catalog-fixture.ts'
 import type { CadAssemblyRequest } from '../supabase/functions/_shared/cad-adapter.ts'
 import {createProjectImageTools} from '../supabase/functions/_shared/project-image-tools.ts'
 import type {WorkingContext} from '../supabase/functions/_shared/bob-working-context.ts'
+import {withConstructionWorkRead} from '../supabase/functions/_shared/construction-work.ts'
 
 /** Bob chooses his own tools. The server offers the whole toolbox, never forces a
  * tool, never replaces Bob's reply, and points out only facts it knows. */
@@ -294,4 +295,19 @@ for(const priorWrite of [false,true])for(const error of ['model_output_limit','t
  if(error==='turn_budget_exhausted'){assert.doesNotMatch(result.answer,/budget|kostnad|\$/i);assert.equal(result.evidence.partial,true)}
  assert.deepEqual(committed,result);assert.equal(failures,0);assert.equal(result.providerResponseId,undefined)
  assert.equal(result.evidence.writes?.length??0,priorWrite?1:0)
+})
+
+for(const priorWrite of [false,true])test(`an internal CAD fault finishes without another model call and preserves receipts (prior write: ${priorWrite})`,async()=>{
+ const f=fixture();let committed:any,calls=0,checks=0
+ if(priorWrite)await f.writer.commit({kind:'target',record_id:'A',expected_updated_at:null,expected_revision:0,request_quote:'Rita',data:{solution_id:id,solution_revision:1}})
+ const result=await runClaimedProjectTurn({projectId:'A',userId:'u',message,generation:1,resume:true,
+  lookup:f.makeLookup(),writer:f.writer,hasAccess:async()=>true,fail:async()=>{assert.fail('known CAD failure should be delivered')},commit:async value=>{committed=value},
+  cadAssistant:createCadAssistant({...f.cadOptions,unlimitedWork:true,
+   checkConstruction:async()=>{checks++;return withConstructionWorkRead({function:{parameters:{properties:{},required:[]}}} as any)},
+   callModel:async()=>{assert.fail('no CAD reviewer after a failed check')}}),
+  callModel:async()=>{calls++;assert.equal(calls,1,'no paid retry or explanation');return response(null,call('design_project_cad',cadRequest))}})
+ assert(result.ok);assert.match(result.answer,/internt fel/);assert.doesNotMatch(result.answer,/TypeError|undefined|enum/)
+ assert.equal(result.evidence.partial,true);assert.equal(result.providerResponseId,undefined)
+ assert.equal(result.evidence.writes?.length??0,priorWrite?1:0)
+ assert.deepEqual(committed,result);assert.equal(checks,1);assert.equal(f.renders,0)
 })
