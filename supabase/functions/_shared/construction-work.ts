@@ -16,10 +16,11 @@ export const CONSTRUCTION_SOLUTION_EDIT_SCHEMA=nullable({type:'object',additiona
  changes:PROJECT_EDIT_TOOLS[1].function.parameters.properties.changes,
  reason:{type:'string',minLength:1,maxLength:1000},
 }})
-export function withConstructionWorkRead(base:Tool):Tool{
+export const CONSTRUCTION_CREATION_GUIDE=' For a new Construction, use artifact_id:null, revision:null, ids:[] and view=work before authoring geometry; preparation reports the same design-readiness issues checked at save.'
+export function withConstructionWorkRead(base:Tool,creationPreparation=false):Tool{
  const p=base.function.parameters
  if(!Array.isArray(p?.properties?.view?.enum)||!Array.isArray(p?.required))throw new ConstructionToolContractError()
- return {...base,function:{...base.function,description:base.function.description+
+ return {...base,function:{...base.function,description:base.function.description+(creationPreparation?CONSTRUCTION_CREATION_GUIDE:'')+
   ' view=work collects governing Solution/Step sources, editable inputs and the complete affected part/dependency subgraph in one packet. work_kind selects parameters, parts or inspect; step_id names a governing approved Step or null. Other views use work_kind:null and step_id:null. Follow coverage/next_read when a large packet needs more pages. solution_edit entries carry the ordinary server-bound content editor; they are not approval.',
   parameters:{...p,properties:{...p.properties,view:{type:'string',enum:[...p.properties.view.enum,'work']},
    step_id:{type:['string','null'],maxLength:200},work_kind:{type:['string','null'],enum:['parameters','parts','inspect',null]}},required:[...p.required,'step_id','work_kind']}}}
@@ -47,6 +48,7 @@ export function createConstructionWorkPackets(projectId:string){
   const {packet,solutionEdit}=sources
   if(packet.status!=='ok')return packet
   if(solutionEdit.status==='denied')return {status:'denied'}
+  if(packet.creation_state&&packet.solution?.status==='ok'&&solutionEdit.status!=='ok')return {status:'unavailable',reason:'work_edit_context_unavailable'}
   const expected=packet.solution
   if(solutionEdit.status==='ok'&&(solutionEdit.target?.solution_id!==expected.solution_id
    ||solutionEdit.target?.solution_revision!==expected.solution_revision||solutionEdit.target?.revision!==expected.target_revision))
@@ -62,7 +64,7 @@ export function createConstructionWorkPackets(projectId:string){
   }
   const page=await constructionWorkPage({...query,revision:draft.revision},{status:'ok',projectId,artifact_id:draft.artifact_id,revision:draft.revision,
    current_revision:draft.current_revision,source_state:draft.source_state,archived:draft.archived,target_revision:draft.target_revision,
-   work_operation:query.work_kind,work_context_key:key,selection:query.ids,missing_ids:selection.missing_ids,
+   work_operation:query.work_kind,...(draft.artifact_id===null&&packet.creation_state?{creation_state:packet.creation_state,scoped_refinement_available:packet.scoped_refinement_available===true}:{}),work_context_key:key,selection:query.ids,missing_ids:selection.missing_ids,
    source_coverage:packet.coverage,source_conflicts:packet.conflicts,
    limits:'Exact project sources and a closed dependency selection. Missing/unreadable governing sources remain gaps. No interpretation, rendering or manufacturing approval.'},items,{work_context_key:key})
   // Worker-local telemetry cannot influence exact page boundaries on replay.

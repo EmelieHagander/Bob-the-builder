@@ -1,10 +1,74 @@
 # Foundation verification and rollout
 
-<a id="cad-runtime-recovery-2026-10-29"></a>
-## CAD schema correction installed; runtime-fault recovery prepared — 2026-10-29
+<a id="creation-preparation-2026-10-29"></a>
+## Construction preparation and scoped read recovery — prepared, 2026-10-29
 
-**The merged #369 correction is installed. The additional recovery change below
-is source-only. No new paid acceptance run has been started.**
+**Source/local verification only; not deployed or catalog-activated.** This
+continues the paid box findings; it does not claim a successful new paid run.
+
+The work reader already supports a new Construction (`artifact_id:null`). The
+missing step was showing the canonical construction-purpose readiness **before**
+authoring geometry. New manifests add that read to the existing packet, including
+exact Solution/selection pins and the gate's unresolved issues. A changed pin,
+failed read or revoked access cannot become a ready packet. The editable snapshot
+carries exact design paths; the published manual's misleading `/purpose` and
+`/choices/-` abbreviations are corrected to full `/design_intent/...` paths.
+
+The existing catalog followup mechanism offers relevant tools after that packet:
+Solution creation/selection when absent, the content editor for readiness issues,
+and construction/material tools when ready. Whole-solution readiness remains
+separate from explicit scoped FORM refinement: unrelated open choices do not
+remove that existing checkpoint capability or become automatically approved.
+The save gate still rechecks the chosen scope and current evidence. No additional
+permanent core tools, agent prompts, model profiles or reader colleagues change.
+
+The four invalid material searches previously omitted `profile_code`. Schema
+and parser already agreed; this was not a missing published field. The prepared
+read contract makes unused profile filters optional, canonically null. A supplied
+profile revision without a code and every typed-property search without both
+exact profile fields still fail before database access. Unknown fields, writes,
+identity/revision pins and material binding requirements remain validated. No
+profile, category or material identity is guessed. This avoids an extra model
+round solely to spell an unused null, without globally enabling provider strict
+mode on dynamic property maps.
+
+Project lookup now retains unresolved errors by exact dataset, filters, record
+and page. Only a successful complete reread of that same scope removes its gap.
+Another successful save/read cannot clear it. Checkpoints preserve these scopes;
+legacy unknown gaps, malformed calls and truncation remain conservative. This
+is not a general reset of every reader's `partial` flag. Historical raw job
+checkpoints for the box turn were no longer available in the read-only lookup;
+no new claim about its exact failed query is inferred.
+
+**70/70 focused cases pass** across `construction-preparation`,
+`project-lookup-recovery`, `material-catalog-shape`, `project-edits`,
+`construction-work`, `bob-lookup-continuation`, `bob-checkpoint-resume`,
+`task-sources` and `construction-draft`. These include the migrated database
+publication, immutable old definitions, idempotent activation, real construction
+writes, scoped readiness, access revocation and exact-query recovery after resume.
+Both Edge entrypoints pass Deno checking with the exact local Supabase 2.49.8
+mapping described in the preceding release record; repository import maps are
+unchanged. Both new and previous construction catalog generators pass `--check`.
+`git diff --check` passes. No full CI, production writes or model/CAD test ran.
+Documentation was reviewed directly against Archie's owner/State rules.
+
+Release order: merge reviewed
+source, install both Edge entrypoints, then apply
+`20261029093710_bob_creation_preparation_catalog.sql`. It versions four existing
+catalog definitions; no domain schema change is introduced. Older manifests keep
+their old tool definitions and do not acquire an extra readiness RPC on replay.
+Do not roll back the compatible runtime underneath jobs pinned to the new catalog.
+
+Remaining acceptance is one separately authorized create → width change → final
+drawing → exact-version reopen run. Measure the whole outcome, invalid retries,
+manual loads, model/tool calls, elapsed time and cost against the failed box
+baseline. Local availability and gate tests do not establish model choice or
+production savings. [State](bob-delivery-flow.md#state) owns the next action.
+
+<a id="cad-runtime-recovery-2026-10-29"></a>
+## CAD schema correction and runtime-fault recovery installed — 2026-10-29
+
+**Both #369 and #370 are installed. No new paid acceptance run has been started.**
 
 ### Installation of the existing correction
 
@@ -40,7 +104,7 @@ security/performance advisories were read before installation; this runtime-only
 release does not resolve those unrelated findings. No successful live drawing
 is claimed by source readback or synthetic tests.
 
-### Prepared same-turn recovery correction
+### Installed same-turn recovery correction
 
 The work-view schema composer assumed a paged `view.enum` contract. A legacy
 read schema therefore threw a generic `TypeError`, which the CAD catch classified
@@ -49,7 +113,7 @@ not populate the existing terminal-failure checkpoint. Bob could therefore
 repeat the same broken check, change views or spend another model call explaining
 the failure. The new regression fails on the unchanged code.
 
-The prepared change validates that server-owned schema composition and raises
+The installed change validates that server-owned schema composition and raises
 a typed `ConstructionToolContractError`. CAD marks this fault `design_runtime_error`,
 `retryable:false`, and uses the existing terminal checkpoint and server answer.
 It prevents further CAD/model dispatch in the same turn, retains saved receipts,
@@ -68,7 +132,28 @@ write receipts. Both Edge entrypoints pass Deno checking. Standalone Node `tsc`
 on `cad-assistant.ts` cannot resolve the Deno global/HTTPS SDK imports; it is not
 reported as a passing check. The affected runtime is checked in Deno instead.
 
-### Remaining creation and evidence findings
+### Installation of #370
+
+[PR #370](https://github.com/EmelieHagander/Bob-the-builder/pull/370) merged as
+`48f32fb336ce2fd0cd6f122db02c6b53f997b9f8`, tree
+`8f5c10f21045869a8e4c25ebd14c71295531f76a`, identical to the tested tree.
+The owner explicitly requested deployment. The only executable differences
+from #369 were `construction-work.ts` and `cad-assistant.ts`.
+
+| Function | Version | JWT verification | Bundle SHA-256 |
+|---|---|---|---|
+| `bob-worker` | 150 | existing custom authentication, `false` | `47679025203ebf67b58df607647965777b818f11924f111f60487ee9a5722563` |
+| `ask-bob` | 182 | `true` | `1e0950392428a5e36484d2116d59a1ca570be2ca7cfc510ad0f9c79ddff0e2e7` |
+
+Readback matched all 122/124 returned files except the same expected type
+erasure described above. Both unauthenticated POSTs returned 401. There were
+no queued, running or paused Bob jobs before or after deployment. No migrations,
+catalog/model/prompt changes, full CI or paid acceptance were run. The already
+passing focused tests were not rerun for this identical-tree deployment.
+
+### Initial creation and evidence findings before the prepared correction
+
+The observations below describe the #370 baseline. The [prepared correction](#creation-preparation-2026-10-29) above records the resulting changes and remaining acceptance.
 
 Readback of active `tools.search_material_catalog` v2 confirms that
 `profile_code` is present, required and nullable, with explicit null guidance.
@@ -79,10 +164,9 @@ switching every tool is unsafe because some contain dynamic property maps.
 This is a code-path observation, not a measured explanation of every omission.
 
 The new-construction work view already supports `artifact_id:null` and reads
-governing sources. Do not build a duplicate preparation reader. Next inspect
-whether its actual output and tool availability supply the selected design
-intent, alignment, exact editable paths and material bindings before the first
-save. The `/purpose` rejection does not authorize a new arbitrary edit path.
+governing sources. The follow-up therefore reused that reader to expose readiness
+and exact edit paths before the first save, rather than adding a duplicate.
+Material identities and bindings continue to come from exact catalog reads. The `/purpose` rejection does not authorize a new arbitrary edit path.
 
 `project-lookup.ts` retains an accumulated `incomplete` flag after a failed read;
 `project-answer.ts` and `project-turn.ts` propagate it to evidence, and metrics

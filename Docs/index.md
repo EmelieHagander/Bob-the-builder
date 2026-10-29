@@ -11,8 +11,9 @@
   [Technical installation](foundation-verification.md#construction-work-2026-10-28)
   and [one paid test](foundation-verification.md#construction-work-paid-2026-10-29)
   are separate: width change passes, final drawing fails. The
-  [CAD schema correction is installed; runtime-fault recovery is prepared](foundation-verification.md#cad-runtime-recovery-2026-10-29).
-  [State](bob-delivery-flow.md#state) owns the next release, creation investigation
+  [CAD schema correction and runtime-fault recovery are installed](foundation-verification.md#cad-runtime-recovery-2026-10-29).
+  [Creation preparation and scoped read recovery are prepared](foundation-verification.md#creation-preparation-2026-10-29).
+  [State](bob-delivery-flow.md#state) owns the next release
   and remaining acceptance. The retrieval helper remains deferred.
 
 - [Bob cost corrections, 2026-10-28](foundation-verification.md#bob-cost-controls-2026-10-28)

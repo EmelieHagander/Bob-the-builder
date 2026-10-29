@@ -20,13 +20,16 @@ function tool(name: string, description: string, properties: Record<string, unkn
   } } }
 }
 export const CATALOG_SEARCH_TOOL = tool('search_material_catalog',
-  'Browse categories/profiles, or search current reusable material/part definitions. Supply every required field, using null for unused nullable filters. For entity=categories or profiles use categories=[], profile_code=null, profile_revision=null, properties={}. query=null browses all; never use an empty string. Copy returned codes/revisions, then read the exact profile before saving; do not guess vocabulary. Not inventory or a Shopping list. Follow next_cursor. A failed request is not absence.', {
+  'Browse categories/profiles, or search current reusable material/part definitions. Supply every required field. Unused profile_code and profile_revision may be omitted or null; code supplies null. Typed property filters require both exact profile fields. For entity=categories or profiles use categories=[], profile_code=null, profile_revision=null, properties={}. query=null browses all; never use an empty string. Copy returned codes/revisions, then read the exact profile before saving; do not guess vocabulary. Not inventory or a Shopping list. Follow next_cursor. A failed request is not absence.', {
     entity: { type: 'string', enum: ['categories', 'profiles', 'materials', 'parts'] }, query: nullableText,
     categories: { type: 'array', maxItems: 12, uniqueItems: true, items: { type: 'string' }, description: 'Exact category codes, e.g. wood and sheet. Parent categories include descendants. Empty for vocabulary browsing.' },
-    profile_code: nullableText, profile_revision: { type: ['integer', 'null'] },
+    profile_code: { ...nullableText, description: 'Exact profile code, or null/omitted for an untyped search.' }, profile_revision: { type: ['integer', 'null'] },
     properties: { ...propertiesSchema, description: propertiesSchema.description + ' Search filters must be known, non-parameter values. A profile and exact revision are required for typed property filters.' },
     after: { ...nullableText, description: 'Copy next_cursor or null.' },
   })
+// Unused read filters have an unambiguous null meaning. Writes and typed
+// property searches still require their exact profile identity/revision.
+CATALOG_SEARCH_TOOL.function.parameters.required = CATALOG_SEARCH_TOOL.function.parameters.required.filter(k => !['profile_code', 'profile_revision'].includes(k))
 export const CATALOG_READ_TOOL = tool('read_material_catalog',
   'Read one exact definition or profile, including full dynamic fields, units and parameter names. Null revision reads the current/latest published version. Definition data does not generate geometry or establish stock.', {
     entity: { type: 'string', enum: ['definition', 'profile'] }, id: { type: 'string' }, revision: { type: ['integer', 'null'] },
@@ -105,17 +108,17 @@ export function parseCatalogRead(name: string, value: unknown): Record<string, u
   if (!isObject(value)) return null
   const base = { action: '', kind: null as string | null, query: null as string | null, after: null as string | null,
     id: null as string | null, revision: null as number | null, profile_code: null as string | null, categories: [] as string[], properties: {} as CatalogProperties }
-  const v = value
+  const v = name === CATALOG_SEARCH_TOOL.function.name ? { profile_code: null, profile_revision: null, ...value } : value
   if (name === CATALOG_READ_TOOL.function.name) {
     if (!exactKeys(v, CATALOG_READ_TOOL.function.parameters.required) || !text(v.id, 200) || (v.revision !== null && !revision(v.revision))) return null
     if (v.entity === 'definition' ? !uuid.test(v.id) : v.entity !== 'profile' || !code.test(v.id)) return null
     return { ...base, action: v.entity === 'profile' ? 'profile' : 'read', id: v.id, revision: v.revision }
   }
-  if (name !== CATALOG_SEARCH_TOOL.function.name || !exactKeys(v, CATALOG_SEARCH_TOOL.function.parameters.required)
+  if (name !== CATALOG_SEARCH_TOOL.function.name || !exactKeys(v, Object.keys(CATALOG_SEARCH_TOOL.function.parameters.properties))
     || !['categories','profiles','materials','parts'].includes(String(v.entity))
     || (v.query !== null && !text(v.query,200)) || (v.after !== null && !text(v.after,200))
     || (v.profile_code !== null && (typeof v.profile_code !== 'string' || !code.test(v.profile_code)))
-    || (v.profile_revision !== null && !revision(v.profile_revision))
+    || (v.profile_revision !== null && (!revision(v.profile_revision) || v.profile_code === null))
     || !Array.isArray(v.categories) || v.categories.length > 12 || new Set(v.categories).size !== v.categories.length
     || v.categories.some(x => typeof x !== 'string' || !category.test(x))
     || !propertiesValid(v.properties, false, true)) return null
@@ -135,7 +138,7 @@ function catalogReadIssue(name: string, value: unknown): Record<string, unknown>
   if (isObject(value) && name === CATALOG_SEARCH_TOOL.function.name) {
     if (value.query !== null && !text(value.query, 200)) return invalid(['query'], 'Use query=null to browse all entries, or a non-empty search string of at most 200 characters. Empty or whitespace-only query is invalid.')
     if (value.entity === 'categories' || value.entity === 'profiles') return invalid(['categories','profile_code','profile_revision','properties'], 'Vocabulary browsing requires categories=[], profile_code=null, profile_revision=null, properties={}. Use query=null to browse all categories/profiles, then copy exact codes and revisions from the result.')
-    if (isObject(value.properties) && Object.keys(value.properties).length && (value.profile_code === null || value.profile_revision === null)) return invalid(['profile_code','profile_revision'], 'Typed property filters require both profile_code and profile_revision from an exact published profile. Browse profiles and read that profile first, or use properties={} for an untyped search.')
+    if (isObject(value.properties) && Object.keys(value.properties).length && (value.profile_code == null || value.profile_revision == null)) return invalid(['profile_code','profile_revision'], 'Typed property filters require both profile_code and profile_revision from an exact published profile. Browse profiles and read that profile first, or use properties={} for an untyped search.')
     if (value.after !== null && (typeof value.after !== 'string' || !uuid.test(value.after))) return invalid(['after'], 'For materials/parts, after must be the exact next_cursor UUID from the previous result, or null for the first page.')
   }
   return invalid([], 'Use the loaded schema and exact profile, category or item references. Property filters must have known non-parameter values; read the exact profile for valid fields and units.')

@@ -116,7 +116,20 @@ Unknown is an explicit null with `truth=unknown` and a note, never zero or a sea
 
 ## Search → read → ensure/revise
 
-Catalog tools keep their strict schemas. Vocabulary browsing (`categories` / `profiles`) requires every field, with `categories=[]`, `profile_code=null`, `profile_revision=null`, `properties={}` and `query=null` for an unfiltered page. Rejected shapes return field paths; rejected filter combinations explain the correction without filling in missing inputs or increasing the existing read budget. For definitions, copy published profile codes/revisions and category axes from reads; the exact profile exposes its form category as `record.form`. Known SQL category/profile/property rejections return fixed public repair guidance, never raw database details. These critical rules live in the code descriptions offered in both inline and optional manual modes; the hosted catalog policy and schemas are unchanged.
+Catalog tools validate their declared argument shapes before database access.
+The prepared 2026-10-29 read contract allows omitted unused `profile_code` and
+`profile_revision`, which code supplies as null. Vocabulary browsing still uses
+`categories=[]`, `properties={}` and `query=null` for an unfiltered page. A profile
+revision requires its code; typed property filters require both exact fields.
+Writes never infer a profile or material identity. Unknown fields remain errors.
+[Publication and verification](foundation-verification.md#creation-preparation-2026-10-29)
+distinguish this prepared contract from the currently active all-fields contract.
+
+Rejected shapes return field paths; rejected filter combinations explain the
+correction. For definitions, copy published profile codes/revisions and category
+axes from reads; the exact profile exposes its form category as `record.form`.
+Known SQL category/profile/property rejections return fixed public repair
+guidance, never raw database details.
 
 Three tools are registered through the existing tool session, not hardwired into the model loop:
 
