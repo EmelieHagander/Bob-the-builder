@@ -110,7 +110,7 @@ for(const migration of migrations){
     if(JSON.stringify(row.definition.core_tools)!==JSON.stringify(spec.core_tools_before))throw Error('phase_tools_core_tools_changed')
     row.definition={...row.definition,core_tools:spec.core_tools,phase_tools:spec.phase_tools}
    }
-   row.metadata={...rest,publication:'phase-tools-v1',phase_tools_version:1}
+   row.metadata=spec.card!==undefined?{...rest,card_publication:'phase-tools-v1',phase_tools_version:1}:{...rest,publication:'phase-tools-v1',phase_tools_version:1}
    versions.set(spec.key,versions.get(spec.key)!+1)
   }
  }

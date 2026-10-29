@@ -44,7 +44,10 @@ begin
   select coalesce(max(version),0)+1 into next_version from shared.ai_prompt_versions where prompt_id=prior.prompt_id;
   insert into shared.ai_prompt_versions(prompt_id,version,definition_kind,definition_format_version,metadata,content,definition,flow,available_variables)
    values(prior.prompt_id,next_version,prior.definition_kind,prior.definition_format_version,
-    (prior.metadata-'seed_version'-'source_revision')||jsonb_build_object('publication','phase-tools-v1','phase_tools_version',1),
+    -- A card-only edit keeps the prior publication name: earlier publications use it
+    -- to recognise themselves, so a replay must not mistake this version for theirs.
+    (prior.metadata-'seed_version'-'source_revision')||case when item ? 'card' then jsonb_build_object('card_publication','phase-tools-v1','phase_tools_version',1)
+     else jsonb_build_object('publication','phase-tools-v1','phase_tools_version',1) end,
     prior.content,definition,prior.flow,prior.available_variables) returning id into version_uuid;
   activation:=activation||jsonb_build_object(item->>'key',version_uuid);
  end loop;

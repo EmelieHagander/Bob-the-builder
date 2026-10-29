@@ -8,7 +8,7 @@ import { createProjectEdits } from '../supabase/functions/_shared/project-edits.
 import { createSolutionActions, CREATE_SELECT_PARAMETERS, SOLUTION_ACTION_TOOLS } from '../supabase/functions/_shared/project-solution-actions.ts'
 import { parseDesignReadiness } from '../supabase/functions/_shared/project-design-intent.ts'
 import type { ToolFollowup } from '../supabase/functions/_shared/project-tools/session.ts'
-import { catalogFixture, preCreateSelectCatalogFixture } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, preCreateSelectCatalogFixture, prePhaseToolsCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { CREATE_SELECT_MANUAL } from '../scripts/build-bob-create-select-catalog.ts'
 
 // Paid box run 2026-10-29: an explicit box request took create → read → select
@@ -67,7 +67,8 @@ test('one call creates, aligns and selects an explicitly requested Solution on n
       if (!['tools.create_solution_alternative', 'bob.tools'].includes(prior.prompt_key)) { assert.deepEqual(row, prior, prior.prompt_key); continue }
       assert.equal(row.version, prior.version + 1, prior.prompt_key); assert.equal(row.content, prior.content)
       assert.equal(row.metadata.create_select_version, 1); assert.equal(row.metadata.write_state_version, 1)
-      assert.deepEqual(row.definition, latest.definition(row.prompt_key, row.definition_kind).definition, prior.prompt_key)
+      // Compared at the boundary before the 2026-10-29 phase-tools publication, which later revised the bench and cards.
+      assert.deepEqual(row.definition, prePhaseToolsCatalogFixture().definition(row.prompt_key, row.definition_kind).definition, prior.prompt_key)
     }
     const create = current.definitions.find((r: any) => r.prompt_key === 'tools.create_solution_alternative').definition
     assert.deepEqual(create.parameters, CREATE_SELECT_PARAMETERS); assert.deepEqual(create.required_parameters, CREATE_SELECT_PARAMETERS.required)

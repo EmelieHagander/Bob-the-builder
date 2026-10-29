@@ -137,7 +137,8 @@ test('the publication versions only bob.tools and the cards, is idempotent and m
       // The fixture carries the same card and bench (an older seeded text drift elsewhere is not this publication's).
       if (key === 'bob.tools') assert.deepEqual(f.definition, row.definition); else assert.equal(f.definition.card_description, row.definition.card_description, key)
       const { seed_version: _s, source_revision: _r, ...kept } = was.metadata
-      assert.deepEqual(row.metadata, { ...kept, publication: 'phase-tools-v1', phase_tools_version: 1 }, key)
+      assert.deepEqual(row.metadata, key === 'bob.tools' ? { ...kept, publication: 'phase-tools-v1', phase_tools_version: 1 }
+        : { ...kept, card_publication: 'phase-tools-v1', phase_tools_version: 1 }, key)
       assert.equal(f.metadata.phase_tools_version, 1, key)
       if (key !== 'bob.tools') assert.deepEqual({ ...was.definition, card_description: data.cards[key.slice(6)].card }, row.definition, key)
     }
