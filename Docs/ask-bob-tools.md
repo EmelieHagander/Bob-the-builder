@@ -78,7 +78,7 @@ approval or a substitute for save validation. No new core tool is added.
 own the current source-only status.
 
 <a id="write-state"></a>
-**Writes return their state — prepared, 2026-10-29 (owner decision).** New
+**Writes return their state — installed, 2026-10-29 (owner decision).** New
 manifests pin `bob.tools` `write_state_version: 1`. Construction saves, part
 edits and parameter changes return the check of their receipt revision
 (`check`, `checked_concept_ready`) through the ordinary check path, so Bob does

@@ -720,7 +720,7 @@ let such jobs finish before rolling either runtime back.
 
 ### Exact lookup and controlled completion — source 2026-10-29
 
-**Prepared, not deployed.** New jobs pin `exactLookupVersion: 1` in
+**Installed 2026-10-29** (`bob-worker` v152, `ask-bob` v184; [evidence](../Docs/foundation-verification.md#controlled-completion-install-2026-10-29)). New jobs pin `exactLookupVersion: 1` in
 `ask-openai.ts`: lookups read `search_bob_project_data_v10` through
 `lookup-rpc.ts`, and a statement timeout (57014) is retried once inside the same
 journaled read (26 s allowance). Journals without the pin keep v8/v9 and one
@@ -728,7 +728,7 @@ attempt. New manifests with `work_completion_version: 3` replace the full review
 after saved work with server facts, the small completion gate and at most one
 targeted note ([conversation owner](../Docs/ask-bob-conversations.md#controlled-completion)).
 [Database contract](../db/README.md#room-dimensions--2026-10-26) lists v10.
-Each step needs the owner's explicit OK, in this order:
+The installed order was:
 
 1. Apply `20261029115500_bob_exact_lookup.sql` (adds v10 only).
 2. Deploy `bob-worker`, then `ask-bob`, from the same merge commit.

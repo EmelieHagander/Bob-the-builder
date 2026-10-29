@@ -60,10 +60,11 @@ The [controlled completion record](#controlled-completion-2026-10-29) owns the
 prepared corrections. [State](bob-delivery-flow.md#state) owns the next action.
 
 <a id="controlled-completion-2026-10-29"></a>
-## Controlled completion, exact lookup and write state — prepared, 2026-10-29
+## Controlled completion, exact lookup and write state — installed, 2026-10-29
 
-**Source and local verification only; not deployed, migrated or catalog-
-activated.** Owner decisions the same day, after the
+**Installed and catalog-activated; no paid run yet.** The
+[installation record](#controlled-completion-install-2026-10-29) follows the
+preparation notes below. Owner decisions the same day, after the
 [paid run](#construction-work-paid-run3-2026-10-29): Bob should get what he
 needs when he needs it rather than an open-ended review; `search_project_data`
 is not needed as a core tool because the server already binds the current
@@ -114,6 +115,44 @@ apply `20261029115500_bob_exact_lookup.sql`; deploy `bob-worker`, then
 and `20261029120000_bob_controlled_completion_catalog.sql`. Shared standard
 materials (owner decision: shared, marked unreviewed) follow in a separate
 change.
+
+<a id="controlled-completion-install-2026-10-29"></a>
+### Installation, 2026-10-29
+
+The owner approved the release. [PR #372](https://github.com/EmelieHagander/Bob-the-builder/pull/372)
+merged as `962c78d9ee9c64eb3a71955197ef73255b7f090b`. Its tree
+`66038f493a0ea95c14cdb1b14898095085496238` equals the tested branch head. Zero
+queued, running or paused Bob jobs were read before each step.
+
+1. **Exact lookup:** recorded as `20261029133800_bob_exact_lookup`.
+   `search_bob_project_data_v10` exists and `authenticated` may execute it. As
+   the test owner in a read-only transaction, v9 and v10 return identical
+   results (md5) for the exact box read, the artifact listing and the project
+   record; the exact read took 1,494 ms on v9 and 48 ms on v10.
+2. **Runtimes,** worker first, from the merge commit (Supabase CLI 2.117.0,
+   server-side bundling):
+
+   | Function | Version | JWT verification | Bundle SHA-256 |
+   |---|---|---|---|
+   | `bob-worker` | 152 | existing custom authentication, `false` | `8d993c80f6e29628dfe8e549f728ddfcee780f1ddbdfe74e0df7d0c2d8968e3f` |
+   | `ask-bob` | 184 | `true` | `4163ed3c37c7ad8cb229e99974f97d5cc2fc1e767126cb4a782cc031653d58d6` |
+
+   Readback matched **123/124** worker and **125/126** HTTP files byte for byte,
+   including `lookup-rpc.ts`, `write-state.ts` and `project-answer.ts`; the
+   only difference is the established empty bundle of type-only
+   `cad-intake.ts`. Unauthenticated POSTs returned **401** for both.
+3. **Catalog:** recorded as `20261029133951_bob_write_state_catalog` and
+   `20261029133953_bob_controlled_completion_catalog`. Active readback:
+   `bob.tools` v25 (`write_state_version` 1, five core tools without
+   `search_project_data`), seven tool definitions on `write-state-v1`,
+   `agent-contract.ask-bob` v10 (`work_completion_version` 3,
+   `turn_usd_stop` 2 unchanged), `completion-gate.contract` v2,
+   `role.completion-gate` v2 and `bob.note.gate-gap` v1. All 12 active
+   definitions equal the tested fixture in definition, content and metadata.
+   The next new Bob job pins a fresh manifest; earlier jobs keep theirs.
+
+This proves installation only. Bob's call count, cost and delivery on the box
+scenario need a new, separately authorized paid run.
 
 <a id="creation-preparation-2026-10-29"></a>
 ## Construction preparation and scoped read recovery — installed, 2026-10-29

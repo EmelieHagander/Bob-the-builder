@@ -1443,7 +1443,7 @@ the app and Bob alike. `20261026130000_room_dimensions.sql`:
   300 characters); every other dataset is `v8` unchanged. Security invoker,
   executable by `authenticated`.
 - `bob.search_bob_project_data_v10` (`20261029115500_bob_exact_lookup.sql`,
-  prepared 2026-10-29): returns exactly what v9 returns. For `artifacts` it
+  installed 2026-10-29): returns exactly what v9 returns. For `artifacts` it
   checks each record against the small base tables (`artifact_revisions`,
   `artifacts`, room-layout, multifloor and stair rows) and reads a
   security-invoker detail view only for a record that has that detail. v9's

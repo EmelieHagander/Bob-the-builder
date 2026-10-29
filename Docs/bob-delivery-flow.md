@@ -556,14 +556,14 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — granska och släpp styrd färdigkontroll (2026-10-29):**
+**Aktivt nästa steg — nytt lådprov efter styrd färdigkontroll (2026-10-29):**
 det betalda lådprovet efter #371 [sparade ritningen men underkändes](foundation-verification.md#construction-work-paid-run3-2026-10-29)
-(58 anrop, USD 2,28, avbrutet ritsteg). Rotorsakerna är rättade i en förberedd
-ändring: styrd färdigkontroll i stället för full granskning, snabb exakt
-läsning (v10) och skrivningar som returnerar sitt läge.
-[Ändringar, kontrollbevis och releaseordning](foundation-verification.md#controlled-completion-2026-10-29)
-ägs där. Inget är driftsatt; varje steg kräver ägarens uttryckliga ja.
-Gemensamma standardmaterial (delade, märkta ogranskade) kommer i en egen ändring.
+(58 anrop, USD 2,28, avbrutet ritsteg). Rotorsakerna är rättade och
+[installerade](foundation-verification.md#controlled-completion-install-2026-10-29):
+styrd färdigkontroll i stället för full granskning, snabb exakt läsning (v10)
+och skrivningar som returnerar sitt läge (`bob-worker` v152, `ask-bob` v184).
+#369–#372 ska inte driftsättas igen. Gemensamma standardmaterial (delade,
+märkta ogranskade) kommer i en egen ändring.
 
 Därefter återstår ett nytt separat godkänt prov av skapa → ändra bredd → ritning →
 återöppna exakt sparad version. Behåll samma Construction-identitet, kontrollera
