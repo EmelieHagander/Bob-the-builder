@@ -22,11 +22,25 @@ let preSourceRenewalRows:any[]|undefined,preSourceRenewalVersions:Map<string,num
 let preBuildingScopeRows:any[]|undefined,preBuildingScopeVersions:Map<string,number>|undefined
 let preCostControlsRows:any[]|undefined,preCostControlsVersions:Map<string,number>|undefined
 let preCreationRows:any[]|undefined,preCreationVersions:Map<string,number>|undefined
+let preControlledCompletionRows:any[]|undefined,preControlledCompletionVersions:Map<string,number>|undefined
 let preConstructionWorkRows:any[]|undefined,preConstructionWorkVersions:Map<string,number>|undefined
 // Materialise the explicit immutable publication patches in migration order.
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const controlledCompletion=source.match(/\$controlled_completion_spec\$([\s\S]+?)\$controlled_completion_spec\$/)
+ if(controlledCompletion){
+  preControlledCompletionRows=structuredClone(seed);preControlledCompletionVersions=new Map(versions)
+  const spec=JSON.parse(controlledCompletion[1]),marker={publication:'bob-controlled-completion-v1',controlled_completion_version:1}
+  for(const {variables,...addition} of spec.additions){seed.push({definition:{},...addition,variables,metadata:{...marker}});versions.set(addition.key,1)}
+  for(const edit of spec.edits){
+   const row=seed.find(row=>row.key===edit.key),{seed_version,source_revision,...rest}=row.metadata??{}
+   row.metadata={...rest,...edit.metadata,...marker}
+   if(edit.content!==undefined)row.content=edit.content
+   if(edit.definition)row.definition={...row.definition,...edit.definition}
+   versions.set(edit.key,versions.get(edit.key)!+1)
+  }
+ }
  const creation=source.match(/\$creation_preparation_spec\$([\s\S]+?)\$creation_preparation_spec\$/)
  if(creation){
   preCreationRows=structuredClone(seed);preCreationVersions=new Map(versions)
@@ -614,6 +628,10 @@ function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):Ai
 const preConstructionEditsManifest=fixtureManifest(preConstructionEditsRows??seed,preConstructionEditsVersions??versions,'fixture-pre-construction-edits-manifest')
 export function preConstructionEditsCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw new Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preConstructionEditsManifest)})}
 const manifest=fixtureManifest(seed,versions,'fixture-manifest')
+for(const row of preControlledCompletionRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preControlledCompletionManifest=fixtureManifest(preControlledCompletionRows??seed,preControlledCompletionVersions??versions,'fixture-pre-controlled-completion-manifest')
+/** Manifests pinned before 2026-10-29 keep the v2 full review after saved work. */
+export function preControlledCompletionCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preControlledCompletionManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 for(const row of preCreationRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preCreationManifest=fixtureManifest(preCreationRows??seed,preCreationVersions??versions,'fixture-pre-creation-manifest')
 export function preCreationCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preCreationManifest)})}

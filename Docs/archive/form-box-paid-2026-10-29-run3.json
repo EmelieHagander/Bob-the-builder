@@ -1,0 +1,490 @@
+{
+ "run": {
+  "runId": 40856013457,
+  "url": "https://github.com/EmelieHagander/Bob-the-builder/actions/runs/40856013457",
+  "commit": "8dd251248c294d0a39de4dfb81f711e86a3eb718",
+  "scenario": "box",
+  "config": "baseline",
+  "conclusion": "failure",
+  "reason": "drawing turn exceeded the runner 15-minute step deadline and was cancelled (confirmed)"
+ },
+ "project_id": "p_ebb5e61855b0406fa9c63cccf9ec0c5f",
+ "manifest_id": "a4765a36-0bcb-4848-87fd-382dda1e5eed",
+ "drawing_saved": {
+  "drawing_revision": 1,
+  "construction_revision": 3,
+  "views": [
+   "front",
+   "right",
+   "top"
+  ],
+  "title_stale": true
+ },
+ "turns": [
+  {
+   "step": "concept",
+   "turn_id": "9e6f7985-ba19-4179-b0c0-0ba46a7df6cc",
+   "job_id": "ea943c67-b366-49f6-a617-b095e07c8344",
+   "job_status": "completed",
+   "created_at": "2026-10-29 10:15:09.396939+00",
+   "updated_at": "2026-10-29 10:26:58.796286+00",
+   "model_by_role": [
+    {
+     "role": "ask-bob",
+     "n": 27,
+     "usd": "0.980567",
+     "inp": "826097",
+     "cached": 637952,
+     "outp": "23381"
+    }
+   ],
+   "tools": [
+    {
+     "tool": "check_construction_draft",
+     "status": "checked",
+     "n": 2
+    },
+    {
+     "tool": "create_solution_alternative",
+     "status": "saved",
+     "n": 1
+    },
+    {
+     "tool": "describe_tool",
+     "status": "ok",
+     "n": 3
+    },
+    {
+     "tool": "edit_construction_parts",
+     "status": "invalid",
+     "n": 2
+    },
+    {
+     "tool": "edit_construction_parts",
+     "status": "saved",
+     "n": 1
+    },
+    {
+     "tool": "edit_project_record",
+     "status": "invalid",
+     "n": 1
+    },
+    {
+     "tool": "edit_project_record",
+     "status": "saved",
+     "n": 2
+    },
+    {
+     "tool": "read_construction_draft",
+     "status": "ok",
+     "n": 10
+    },
+    {
+     "tool": "read_material_catalog",
+     "status": "ok",
+     "n": 1
+    },
+    {
+     "tool": "read_solution_context",
+     "status": "ok",
+     "n": 7
+    },
+    {
+     "tool": "save_catalog_definition",
+     "status": "saved",
+     "n": 1
+    },
+    {
+     "tool": "save_construction_draft",
+     "status": "saved",
+     "n": 1
+    },
+    {
+     "tool": "search_material_catalog",
+     "status": "empty",
+     "n": 4
+    },
+    {
+     "tool": "search_material_catalog",
+     "status": "ok",
+     "n": 2
+    },
+    {
+     "tool": "search_project_data",
+     "status": "unavailable",
+     "n": 1
+    },
+    {
+     "tool": "select_solution_alternative",
+     "status": "saved",
+     "n": 1
+    }
+   ],
+   "delivery": {
+    "status": "partial",
+    "duration_ms": 705316,
+    "counts": {
+     "steps": 27,
+     "nudges": 0,
+     "end_reason": "answered",
+     "tool_calls": 40,
+     "cad_renders": 0,
+     "cad_reviews": 0,
+     "output_phase": "final_answer",
+     "saved_records": 9,
+     "deferred_calls": 0,
+     "cad_consultations": 0,
+     "cad_review_passed": false,
+     "completion_checks": 1,
+     "uncertain_resends": 0,
+     "reused_model_calls": 0,
+     "cad_input_corrections": 0,
+     "cad_review_rejections": 0,
+     "cad_review_unavailable": 0
+    }
+   },
+   "bob_calls_returned_tools": [
+    [
+     "read_construction_draft",
+     "read_solution_context",
+     "search_project_data"
+    ],
+    [
+     "read_solution_context",
+     "read_solution_context",
+     "describe_tool",
+     "describe_tool"
+    ],
+    [
+     "create_solution_alternative"
+    ],
+    [
+     "read_solution_context",
+     "read_solution_context"
+    ],
+    [
+     "select_solution_alternative"
+    ],
+    [
+     "read_solution_context",
+     "read_construction_draft"
+    ],
+    [
+     "edit_project_record"
+    ],
+    [
+     "edit_project_record"
+    ],
+    [
+     "read_construction_draft"
+    ],
+    [
+     "edit_project_record"
+    ],
+    [
+     "search_material_catalog"
+    ],
+    [
+     "search_material_catalog",
+     "search_material_catalog",
+     "search_material_catalog",
+     "search_material_catalog"
+    ],
+    [
+     "search_material_catalog",
+     "read_material_catalog"
+    ],
+    [
+     "describe_tool"
+    ],
+    [
+     "save_catalog_definition"
+    ],
+    [
+     "read_solution_context",
+     "read_construction_draft"
+    ],
+    [
+     "save_construction_draft"
+    ],
+    [
+     "check_construction_draft"
+    ],
+    [
+     "read_construction_draft",
+     "read_construction_draft",
+     "read_construction_draft"
+    ],
+    [
+     "edit_construction_parts"
+    ],
+    [
+     "edit_construction_parts"
+    ],
+    [
+     "edit_construction_parts"
+    ],
+    [
+     "check_construction_draft"
+    ],
+    [],
+    [
+     "read_construction_draft",
+     "read_construction_draft"
+    ],
+    [
+     "read_construction_draft"
+    ],
+    []
+   ]
+  },
+  {
+   "step": "width",
+   "turn_id": "ce6bc289-a06e-436d-a6ab-10fa6d8f00bb",
+   "job_id": "764abcb1-bfcb-424a-bb88-78b566e678ff",
+   "job_status": "completed",
+   "created_at": "2026-10-29 10:27:09.381305+00",
+   "updated_at": "2026-10-29 10:31:02.53625+00",
+   "model_by_role": [
+    {
+     "role": "ask-bob",
+     "n": 8,
+     "usd": "0.247952",
+     "inp": "135005",
+     "cached": 75264,
+     "outp": "5319"
+    }
+   ],
+   "tools": [
+    {
+     "tool": "change_construction_parameters",
+     "status": "saved",
+     "n": 1
+    },
+    {
+     "tool": "check_construction_draft",
+     "status": "checked",
+     "n": 1
+    },
+    {
+     "tool": "check_construction_draft",
+     "status": "unavailable",
+     "n": 1
+    },
+    {
+     "tool": "describe_tool",
+     "status": "ok",
+     "n": 1
+    },
+    {
+     "tool": "read_construction_draft",
+     "status": "ok",
+     "n": 2
+    }
+   ],
+   "delivery": {
+    "status": "saved",
+    "duration_ms": 229463,
+    "counts": {
+     "steps": 8,
+     "nudges": 0,
+     "end_reason": "answered",
+     "tool_calls": 6,
+     "cad_renders": 0,
+     "cad_reviews": 0,
+     "output_phase": "final_answer",
+     "saved_records": 3,
+     "deferred_calls": 0,
+     "cad_consultations": 0,
+     "cad_review_passed": false,
+     "completion_checks": 1,
+     "uncertain_resends": 0,
+     "reused_model_calls": 0,
+     "cad_input_corrections": 0,
+     "cad_review_rejections": 0,
+     "cad_review_unavailable": 0
+    }
+   },
+   "bob_calls_returned_tools": [
+    [
+     "read_construction_draft"
+    ],
+    [
+     "describe_tool"
+    ],
+    [
+     "change_construction_parameters"
+    ],
+    [
+     "check_construction_draft"
+    ],
+    [
+     "read_construction_draft"
+    ],
+    [
+     "check_construction_draft"
+    ],
+    [],
+    []
+   ]
+  },
+  {
+   "step": "drawing",
+   "turn_id": "d71762c3-52ca-4f99-8b52-9b8ed6c7b4ee",
+   "job_id": "e8d467ab-012e-4d65-9e64-b6dfbb51d86a",
+   "job_status": "cancelled",
+   "created_at": "2026-10-29 10:31:13.286401+00",
+   "updated_at": "2026-10-29 10:46:11.921541+00",
+   "model_by_role": [
+    {
+     "role": "ask-bob",
+     "n": 21,
+     "usd": "0.961547",
+     "inp": "583819",
+     "cached": 309248,
+     "outp": "13187"
+    },
+    {
+     "role": "cad-reviewer",
+     "n": 2,
+     "usd": "0.088513",
+     "inp": "34828",
+     "cached": 0,
+     "outp": "13865"
+    }
+   ],
+   "tools": [
+    {
+     "tool": "describe_tool",
+     "status": "ok",
+     "n": 9
+    },
+    {
+     "tool": "design_project_cad",
+     "status": "already_saved",
+     "n": 1
+    },
+    {
+     "tool": "design_project_cad",
+     "status": "needs_data",
+     "n": 1
+    },
+    {
+     "tool": "design_project_cad",
+     "status": "ready",
+     "n": 1
+    },
+    {
+     "tool": "read_construction_delivery",
+     "status": "ok",
+     "n": 1
+    },
+    {
+     "tool": "read_construction_draft",
+     "status": "ok",
+     "n": 12
+    },
+    {
+     "tool": "read_drawing_requests",
+     "status": "returned",
+     "n": 1
+    },
+    {
+     "tool": "read_project_record_section",
+     "status": "ok",
+     "n": 1
+    },
+    {
+     "tool": "save_cad_design",
+     "status": "saved",
+     "n": 1
+    },
+    {
+     "tool": "search_project_data",
+     "status": "ok",
+     "n": 1
+    },
+    {
+     "tool": "search_project_data",
+     "status": "unavailable",
+     "n": 2
+    }
+   ],
+   "delivery": null,
+   "bob_calls_returned_tools": [
+    [
+     "read_construction_draft",
+     "read_construction_draft"
+    ],
+    [
+     "read_construction_draft"
+    ],
+    [
+     "describe_tool",
+     "describe_tool"
+    ],
+    [
+     "design_project_cad"
+    ],
+    [
+     "search_project_data"
+    ],
+    [
+     "describe_tool"
+    ],
+    [
+     "describe_tool"
+    ],
+    [
+     "describe_tool"
+    ],
+    [
+     "save_cad_design"
+    ],
+    [
+     "search_project_data",
+     "search_project_data"
+    ],
+    [],
+    [
+     "describe_tool",
+     "describe_tool",
+     "describe_tool"
+    ],
+    [
+     "read_drawing_requests",
+     "read_construction_delivery"
+    ],
+    [
+     "describe_tool"
+    ],
+    [
+     "read_project_record_section"
+    ],
+    [
+     "read_construction_draft",
+     "read_construction_draft",
+     "read_construction_draft",
+     "read_construction_draft"
+    ],
+    [
+     "read_construction_draft",
+     "read_construction_draft",
+     "read_construction_draft"
+    ],
+    [
+     "read_construction_draft"
+    ],
+    [
+     "design_project_cad"
+    ],
+    [
+     "design_project_cad"
+    ],
+    [
+     "read_construction_draft"
+    ]
+   ]
+  }
+ ]
+}

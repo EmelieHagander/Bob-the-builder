@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { runProjectAnswer } from '../supabase/functions/_shared/project-answer.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
-import { catalogFixture, preContextStrategyCatalogFixture } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, preContextStrategyCatalogFixture, preControlledCompletionCatalogFixture } from './support/ai-catalog-fixture.ts'
 
 // Owner request 2026-10-19: a read-only turn regenerated every final answer in a
 // full completion review. The gate keeps the review for answers that leave
@@ -39,13 +39,14 @@ test('a finished read-only answer is delivered without regenerating it in a revi
   assert.equal(observation.completion_checks, 0); assert.equal(observation.completion_gate, 'done')
 })
 
-test('remaining work, a failed gate or an unreadable verdict keeps the full review', async () => {
+// v3 (2026-10-29) sends a targeted note or delivers; see bob-controlled-completion.test.ts.
+test('a v2-pinned manifest keeps the full review for remaining work, a failed gate or an unreadable verdict', async () => {
   for (const verdict of [
     { success: true, model: 'mini', usage, data: { work_remaining: true, reason: 'Ett lovat steg återstår.' } },
     { success: false, model: 'mini', usage, data: null, error: 'unavailable' },
     { success: true, model: 'mini', usage, data: 'not json' },
   ]) {
-    const { result, calls, observation } = await run(() => verdict)
+    const { result, calls, observation } = await run(() => verdict, preControlledCompletionCatalogFixture())
     assert(result.ok); assert.match(result.answer, /inget arbete återstår/)
     assert.deepEqual(calls, ['ask-bob', 'completion-gate', 'ask-bob'])
     assert.equal(observation.completion_checks, 1)
@@ -78,7 +79,8 @@ test('the publication adds only the gate role and its parts, and the fixture mat
     const live = createAiCatalogSession({ rpc: async () => { throw new Error('Pinned') } }, { app: 'bob', manifest: current })
     const role = live.role('completion-gate')
     assert.equal(role.tier, 'mini'); assert.equal(role.reasoningEffort, 'low')
-    const fixture = catalogFixture()
+    // The 2026-10-29 publication later versions the contract and role purpose.
+    const fixture = preControlledCompletionCatalogFixture()
     for (const key of ['role.completion-gate', 'completion-gate.contract', 'schema.bob_completion_gate']) {
       assert.deepEqual(fixture.definition(key).definition, live.definition(key).definition); assert.equal(fixture.definition(key).content, live.definition(key).content)
     }

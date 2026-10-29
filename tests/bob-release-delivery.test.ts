@@ -77,8 +77,8 @@ test('release integration resumes selective construction editing, checking and d
     ()=>['design_project_cad',{...request,construction_revision:2}],
     ()=>['describe_tool',{name:'save_cad_design'}],
     ()=>['save_cad_design',{}],
-    // Existing post-write completion review returns current receipts once.
-    ()=>null,
+    // v3 (2026-10-29): the completion gate confirms the saved receipt, so the
+    // first final answer is delivered without a second full Bob round.
     ()=>null,
   ]
   try {

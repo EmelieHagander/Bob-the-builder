@@ -1,10 +1,70 @@
 # Foundation verification and rollout
 
+<a id="construction-work-paid-run3-2026-10-29"></a>
+## Paid box run after #371 — 2026-10-29
+
+**Partial result: the final drawing is saved for the first time, but the turn
+was cancelled; acceptance failed.** The owner authorized the run after the #371
+installation. [Run 40856013457](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/40856013457)
+ran once on `8dd251248c294d0a39de4dfb81f711e86a3eb718`, scenario `box`, label
+`baseline`, in synthetic project `p_ebb5e61855b0406fa9c63cccf9ec0c5f`. All
+three turns pinned the new manifest `a4765a36-0bcb-4848-87fd-382dda1e5eed`
+(`bob.tools` v24, creation preparation active).
+
+| Step | Model calls | Known model USD | Delivery elapsed | Result |
+|---|---:|---:|---:|---|
+| Create box | 27 | 0.980567 | 705.316 s | One checked Construction, revision 2, 400 × 300 × 250 mm |
+| Change width | 8 | 0.247952 | 229.463 s | Same identity, revision 3, 500 × 300 × 250 mm |
+| Final drawing | 23 | 1.050060 | cancelled at the runner's 15-minute step deadline | Drawing revision 1 saved, views front/right/top, linked to Construction revision 3; no delivered answer |
+| **Total** | **58** | **2.278579** | | **Acceptance failed** |
+
+Compared with the [first paid run](#construction-work-paid-2026-10-29) (58
+calls, USD 1.951736): invalid material searches fell from 4 to 0, invalid or
+needs-data saves from 4 to 0 and manual loads from 9 to 3, but Construction
+re-reads rose from 4 to 10, so the create turn only fell from 33 to 27 calls.
+The [content-free evidence](archive/form-box-paid-2026-10-29-run3.json) keeps
+turn/job IDs, per-role cost, tool outcomes and each call's returned tools.
+
+Root causes established from execution events, the cancelled job's checkpoints,
+live function definitions and read-only timing as the test owner:
+
+1. **Full review after saved work.** `work_completion_version: 2` always sends a
+   second full Bob round after work, whose note asks Bob to compare with fresh
+   records and execute remaining work. In the drawing turn Bob's correct answer
+   at call 11 was followed by eight more reads, a duplicate `design_project_cad`
+   (`already_saved`, then `needs_data`) and the timeout. The small
+   `role.completion-gate` exists but was skipped by design for work turns; the
+   source reader and targeted CAD reviewer are disabled. Rounds after the first
+   answer cost about USD 0.70 (31 %).
+2. **Artifact lookups time out.** `search_bob_project_data_v9` for an exact
+   artifact takes 3.3 s at idle as `authenticated` (v3 alone 37 ms) and hit the
+   8 s `statement_timeout` in every model-issued artifact lookup of the run. The
+   v4/v6/v7 enrichment layers join security-invoker views on
+   `artifact_id::text = …`, which prevents index use; each view filtered by
+   project and artifact takes 5–21 ms. Timeouts are not retried and mark reads
+   partial. Construction check and delivery reads also timed out once each on
+   the shared small instance.
+3. **Writes return only receipts.** Bob re-read the Construction after nearly
+   every save and needed separate check and result reads; older tool results
+   leave the bounded result window quickly.
+
+Smaller causes: four sequential solution steps for an explicit request, a first
+geometry mistake caught only by the later check, an invalid-edit message that
+did not name the unused parameter node, no shared standard materials (12 mm
+plywood created separately in four projects), stale dimensions in free-text
+titles copied to the drawing, and internal IDs in chat answers (the human-text
+rule covers saved records only). `search_project_data` cannot leave the current
+project; Bob used it only to confirm data he already had.
+
+The [controlled completion record](#controlled-completion-2026-10-29) owns the
+prepared corrections. [State](bob-delivery-flow.md#state) owns the next action.
+
 <a id="creation-preparation-2026-10-29"></a>
 ## Construction preparation and scoped read recovery — installed, 2026-10-29
 
-**Installed and catalog-activated; no new paid run.** This continues the paid
-box findings; it does not claim a successful model outcome. The
+**Installed and catalog-activated.** The
+[paid run after installation](#construction-work-paid-run3-2026-10-29) failed
+acceptance. This record continues the earlier paid box findings. The
 [installation record](#creation-preparation-install-2026-10-29) follows the
 preparation notes below.
 
@@ -104,8 +164,8 @@ fields, and `bob.tools` carries the four new work-view followups. Older jobs kee
 manifest `c2c77a1f-21de-4221-b6a1-11fbdd602ccd`; the next new job pins a fresh
 manifest. Prompts, model profiles and helper roles were not changed.
 
-This proves installation only. The create → width change → final drawing →
-exact-version reopen run remains separately authorized acceptance.
+This proves installation only. The separately authorized create → width
+change → final drawing run [followed the same day and failed acceptance](#construction-work-paid-run3-2026-10-29).
 
 <a id="cad-runtime-recovery-2026-10-29"></a>
 ## CAD schema correction and runtime-fault recovery installed — 2026-10-29

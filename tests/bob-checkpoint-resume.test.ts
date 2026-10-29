@@ -12,7 +12,8 @@ test('43 model steps survive a fresh JSON-restored worker after every committed 
   const expected = await baseline.runToEnd()
   const resumed = createResumeProbe({ checkpoint: true, yieldMode: 'boundary' })
   assert.deepEqual(await resumed.runToEnd(), expected)
-  assert.equal(resumed.totals().providerPosts, 43)
+  // 43 Bob steps plus one small completion-gate call (v3 targeted note).
+  assert.equal(resumed.totals().providerPosts, 44)
   assert.equal(resumed.totals().modelRequests, baseline.totals().modelRequests, 'no historical model-wrapper traversal')
   assert.equal(resumed.totals().toolTraversals, baseline.totals().toolTraversals, 'completed tool handlers are never replayed')
   assert.equal(resumed.totals().lookupRequests, baseline.totals().lookupRequests, 'orientation and completed reads are restored')
@@ -42,7 +43,7 @@ test('a write committed before its operation checkpoint is recovered through the
   assert.equal(probe.totals().writeTransport, 3, 'only the interrupted active write needs ledger reconciliation')
   assert.equal(probe.receipts.length, 2)
   if (result.ok) assert.equal(result.evidence.writes?.length, 2)
-  assert.equal(probe.totals().providerPosts, 6)
+  assert.equal(probe.totals().providerPosts, 7, 'six Bob steps plus the completion gate')
 })
 
 test('accepted model waiting survives fresh claims with one provider POST and unchanged pending request', async () => {
@@ -53,7 +54,7 @@ test('accepted model waiting survives fresh claims with one provider POST and un
   assert.equal(probe.state()!.journal.positions['model:ask-bob'] ?? 0, 0, 'pending operation is not advanced past its unconsumed result')
   probe.completeWaitingModel()
   assert.equal((await probe.runToEnd()).ok, true)
-  assert.equal(probe.totals().providerPosts, 6)
+  assert.equal(probe.totals().providerPosts, 7, 'six Bob steps plus the completion gate')
   assert.equal(probe.totals().writes, 2)
 })
 

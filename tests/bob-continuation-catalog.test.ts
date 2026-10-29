@@ -79,7 +79,8 @@ test('new policy applies to every Bob role only with both a durable opt-in and e
 })
 test('fixture versions retain the pre-continuation contract and require explicit unlimited opt-in',()=>{
  const current=catalogFixture(),old=preContinuationCatalogFixture()
- assert.equal(current.definition('agent-contract.ask-bob').metadata.work_completion_version,2)
+ // v3 since the controlled-completion publication (2026-10-29); the allowance pin is unchanged.
+ assert.equal(current.definition('agent-contract.ask-bob').metadata.work_completion_version,3)
  assert.equal(current.definition('agent-contract.ask-bob').metadata.work_allowance_version,1)
  assert.equal(old.definition('agent-contract.ask-bob').metadata.work_completion_version,1)
  assert.equal(old.definition('agent-contract.ask-bob').metadata.work_allowance_version,undefined)

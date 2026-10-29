@@ -48,7 +48,7 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
       if(state?.version!==1||state.runId!==opts.runId||state.turnId!==opts.turnId||!Number.isFinite(state.startedAt)||state.startedAt<0
         ||state.observation!==null&&(!state.observation||!['steps','tool_calls','deferred_calls','completion_checks','nudges'].every(key=>Number.isSafeInteger(state.observation![key as keyof TurnObservation])&&Number(state.observation![key as keyof TurnObservation])>=0)
           ||!['answered','asked','step_budget','time_budget','refused','commentary_limit','failed'].includes(state.observation.end)
-          ||state.observation.completion_gate!==undefined&&!['done','review'].includes(state.observation.completion_gate)
+          ||state.observation.completion_gate!==undefined&&!['done','review','unavailable'].includes(state.observation.completion_gate)
           ||state.observation.output_phase!==undefined&&!outputPhases.has(state.observation.output_phase)))throw new Error('metrics_checkpoint_invalid')
       turn=state.observation===null?undefined:structuredClone(state.observation)
       startedAt=state.startedAt
