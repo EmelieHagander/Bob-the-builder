@@ -59,6 +59,62 @@ project; Bob used it only to confirm data he already had.
 The [controlled completion record](#controlled-completion-2026-10-29) owns the
 prepared corrections. [State](bob-delivery-flow.md#state) owns the next action.
 
+<a id="controlled-completion-2026-10-29"></a>
+## Controlled completion, exact lookup and write state — prepared, 2026-10-29
+
+**Source and local verification only; not deployed, migrated or catalog-
+activated.** Owner decisions the same day, after the
+[paid run](#construction-work-paid-run3-2026-10-29): Bob should get what he
+needs when he needs it rather than an open-ended review; `search_project_data`
+is not needed as a core tool because the server already binds the current
+project; fix the lookup timeouts; writes return the state they produced. All
+three parts are pinned so running and older jobs keep their behaviour.
+
+1. **Controlled completion** (`work_completion_version: 3`, publication
+   `bob-controlled-completion-v1`). Server-known gaps get the existing
+   targeted finish note; otherwise the small completion gate judges the answer
+   against the request, `saved_work` and `attempted_actions`, treating optional
+   offers as finished. Only a named gap sends one targeted note,
+   `bob.note.gate-gap`; a failed or unreadable verdict delivers the answer.
+   [Conversation owner](ask-bob-conversations.md#controlled-completion).
+2. **Exact lookup** (`exactLookupVersion: 1`, `search_bob_project_data_v10`).
+   Returns exactly what v9 returns; for artifacts it reads a heavy detail view
+   only for a record that has that detail. Read-only timings in production as
+   the test owner, run as an equivalent rolled-back block without creating the
+   function: exact box read v9 1.2–12.3 s → v10 39–276 ms; project listing
+   1.1–1.3 s → 42–48 ms; identical result hashes. A statement timeout is
+   retried once inside the same journaled read.
+   [Database contract](../db/README.md#room-dimensions--2026-10-26).
+3. **Write state** (`bob.tools` `write_state_version: 1`, publication
+   `write-state-v1`). Construction saves, part edits and parameter changes
+   carry the check of their receipt revision through the ordinary check path
+   (saved observation, reuse key; findings capped at about 1,500 tokens with an
+   omitted count). Solution creation returns a usable reference; selection and
+   selected-solution edits return construction readiness and a fresh edit
+   reference. An unused parameter node is named in the rejection.
+   `search_project_data` leaves the five core tools but stays loadable;
+   continuations follow `checked_concept_ready` and `creation_state`.
+
+Expected effect on the paid box create turn: about 6–8 fewer Bob calls from
+write state and 3 from completion, and no timed-out artifact reads. These are
+estimates from the recorded call sequence, not measured model behaviour.
+
+Validation: new focused suites `bob-controlled-completion` (6), `write-state`
+(6), `exact-lookup-sql` and `lookup-retry` pass, including PGlite publication,
+idempotent re-application, fixture-equals-database and v10 = v9 equivalence for
+plain, room-layout, multifloor, stair, paged, filtered, trimmed, denied and
+invalid reads. Existing tests that asserted the v2 review sequence now either
+pin the pre-publication fixtures or assert the v3 sequence. Strict `tsc` on the
+changed edge modules is clean; Deno is unavailable here. No full suite, CI,
+production write or model/CAD call ran.
+
+Release order, each step with the owner's explicit OK and no running Bob job:
+apply `20261029115500_bob_exact_lookup.sql`; deploy `bob-worker`, then
+`ask-bob`, from the merge commit; apply `20261029113000_bob_write_state_catalog.sql`
+and `20261029120000_bob_controlled_completion_catalog.sql`. Shared standard
+materials (owner decision: shared, marked unreviewed) follow in a separate
+change.
+
 <a id="creation-preparation-2026-10-29"></a>
 ## Construction preparation and scoped read recovery — installed, 2026-10-29
 

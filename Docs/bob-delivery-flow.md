@@ -556,19 +556,25 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — leveransprovet (2026-10-29):** rättningen för nyskapande
-(#371) är mergad, installerad (`bob-worker` v151, `ask-bob` v183) och
-katalogaktiverad. [Installationsbevis](foundation-verification.md#creation-preparation-install-2026-10-29)
-ägs där. #369/#370/#371 ska inte driftsättas igen.
+**Aktivt nästa steg — granska och släpp styrd färdigkontroll (2026-10-29):**
+det betalda lådprovet efter #371 [sparade ritningen men underkändes](foundation-verification.md#construction-work-paid-run3-2026-10-29)
+(58 anrop, USD 2,28, avbrutet ritsteg). Rotorsakerna är rättade i en förberedd
+ändring: styrd färdigkontroll i stället för full granskning, snabb exakt
+läsning (v10) och skrivningar som returnerar sitt läge.
+[Ändringar, kontrollbevis och releaseordning](foundation-verification.md#controlled-completion-2026-10-29)
+ägs där. Inget är driftsatt; varje steg kräver ägarens uttryckliga ja.
+Gemensamma standardmaterial (delade, märkta ogranskade) kommer i en egen ändring.
 
-Nu återstår ett separat godkänt prov av skapa → ändra bredd → ritning →
+Därefter återstår ett nytt separat godkänt prov av skapa → ändra bredd → ritning →
 återöppna exakt sparad version. Behåll samma Construction-identitet, kontrollera
 mått och resultat och jämför hela kedjans anrop, kostnad och tid med
-[det tidigare underkända provet](foundation-verification.md#construction-work-paid-2026-10-29).
+[det första](foundation-verification.md#construction-work-paid-2026-10-29) och
+[det andra underkända provet](foundation-verification.md#construction-work-paid-run3-2026-10-29).
 Ingen verklig leverans eller kostnadsminskning är bevisad av de lokala testerna.
 Kvarvarande statusluckor måste knytas till exakt källa/urval; godkänd konstruktion
-får aldrig nollställa alla `partial`-flaggor. Agentprompter och modellval är
-orörda och läsarmodellen fortsatt uppskjuten.
+får aldrig nollställa alla `partial`-flaggor. Bobs huvudprompt och modellval är
+orörda; Färdigkollens kontrakt ändras i den förberedda ändringen. Läsarmodellen
+är fortsatt uppskjuten.
 
 Källavstämning på samma Construction, sex katalogägda kärnverktyg och
 GPT-5.4 medium är tekniskt installerade och återlästa och ligger kvar.
