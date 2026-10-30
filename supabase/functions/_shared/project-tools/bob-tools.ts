@@ -58,7 +58,7 @@ export const CORE_READ_PRELOAD = ['search_project_data', 'list_project_category'
 export function catalogCoreTools(catalog: AiCatalogSession): string[] | null {
   const names = catalog.definition('bob.tools', 'tool_contract').definition.core_tools
   if (names === undefined) return null // Existing pinned jobs retain their preload behavior.
-  if (!Array.isArray(names) || names.length < 1 || names.length > 6 || !names.includes('describe_tool')
+  if (!Array.isArray(names) || names.length < 1 || names.length > 7 || !names.includes('describe_tool')
     || new Set(names).size !== names.length || names.some(name => typeof name !== 'string'
       || !catalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + name && row.definition_kind === 'tool_contract')))
     throw new Error('core_tool_catalog_invalid')
@@ -98,6 +98,8 @@ export function createBobToolSession(opts: {
   toolInstructions?: ToolInstructions;
   knowledgeReader?: KnowledgeReader;
   context?: WorkingContext; projectContext?: ProjectContext; readPolicy: ToolPolicyReader;
+  /** Worker pilot (2026-10-30): Bob's hand-over tools, registered by the turn that owns the workers. */
+  extraTools?: ToolDefinition[];
   /** FORM small source reader; offered only where a publication enables it. */
   sourceReader?: SourceReader;
   operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; workRecords?: WorkRecords; planLinks?: PlanLinks; buildingScope?: BuildingScope; planAssistant?: ReturnType<typeof createPlanAssistant>;
@@ -222,6 +224,7 @@ export function createBobToolSession(opts: {
         return opts.writer!.write('propose_project_plan',{...proposal,request_quote:(v as any).request_quote},{humanText:false})
       },
     }] : []),
+    ...(opts.extraTools ?? []),
   ]
   return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions, ...(opts.preloadTools ? { preloadTools: opts.preloadTools } : {}),
     ...(opts.aiCatalog?.manifest().definitions.some(row=>row.prompt_key==='bob.tools'&&row.metadata?.construction_work_version===1)?{

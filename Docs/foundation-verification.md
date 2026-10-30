@@ -1,5 +1,21 @@
 # Foundation verification and rollout
 
+<a id="materials-worker-2026-10-30"></a>
+## Materials worker pilot — built 2026-10-30, not installed
+
+Owner decision: try Bob as coordinator with one worker, Mattias (materials),
+and measure before settling ([contract](ask-bob-tools.md#materials-worker)).
+Release order with the owner's OK and no running Bob job: deploy `bob-worker`
+and `ask-bob`, then apply `20261030090000_bob_materials_worker_catalog.sql`
+(new role, setting, tool contract, a `bob.tool_catalog` policy row and
+`bob.tools` with the worker), then a box run compared with run 6.
+
+Validation: `bob-materials-worker` (4: Bob hands over and has no materials
+tools, Mattias's fixed tools and input order with Bob's brief last, refused
+hand-overs and out-of-set calls, pinned manifests unchanged), the bench test
+pinned to the manifest before the pilot, the catalog fixture replay and the
+related suites pass.
+
 <a id="box-paid-run7-2026-10-30"></a>
 ## Repair helper installed; paid box run 7 passed but cost more; tool order restored — 2026-10-30
 

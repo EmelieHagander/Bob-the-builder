@@ -35,6 +35,7 @@ let preToolSheetsRows:any[]|undefined,preToolSheetsVersions:Map<string,number>|u
 let preToolOrderRows:any[]|undefined,preToolOrderVersions:Map<string,number>|undefined
 let preToolRepairRows:any[]|undefined,preToolRepairVersions:Map<string,number>|undefined
 let preToolOrderRestoreRows:any[]|undefined,preToolOrderRestoreVersions:Map<string,number>|undefined
+let preMaterialsWorkerRows:any[]|undefined,preMaterialsWorkerVersions:Map<string,number>|undefined
 let preMemoryStairRows:any[]|undefined,preMemoryStairVersions:Map<string,number>|undefined
 // SQL publications drop the seed markers and name themselves, as `(prior.metadata-'seed_version'-'source_revision')||publication`.
 const publishAs=(row:any,publication:string)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication}}
@@ -383,6 +384,20 @@ for(const migration of migrations){
   for(const addition of JSON.parse(memoryStair[1])){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-memory-stair-v1'}});versions.set(addition.key,1)}
   const contract=seed.find(row=>row.key==='agent-contract.ask-bob')
   publishAs(contract,'bob-memory-stair-v1');contract.metadata.memory_stair_version=1;contract.metadata.prompt_tiers_version=1;versions.set(contract.key,versions.get(contract.key)!+1)
+ }
+ const materialsWorker=source.match(/\$materials_worker_additions\$([\s\S]+?)\$materials_worker_additions\$/)
+ if(materialsWorker){
+  preMaterialsWorkerRows=structuredClone(seed);preMaterialsWorkerVersions=new Map(versions)
+  const additions=JSON.parse(materialsWorker[1])
+  for(const addition of additions){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-materials-worker-v1'}});versions.set(addition.key,1)}
+  const worker=JSON.parse(source.match(/\$materials_worker_definition\$([\s\S]+?)\$materials_worker_definition\$/)![1])
+  const tool=additions.find((a:any)=>a.key==='tools.ask_materials_worker').definition
+  const policy={name:'ask_materials_worker',description:tool.description,how_to:tool.additional_description,schema_version:1,always_load:false,preload_phases:[],active:true}
+  const box=seed.find(row=>row.key==='bob.tools')
+  box.definition={...box.definition,materials_worker_version:1,workers:{materials:worker},core_tools:[...box.definition.core_tools,'ask_materials_worker'],
+   contract_keys:[...box.definition.contract_keys,'tools.ask_materials_worker'],catalog:[...box.definition.catalog,policy],
+   shelves:box.definition.shelves.map((shelf:any)=>shelf.label==='Materials, stock and Shopping'?{...shelf,tools:['ask_materials_worker',...shelf.tools]}:shelf)}
+  publishAs(box,'bob-materials-worker-v1');box.metadata.materials_worker_version=1;versions.set(box.key,versions.get(box.key)!+1)
  }
  if(/\$bob_tool_order_restore\$/.test(source)){
   preToolOrderRestoreRows=structuredClone(seed);preToolOrderRestoreVersions=new Map(versions)
@@ -801,6 +816,10 @@ for(const row of preMemoryStairRows??[])if(row.kind==='tier_binding'&&row.defini
 const preMemoryStairManifest=fixtureManifest(preMemoryStairRows??seed,preMemoryStairVersions??versions,'fixture-pre-memory-stair-manifest')
 /** Manifests pinned before the 2026-10-30 memory stair: one rewritten summary and the per-turn briefing order. */
 export function preMemoryStairCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preMemoryStairManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
+for(const row of preMaterialsWorkerRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preMaterialsWorkerManifest=fixtureManifest(preMaterialsWorkerRows??seed,preMaterialsWorkerVersions??versions,'fixture-pre-materials-worker-manifest')
+/** The manifest before the materials worker pilot: Bob offers the materials tools himself. */
+export function preMaterialsWorkerCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preMaterialsWorkerManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 for(const row of preToolOrderRestoreRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preToolOrderRestoreManifest=fixtureManifest(preToolOrderRestoreRows??seed,preToolOrderRestoreVersions??versions,'fixture-pre-tool-order-restore-manifest')
 /** The manifest with tool sheets and the repair helper (tool_repair_version 1), before tool order was restored. */

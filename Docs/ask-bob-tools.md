@@ -118,6 +118,38 @@ price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
   conversation; a context rollover summarizes them away, so they are sent again
   on the next step.
 
+<a id="materials-worker"></a>
+**Bob with a worker: Mattias (materials) — pilot built 2026-10-30, not installed
+(owner decision: one worker, measured before anything else moves).**
+Bob carried 100 tools; most rejected calls in runs 5–7 were about meaning in a
+specialised area. The pilot moves one area to a worker with its own tools:
+
+- Bob no longer offers the Materials, stock and Shopping tools (the eight on
+  that shelf); the tool picker does not offer them either. His standard tools
+  gain one: `ask_materials_worker` (`job`, `findings`).
+- Mattias (`role.materials-worker`, same profile as Bob) has a fixed native
+  list: the eight materials tools and four reading tools
+  (`search_project_data`, `open_project_item`, `read_construction_draft`,
+  `read_solution_context`), with full manuals, at most 12 steps per job.
+- His input, fixed first: his tools and instructions, the locked project
+  snapshot, a line saying the conversation is background, the same summaries
+  and history Bob reads (`stairConversation`), then Bob's brief last: the job,
+  what Bob found this turn, and the project's current materials (read at the
+  start of the job). The material list changes as he works, so it sits with the
+  brief, not above the conversation.
+- He reads and saves through a tool session with the same gates, receipts and
+  turn budgets as Bob's; his saves count as the turn's work. He does only the
+  job, keeps unknown values unknown, and reports to Bob (what he found or saved,
+  with ids, and what is open). He never answers the owner.
+- Bob gets `{status, report, calls}` and checks it before he answers.
+
+The worker definition lives in `bob.tools` (`workers.materials`,
+`materials_worker_version` 1), so further workers are catalog data. Source:
+`20261030090000_bob_materials_worker_catalog.sql`, `bob-workers.ts` and the
+toolbox setup in `project-answer.ts`. Not yet measured; further workers and
+the trade specialists (electrician, plumber, roofer, carpenter and drywaller,
+tiler) are a proposal that waits for the pilot's numbers.
+
 <a id="tool-repair"></a>
 **Rolled back after [paid box run 7](foundation-verification.md#box-paid-run7-2026-10-30):
 new jobs use [tool order](#tool-order) again; manifests pinned in between keep

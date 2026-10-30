@@ -188,7 +188,7 @@ export async function answerWithOpenAi(opts: {
   // full timeout, so several calls share one segment; a call cut off at the segment
   // wall yields into a fresh segment, consuming the same bounded retry budget
   // as other dispatched failures. Durable AI waiting does not consume retries.
-  const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'completion-gate': 15000, 'tool-picker': 15000, 'tool-repair': 15000, 'memory-stair': 30000, 'bob-delivery-language': 15000 }
+  const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'completion-gate': 15000, 'tool-picker': 15000, 'tool-repair': 15000, 'materials-worker': 60000, 'memory-stair': 30000, 'bob-delivery-language': 15000 }
   let drawingRequestId:string|null=null
   let drawingBudget:ReturnType<typeof createDrawingBudget>|undefined
   let modelBudget: ReturnType<typeof createBobModelBudget>
