@@ -3,16 +3,15 @@
 > **Implementation: September 2026 context release.** This supersedes the earlier provider-cursor-only design and its unimplemented provider-compaction/reseed plan. Code and migrations are not deployment proof: the merged PR release record owns hosted migration versions, Edge version and live verification.
 
 <a id="memory-stair"></a>
-## Prompt tiers and the memory stair — built 2026-10-30, not installed
+## Prompt tiers and the memory stair — installed 2026-10-30
 
 **Owner decision 2026-10-30.** Bob's input is ordered by how often each part
 changes, so the provider reuses the previous turn's start (its prompt cache is
 prefix-based). New manifests opt in through `agent-contract.ask-bob` metadata
 `memory_stair_version` 1 and `prompt_tiers_version` 1 (both require
 `context_strategy_version` 1); pinned jobs keep the rewritten summary and the
-earlier order. Not installed: migrations `20261030040000_bob_memory_stair.sql`
-and `20261030050000_bob_memory_stair_catalog.sql` wait for the owner's OK, and
-both Bob runtimes must be deployed first.
+earlier order. Installed with `bob-worker` v156 and `ask-bob` v188
+([installation record](foundation-verification.md#memory-stair-install-2026-10-30)).
 
 Order of the input, top to bottom:
 
