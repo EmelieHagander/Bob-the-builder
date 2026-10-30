@@ -1136,10 +1136,13 @@ with the new sheets needs the owner's OK.
 
 ### Build guides (IKEA-style) — slice 1, 2026-10-30
 
-**Status: source only.** Not wired to the worker's HTTP route, the Edge or the
-app, and not deployed. Owner decisions 2026-10-30: a guide is made together
-with every final drawing, in the same Bob request, and the first live run
-measures what that adds; build pages show screws, nails, bolts and glue per step.
+**Status: source only, behind an off switch.** Worker route, database, Edge and
+app are written (PR #383); nothing is deployed or applied. Owner decisions
+2026-10-30: a guide is made together with every final drawing, in the same Bob
+request, and the first live run measures what that adds; build pages show
+screws, nails, bolts and glue per step. The ordinary drawing sheets keep no
+fastener table ([2026-10-26 decision](#fastener-schedule-on-drawings--annotations-version-2-2026-10-26)
+still holds); fasteners appear only on guide pages.
 The [workshop pack](https://claude.ai/artifact/Ub7frcych8Yhm8mSMp2tXh) holds the
 open questions.
 
@@ -1234,7 +1237,20 @@ Release order, each step manual with the owner's OK: deploy the Modal worker
 (PR 1), apply `20261030170000`, deploy `ask-bob` and `bob-worker`, then apply
 `20261030171000`. With the switch off this changes nothing for Bob.
 
-Remaining: the app section, then one paid run to measure the cost.
+**App (PR 4, source only).** `CadBuildGuide` shows a "Build guide · N pages"
+section under the drawing sheets, in the owner view and the volunteer view
+(which receives guide pages only where it receives the drawing). Each page is a
+zoomable sheet with a download link; pages are labelled "What is in the box",
+"Step N (build R×)" and "Done". The section says the guide is not reviewed and
+that fastener counts are rule-of-thumb proposals. `not_generated` and `failed`
+show one plain sentence; a drawing made with the switch off shows nothing.
+Browser checks: `check-volunteer-browser.mjs` (pages, labels, zoom at
+320/390/1280) and `check-foundations-browser.mjs` (not-generated message).
+
+Release order, continued: deploy Pages after the Edge.
+
+Remaining: one paid run to measure the cost, with the owner's OK and the switch
+turned on.
 
 ### Fastener schedule on drawings — annotations version 2, 2026-10-26
 

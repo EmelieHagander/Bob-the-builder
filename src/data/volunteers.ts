@@ -28,7 +28,7 @@ export interface VolunteerDrawingSummary {
 export interface VolunteerDrawing extends VolunteerDrawingSummary {
   projectId: string; taskId: string; kind: ArtifactKind; description: string; assumptions: string
   content: null | {
-    imageId: string | null; cad: Pick<CadDrawing, 'recipe' | 'files' | 'source_changed'> | null
+    imageId: string | null; cad: (Pick<CadDrawing, 'recipe' | 'files' | 'source_changed'> & { build_guide?: Record<string, any> | null }) | null
     parametricRecipe: StorageBoxRecipe | null; generation: ArtifactGeneration | null
     roomLayout: RoomLayoutDetails | null; multifloorPlan: BuildingPlanDetails | null; stairStudy: StairDetails | null
   }
