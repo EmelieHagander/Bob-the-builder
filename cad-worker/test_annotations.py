@@ -30,7 +30,7 @@ class AnnotationPagesTest(unittest.TestCase):
                     numbers=[el for el in page.iter(NS+'text') if el.get('text-anchor')=='middle' and (el.text or '').startswith('P')]
                     self.assertLessEqual(len(numbers),PARTS_PER_PAGE)
                     seen.extend(el.text for el in numbers)
-                    self.assertIn('Construction source / revision 7',texts)
+                    self.assertIn('Construction version 7 - ID source',texts)
                     for i,a in enumerate(numbers):
                         x,y=float(a.get('x')),float(a.get('y'))
                         self.assertTrue(100<=x<=660 and 110<=y<=610)
@@ -76,7 +76,7 @@ class FastenerBandTest(unittest.TestCase):
                 plain=Path(tmp,'plain.svg');plain.write_text(path.read_text())
                 annotate(plain,req,rows,box,'front',[5,-100,15],[0,0,1],[5,10,15],source)
                 plain_root=ET.parse(plain).getroot()
-                self.assertEqual(plain_root.get('data-page-height'),str(max(750,170+min(count,PARTS_PER_PAGE)*32)),'no schedule: sheets unchanged')
+                self.assertEqual(plain_root.get('data-page-height'),'750','no schedule: one kind of part fits the standard sheet')
                 self.assertFalse(any((el.text or '').startswith('Fasteners') for el in plain_root.iter(NS+'text')))
                 notes=annotate(path,req,rows,box,'front',[5,-100,15],[0,0,1],[5,10,15],source,schedule())
                 self.assertEqual(set(notes),{'dimensions','parts','coverage'},'per-view notes keep their exact shape')
@@ -86,7 +86,7 @@ class FastenerBandTest(unittest.TestCase):
                 title=[el for el in texts[0] if (el.text or '').startswith('Fasteners - proposal')]
                 self.assertEqual(len(title),1)
                 self.assertFalse(any((el.text or '').startswith('Fasteners') for page in texts[1:] for el in page),'band only on sheet 1')
-                footer=[el for el in texts[0] if (el.text or '').startswith(('Construction source','Blank dimensions'))]
+                footer=[el for el in texts[0] if (el.text or '').startswith(('Construction version','Part sizes'))]
                 band=[el for el in texts[0] if float(el.get('y'))>=annotations.FASTENER_TOP and float(el.get('x'))<740 and el not in footer]
                 self.assertEqual(len(band),1+5+2*5+3,'title, five header cells, two rows of five cells, three notes')
                 self.assertEqual(min(float(el.get('y')) for el in footer),height-48)
@@ -94,5 +94,71 @@ class FastenerBandTest(unittest.TestCase):
                 self.assertTrue(all(float(el.get('x'))<740 for el in band),'band stays left of the part table')
                 self.assertIn('F2',[el.text for el in band])
                 self.assertGreaterEqual(height,750)
+
+def blank_svg(tmp):
+    path=Path(tmp,'view.svg')
+    path.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><g id="Visible"><path d="M0 0 L100 100"/></g></svg>')
+    return path
+
+def texts_of(path):
+    return [el.text for el in ET.parse(path).getroot().iter(NS+'text')]
+
+class PlainLanguageTest(unittest.TestCase):
+    """Sheets read for people without drawing experience; exact notes stay unchanged."""
+    def test_part_names_drop_ids_sizes_and_never_claim_a_size(self):
+        self.assertEqual(annotations.part_name('leg_45x45x430'),'Leg')
+        self.assertEqual(annotations.part_name('sidePanel.left'),'Side panel left')
+        self.assertEqual(annotations.part_name('retained_assembly_600_800_300'),'Retained assembly')
+        self.assertEqual(annotations.part_name('P1'),'Part')
+        self.assertEqual(annotations.part_name('a_very_long_descriptive_cabinet_part'),'A very long descript...')
+
+    def test_blank_sizes_name_the_length(self):
+        self.assertEqual(annotations.blank_text({'primitive':'box','x_mm':1110,'y_mm':45,'z_mm':45}),'45 x 45 mm, length 1110 mm')
+        self.assertEqual(annotations.blank_text({'primitive':'box','x_mm':600,'y_mm':18,'z_mm':400}),'18 x 400 mm, length 600 mm')
+        self.assertEqual(annotations.blank_text({'primitive':'tube','outside_diameter_mm':42.4,'wall_thickness_mm':2.6,'length_mm':900}),'Tube, dia. 42.4, wall 2.6, length 900 mm')
+        self.assertEqual(annotations.blank_text({'primitive':'cylinder','diameter_mm':8,'length_mm':40}),'Round, diameter 8, length 40 mm')
+
+    def test_parts_are_grouped_by_kind_and_every_number_is_listed_once(self):
+        definitions={'leg':{'primitive':'box','x_mm':45,'y_mm':45,'z_mm':430},'rail':{'primitive':'box','x_mm':1110,'y_mm':45,'z_mm':45}}
+        rows=[{'definition_id':d} for d in ('leg','leg','rail','leg','rail')]
+        lines=annotations.part_lines(list(enumerate(rows,1)),definitions)
+        self.assertEqual(lines,[(13,'P1-P2, P4: 3 x Leg'),(11,'45 x 45 mm, length 430 mm'),(0,''),(13,'P3, P5: 2 x Rail'),(11,'45 x 45 mm, length 1110 mm')])
+        many=annotations.part_lines([(n,{'definition_id':'leg' if n%2 else 'rail'}) for n in range(1,33)],definitions)
+        listed=' '.join(t for size,t in many if size==13)
+        self.assertEqual(sorted(int(n) for n in __import__('re').findall(r'P(\d+)',listed)),list(range(1,33)))
+        self.assertTrue(all(len(t)<=annotations.COLUMN_CHARS+1 for size,t in many if size==13),'marker lines wrap inside the column')
+
+    def test_dimensions_use_words_with_the_axis_letter_and_every_view_explains_directions(self):
+        req={'definitions':[{'id':'post','primitive':'box','x_mm':45,'y_mm':70,'z_mm':900}]}
+        box={'min':[0,0,0],'max':[45,70,900],'size':[45,70,900]}
+        rows=[{'id':'post','definition_id':'post','bounding_box_mm':box}]
+        center=[22.5,35,450]
+        cases={'front':([22.5,-5000,450],[0,0,1],['Width 45 mm (X)','Height 900 mm (Z)','Y depth: away from you']),
+               'back':([22.5,5000,450],[0,0,1],['Width 45 mm (X)','Height 900 mm (Z)','Y depth: towards you']),
+               'top':([22.5,35,5000],[0,1,0],['Width 45 mm (X)','Depth 70 mm (Y)','Z height: towards you']),
+               'isometric':([5000,-5000,5000],[0,0,1],['Total size: width 45 x depth 70 x height 900 mm (X x Y x Z)','X width','Y depth','Z height'])}
+        for view,(camera,up,expected) in cases.items():
+            with self.subTest(view=view), tempfile.TemporaryDirectory() as tmp:
+                path=blank_svg(tmp)
+                notes=annotate(path,req,rows,box,view,camera,up,center,{'artifact_id':'source','revision':2})
+                texts=texts_of(path)
+                self.assertIn(annotations.VIEW_TITLES[view],texts)
+                self.assertIn('Directions in this view',texts)
+                for value in expected: self.assertIn(value,texts)
+                self.assertFalse(any(t.startswith(('XYZ','Overall XYZ','Assembly /')) for t in texts),'no bare axis codes')
+                self.assertEqual(notes['parts'],[{'number':'P1','instance_id':'post','definition_id':'post','blank_mm':{'x_mm':45,'y_mm':70,'z_mm':900}}],'exact notes unchanged')
+
+    def test_many_kinds_of_part_grow_the_sheet_and_stay_above_the_footer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=blank_svg(tmp)
+            req={'definitions':[{'id':f'kind_{chr(97+i)}{chr(97+i)}','primitive':'box','x_mm':10+i,'y_mm':20,'z_mm':30} for i in range(26)]}
+            box={'min':[0,0,0],'max':[40,20,30],'size':[40,20,30]}
+            rows=[{'id':f'part{i:03}','definition_id':req['definitions'][i%26]['id'],'bounding_box_mm':box} for i in range(40)]
+            annotate(path,req,rows,box,'front',[20,-100,15],[0,0,1],[20,10,15],{'artifact_id':'source','revision':1})
+            root=ET.parse(path).getroot();height=float(root.get('data-page-height'))
+            self.assertGreater(height,750)
+            for page in [g for g in root if g.get('id','').startswith('DrawingPage')]:
+                column=[float(el.get('y')) for el in page.iter(NS+'text') if float(el.get('x'))==annotations.COLUMN_X]
+                self.assertLessEqual(max(column),height-75)
 
 if __name__=='__main__': unittest.main()
