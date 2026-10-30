@@ -1105,6 +1105,13 @@ manifest notes (`annotations` version 1) and the transport are unchanged.
   smaller text. Disclaimers stay in plain words (not to scale, products, fixings and
   strength unchecked, sizes before notches and holes, not approved for building).
 
+In the app (`CadDrawingView`), each saved view has its own zoom (100-300 %)
+inside the shared `box-drawing-viewport`, so a 1000 px sheet can be read on a
+phone and multi-sheet views are no longer squeezed into 480 px. "Parts and
+sizes" uses the same words: plain name, quantity, size with the length named,
+notches or holes, and the drawing's P-numbers from the saved annotation notes
+(hidden for drawings without notes). The CSV cut list is unchanged.
+
 The reviewer still receives the exact recipe and manifest with the pixels.
 Saved drawings keep their old sheets until rendered again. The first paid review
 with the new sheets needs the owner's OK.

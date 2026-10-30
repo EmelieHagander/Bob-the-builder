@@ -4,6 +4,8 @@
 .box-drawing-viewport { width: 100%; max-width: 100%; max-height: 72vh; overflow: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); overscroll-behavior: contain; }
 .box-drawing-sheet { line-height: 0; }
 .box-drawing-sheet svg { display: block; width: 100%; height: auto; }
+.box-drawing-sheet img { display: block; width: 100%; height: auto; background: white; }
+.cad-sheet { margin: 16px 0; min-width: 0; max-width: 100%; }
 .box-dimensions { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .box-dimensions dt { font-size: 13px; color: var(--ink-soft); }
 .box-dimensions dd { margin: 4px 0 0; font-weight: 700; font-variant-numeric: tabular-nums; }
