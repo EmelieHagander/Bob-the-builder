@@ -1,5 +1,6 @@
 import tempfile, unittest
 from pathlib import Path
+from bob_cad.annotations import VIEW_TITLES
 from bob_cad.worker import CadContractError, render_assembly, validate_request, _shape, _checks, _render_preview, _camera, VIEWS, MAX_VIEWS
 from PIL import Image
 from unittest.mock import patch
@@ -93,11 +94,11 @@ class CadWorkerTest(unittest.TestCase):
                 self.assertEqual(notes['dimensions'],[{'axis':'xyz'[i],'mm':result['bounding_box_mm']['size'][i]} for i in expected])
                 root=ET.parse(Path(tmp,view+'.svg')).getroot()
                 texts=[e.text for e in root.iter() if e.tag.endswith('}text')]
-                self.assertIn('Assembly / '+view,texts)
+                self.assertIn(VIEW_TITLES[view],texts)
                 self.assertFalse(any(r['assembly_id'] in s for s in texts))
-                self.assertTrue(any('Dimensions in mm' in s for s in texts))
+                self.assertTrue(any('measurements in mm' in s for s in texts))
                 self.assertTrue(any('P1' in s for s in texts))
-                self.assertTrue(any('revision 3' in s for s in texts))
+                self.assertTrue(any('Construction version 3' in s for s in texts))
                 self.assertEqual(hashlib.sha256(Path(tmp,view+'.svg').read_bytes()).hexdigest(),result['previews'][view]['source_sha256'])
                 self.assertEqual(hashlib.sha256(Path(tmp,view+'.png').read_bytes()).hexdigest(),result['previews'][view]['sha256'])
 

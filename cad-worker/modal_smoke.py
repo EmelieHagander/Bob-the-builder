@@ -8,8 +8,16 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+import importlib.util
+from pathlib import Path
 
 import modal
+
+
+# Plain-language view titles, read without importing the CAD kernel.
+_spec = importlib.util.spec_from_file_location("cad_annotations", Path(__file__).parent / "bob_cad/annotations.py")
+_annotations = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_annotations)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -67,11 +75,11 @@ def main():
             raise RuntimeError("CAD export hash mismatch")
         if (b"ISO-10303-21" if key == "step" else b"<svg") not in raw:
             raise RuntimeError("Invalid CAD file format")
-        if key != 'step' and (b'revision 3' not in raw or b'Dimensions in mm' not in raw or b'P1' not in raw):
+        if key != 'step' and (b'Construction version 3' not in raw or b'measurements in mm' not in raw or b'P1' not in raw):
             raise RuntimeError('Saved SVG lacks source revision, dimensions or part labels')
         if key != 'step':
             texts=[e.text or '' for e in ET.fromstring(raw).iter() if e.tag.endswith('}text')]
-            if 'Assembly / '+key not in texts or any(recipe['assembly_id'] in t for t in texts):
+            if _annotations.VIEW_TITLES[key] not in texts or any(recipe['assembly_id'] in t for t in texts):
                 raise RuntimeError('Visible CAD heading uses a stable identity instead of a neutral label')
     if set(packet.get("previews",{})) != set(recipe["views"]):
         raise RuntimeError("Missing CAD PNG previews")
