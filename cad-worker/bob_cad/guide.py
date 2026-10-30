@@ -7,16 +7,18 @@ those joints. Nothing here invents geometry, order or hardware: unknowns are sho
 as unknown. Concept presentation only, like the drawing sheets."""
 from __future__ import annotations
 
-import math, xml.etree.ElementTree as ET
+import hashlib, itertools, math, shutil, xml.etree.ElementTree as ET
 from pathlib import Path
 from cairosvg import svg2png
 from build123d import Align, Compound, Cone, Cylinder, ExportSVG, Location, Unit
 from .annotations import part_name, blank_text, marker_ranges, _number
-from .worker import CadContractError, ID, _location, _shape, validate_fasteners, validate_request
+from .worker import CadContractError, ID, _location, _shape, validate_drawing_source, validate_fasteners, validate_request
 
 NS = 'http://www.w3.org/2000/svg'
 ET.register_namespace('', NS)
 GUIDE_VERSION = 1
+MAX_PAGES = 60
+_LAYERS = itertools.count()
 PAGE_W, PAGE_H = 1000, 750
 TOUCH_MM = 0.5
 CAMERAS = {'isometric': (1, -1, 1), 'isometric_front_left': (-1, -1, 1),
@@ -92,7 +94,8 @@ def _arrow(start, end, size):
 
 class _View:
     """One camera shared by every layer on a page, mapped into a page rectangle."""
-    def __init__(self, shapes, camera, frame):
+    def __init__(self, shapes, camera, frame, scratch):
+        self.scratch = scratch
         asm = Compound(children=shapes); bb = asm.bounding_box()
         self.center = [(bb.min.X + bb.max.X) / 2, (bb.min.Y + bb.max.Y) / 2, (bb.min.Z + bb.max.Z) / 2]
         d = max(bb.size.X, bb.size.Y, bb.size.Z) * 4
@@ -117,7 +120,7 @@ class _View:
         if not shapes: return
         visible, _ = Compound(children=shapes).project_to_viewport(tuple(self.camera), viewport_up=(0, 0, 1), look_at=tuple(self.center))
         svg = ExportSVG(unit=Unit.MM, scale=1, margin=0, precision=3); svg.add_layer('V'); svg.add_shape(visible, layer='V')
-        path = Path('/tmp') / f'bob_guide_{id(self)}.svg'; svg.write(str(path))
+        path = self.scratch / f'layer-{next(_LAYERS)}.svg'; svg.write(str(path))
         root = ET.parse(path).getroot(); path.unlink(missing_ok=True)
         g = ET.SubElement(page, f'{{{NS}}}g', {'transform': f'translate({self.dx},{self.dy}) scale({self.scale})',
                                                'fill': 'none', 'stroke': colour, 'stroke-width': str(width / self.scale),
@@ -199,8 +202,33 @@ def _signature(joint_ids, joints, boxes, defs_of):
                          tuple(round(boxes[i]['max'][k] - lo[k], 1) for k in range(3))) for i in ids))
 
 
-def render_guide(raw, joints, steps, output_dir, fasteners=None, context_ids=(), size=(1500, 1125)):
+def _plan(steps, joint_ends, boxes, defs_of):
+    """Per step, its sub-assemblies grouped by identical geometry (drawn once, 'N×')."""
+    plan = []
+    for step in steps:
+        groups = []
+        for comp in _components(step['joint_ids'], joint_ends):
+            sig = _signature(comp, joint_ends, boxes, defs_of)
+            for g in groups:
+                if g['sig'] == sig: g['copies'].append(comp); break
+            else: groups.append({'sig': sig, 'copies': [comp]})
+        plan.append((step, groups))
+    return plan
+
+
+def render_guide(raw, joints, steps, output_dir, fasteners=None, context_ids=(), size=(1500, 1125), drawing_source=None, svg_only=False):
+    out = Path(output_dir); out.mkdir(parents=True, exist_ok=True)
+    scratch = out / '.layers'; scratch.mkdir(exist_ok=True)
+    try:
+        return _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size, drawing_source, svg_only)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size, drawing_source, svg_only):
     req = validate_request(raw)
+    validate_drawing_source(drawing_source)
+    if not isinstance(context_ids, (list, tuple)) or len(set(context_ids)) != len(context_ids): raise CadContractError('guide_context')
     ids = [i['id'] for i in req['instances']]
     joint_ends = validate_guide(joints, steps, set(ids))
     if fasteners is not None: validate_fasteners(fasteners)
@@ -214,17 +242,22 @@ def render_guide(raw, joints, steps, output_dir, fasteners=None, context_ids=(),
     numbers = {iid: n for n, iid in enumerate(sorted(ids), 1)}
     lo = [min(b['min'][k] for b in boxes.values()) for k in range(3)]; hi = [max(b['max'][k] for b in boxes.values()) for k in range(3)]
     center = [(lo[k] + hi[k]) / 2 for k in range(3)]; size_mm = max(hi[k] - lo[k] for k in range(3))
-    out = Path(output_dir); out.mkdir(parents=True, exist_ok=True)
+    plan = _plan(steps, joint_ends, boxes, defs_of)
+    if sum(len(groups) for _, groups in plan) + 2 > MAX_PAGES: raise CadContractError('guide_too_many_pages')
     pages = []
 
     def label(part_ids):
         return ', '.join(marker_ranges(sorted(numbers[i] for i in part_ids)))
 
     def save(page, key, note):
+        if drawing_source:
+            # Every page names the exact construction it was drawn from.
+            _text(page, PAGE_W - 30, 26, f'Construction version {drawing_source["revision"]} · ID {drawing_source["artifact_id"]}', 10, '400', 'end', '#555555')
         data = ET.tostring(page, encoding='utf-8', xml_declaration=False)
         (out / f'{key}.svg').write_bytes(data)
-        svg2png(bytestring=data, write_to=str(out / f'{key}.png'), output_width=size[0], output_height=size[1], background_color='white')
-        pages.append({'key': key, **note})
+        if not svg_only:
+            svg2png(bytestring=data, write_to=str(out / f'{key}.png'), output_width=size[0], output_height=size[1], background_color='white')
+        pages.append({'key': key, 'sha256': hashlib.sha256(data).hexdigest(), **note})
 
     def parts_box(page, items, hardware, unsized, glue, y0=140):
         rows = len(items) + len(hardware) + (1 if glue else 0) + (1 if unsized else 0)
@@ -232,7 +265,7 @@ def render_guide(raw, joints, steps, output_dir, fasteners=None, context_ids=(),
                                               'fill': 'none', 'stroke': INK, 'stroke-width': '2'})
         y = y0 + 12
         for count, part_ids in items:
-            view = _View([solids[part_ids[0]]], (1, -1, 1), (52, y, 80, 72)); view.layer(page, [solids[part_ids[0]]], INK, 1.6)
+            view = _View([solids[part_ids[0]]], (1, -1, 1), (52, y, 80, 72), scratch); view.layer(page, [solids[part_ids[0]]], INK, 1.6)
             _text(page, 146, y + 34, f'{count}×', 26, '700'); _text(page, 146, y + 58, f'{label(part_ids)} {part_name(defs_of[part_ids[0]])}', 13, fill='#333333'); y += 84
         for h in hardware:
             _glyph(page, h['kind'], 60, y); _text(page, 146, y + 34, f'{h["count"]}×', 26, '700')
@@ -249,7 +282,7 @@ def render_guide(raw, joints, steps, output_dir, fasteners=None, context_ids=(),
     for n, (did, members) in enumerate(list(kinds.items())[:8]):
         x = 40 + (n % cols) * (tile_w + 20); y = 100 + (n // cols) * 270
         ET.SubElement(page, f'{{{NS}}}rect', {'x': str(x), 'y': str(y), 'width': str(tile_w), 'height': '250', 'rx': '12', 'fill': 'none', 'stroke': INK, 'stroke-width': '2'})
-        _View([solids[members[0]]], (1, -1, 1), (x + 16, y + 14, tile_w - 32, 140)).layer(page, [solids[members[0]]], INK, 1.8)
+        _View([solids[members[0]]], (1, -1, 1), (x + 16, y + 14, tile_w - 32, 140), scratch).layer(page, [solids[members[0]]], INK, 1.8)
         _text(page, x + tile_w / 2, y + 190, f'{len(members)}×', 32, '700', 'middle')
         _text(page, x + tile_w / 2, y + 216, f'{label(members)} {part_name(did)}', 15, '600', 'middle')
         _text(page, x + tile_w / 2, y + 238, blank_text(definitions[did]), 12, '400', 'middle', '#333333')
@@ -270,14 +303,7 @@ def render_guide(raw, joints, steps, output_dir, fasteners=None, context_ids=(),
 
     placed = set(context_ids)
     number = 0
-    for step in steps:
-        comps = _components(step['joint_ids'], joint_ends)
-        groups = []
-        for comp in comps:
-            sig = _signature(comp, joint_ends, boxes, defs_of)
-            for g in groups:
-                if g['sig'] == sig: g['copies'].append(comp); break
-            else: groups.append({'sig': sig, 'copies': [comp]})
+    for step, groups in plan:
         for g in groups:
             number += 1
             comp = g['copies'][0]
@@ -327,7 +353,7 @@ def render_guide(raw, joints, steps, output_dir, fasteners=None, context_ids=(),
             ET.SubElement(page, f'{{{NS}}}circle', {'cx': '76', 'cy': '76', 'r': '44', 'fill': 'none', 'stroke': INK, 'stroke-width': '3'})
             _text(page, 76, 99, str(number), 60, '700', 'middle')
             if len(g['copies']) > 1: _text(page, 136, 99, f'{len(g["copies"])}×', 42, '700')
-            view = _View(context + lifted + arrows, cam, (320, 60, 650, 630))
+            view = _View(context + lifted + arrows, cam, (320, 60, 650, 630), scratch)
             view.layer(page, [solids[i] for i in sorted(placed)], CONTEXT, 1.6)
             view.layer(page, [solids[i] for i in bases if i not in placed], INK, 2.2)
             view.layer(page, lifted + arrows, INK, 2.6)
@@ -355,8 +381,8 @@ def render_guide(raw, joints, steps, output_dir, fasteners=None, context_ids=(),
 
     loose = [i for i in ids if i not in placed]
     page = _page(); _text(page, 40, 80, 'Done', 36, '700')
-    _View(list(solids.values()), (1, -1, 1), (120, 110, 760, 540)).layer(page, list(solids.values()), INK, 2.2)
+    _View(list(solids.values()), (1, -1, 1), (120, 110, 760, 540), scratch).layer(page, list(solids.values()), INK, 2.2)
     _text(page, 500, 700, f'Total size: width {_number(round(hi[0]-lo[0],1))} × depth {_number(round(hi[1]-lo[1],1))} × height {_number(round(hi[2]-lo[2],1))} mm', 16, '600', 'middle')
     if loose: _text(page, 500, 726, f'Not in any step: {", ".join(f"P{numbers[i]}" for i in sorted(loose, key=lambda i: numbers[i]))}. Ask Bob where they go.', 14, '400', 'middle', '#333333')
     save(page, f'guide-{number + 1}', {'kind': 'done', 'loose_instance_ids': sorted(loose, key=lambda i: numbers[i])})
-    return {'version': GUIDE_VERSION, 'basis': 'proposed_order', 'pages': pages}
+    return {'version': GUIDE_VERSION, 'basis': 'proposed_order', 'drawing_source': drawing_source, 'pages': pages}

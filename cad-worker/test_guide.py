@@ -2,6 +2,9 @@
 import copy, json, tempfile, unittest
 from pathlib import Path
 from PIL import Image
+import hashlib, os
+from unittest.mock import patch
+from bob_cad import guide as guide_module
 from bob_cad.guide import fastener_rows, render_guide, _lift_direction
 from bob_cad.worker import CadContractError
 
@@ -77,5 +80,57 @@ class GuideTest(unittest.TestCase):
             with self.subTest(code=code), tempfile.TemporaryDirectory() as tmp:
                 with self.assertRaisesRegex(CadContractError, code):
                     render_guide(case['recipe'], case['joints'], case['steps'], tmp, case['fasteners'])
+
+SOURCE = {'artifact_id': '11111111-1111-4111-8111-111111111111', 'revision': 4}
+
+class GuideServiceTest(unittest.TestCase):
+    def test_svg_only_pages_are_hashed_pinned_and_leave_no_working_files(self):
+        f = bench()
+        with tempfile.TemporaryDirectory() as tmp:
+            guide = render_guide(f['recipe'], f['joints'], f['steps'], tmp, f['fasteners'], drawing_source=SOURCE, svg_only=True)
+            self.assertEqual(guide['drawing_source'], SOURCE)
+            self.assertEqual(sorted(os.listdir(tmp)), sorted(p['key'] + '.svg' for p in guide['pages']), 'no PNGs and no working layers')
+            for page in guide['pages']:
+                data = Path(tmp, page['key'] + '.svg').read_bytes()
+                self.assertEqual(hashlib.sha256(data).hexdigest(), page['sha256'])
+                self.assertIn('Construction version 4 · ID 11111111-1111-4111-8111-111111111111', data.decode())
+
+    def test_page_cap_and_construction_pin_are_enforced(self):
+        f = bench()
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(guide_module, 'MAX_PAGES', 4), self.assertRaisesRegex(CadContractError, 'guide_too_many_pages'):
+                render_guide(f['recipe'], f['joints'], f['steps'], tmp, f['fasteners'])
+            with self.assertRaisesRegex(CadContractError, 'drawing_source'):
+                render_guide(f['recipe'], f['joints'], f['steps'], tmp, f['fasteners'], drawing_source={'artifact_id': 'x', 'revision': 1})
+
+    def test_authenticated_guide_route_returns_hashed_svg_pages(self):
+        import base64, json, threading, urllib.request, urllib.error
+        from http.server import HTTPServer
+        from bob_cad.server import Handler
+        f = bench()
+        envelope = {'recipe': f['recipe'], 'drawing_source': SOURCE, 'joints': f['joints'], 'steps': f['steps'],
+                    'fasteners': f['fasteners'], 'context_ids': []}
+        with patch.dict(os.environ, {'BOB_CAD_TOKEN': 'fixture-token-' + 'x' * 32}):
+            server = HTTPServer(('127.0.0.1', 0), Handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+            endpoint = f'http://127.0.0.1:{server.server_port}/guide'
+            auth = {'Authorization': 'Bearer ' + os.environ['BOB_CAD_TOKEN'], 'Content-Type': 'application/json'}
+            try:
+                with self.assertRaises(urllib.error.HTTPError) as error:
+                    urllib.request.urlopen(urllib.request.Request(endpoint, data=b'{}', method='POST'), timeout=5)
+                self.assertEqual(error.exception.code, 401)
+                with urllib.request.urlopen(urllib.request.Request(endpoint, data=json.dumps(envelope).encode(), method='POST', headers=auth), timeout=45) as response:
+                    packet = json.load(response)
+                self.assertEqual(set(packet['files']), {f'guide-{n}' for n in range(5)})
+                self.assertEqual(packet['guide']['drawing_source'], SOURCE)
+                for page in packet['guide']['pages']:
+                    raw = base64.b64decode(packet['files'][page['key']])
+                    self.assertTrue(raw.startswith(b'<svg')); self.assertEqual(hashlib.sha256(raw).hexdigest(), page['sha256'])
+                for broken in ({k: v for k, v in envelope.items() if k != 'context_ids'}, {**envelope, 'drawing_source': None}, {**envelope, 'extra': 1}):
+                    with self.assertRaises(urllib.error.HTTPError) as error:
+                        urllib.request.urlopen(urllib.request.Request(endpoint, data=json.dumps(broken).encode(), method='POST', headers=auth), timeout=45)
+                    self.assertEqual(error.exception.code, 422)
+            finally:
+                server.shutdown(); server.server_close(); thread.join(timeout=5)
 
 if __name__ == '__main__': unittest.main()

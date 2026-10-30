@@ -1170,9 +1170,27 @@ rails and the rule schedule computed for its 16 joints (38 screws).
 unsized joints, loose parts and refused orders. One bench guide renders in
 about 0.5 s locally.
 
-Next: the final-drawing request has Bob propose the order, sends joints, steps
-and the schedule with the drawing render, and saves the pages with the drawing;
-the app shows them; then a paid run measures the cost.
+**Worker route `/guide` (PR 1, source only).** Same bearer token and child
+process as `/render`, its own 40 s limit. Strict envelope `{recipe,
+drawing_source, joints, steps, fasteners, context_ids}` (2 MiB; `fasteners` may
+be null, `drawing_source` may not); any other shape answers 422. Answers
+`{guide, files}`: SVG pages only (`guide-0` … `guide-N`, at most 60, 1 MiB
+each, 6 MiB in all), each page's `sha256` in `guide.pages`, the construction
+version and ID printed on every page and echoed as `guide.drawing_source`.
+Working files stay in the job's own temporary folder. `/render`, its envelope
+and `CAD_TRANSPORT_CONTRACT` are unchanged. `modal_smoke.py` adds a `/guide`
+case (pages, hashes, pin, rule fasteners, 401/422).
+
+**Switch (owner decision 2026-10-30):** one global row in `shared.ai_settings`
+(`cad-build-guide`, off by default), toggled in the Supabase dashboard. bob has
+no owner/organiser authority in the database yet (`has_project_access` is any
+member), so a per-project toggle would let any member start paid work.
+
+Remaining, each safe with the switch off: the database (switch row, guide pages
+saved with the drawing revision, volunteer read), the Edge (Bob proposes the
+order in the final-drawing request; no order means no guide, never an invented
+one; a failed guide never blocks the drawing; the reviewer does not see the
+guide), the app section, then one paid run to measure the cost.
 
 ### Fastener schedule on drawings — annotations version 2, 2026-10-26
 
