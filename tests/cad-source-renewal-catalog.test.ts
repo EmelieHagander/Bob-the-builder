@@ -5,7 +5,7 @@ import {execFileSync} from 'node:child_process'
 import {projectSchema} from './support/project-schema.ts'
 import {preContextStrategyCatalogFixture as catalogFixture} from './support/ai-catalog-fixture.ts'
 import type {AiCatalogManifest} from '../supabase/functions/_shared/ai-catalog.ts'
-import {DESIGN_CAD_TOOL,withoutResumeViews} from '../supabase/functions/_shared/cad-assistant.ts'
+import {DESIGN_CAD_TOOL,withoutAssemblyOrder,withoutResumeViews} from '../supabase/functions/_shared/cad-assistant.ts'
 import {withLegacyCadViews} from '../supabase/functions/_shared/cad-adapter.ts'
 const publication='20261017180143_cad_source_renewal_catalog.sql'
 const source=readFileSync(new URL('../supabase/migrations/'+publication,import.meta.url),'utf8')
@@ -40,7 +40,7 @@ test('explicit source renewal publishes exactly two definitions and preserves hi
  }
  assert.equal(patch.revision_description,DESIGN_CAD_TOOL.function.parameters.properties.construction_revision.description)
  // This publication predates the 2026-10-21 view contract.
- assert.deepEqual(current.definitions.find(d=>d.prompt_key==='tools.design_project_cad')!.definition.parameters,withLegacyCadViews(withoutResumeViews(DESIGN_CAD_TOOL).function.parameters))
+ assert.deepEqual(current.definitions.find(d=>d.prompt_key==='tools.design_project_cad')!.definition.parameters,withLegacyCadViews(withoutResumeViews(withoutAssemblyOrder(DESIGN_CAD_TOOL)).function.parameters))
  assert.match(patch.manual,/same drawing request_id/);assert.match(patch.manual,/Omitted revisions never select a new head/)
 })
 test('current runtime/toolbox and offline contracts carry the same explicit recovery instruction',async()=>{

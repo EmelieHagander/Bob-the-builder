@@ -1189,10 +1189,52 @@ member), so a per-project toggle would let any member start paid work.
 **Database (PR 2, source only):** [`20261030170000_cad_build_guide.sql`](../db/README.md#build-guides-with-the-drawing-revision--source-only-2026-10-30) adds the switch row (off), the
 `validate_cad_build_guide` trigger and the volunteer reader change.
 
-Remaining, each safe with the switch off: the Edge (Bob proposes the
-order in the final-drawing request; no order means no guide, never an invented
-one; a failed guide never blocks the drawing; the reviewer does not see the
-guide), the app section, then one paid run to measure the cost.
+**Edge (PR 3, source only).**
+
+- **Catalog.** Publication `cad-build-guide-v1`
+  (`20261030171000_cad_build_guide_catalog.sql`) gives `design_project_cad` a
+  nullable, required `assembly_dependencies` argument: for every saved joint,
+  the joints that must be done before it. The runtime hides it from Bob unless
+  the switch is on (`withoutAssemblyOrder` in `catalogTool`), so with the switch
+  off Bob neither sees nor pays for it. Historical publications are rebuilt
+  without it.
+- **Switch read.** `ask-openai.ts` reads `shared.ai_settings` `cad-build-guide`
+  once per job (journaled `cad:build_guide_switch`; missing or failed = off), and
+  only for catalogs that offer the argument. It is not part of
+  `drawingRuntimeVersion`, so flipping it never wakes waiting drawing requests.
+- **Order.** With the switch on, `cad-assistant.ts` checks the order with
+  `assemblyStages` (the same rule as `derive_construction_lists`) right after
+  the construction check. An invalid order is answered before any render or
+  review. No order, or no joints, records
+  `build_guide.status: not_generated`; code never invents an order. The order
+  is excluded from the drawing input fingerprint, so changing only the order
+  buys no new render or review.
+- **Render step.** The guide input (recipe, pin, saved joints, steps, the
+  server's fastener schedule from `read_construction_fasteners`, context parts
+  with role reference or existing_part) joins the drawing's `cad:render` step;
+  `cadRenderInput` is unchanged when there is no guide. The step calls `/guide`
+  through `createCadGuideTransport` after `/render` (90 s reserve). A failed
+  guide, or drawing and guide files over 5.5 MB, records `status: failed` and
+  the drawing continues.
+- **Saved with the drawing.** Pages join `files` (`guide-N`); notes join
+  `manifest.build_guide` (`generated`, `construction`, `fasteners`
+  rule_version/complete, `pages`, `reviewed: false`). `verifyCadFiles` accepts
+  guide pages only with matching notes, both in transport and on save.
+- **Reviewer.** The independent reviewer gets the manifest without
+  `build_guide` and only the drawing previews; review cost is unchanged.
+
+Tests: `tests/cad-build-guide.test.ts` (switch off unchanged; order, schedule
+and notes; no order; invalid orders cost nothing; failure keeps the drawing;
+the reviewer never sees the guide; the parameter is hidden when off; catalog
+equals runtime), `tests/cad-transport.test.ts`, `tests/construction-lists.test.ts`.
+The Edge type check (`npm run check:edge`) could not run in this session
+because the network blocks `esm.sh`.
+
+Release order, each step manual with the owner's OK: deploy the Modal worker
+(PR 1), apply `20261030170000`, deploy `ask-bob` and `bob-worker`, then apply
+`20261030171000`. With the switch off this changes nothing for Bob.
+
+Remaining: the app section, then one paid run to measure the cost.
 
 ### Fastener schedule on drawings — annotations version 2, 2026-10-26
 
