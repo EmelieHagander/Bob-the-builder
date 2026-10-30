@@ -1,9 +1,9 @@
 # Foundation verification and rollout
 
 <a id="material-sizes-diameter-2026-10-30"></a>
-## Material sizes with a diameter and the small review findings — prepared 2026-10-30
+## Material sizes with a diameter and the small review findings — installed 2026-10-30
 
-**Prepared, not migrated.** The owner asked to fix the remaining small findings
+**Installed; [installation record](#material-sizes-diameter-install-2026-10-30) below.** The owner asked to fix the remaining small findings
 of the [independent review](archive/material-tables-review-2026-10-29.md) and
 the tube gap (M2). Contract: [Database](../db/README.md#material-sizes-diameter),
 [Catalog](material-catalog.md#sizes-diameter).
@@ -30,6 +30,32 @@ shared catalog change does.
 Validation: `material-tables-hardening` (12, four new), `material-model`,
 `material-catalog-db` and the catalog fixture replay pass; the start-list seed
 still re-applies without change on its own schema.
+
+<a id="material-sizes-diameter-install-2026-10-30"></a>
+### Installation, 2026-10-30
+
+The owner approved deployment. The focused run over the catalog and material
+tests (746 tests) passed except the seven known failures on main.
+[PR #376](https://github.com/EmelieHagander/Bob-the-builder/pull/376) merged as
+`8874179b43ed9ceb1ced5c78c7721150a5da98e9`; its tree
+`99fd03009a14fb6849c8aca32c9f747cf8e3e421` equals the tested head. Zero active
+Bob jobs were read before and after each step. No function was deployed
+(`bob-worker` v154, `ask-bob` v186 unchanged).
+
+Recorded as `20261030054624_material_sizes_diameter_and_details` and
+`20261030054716_material_size_text_catalog`. Readback: size columns and
+`piece_length_mm` (stock and history) are `numeric(16,6)`; all 12 fastener sizes
+carry `diameter_mm` and no `width_mm`; nails read `3,4 × 100` and `2,8 × 75`;
+"Utomhusskruv C4" (revision 2) and "Rostfri skruv" (revision 1, reviewed, alias
+"rostfri skruv") each hold 4,2 × 55 and 5,0 × 60, and the nail definitions are
+at revision 2, every identity hash equal to its document; `store_articles_store_idx`
+exists and `supplier_articles.store_article_id` is gone; the lookup row reads
+`bob.current_store_prices`, the spec and sharing include the diameter, and
+`seed_length` stays. As the test owner in a read-only transaction, "rostfri
+skruv", "utomhusskruv", "trådspik 100x3,4" and "2tum4" return the expected
+definitions only. `tools.search_material_catalog` is v6 (`material-size-text-v1`),
+and all 312 active Bob definitions equal the tested fixture. The next new Bob job
+pins a fresh manifest; earlier jobs keep theirs.
 
 <a id="box-paid-run4-2026-10-30"></a>
 ## Paid box run after #375 — 2026-10-30

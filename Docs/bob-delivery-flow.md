@@ -565,11 +565,12 @@ på en ändrad verktygslista saknade cache (cirka USD 0,33, 28 %). Ägaren välj
 åtgärd innan nästa betalda prov. `bob-worker` v154 och `ask-bob` v186 körs;
 #369–#375 ska inte driftsättas igen.
 
-**Förberett, ej migrerat — storlekar med diameter och granskningens småfel (ägarbeslut 2026-10-30; [ändringar](foundation-verification.md#material-sizes-diameter-2026-10-30)):**
+**Installerat 2026-10-30 — storlekar med diameter och granskningens småfel (ägarbeslut; [bevis](foundation-verification.md#material-sizes-diameter-install-2026-10-30)):**
 rör kan bli delade storlekar (ytterdiameter och gods), skruv och spik har
 diametern i egen kolumn och först i etiketten, C4 och rostfri skruv är skilda
 material, hemmalager kan säga "6 st à 3,0 m", sex decimaler, ett index och
-oanvända delar borttagna. Två migreringar, ingen driftsättning av funktioner.
+oanvända delar borttagna. Två migreringar, ingen driftsättning av funktioner;
+`tools.search_material_catalog` v6.
 
 **Installerat — ägarens uppföljningar före lådprovet (2026-10-29; `bob-worker` v154, `ask-bob` v186, [bevis](foundation-verification.md#follow-ups-install-2026-10-29)):**
 6 fasta verktyg plus 4 efter projektfas och kort som säger när varje annat
