@@ -138,8 +138,8 @@ migration; the owner approved it and it was applied on 2026-10-29. It states no
 product, supplier, price or weight.
 
 <a id="shared-specs"></a>
-**Bob's new materials become shared, unreviewed specifications — prepared
-2026-10-29 (owner decision, follow-up 1), not applied.** The paid box run created
+**Bob's new materials become shared, unreviewed specifications — installed
+2026-10-30 (owner decision, follow-up 1; [evidence](foundation-verification.md#follow-up-1-install-2026-10-30)).** The paid box run created
 12 mm plywood separately in four projects. Now every material Bob saves in a
 project is also linked to a shared standard material, created or reused,
 marked unreviewed. Only the specification is shared: the shared entry is named

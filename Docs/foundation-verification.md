@@ -1,9 +1,10 @@
 # Foundation verification and rollout
 
 <a id="follow-up-1-2026-10-29"></a>
-## Material tables hardened and Bob's materials shared — prepared, 2026-10-29
+## Material tables hardened and Bob's materials shared — installed, 2026-10-30
 
-**Source and local verification only; not migrated.** Owner decisions after the
+**Installed; no paid run yet.** The [installation record](#follow-up-1-install-2026-10-30)
+follows the preparation notes below. Owner decisions after the
 [independent review](archive/material-tables-review-2026-10-29.md): fix the
 tables before any write path, let project stock point at household stock, and
 share only the specification when Bob's new materials become shared and
@@ -30,6 +31,30 @@ cut-plan and stock suites pass. No production write, deploy, CI or model call.
 Release order with the owner's OK and no running Bob job: apply
 `20261029260000_material_tables_hardening.sql`, then
 `20261029270000_material_shared_specs.sql`. No function deployment.
+
+<a id="follow-up-1-install-2026-10-30"></a>
+### Installation, 2026-10-30
+
+The owner approved the merge and migrations. The final focused run on the
+branch head passed **1,532/1,540**: the seven known failures on main, plus one
+order-dependent assertion in the new sharing test that was fixed and passed three
+consecutive times before merge. [PR #375](https://github.com/EmelieHagander/Bob-the-builder/pull/375)
+merged as `07991cadea50225b109852c57714d4b45df1479b`; its tree
+`a5510f246183154cbb3d1fb520afb68e1e1d85aa` equals the tested head. Zero active Bob
+jobs were read before each step. No function was deployed (`bob-worker` v154,
+`ask-bob` v186 unchanged).
+
+Recorded as `20261030043508_material_tables_hardening` and
+`20261030043511_material_shared_specs`. Readback: `is_bob_participant` no longer
+reads household access; `household_stock_revisions`, the price `review_status`
+and `price_basis` columns and `stock_revisions.household_stock_id` exist;
+`bob_private.stock_command` wraps the renamed `stock_command_before_household_stock`
+(authenticated may execute only the wrapper); the material and size links on
+definitions are `on delete restrict`; the size uniqueness index exists;
+`catalog_save` calls `share_material_spec` (not executable by `authenticated`);
+older-revision reads omit `spec`; the lookup ranks by reviewed tokens. As the test
+owner in a read-only transaction, "utomhusskruv", "2tum4" and "13 mm gips" return
+the same reviewed definitions as before, with null stock and price.
 
 <a id="follow-ups-2026-10-29"></a>
 ## Owner follow-ups before the next paid run — installed, 2026-10-29

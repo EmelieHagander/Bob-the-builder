@@ -574,7 +574,7 @@ sökning på hela ord med hemmalager `null` när inget registrerats; utelämnade
 egenskaper gör en definition ofullständig. [Ändringar och releaseordning](foundation-verification.md#follow-ups-2026-10-29).
 Därefter kör ägaren lådprovet.
 
-**Förberett, ej migrerat — materialtabellerna och första skrivvägen (uppföljning 1):**
+**Installerat 2026-10-30 — materialtabellerna och första skrivvägen (uppföljning 1; [bevis](foundation-verification.md#follow-up-1-install-2026-10-30)):**
 efter den [fristående granskningen](archive/material-tables-review-2026-10-29.md):
 behörighet bara för Bob-projektdeltagare, inget läckage från privata
 definitioner, länkar som följer aktuell revision och passar definitionen,

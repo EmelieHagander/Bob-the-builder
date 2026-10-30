@@ -273,7 +273,7 @@ profile `bulk` revision 1 (all optional) and category `mineral.aggregate`.
 Rationale and consumers: [material catalog](../Docs/material-catalog.md#optional-dimensions).
 
 <a id="material-hardening"></a>
-**Hardening before the first write path — prepared 2026-10-29, not applied**
+**Hardening before the first write path — installed 2026-10-30**
 (owner decisions after the [independent review](../Docs/archive/material-tables-review-2026-10-29.md)).
 `20261029260000_material_tables_hardening.sql`:
 
@@ -309,7 +309,7 @@ No runtime caller writes household stock, stores, prices or project-to-household
 links yet; Bob's own material saves are the first write path (below).
 
 <a id="material-shared-specs"></a>
-**Bob's materials shared as specifications — prepared 2026-10-29, not applied**
+**Bob's materials shared as specifications — installed 2026-10-30**
 (owner decision, follow-up 1). `20261029270000_material_shared_specs.sql` makes
 `bob_private.catalog_save` call `bob_private.share_material_spec` for every
 saved project material: a complete sheet, timber or fastener definition, or a
