@@ -115,8 +115,10 @@ test('release integration resumes selective construction editing, checking and d
         assert(!JSON.stringify(o.messages).includes(privateStep),'CAD file bytes are private runtime data')
         requests.push(structuredClone(o));maxInput=Math.max(maxInput,estimateBobRequestInput(o).total)
         const action=actions[modelCalls++]?.();assert(modelCalls<=actions.length,'No unplanned retry or extra model work')
-        if(action)assert(o.tools?.some(t=>t.function.name===action[0]),action[0]+' must be callable')
-        const id='action-'+modelCalls,tools=action?[{id,type:'function' as const,function:{name:action[0],arguments:JSON.stringify(action[1])}}]:undefined
+        // Tool-sheet manifests (2026-10-30): a tool described in the conversation is called through use_tool.
+        const native=!!action&&!!o.tools?.some(t=>t.function.name===action[0])
+        if(action)assert(native||o.tools?.some(t=>t.function.name==='use_tool')&&o.messages!.some(m=>typeof m.content==='string'&&m.content.includes('"name":"'+action[0]+'"')),action[0]+' must be callable')
+        const id='action-'+modelCalls,tools=action?[{id,type:'function' as const,function:native?{name:action[0],arguments:JSON.stringify(action[1])}:{name:'use_tool',arguments:JSON.stringify({name:action[0],arguments:action[1]})}}]:undefined
         return {success:true,model:'fixture',responseId:'response-'+modelCalls,data:action?null:'Konceptritningen är sparad och kopplad till arbetssteget. Bärighet är inte verifierad.',
           usage:{input_tokens:1,output_tokens:101,total_tokens:102,reasoning_tokens:100},outputPhase:action?'tool_calls':'final_answer',toolCalls:tools,
           outputItems:[{type:'reasoning',id:'rs_'+id,summary:[],encrypted_content:'opaque-fixture-'+id},...(tools?.map(t=>({type:'function_call',id:'fc_'+id,call_id:id,name:t.function.name,arguments:t.function.arguments,status:'completed'}))??
@@ -150,7 +152,9 @@ test('release integration resumes selective construction editing, checking and d
     assert.deepEqual(drawn.recipe,exact.recipe);assert.equal(drawn.manifest.bob_construction.revision,2)
     assert.equal((await query('select * from bob.current_drawing_steps where artifact_id=$1',[id])).rows.length,1)
     assert.match(final.answer,/inte verifierad/)
-    assert(requests.at(-1).tools.some((t:any)=>t.function.name==='edit_construction_parts'),'loaded manuals survive every lease')
+    // Native, or (tool-sheet manifests) still described in the conversation for use_tool.
+    assert(requests.at(-1).tools.some((t:any)=>t.function.name==='edit_construction_parts')||requests.at(-1).tools.some((t:any)=>t.function.name==='use_tool')
+      &&requests.at(-1).messages.some((m:any)=>typeof m.content==='string'&&m.content.includes('"name":"edit_construction_parts"')),'loaded manuals survive every lease')
     t.diagnostic(JSON.stringify({leases,modelCalls,renders,reviews,writes,maxInputEstimate:maxInput,liveProviderCalls:0}))
   }finally{await call(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')}
 })

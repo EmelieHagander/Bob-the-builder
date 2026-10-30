@@ -74,6 +74,54 @@ after a specific outcome. Older pinned manifests keep their five tools and cards
 `search_project_data` returns to the permanent set (removed in #372) at the
 owner's request.
 
+<a id="tool-picker"></a>
+**The request chooses the four — prepared 2026-10-30, not deployed (owner
+decision; [record](foundation-verification.md#tool-picker-2026-10-30)).** In the
+paid box run after #375 every turn started with the concept set, the drawing
+turn too, and Bob loaded eight tools mid-turn; each change to the tool list cost
+the provider cache for that call (about USD 0.33 of 1.17). Prompt assembly now
+asks a small read-only role, `role.tool-picker` (mini tier, schema
+`schema.bob_tool_pick`), once at the start of a fresh turn: it reads the owner's
+latest instruction, a short conversation excerpt, the number of pending drawing
+requests and every non-permanent tool card, and names at most four tools. Those
+replace the phase set for the turn; unknown names are dropped, and an empty,
+invalid or failed answer keeps the phase set. The choice is saved in the turn's
+checkpoint, so a resumed turn neither asks again nor changes its list. Manifests
+without the role, and offline callers that do not set `toolPicker`, keep the
+phase choice. Source: `20261030020000_bob_tool_picker_catalog.sql` and
+`pickTurnTools` in `supabase/functions/_shared/project-answer.ts`.
+
+<a id="tool-sheets"></a>
+**A fixed base prompt; the job's tools in detail at the end — prepared
+2026-10-30, not deployed (owner decision; [record](foundation-verification.md#tool-picker-2026-10-30)).**
+The provider caches a request from its start, and the tool list comes first:
+a tool added in the middle of the sorted list made everything after it full
+price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
+`tool-sheets-v1`) therefore keep the start of every request the same:
+
+- The native tool list holds only the six permanent tools and `use_tool`
+  (`tools.use_tool`: a name and its arguments).
+- The system message is the role, the card directory and one fixed sentence in
+  the project manager's voice (`bob.toolbox.sheets-at-end`): *Som
+  byggprojektledare har du alltid dina standardverktyg till hands. Verktygen du
+  har framför dig för just det här jobbet beskrivs i detalj sist i samtalet.*
+- Every other tool the turn has loaded (the picker's four, an operation
+  follow-up) is described once, as name, description and parameters exactly as
+  its native definition would read, in a message after everything else in that
+  step's input (`bob.toolbox.sheets-intro`). A tool loaded with `describe_tool`
+  needs no second copy: its result already holds the manual and parameters.
+- `use_tool` runs the named tool through the same session as a direct call:
+  the step's fence, policy gates, server quote, validation and receipts; reports
+  and metrics use the named tool. Bob's function tools were never in strict
+  schema mode, so argument checking stays where it was, on the server.
+- The checkpoint keeps which tools already have their details in the
+  conversation; a context rollover summarizes them away, so they are sent again
+  on the next step.
+
+Manifests before the publication keep every loaded tool native. Source:
+`20261030030000_bob_tool_sheets_catalog.sql`, `unwrapToolCall` and the step
+assembly in `supabase/functions/_shared/project-answer.ts`.
+
 <a id="coherent-construction-work"></a>
 ### Coherent construction operations — installed, 2026-10-28
 
