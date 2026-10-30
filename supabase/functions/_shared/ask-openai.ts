@@ -141,6 +141,11 @@ export async function answerWithOpenAi(opts: {
     const signal = AbortSignal.timeout(26000)
     return memo('rpc:' + name, stable, () => readWithRetry(name, args, signal), 0, signal)
   }
+  // The server's fastener schedule, for construction lists and build guides.
+  const readFasteners = async (id: string, revision: number) => {
+    const { data, error } = await readRpc('read_construction_fasteners', { p_project: opts.projectId, p_artifact: id, p_revision: revision })
+    return error ? null : data
+  }
   // Project writes keep their journal stream and recorded { data, error }. A
   // write the database cancelled at the statement timeout saved nothing, so it
   // is sent once more inside the same recorded operation.
@@ -660,10 +665,7 @@ export async function answerWithOpenAi(opts: {
     // Jobs pinned to the joint-fasteners catalog read the server schedule in
     // derive_construction_lists; earlier manifests keep their journal sequence.
     ...(aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.derive_construction_lists'&&row.metadata?.joint_fastener_version===1)?{
-      readFasteners:async(id:string,revision:number)=>{
-        const {data,error}=await readRpc('read_construction_fasteners',{p_project:opts.projectId,p_artifact:id,p_revision:revision})
-        return error?null:data
-      }}:{}),
+      readFasteners}:{}),
     readSources:async (pins:ReturnType<typeof parameterSourcePins>)=>{
       const project=new Map<string,Record<string,any>>()
       if(pins.project.length){
@@ -795,11 +797,7 @@ export async function answerWithOpenAi(opts: {
     // The owner's global switch (shared.ai_settings cad-build-guide; missing = off),
     // read once per job and only for catalogs that offer the order parameter.
     ...(buildGuideOffered?{buildGuide:{
-     enabled:()=>buildGuideOn(),
-     readFasteners:async(id:string,revision:number)=>{
-      const {data,error}=await readRpc('read_construction_fasteners',{p_project:opts.projectId,p_artifact:id,p_revision:revision})
-      return error?null:data
-     }}}:{}),
+     enabled:()=>buildGuideOn(),readFasteners}}:{}),
     checkConstruction:async(id,revision,fresh)=>{
      // One check reads the same exact revision twice (the check itself and
      // the final pin comparison). Within one check those reads observe the

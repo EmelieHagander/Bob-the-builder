@@ -63,13 +63,14 @@ test('no fastener schedule is read for a drawing render',async()=>{
  const transport=await import('../supabase/functions/_shared/cad-transport.ts')
  assert.equal('readConstructionFasteners' in transport,false)
  const code=await readFile(new URL('../supabase/functions/_shared/ask-openai.ts',import.meta.url),'utf8')
- const start=code.indexOf("memo('cad:render'"),render=code.slice(start,code.indexOf('},45000)',start)).replace(/\/\/[^\n]*/g,'')
- assert(start>0&&render.length>0)
+ const start=code.indexOf("memo('cad:render'"),render=code.slice(start,code.indexOf('},guide?90000:45000)',start)).replace(/\/\/[^\n]*/g,'')
+ assert(start>0&&code.indexOf('},guide?90000:45000)',start)>start)
  assert.match(render,/createCadTransport\(Deno\.env\.get\('BOB_CAD_URL'\),Deno\.env\.get\('BOB_CAD_TOKEN'\)\)\(recipe,source\)/)
  assert.doesNotMatch(render,/fastener/i)
- // The one remaining schedule read serves derive_construction_lists.
+ // The one schedule read serves derive_construction_lists and, behind the
+  // build-guide switch, the guide input built outside this step (2026-10-30).
  assert.equal(code.split("'read_construction_fasteners'").length,2)
- assert.match(code,/readFasteners:async\(id:string,revision:number\)=>\{\s*const \{data,error\}=await readRpc\('read_construction_fasteners'/)
+ assert.match(code,/const readFasteners = async \(id: string, revision: number\) => \{\s*const \{ data, error \} = await readRpc\('read_construction_fasteners'/)
 })
 test('every numbered sheet is required, hash checked and retained for independent review',async()=>{
  const r=structuredClone(recipe),p:any=await packet()
