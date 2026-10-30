@@ -1110,9 +1110,12 @@ manifest notes (`annotations` version 1) and the transport are unchanged.
   smaller text. Disclaimers stay in plain words (not to scale, products, fixings and
   strength unchecked, sizes before notches and holes, not approved for building).
 
-In the app (`CadDrawingView`), each saved view has its own zoom (100-300 %)
+In the app (`CadDrawingView`), each saved view has its own zoom (100-400 %)
 inside the shared `box-drawing-viewport`, so a 1000 px sheet can be read on a
-phone and multi-sheet views are no longer squeezed into 480 px. "Parts and
+phone and multi-sheet views are no longer squeezed into 480 px. `useSheetZoom`
+gives pinch to zoom and one-finger drag on phones, mouse drag to pan, and
+Ctrl/⌘ + wheel (also a trackpad pinch) to zoom on computers; a plain wheel keeps
+scrolling the page so tall views never trap it. The +/− buttons remain. "Parts and
 sizes" uses the same words: plain name, quantity, size with the length named,
 notches or holes, and the drawing's P-numbers from the saved annotation notes
 (hidden for drawings without notes). The CSV cut list is unchanged.

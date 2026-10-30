@@ -4,6 +4,7 @@ import type { DrawingSourceStatus } from '../data/drawingSources'
 import { CadSourceMap } from './CadSourceMap'
 import { lazy, Suspense, useCallback, useState } from 'react'
 import './StorageBoxDrawing.css'
+import { SHEET_ZOOM_MAX, useSheetZoom } from '../lib/useSheetZoom'
 const WireframeView = lazy(() => import('./CadWireframeView').catch(() => ({ default: WireframeUnavailable })))
 function WireframeUnavailable({onFallback}:{onFallback:(message:string)=>void}) {
  return <div role="alert"><p>The 3D viewer could not be loaded. Check the connection and try again.</p><button type="button" className="btn" onClick={()=>onFallback('')}>Show saved drawing</button></div>
@@ -11,17 +12,17 @@ function WireframeUnavailable({onFallback}:{onFallback:(message:string)=>void}) 
 
 /** One saved view. Sheets are 1000 px wide, so on a phone they need zoom to be read. */
 function CadSheet({src,label,title,file}:{src:string;label:string;title:string;file:string}){
- const [zoom,setZoom]=useState(1)
+ const {viewport,zoom,panning,pan,zoomBy,reset}=useSheetZoom()
  return <figure className="cad-sheet">
   <figcaption><strong>{label}</strong> · <a download={file} href={src}>download drawing</a></figcaption>
   <div className="foundation-actions box-drawing-controls">
-   <button type="button" className="btn" onClick={()=>setZoom(z=>Math.max(1,z-0.5))} disabled={zoom<=1} aria-label={`Zoom ${label} out`}>−</button>
+   <button type="button" className="btn" onClick={()=>zoomBy(-0.5)} disabled={zoom<=1} aria-label={`Zoom ${label} out`}>−</button>
    <span aria-live="polite">{Math.round(zoom*100)}%</span>
-   <button type="button" className="btn" onClick={()=>setZoom(z=>Math.min(3,z+0.5))} disabled={zoom>=3} aria-label={`Zoom ${label} in`}>+</button>
-   <button type="button" className="btn" onClick={()=>setZoom(1)} disabled={zoom===1}>Reset zoom</button>
+   <button type="button" className="btn" onClick={()=>zoomBy(0.5)} disabled={zoom>=SHEET_ZOOM_MAX} aria-label={`Zoom ${label} in`}>+</button>
+   <button type="button" className="btn" onClick={reset} disabled={zoom===1}>Reset zoom</button>
   </div>
-  <div className="box-drawing-viewport" tabIndex={0} aria-label={`${label}. Scroll to read the full drawing.`}>
-   <div className="box-drawing-sheet" style={{width:`${zoom*100}%`}}><img alt={`${title} — ${label}`} src={src} /></div>
+  <div ref={viewport} {...pan} className={`box-drawing-viewport sheet-pan${panning?' is-panning':''}`} tabIndex={0} aria-label={`${label}. Scroll or drag to read the full drawing.`}>
+   <div className="box-drawing-sheet" style={{width:`${zoom*100}%`}}><img alt={`${title} — ${label}`} src={src} draggable={false} /></div>
   </div>
  </figure>
 }
@@ -47,7 +48,7 @@ export function CadDrawingView({value,title,projectId,artifactId,revision,source
   {interactive&&projectId&&artifactId&&revision&&<Suspense fallback={<p role="status">Loading the 3D viewer…</p>}>
    <WireframeView projectId={projectId} artifactId={artifactId} revision={revision} title={title} onFallback={fallback}/>
   </Suspense>}
-  {Object.keys(names).some(key=>value.files[key])&&<p className="foundation-hint">Each view fits the screen. Zoom in and scroll to read part numbers and sizes.</p>}
+  {Object.keys(names).some(key=>value.files[key])&&<p className="foundation-hint">Each view fits the screen. To read part numbers and sizes, pinch or press + to zoom (on a computer: Ctrl + scroll wheel), then drag to move around.</p>}
   {Object.entries(names).filter(([key])=>value.files[key]).map(([key,label])=><CadSheet key={key} label={label} title={title} file={`${key}.svg`} src={`data:image/svg+xml;base64,${value.files[key]}`} />)}
   {value.files.step&&<a className="btn" download="assembly.step" href={`data:application/step;base64,${value.files.step}`}>Download 3D model</a>}
   <details><summary>Parts and sizes</summary>
