@@ -21,6 +21,7 @@ import { compactReceipts, type ProjectWriter } from './project-write.ts'
 import { humanTextIssues } from './human-text.ts'
 import { answerTextFragments, type AnswerTextOutcome } from './answer-text.ts'
 import { toolRejection } from './tool-rejection.ts'
+import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
@@ -208,6 +209,8 @@ export interface BobAnswerState {
   sheets?: string[]
   /** Tool-order manifests: the native tool names in the order sent; later loads are appended. */
   native?: string[]
+  /** Tool-repair manifests: rejected calls already sent to the small role this turn. */
+  repairs?: number
   /** Prompt-tier manifests: the tool availability last sent at the end of the input. */
   availability?: string
   messages: NonNullable<OpenAIServiceOptions['messages']>
@@ -328,6 +331,10 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // detail at the end of the conversation, once each, and called through use_tool.
   const toolSheets = !!(phaseTools && coreTools && opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.tool_sheets_version === 1)
   const sheetsSent = new Set<string>(restored?.sheets ?? [])
+  // Owner decision 2026-10-30 ("wrench wench"): with tool sheets, a call whose arguments the server
+  // rejects goes once to a small role holding the tool's real definition; see bob-tool-repair.ts.
+  const toolRepair = toolSheets && opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.tool_repair_version === 1
+  let repairsUsed = restored?.repairs ?? 0
   // Owner decision after paid box run 5: every tool is native. The turn's first tools keep their
   // order and a tool loaded later is added at the end, so the list only grows within a turn.
   const toolOrder = !!(phaseTools && coreTools && opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.tool_order_version === 1)
@@ -472,6 +479,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       initial: { briefing, catalog, drawingRequests, orientation, directory: orientationReader?.exportState(), ...(toolPick ? { toolPick } : {}) },
       ...(toolSheets ? { sheets: [...sheetsSent] } : {}),
       ...(toolOrder ? { native: [...nativeOrder] } : {}),
+      ...(toolRepair ? { repairs: repairsUsed } : {}),
       ...(availabilitySent !== undefined ? { availability: availabilitySent } : {}),
       messages, previousResponseId, preparedEpoch, observation, toolbox: toolbox.exportState(), workResults,
       completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
@@ -620,6 +628,31 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         const began = Date.now()
         try { result = await toolbox.execute(toolName, args) }
         catch (error) { rethrowContinuation(error); observe('failed'); return { ok: false, error: toolFailureCode(error) } }
+        if (toolRepair && result?.status === 'invalid' && toolName !== USE_TOOL && toolName !== 'describe_tool' && repairsUsed < TOOL_REPAIR_LIMIT
+          && args && typeof args === 'object' && !Array.isArray(args) && Date.now() + 20_000 < deadline) {
+          repairsUsed++
+          let spec: NonNullable<OpenAIServiceOptions['tools']>[number] | undefined
+          const bound = toolbox.toolParameters()?.[toolName]
+          try { spec = opts.aiCatalog.tool(toolName, { ...schemaParameters(), ...(bound ?? {}) }) } catch { spec = undefined }
+          if (spec) {
+            let repair: Awaited<ReturnType<typeof repairToolArguments>>
+            try {
+              repair = await repairToolArguments({ callModel: opts.callModel, userId: opts.userId, tool: spec, args, result,
+                catalogSchemaParameters: schemaParameters(), ...(bound ? { catalogToolParameters: bound } : {}), timeoutMs: Math.min(30_000, deadline - Date.now()) })
+            } catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'turn_budget_exhausted') { observe('failed'); return { ok: false, error: 'turn_budget_exhausted' } } repair = { status: 'unavailable' } }
+            console.log('[Bob tool repair]', JSON.stringify({ tool: /^[a-z][a-z0-9_]{0,63}$/.test(toolName) ? toolName : 'invalid_name', outcome: repair.status }))
+            if (repair.status === 'repaired') {
+              if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
+              let retried: any
+              try { retried = await toolbox.execute(toolName, repair.args) }
+              catch (error) { rethrowContinuation(error); observe('failed'); return { ok: false, error: toolFailureCode(error) } }
+              // The repaired call is what ran; Bob sees that, and the shape for next time.
+              if (retried?.status !== 'invalid') result = { ...retried, arguments_reshaped: true,
+                ...(JSON.stringify(repair.args).length <= 3000 ? { arguments_used: repair.args } : {}),
+                ...(repair.notUsed.length ? { values_not_used: repair.notUsed } : {}) }
+            }
+          }
+        }
         observation.tool_calls++
         // Its result carries the manual and parameters: that tool's sheet is in the conversation now.
         if (toolSheets && toolName === 'describe_tool' && result?.status === 'ok' && typeof result.name === 'string') sheetsSent.add(result.name)

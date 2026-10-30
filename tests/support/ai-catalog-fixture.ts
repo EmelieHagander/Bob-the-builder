@@ -33,6 +33,7 @@ let preConstructionWorkRows:any[]|undefined,preConstructionWorkVersions:Map<stri
 let preToolPickerRows:any[]|undefined,preToolPickerVersions:Map<string,number>|undefined
 let preToolSheetsRows:any[]|undefined,preToolSheetsVersions:Map<string,number>|undefined
 let preToolOrderRows:any[]|undefined,preToolOrderVersions:Map<string,number>|undefined
+let preToolRepairRows:any[]|undefined,preToolRepairVersions:Map<string,number>|undefined
 let preMemoryStairRows:any[]|undefined,preMemoryStairVersions:Map<string,number>|undefined
 // SQL publications drop the seed markers and name themselves, as `(prior.metadata-'seed_version'-'source_revision')||publication`.
 const publishAs=(row:any,publication:string)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication}}
@@ -381,6 +382,14 @@ for(const migration of migrations){
   for(const addition of JSON.parse(memoryStair[1])){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-memory-stair-v1'}});versions.set(addition.key,1)}
   const contract=seed.find(row=>row.key==='agent-contract.ask-bob')
   publishAs(contract,'bob-memory-stair-v1');contract.metadata.memory_stair_version=1;contract.metadata.prompt_tiers_version=1;versions.set(contract.key,versions.get(contract.key)!+1)
+ }
+ const toolRepair=source.match(/\$tool_repair_additions\$([\s\S]+?)\$tool_repair_additions\$/)
+ if(toolRepair){
+  preToolRepairRows=structuredClone(seed);preToolRepairVersions=new Map(versions)
+  for(const addition of JSON.parse(toolRepair[1])){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-tool-repair-v1'}});versions.set(addition.key,1)}
+  const box=seed.find(row=>row.key==='bob.tools')
+  const{tool_order_version:_o,...definition}=box.definition;box.definition={...definition,tool_sheets_version:1,tool_repair_version:1}
+  publishAs(box,'bob-tool-repair-v1');delete box.metadata.tool_order_version;box.metadata.tool_sheets_version=1;box.metadata.tool_repair_version=1;versions.set(box.key,versions.get(box.key)!+1)
  }
  if(/\$bob_tool_order\$/.test(source)){
   preToolOrderRows=structuredClone(seed);preToolOrderVersions=new Map(versions)
@@ -785,6 +794,10 @@ for(const row of preMemoryStairRows??[])if(row.kind==='tier_binding'&&row.defini
 const preMemoryStairManifest=fixtureManifest(preMemoryStairRows??seed,preMemoryStairVersions??versions,'fixture-pre-memory-stair-manifest')
 /** Manifests pinned before the 2026-10-30 memory stair: one rewritten summary and the per-turn briefing order. */
 export function preMemoryStairCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preMemoryStairManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
+for(const row of preToolRepairRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preToolRepairManifest=fixtureManifest(preToolRepairRows??seed,preToolRepairVersions??versions,'fixture-pre-tool-repair-manifest')
+/** The manifest with tool_order_version 1 (every tool native, mid-turn loads appended), before the tool-repair publication. */
+export function preToolRepairCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preToolRepairManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 for(const row of preToolOrderRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preToolOrderManifest=fixtureManifest(preToolOrderRows??seed,preToolOrderVersions??versions,'fixture-pre-tool-order-manifest')
 /** The manifest with tool_sheets_version 1 (every job tool behind use_tool), before the tool-order publication. */

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { catalogFixture, catalogCall, preToolSheetsCatalogFixture, preToolOrderCatalogFixture } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, catalogCall, preToolSheetsCatalogFixture, preToolOrderCatalogFixture, preToolRepairCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { catalogCoreTools } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { runProjectAnswer, seedToolPolicy, type BobAnswerState } from '../supabase/functions/_shared/project-answer.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
@@ -117,12 +117,12 @@ test('a resumed turn does not repeat sheets; pinned manifests keep every loaded 
   assert.doesNotMatch(old.requests[0].systemMessage!, /beskrivs i detalj sist/)
 })
 
-// Tool order, owner decision after paid box run 5: through use_tool Bob wrote
+// Tool order (read from the manifest before the tool-repair publication), owner decision after paid box run 5: through use_tool Bob wrote
 // wrong arguments for tools that worked first time as native functions. Every
 // tool is native again; the turn's first tools keep their order and a tool
 // loaded later is added at the end, so the list only grows within a turn.
 test('tool order: every tool is native; a tool loaded mid-turn is appended and the rest of the list keeps its order', async () => {
-  const catalog = catalogFixture(), core = catalogCoreTools(catalog)!
+  const catalog = preToolRepairCatalogFixture(), core = catalogCoreTools(catalog)!
   const box = catalog.definition('bob.tools', 'tool_contract')
   assert.equal(box.definition.tool_order_version, 1); assert.equal(box.definition.tool_sheets_version, undefined)
   const { requests, ran } = await turn(catalog, [
@@ -148,7 +148,7 @@ test('tool order: every tool is native; a tool loaded mid-turn is appended and t
 })
 
 test('tool order: a resumed turn sends the same list in the same order', async () => {
-  const catalog = catalogFixture(), checkpoint = { saved: [] as BobAnswerState[] }
+  const catalog = preToolRepairCatalogFixture(), checkpoint = { saved: [] as BobAnswerState[] }
   const first = await turn(catalog, [() => ({ success: true, model: 'fixture', usage, responseId: 'r1', toolCalls: [call('c1', 'describe_tool', { name: 'change_construction_parameters' })] })], checkpoint)
   const resumable = checkpoint.saved.find(state => state.step === 1 && state.phase === 'ready')!
   assert.deepEqual(resumable.native, names(first.requests[0]), 'the checkpoint keeps the order sent so far')
