@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { catalogFixture, catalogCall, preToolPickerCatalogFixture } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, catalogCall, preToolPickerCatalogFixture, preToolSheetsCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { catalogCoreTools, catalogPhaseTools } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { runProjectAnswer, seedToolPolicy, type BobAnswerState } from '../supabase/functions/_shared/project-answer.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
@@ -16,7 +16,9 @@ import type { AiCatalogSession } from '../supabase/functions/_shared/ai-catalog.
 // from the request. A small read-only role names up to four at the turn's start;
 // the phase set is the fallback, and the list stays fixed for the turn.
 // The harness has no CAD-save, work-record, calculator or material adapters, so
-// picks use tools it can offer.
+// picks use tools it can offer. Native lists are read from manifests before the
+// tool sheets; since then the picked tools are described at the end (bob-tool-sheets.test.ts).
+const pickerCatalog = () => preToolSheetsCatalogFixture()
 const WITHOUT_ADAPTER = new Set(['read_work_context', 'edit_work_record', 'change_work_state', 'calculate_project', 'search_material_catalog'])
 const expect = (names: string[]) => names.filter(n => !WITHOUT_ADAPTER.has(n)).sort()
 const ok = (data: unknown) => ({ success: true, model: 'fixture', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 }, data: JSON.stringify(data) })
@@ -61,7 +63,7 @@ async function turn(catalog: AiCatalogSession, opts: { pick?: (input: any) => un
 }
 
 test('the picker reads the request and the cards once, and its tools replace the phase set for the whole turn', async () => {
-  const catalog = catalogFixture(), core = catalogCoreTools(catalog)!
+  const catalog = pickerCatalog(), core = catalogCoreTools(catalog)!
   const drawing = ['design_project_cad', 'check_construction_draft', 'change_construction_parameters']
   const { offered, picks } = await turn(catalog, { pick: () => ok({ tools: drawing, reason: 'En ritning begärs.' }) })
   assert.equal(picks.length, 1, 'one picker call per turn')
@@ -74,7 +76,7 @@ test('the picker reads the request and the cards once, and its tools replace the
 })
 
 test('unknown, duplicate or extra names are dropped; an empty, invalid or failed pick keeps the phase set', async () => {
-  const catalog = catalogFixture(), core = catalogCoreTools(catalog)!, phases = catalogPhaseTools(catalog, core)!
+  const catalog = pickerCatalog(), core = catalogCoreTools(catalog)!, phases = catalogPhaseTools(catalog, core)!
   const mixed = await turn(catalog, { pick: () => ok({ tools: ['made_up', 'design_project_cad', 'design_project_cad', core[0]], reason: '' }) })
   assert.deepEqual(mixed.offered[0], expect([...core, 'design_project_cad']))
   const five = await turn(catalog, { pick: () => ok({ tools: ['design_project_cad', 'check_construction_draft', 'change_construction_parameters', 'read_construction_draft', 'edit_construction_parts'], reason: '' }) })
@@ -84,7 +86,7 @@ test('unknown, duplicate or extra names are dropped; an empty, invalid or failed
 })
 
 test('a resumed turn keeps its picked tools without asking again; pinned manifests and offline callers never ask', async () => {
-  const catalog = catalogFixture(), core = catalogCoreTools(catalog)!, phases = catalogPhaseTools(catalog, core)!
+  const catalog = pickerCatalog(), core = catalogCoreTools(catalog)!, phases = catalogPhaseTools(catalog, core)!
   const checkpoint = { saved: [] as BobAnswerState[] }
   await turn(catalog, { pick: () => ok({ tools: ['design_project_cad'], reason: '' }), checkpoint })
   const first = checkpoint.saved.find(state => state.step === 1)!

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { catalogFixture, catalogCall, prePhaseToolsCatalogFixture } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, catalogCall, prePhaseToolsCatalogFixture, preToolSheetsCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { catalogCoreTools, catalogPhaseTools, TOOL_PHASES } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { runProjectAnswer, seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
@@ -89,7 +89,9 @@ test('an invalid phase bench fails before any model request', () => {
 })
 
 test('the first request offers the six plus the phase four, and the list stays fixed for the turn', async () => {
-  const catalog = catalogFixture(), core = catalogCoreTools(catalog)!, phases = catalogPhaseTools(catalog, core)!
+  // Since the 2026-10-30 tool sheets the four are described at the end instead (bob-tool-sheets.test.ts);
+  // the native choice is pinned by manifests from before that publication.
+  const catalog = preToolSheetsCatalogFixture(), core = catalogCoreTools(catalog)!, phases = catalogPhaseTools(catalog, core)!
   // Phase changes after the first step: the turn keeps the set it started with.
   const design = await offeredTools(catalog, ['design', 'build'])
   assert.deepEqual(design[0], expect([...core, ...phases.design]))
@@ -129,7 +131,8 @@ test('the publication versions only bob.tools and the cards, is idempotent and m
     const before = byKey(prior), after = byKey(current)
     const changed = [...after.keys()].filter(k => JSON.stringify(after.get(k)) !== JSON.stringify(before.get(k))).sort()
     assert.deepEqual(changed, ['bob.tools', ...Object.keys(data.cards).map(n => 'tools.' + n)].sort())
-    const fixture = catalogFixture()
+    // The state this publication produced; later publications version bob.tools again.
+    const fixture = preToolSheetsCatalogFixture()
     for (const key of changed) {
       const row = after.get(key), was = before.get(key), f = fixture.definition(key, row.definition_kind)
       // Definition and content equal the fixture; metadata gains only the publication markers

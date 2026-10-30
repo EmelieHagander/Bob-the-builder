@@ -556,11 +556,11 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Förberett, ej driftsatt — begäran väljer turens fyra verktyg (ägarbeslut 2026-10-30; [ändringar](foundation-verification.md#tool-picker-2026-10-30)):**
+**Förberett, ej driftsatt — begäran väljer turens verktyg, och grundprompten är fast (ägarbeslut 2026-10-30; [ändringar](foundation-verification.md#tool-picker-2026-10-30)):**
 en liten modell läser ägarens senaste begäran och verktygskorten vid turens start
-och väljer upp till fyra verktyg; fasens fyra är reserv. Ägaren beslutar också
-var verktyg som laddas mitt i turen ska ligga (fast ingång i samtalet eller sist
-i listan). Därefter driftsättning och ett betalt lådprov.
+och väljer upp till fyra verktyg; fasens fyra är reserv. Grundprompten med Bobs
+sex standardverktyg och `use_tool` är alltid densamma; turens övriga verktyg
+beskrivs i detalj sist i samtalet. Därefter driftsättning och ett betalt lådprov.
 
 **Tidigare nästa steg — ägarbeslut om stabil verktygslista inom en tur (2026-10-30):**
 [lådprovet efter #375 godkändes](foundation-verification.md#box-paid-run4-2026-10-30):

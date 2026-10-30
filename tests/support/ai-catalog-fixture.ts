@@ -31,6 +31,7 @@ let preMaterialLookupRows:any[]|undefined,preMaterialLookupVersions:Map<string,n
 let preResultWindowRows:any[]|undefined,preResultWindowVersions:Map<string,number>|undefined
 let preConstructionWorkRows:any[]|undefined,preConstructionWorkVersions:Map<string,number>|undefined
 let preToolPickerRows:any[]|undefined,preToolPickerVersions:Map<string,number>|undefined
+let preToolSheetsRows:any[]|undefined,preToolSheetsVersions:Map<string,number>|undefined
 // SQL publications drop the seed markers and name themselves, as `(prior.metadata-'seed_version'-'source_revision')||publication`.
 const publishAs=(row:any,publication:string)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication}}
 // Materialise the explicit immutable publication patches in migration order.
@@ -371,6 +372,14 @@ for(const migration of migrations){
   row.metadata={...rest,publication:'bob-workflows-judgement-v1'}
   row.content+='\n'+source.match(/\$bob_judgement_principles\$([\s\S]+?)\$bob_judgement_principles\$/)![1]
   versions.set(row.key,versions.get(row.key)!+1)
+ }
+ const toolSheets=source.match(/\$tool_sheets_additions\$([\s\S]+?)\$tool_sheets_additions\$/)
+ if(toolSheets){
+  preToolSheetsRows=structuredClone(seed);preToolSheetsVersions=new Map(versions)
+  for(const addition of JSON.parse(toolSheets[1])){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'tool-sheets-v1'}});versions.set(addition.key,1)}
+  const box=seed.find(row=>row.key==='bob.tools')
+  box.definition={...box.definition,tool_sheets_version:1,contract_keys:[...box.definition.contract_keys,'tools.use_tool']}
+  publishAs(box,'tool-sheets-v1');box.metadata.tool_sheets_version=1;versions.set(box.key,versions.get(box.key)!+1)
  }
  const toolPicker=source.match(/\$tool_picker_additions\$([\s\S]+?)\$tool_picker_additions\$/)
  if(toolPicker){
@@ -755,6 +764,10 @@ for(const row of prePhaseToolsRows??[])if(row.kind==='tier_binding'&&row.definit
 const prePhaseToolsManifest=fixtureManifest(prePhaseToolsRows??seed,prePhaseToolsVersions??versions,'fixture-pre-phase-tools-manifest')
 for(const row of preToolPickerRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preToolPickerManifest=fixtureManifest(preToolPickerRows??seed,preToolPickerVersions??versions,'fixture-pre-tool-picker-manifest')
+for(const row of preToolSheetsRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preToolSheetsManifest=fixtureManifest(preToolSheetsRows??seed,preToolSheetsVersions??versions,'fixture-pre-tool-sheets-manifest')
+/** Manifests pinned before the 2026-10-30 tool-sheets publication: every loaded tool is a native function. */
+export function preToolSheetsCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preToolSheetsManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 /** Manifests pinned before the 2026-10-30 tool-picker publication: the phase alone chooses the flexible tools. */
 export function preToolPickerCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preToolPickerManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 /** Manifests pinned before the 2026-10-29 phase-tools publication: five permanent tools, earlier cards. */

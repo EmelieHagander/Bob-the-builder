@@ -1,23 +1,29 @@
 # Foundation verification and rollout
 
 <a id="tool-picker-2026-10-30"></a>
-## The request chooses the turn's tools — prepared 2026-10-30
+## The request chooses the turn's tools; a fixed base prompt — prepared 2026-10-30
 
-**Prepared, not deployed.** Owner decision after the [passing box run](#box-paid-run4-2026-10-30):
+**Prepared, not deployed.** Owner decisions after the [passing box run](#box-paid-run4-2026-10-30):
 prompt assembly chooses the turn's four flexible tools from the request with a
-small read-only role, not from the project phase alone. Contract:
-[tools](ask-bob-tools.md#tool-picker).
+small read-only role, not from the project phase alone ([tool picker](ask-bob-tools.md#tool-picker)),
+and the base prompt with Bob's permanent tools is always the same, with every
+other tool for the job described in detail at the end ([tool sheets](ask-bob-tools.md#tool-sheets)).
 
 Each fresh turn makes one extra mini-tier call (a few thousand input tokens of
-cards, about USD 0.002). Where tools loaded mid-turn should go so they no longer
-cost the cache is a separate owner decision ([State](bob-delivery-flow.md#state)).
+cards, about USD 0.002). With the fixed base, the start of every request (tools,
+role, directory) is the same on every step, turn and project, so a tool loaded
+mid-turn no longer costs the cache; in the last run eight such calls cost about
+USD 0.33.
 
 Release order with the owner's OK and no running Bob job: deploy `bob-worker`
-and `ask-bob` (both carry the `toolPicker` consumer), then apply
-`20261030020000_bob_tool_picker_catalog.sql`. Running and older jobs keep their
+and `ask-bob` (both carry the `toolPicker` and `use_tool` consumers), then apply
+`20261030020000_bob_tool_picker_catalog.sql` and
+`20261030030000_bob_tool_sheets_catalog.sql`. Running and older jobs keep their
 pinned manifests.
 
-Validation: new suite `bob-tool-picker` (4) and the catalog fixture replay pass.
+Validation: new suites `bob-tool-picker` (4) and `bob-tool-sheets` (3, including
+byte-equal tools and system message across steps), the adjusted `bob-phase-tools`
+and the catalog fixture replay pass.
 A paid box run is needed to measure calls, cache share and cost.
 
 <a id="material-sizes-diameter-2026-10-30"></a>

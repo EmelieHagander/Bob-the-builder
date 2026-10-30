@@ -91,6 +91,37 @@ without the role, and offline callers that do not set `toolPicker`, keep the
 phase choice. Source: `20261030020000_bob_tool_picker_catalog.sql` and
 `pickTurnTools` in `supabase/functions/_shared/project-answer.ts`.
 
+<a id="tool-sheets"></a>
+**A fixed base prompt; the job's tools in detail at the end — prepared
+2026-10-30, not deployed (owner decision; [record](foundation-verification.md#tool-picker-2026-10-30)).**
+The provider caches a request from its start, and the tool list comes first:
+a tool added in the middle of the sorted list made everything after it full
+price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
+`tool-sheets-v1`) therefore keep the start of every request the same:
+
+- The native tool list holds only the six permanent tools and `use_tool`
+  (`tools.use_tool`: a name and its arguments).
+- The system message is the role, the card directory and one fixed sentence in
+  the project manager's voice (`bob.toolbox.sheets-at-end`): *Som
+  byggprojektledare har du alltid dina standardverktyg till hands. Verktygen du
+  har framför dig för just det här jobbet beskrivs i detalj sist i samtalet.*
+- Every other tool the turn has loaded (the picker's four, an operation
+  follow-up) is described once, as name, description and parameters exactly as
+  its native definition would read, in a message after everything else in that
+  step's input (`bob.toolbox.sheets-intro`). A tool loaded with `describe_tool`
+  needs no second copy: its result already holds the manual and parameters.
+- `use_tool` runs the named tool through the same session as a direct call:
+  the step's fence, policy gates, server quote, validation and receipts; reports
+  and metrics use the named tool. Bob's function tools were never in strict
+  schema mode, so argument checking stays where it was, on the server.
+- The checkpoint keeps which tools already have their details in the
+  conversation; a context rollover summarizes them away, so they are sent again
+  on the next step.
+
+Manifests before the publication keep every loaded tool native. Source:
+`20261030030000_bob_tool_sheets_catalog.sql`, `unwrapToolCall` and the step
+assembly in `supabase/functions/_shared/project-answer.ts`.
+
 <a id="coherent-construction-work"></a>
 ### Coherent construction operations — installed, 2026-10-28
 

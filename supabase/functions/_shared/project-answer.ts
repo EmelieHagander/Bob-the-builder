@@ -38,8 +38,22 @@ import { type ToolPolicyReader, type ToolboxEntry, type ToolInstructions, checke
 import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' }
 
 /** Instruction content comes from the pinned database manifest; shelf state is data. */
-export function buildBobSystemMessage(aiCatalog: AiCatalogSession, tools: OpenAIServiceOptions['tools'] = [], toolbox: ToolboxEntry[] = [], completeRequest = false): string {
-  return [aiCatalog.role('ask-bob').systemMessage, (completeRequest ? buildBobCompleteHands : buildBobHands)(aiCatalog, tools, sortToolbox(toolbox, aiCatalog.definition('bob.tools', 'tool_contract').definition.shelves as { label: string; tools: string[] }[]))].join('\n\n')
+export function buildBobSystemMessage(aiCatalog: AiCatalogSession, tools: OpenAIServiceOptions['tools'] = [], toolbox: ToolboxEntry[] = [], completeRequest = false, toolSheets = false): string {
+  return [aiCatalog.role('ask-bob').systemMessage, (completeRequest ? buildBobCompleteHands : buildBobHands)(aiCatalog, tools, sortToolbox(toolbox, aiCatalog.definition('bob.tools', 'tool_contract').definition.shelves as { label: string; tools: string[] }[])),
+    ...(toolSheets && tools.length ? [aiCatalog.text('bob.toolbox.sheets-at-end')] : [])].join('\n\n')
+}
+
+/** Owner decision 2026-10-30 (tool sheets): a provider call to use_tool runs the
+ * named tool; anything else is the call itself. */
+export const USE_TOOL = 'use_tool'
+function unwrapToolCall(call: { function: { name: string; arguments: string } }, toolSheets: boolean): { name: string; args: unknown } {
+  let args: unknown = null
+  try { args = JSON.parse(call.function.arguments) } catch { /* the handler reports invalid input */ }
+  if (!toolSheets || call.function.name !== USE_TOOL) return { name: call.function.name, args }
+  const inner = args as { name?: unknown; arguments?: unknown } | null
+  // A malformed wrapper reaches the session as use_tool, which no handler owns: an ordinary invalid result.
+  if (!inner || typeof inner !== 'object' || typeof inner.name !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(inner.name) || inner.name === USE_TOOL) return { name: USE_TOOL, args }
+  return { name: inner.name, args: inner.arguments ?? null }
 }
 
 /** Legacy pinned contracts retain their original per-turn work ceilings. */
@@ -150,6 +164,8 @@ export interface BobAnswerState {
   step: number
   phase: 'ready' | 'model' | 'response' | 'tools'
   initial: { briefing: unknown; catalog: unknown; drawingRequests: unknown; orientation?: ProjectOrientation; directory?: unknown; toolPick?: string[] | null }
+  /** Tool-sheet manifests: tools whose details are already at the end of this conversation. */
+  sheets?: string[]
   messages: NonNullable<OpenAIServiceOptions['messages']>
   previousResponseId?: string
   preparedEpoch?: number
@@ -263,6 +279,16 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // Owner decision 2026-10-30: when the manifest publishes the tool picker, the
   // tools it named for this request replace the phase set; the phase set is the fallback.
   let toolPick: string[] | null = restored?.initial.toolPick ?? null
+  // Owner decision 2026-10-30: the base prompt (role, directory, the permanent
+  // tools and use_tool) never changes; the job's other tools are described in
+  // detail at the end of the conversation, once each, and called through use_tool.
+  const toolSheets = !!(phaseTools && coreTools && opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.tool_sheets_version === 1)
+  const sheetsSent = new Set<string>(restored?.sheets ?? [])
+  const splitSheets = (specs: NonNullable<OpenAIServiceOptions['tools']>) => {
+    if (!toolSheets || !specs.length) return { native: specs, sheets: [] as string[] }
+    return { native: [...specs.filter(spec => coreTools!.includes(spec.function.name)), opts.aiCatalog.tool(USE_TOOL, { include_manual: true })],
+      sheets: specs.map(spec => spec.function.name).filter(name => !coreTools!.includes(name)) }
+  }
   const turnPreload = (phase: string | null) => {
     if (!phaseTools) return preloadTools
     if (toolPick) return [...preloadTools, ...toolPick]
@@ -385,6 +411,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (!opts.checkpoint) return
     await opts.checkpoint.save(structuredClone({ version: 1, projectId: opts.projectId, step, phase,
       initial: { briefing, catalog, drawingRequests, orientation, directory: orientationReader?.exportState(), ...(toolPick ? { toolPick } : {}) },
+      ...(toolSheets ? { sheets: [...sheetsSent] } : {}),
       messages, previousResponseId, preparedEpoch, observation, toolbox: toolbox.exportState(), workResults,
       completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
       tools, closedByLimit, closedByCommentary, request, response: pendingResponse, toolIndex }))
@@ -402,6 +429,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (Date.now() >= deadline) { observe('failed'); return { ok: false, error: 'turn_timeout' } }
     if (opts.projectContext && !await opts.projectContext.validate()) return { ok: false, error: 'context_unavailable' }
     const lastStep = !unlimitedWork && step >= steps - 1, lateInTurn = !unlimitedWork && Date.now() + 40000 >= deadline
+    let pendingSheets: string[] = []
     if (phase === 'ready') {
     tools = []
     try {
@@ -413,6 +441,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       if (!lastStep && !lateInTurn && commentaryStreak < 2) tools = await toolbox.prepare()
       else toolbox.closeSurface()
     } catch (error) { rethrowContinuation(error); return { ok: false, error: toolFailureCode(error) } }
+    if (toolSheets && tools.length) { const split = splitSheets(tools); tools = split.native; pendingSheets = split.sheets.filter(name => !sheetsSent.has(name)) }
     closedByLimit = lastStep || lateInTurn
     closedByCommentary = completionAware && commentaryStreak >= 2
     }
@@ -426,10 +455,12 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       if (opts.completeRequest || opts.carryLoadedTools) toolbox.carryInstructions(); else toolbox.resetInstructions()
       if (!closedByLimit && !closedByCommentary) tools = await toolbox.prepare()
       else { toolbox.closeSurface(); tools = [] }
+      // A rollover summarizes the sheets away: send them again at the end of the next step.
+      if (toolSheets) { tools = splitSheets(tools).native; sheetsSent.clear() }
       shelf = closedByLimit || closedByCommentary ? [] : toolbox.toolbox
       // The returned provider request and its eventual handlers share this
       // refreshed fence. A new describe call remains loaded for the next step.
-      return { systemMessage: [buildBobSystemMessage(opts.aiCatalog, tools, shelf, opts.completeRequest), toolbox.workflowInstructions].filter(Boolean).join('\n\n'), tools: tools.length ? tools : undefined,
+      return { systemMessage: [buildBobSystemMessage(opts.aiCatalog, tools, shelf, opts.completeRequest, toolSheets), toolbox.workflowInstructions].filter(Boolean).join('\n\n'), tools: tools.length ? tools : undefined,
         catalogSchemaParameters: schemaParameters(), catalogToolParameters: toolbox.toolParameters() }
     })
     if (closedByLimit && step > 0 && !closedNoteSent) {
@@ -439,7 +470,13 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     observation.steps = step + 1
     progress({ stage: step === 0 ? 'thinking' : tools.length ? 'thinking' : 'finishing', step: step + 1 })
     // Built once per step: replay rebuilds it for every recorded step too.
-    const systemMessage = [buildBobSystemMessage(opts.aiCatalog, tools, shelf, opts.completeRequest), toolbox.workflowInstructions].filter(Boolean).join('\n\n')
+    const systemMessage = [buildBobSystemMessage(opts.aiCatalog, tools, shelf, opts.completeRequest, toolSheets), toolbox.workflowInstructions].filter(Boolean).join('\n\n')
+    // The job's newly available tools, in detail, after everything else in this request.
+    const sheetMessage = pendingSheets.length ? { role: 'user' as const, content: opts.aiCatalog.text('bob.toolbox.sheets-intro') + '\n' + JSON.stringify(pendingSheets.map(name => {
+      const spec = opts.aiCatalog.tool(name, { ...schemaParameters(), ...(toolbox.toolParameters()?.[name] ?? {}) }).function
+      return { name: spec.name, description: spec.description, parameters: spec.parameters }
+    })) } : null
+    for (const name of pendingSheets) sheetsSent.add(name)
     console.log('[Bob context]', JSON.stringify({ step, tools: tools.length, system_chars: systemMessage.length, tool_schema_bytes: new TextEncoder().encode(JSON.stringify(tools)).length, message_bytes: new TextEncoder().encode(JSON.stringify(messages)).length, remaining_ms: Math.max(0, deadline - Date.now()) }))
     // A terminal design failure has a known cause. Deliver it without another
     // paid model call that can retry the same job or invent a renderer outage.
@@ -450,7 +487,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
       userId: opts.userId, systemMessage, catalogRoleKey: 'ask-bob', catalogSchemaParameters: schemaParameters(),
       ...(toolbox.toolParameters() ? { catalogToolParameters: toolbox.toolParameters() } : {}),
-      messages: [...messages, ...(opts.projectContext?.carrier() ?? []), ...(step === 0 && initialFooter ? [initialFooter] : [])], previousResponseId, tools: tools.length ? tools : undefined,
+      messages: [...messages, ...(opts.projectContext?.carrier() ?? []), ...(step === 0 && initialFooter ? [initialFooter] : []), ...(sheetMessage ? [sheetMessage] : [])], previousResponseId, tools: tools.length ? tools : undefined,
       ...(completionAware ? { responsePhaseMode: 'aware' as const } : {}),
       ...(opts.completeRequest ? { responseItemsMode: 'preserve' as const, responsePhaseMode: 'aware' as const } : {}),
       maxOutputTokens: opts.writer ? 8000 : 900, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),
@@ -490,7 +527,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         previousResponseId = response.responseId; messages = []; toolIndex = 0; phase = 'tools'
         await save(step)
       }
-      opts.onToolBatch?.(response.toolCalls.slice(0, unlimitedWork ? undefined : BOB_TURN_LIMITS.callsPerStep).map(call => call.function.name))
+      opts.onToolBatch?.(response.toolCalls.slice(0, unlimitedWork ? undefined : BOB_TURN_LIMITS.callsPerStep).map(call => unwrapToolCall(call, toolSheets).name))
       for (let index = toolIndex; index < response.toolCalls.length; index++) {
         const call = response.toolCalls[index]
         if (Date.now() >= deadline) { observe('failed'); return { ok: false, error: 'turn_timeout' } }
@@ -504,21 +541,23 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         // one model batch. Only verified own receipts may advance the focus.
         if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
         if (opts.validateCurrentView && !await opts.validateCurrentView()) return { ok: false, error: 'context_unavailable' }
-        let args: unknown = null
-        try { args = JSON.parse(call.function.arguments) } catch { /* the handler reports invalid input */ }
-        progress({ stage: 'tool', tool: call.function.name, step: step + 1 })
+        // Tool-sheet manifests: use_tool runs the named tool through the same session gates.
+        const { name: toolName, args } = unwrapToolCall(call, toolSheets)
+        progress({ stage: 'tool', tool: toolName, step: step + 1 })
         let result: any
         const began = Date.now()
-        try { result = await toolbox.execute(call.function.name, args) }
+        try { result = await toolbox.execute(toolName, args) }
         catch (error) { rethrowContinuation(error); observe('failed'); return { ok: false, error: toolFailureCode(error) } }
         observation.tool_calls++
+        // Its result carries the manual and parameters: that tool's sheet is in the conversation now.
+        if (toolSheets && toolName === 'describe_tool' && result?.status === 'ok' && typeof result.name === 'string') sheetsSent.add(result.name)
         // Content-free reason for every rejected call: codes and field paths only.
         const rejection = ['invalid', 'conflict'].includes(result?.status) ? toolRejection(result) : null
-        if (rejection) console.warn('[Bob tool rejection]', JSON.stringify({ tool: /^[a-z][a-z0-9_]{0,63}$/.test(call.function.name) ? call.function.name : 'invalid_name',
+        if (rejection) console.warn('[Bob tool rejection]', JSON.stringify({ tool: /^[a-z][a-z0-9_]{0,63}$/.test(toolName) ? toolName : 'invalid_name',
           status: result.status, code: rejection.code, fields: rejection.fields }))
         const validationCode = completionV3 && rejection ? rejection.code
           : completionAware && typeof result?.validation?.code === 'string' ? result.validation.code : undefined
-        try { opts.onTool?.({ name: call.function.name, status: String(result?.status ?? 'returned'), step: step + 1, index, ms: Date.now() - began,
+        try { opts.onTool?.({ name: toolName, status: String(result?.status ?? 'returned'), step: step + 1, index, ms: Date.now() - began,
           ...(result?.diagnostics?{diagnostics:result.diagnostics}:{}),
           ...(validationCode !== undefined ? { validation_code: validationCode } : {}) }) } catch { /* diagnostics only */ }
         // Cache hits are worker-local telemetry. Their loss on resume must not
@@ -532,8 +571,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           if (result?.reason !== 'access' || !await opts.hasAccess()) { observe('failed'); return { ok: false, error: 'project_denied' } }
           result = { status: 'not_found', saved: false, message: opts.aiCatalog.text('bob.fact.record-missing') }
         }
-        console.log('[Bob tool]', /^[a-z][a-z0-9_]{0,63}$/.test(call.function.name) ? call.function.name : 'invalid_name', result?.status ?? 'returned')
-        if (completionAware && writeTools.has(call.function.name)) workResults.push({ tool: call.function.name, status: String(result?.status ?? 'returned'),
+        console.log('[Bob tool]', /^[a-z][a-z0-9_]{0,63}$/.test(toolName) ? toolName : 'invalid_name', result?.status ?? 'returned')
+        if (completionAware && writeTools.has(toolName)) workResults.push({ tool: toolName, status: String(result?.status ?? 'returned'),
           ...(typeof result?.message === 'string' ? { message: result.message } : {}),
           ...(typeof result?.refresh_status === 'string' ? { refresh_status: result.refresh_status } : {}),
           ...(result?.validation ? { validation: result.validation } : {}) })
@@ -541,7 +580,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           // Identical rejected work is stalled, even when its repeated calls
           // keep producing journal entries. Changed inputs or other tool work
           // reset the streak; this is not a total correction allowance.
-          const signature = await fingerprint({ tool: call.function.name, arguments: args ?? call.function.arguments, result })
+          const signature = await fingerprint({ tool: toolName, arguments: args ?? call.function.arguments, result })
           rejectionStreak = signature === rejectionSignature ? rejectionStreak + 1 : 1
           rejectionSignature = signature
           if (rejectionStreak >= 3) { observe('failed'); return { ok: false, error: 'tool_no_progress' } }
