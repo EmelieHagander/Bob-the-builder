@@ -2,6 +2,66 @@
 
 > **Implementation: September 2026 context release.** This supersedes the earlier provider-cursor-only design and its unimplemented provider-compaction/reseed plan. Code and migrations are not deployment proof: the merged PR release record owns hosted migration versions, Edge version and live verification.
 
+<a id="memory-stair"></a>
+## Prompt tiers and the memory stair — built 2026-10-30, not installed
+
+**Owner decision 2026-10-30.** Bob's input is ordered by how often each part
+changes, so the provider reuses the previous turn's start (its prompt cache is
+prefix-based). New manifests opt in through `agent-contract.ask-bob` metadata
+`memory_stair_version` 1 and `prompt_tiers_version` 1 (both require
+`context_strategy_version` 1); pinned jobs keep the rewritten summary and the
+earlier order. Not installed: migrations `20261030040000_bob_memory_stair.sql`
+and `20261030050000_bob_memory_stair_catalog.sql` wait for the owner's OK, and
+both Bob runtimes must be deployed first.
+
+Order of the input, top to bottom:
+
+1. **Always the same:** the native tools (six standard tools and `use_tool`),
+   the role, the card directory and the [tool-sheets sentence](ask-bob-tools.md#tool-sheets).
+   Tool availability is no longer in the instructions.
+2. **Project snapshot, locked for the thread:** name, type, location, phase,
+   the current plan's steps as a checklist (done / next, with area) and the
+   areas with their phases (`bob.memory.snapshot`). It is locked at the
+   thread's first managed turn and again only when a summary is saved. Main
+   changes in between reach Bob as immutable events in the history: a phase
+   change, a plan revision, a plan decision (`bob.memory.event`, read from
+   `phase_history` and `project_plan_revisions`).
+3. **The conversation stair:** summaries, each with its source range
+   (`{"source":{"from_seq","to_seq"}}`; Bob reads the exact messages with
+   `read_conversation_message` or searches them), then every newer message
+   unchanged and the events, by time. No tool results.
+4. **The turn:** the owner's request, then the turn frame (binding, current
+   view, recent writes and sources, the project briefing, facts, catalog) and
+   any outstanding drawing requests.
+5. **The steps:** tool calls and results. Tool availability and the job's tool
+   sheets are sent at the end, availability only when it changed.
+
+**The stair.** Summaries are written once and only appended
+(`bob_private.bob_thread_memory_summaries`). When the raw messages pass 4,000
+tokens (or more are unread), the older ones except the newest four become a
+level-2 summary (≤400 tokens) by the `memory-stair` role (mini, low effort,
+input as untrusted data). Five level-2 summaries merge into one level-1; five
+level-0/1 merge into one level-0. A merge supersedes exactly the summaries it
+covers; superseded rows stay as history. The database enforces a contiguous
+range from message 1 that ends before the current request. A summary that
+cannot be written after two attempts is saved as a pointer to its source
+range, so the answer never stops on it. Thresholds (`STAIR_LIMITS` in
+`bob-memory-stair.ts`) come from the 12 live threads: median message 95
+tokens, longest thread about 11,000 tokens.
+
+**In-turn steps.** Older exchanges are compacted (results to references,
+reasoning removed) four at a time instead of one per step
+(`BOB_COMPACTION_BATCH`), so the start of a long turn stays identical between
+batches: in the test, 7 of 8 steps kept the previous request as a prefix,
+against 2 of 8 per step.
+
+**Cache key.** One key per project (`prompt_cache_key`), so a project's
+threads share the fixed start and are routed to the same cache.
+
+Source: `bob-memory-stair.ts`, `buildTieredMessages` in `project-answer.ts`,
+`prepareContext` in `ask-openai.ts`; tests `bob-memory-stair.test.ts` and
+`bob-memory-stair-db.test.ts`.
+
 <a id="launchpad-migration"></a>
 ## Launchpad-pattern migration — 2026-10-19
 
@@ -335,6 +395,9 @@ expertise helps. Project phase describes the setting; it does not prescribe a
 generic sequence or enlarge the assignment to finishing the entire project.
 
 ### What memory keeps
+
+*Manifests with `memory_stair_version` 1 replace the rewritten brief with the
+[memory stair](#memory-stair); this describes the pinned behavior.*
 
 The working brief is editable derived context: the memory assistant may rewrite
 it, merge related material and remove detail that no longer helps the current
