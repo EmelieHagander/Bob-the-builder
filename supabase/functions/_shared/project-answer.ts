@@ -15,7 +15,7 @@ import type { createPlanAssistant } from './plan-assistant.ts'
 import type { ProjectContext } from './project-context/dispatcher.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { createProjectLookup } from './project-lookup.ts'
-import { buildBobHands, buildBobCompleteHands } from './bob-prompt.ts'
+import { buildBobHands, buildBobCompleteHands, bobToolAvailability } from './bob-prompt.ts'
 import type { AiCatalogSession } from './ai-catalog.ts'
 import { compactReceipts, type ProjectWriter } from './project-write.ts'
 import { humanTextIssues } from './human-text.ts'
@@ -38,8 +38,10 @@ import { type ToolPolicyReader, type ToolboxEntry, type ToolInstructions, checke
 import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' }
 
 /** Instruction content comes from the pinned database manifest; shelf state is data. */
-export function buildBobSystemMessage(aiCatalog: AiCatalogSession, tools: OpenAIServiceOptions['tools'] = [], toolbox: ToolboxEntry[] = [], completeRequest = false, toolSheets = false): string {
-  return [aiCatalog.role('ask-bob').systemMessage, (completeRequest ? buildBobCompleteHands : buildBobHands)(aiCatalog, tools, sortToolbox(toolbox, aiCatalog.definition('bob.tools', 'tool_contract').definition.shelves as { label: string; tools: string[] }[])),
+export function buildBobSystemMessage(aiCatalog: AiCatalogSession, tools: OpenAIServiceOptions['tools'] = [], toolbox: ToolboxEntry[] = [], completeRequest = false, toolSheets = false, promptTiers = false): string {
+  const shelf = sortToolbox(toolbox, aiCatalog.definition('bob.tools', 'tool_contract').definition.shelves as { label: string; tools: string[] }[])
+  // Prompt tiers: the availability states move to the end of the input, so the instructions never change.
+  return [aiCatalog.role('ask-bob').systemMessage, completeRequest ? buildBobCompleteHands(aiCatalog, tools, shelf, !promptTiers) : buildBobHands(aiCatalog, tools, shelf),
     ...(toolSheets && tools.length ? [aiCatalog.text('bob.toolbox.sheets-at-end')] : [])].join('\n\n')
 }
 
@@ -71,6 +73,44 @@ function buildTurnFrame(aiCatalog: AiCatalogSession, projectId: string, briefing
     ...(!unlimitedWork ? [aiCatalog.text('bob.frame.limits', { steps: BOB_TURN_LIMITS.steps, writes: BOB_TURN_LIMITS.writes })] : []),
     text('briefing-label'), JSON.stringify(briefing),
   ].join('\n\n')
+}
+
+/** Owner decision 2026-10-30 (prompt tiers): the input is ordered by how often
+ * its parts change, so each turn reuses the previous turn's start. The project
+ * snapshot locked for the thread comes first, then the conversation stair
+ * (summaries written once, each with its source range, then the newer messages
+ * with project events where they happened), then this turn: the request and
+ * the fresh briefing, which change every turn. */
+function buildTieredMessages(aiCatalog: AiCatalogSession, opts: {
+  projectId: string; message: string; context: WorkingContext & { stair: NonNullable<WorkingContext['stair']> }; currentView?: CurrentView;
+  orientation: ProjectOrientation; catalog: unknown; drawingRequests: unknown; projectFacts?: ProjectFacts;
+}): NonNullable<OpenAIServiceOptions['messages']> {
+  const text = (key: string) => aiCatalog.text('bob.frame.' + key)
+  const { footer: _footer, ...orientation } = opts.orientation
+  const context = opts.context, stair = context.stair
+  type Item = { at: string; order: number; message: NonNullable<OpenAIServiceOptions['messages']>[number] }
+  const history: Item[] = [
+    ...stair.raw.map((m, i) => ({ at: m.createdAt, order: i, message: { role: m.role, content: m.text } })),
+    ...stair.events.map((e, i) => ({ at: e.at, order: stair.raw.length + i, message: { role: 'user' as const, content: aiCatalog.text('bob.memory.event') + ' ' + JSON.stringify(e) } })),
+  ].sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.order - b.order)
+  const unfinished = stair.raw.filter(m => m.state !== 'completed').map(m => ({ seq: m.seq, state: m.state }))
+  return [
+    { role: 'user', content: aiCatalog.text('bob.memory.snapshot') + '\n' + JSON.stringify({ locked_at: stair.snapshotLockedAt, ...stair.snapshot }) },
+    ...(stair.summaries.length || history.length ? [{ role: 'user' as const, content: text('prior-conversation') }] : []),
+    ...stair.summaries.map(s => ({ role: 'user' as const, content: aiCatalog.text('bob.memory.summary') + '\n' + JSON.stringify({ source: { from_seq: s.seqFrom, to_seq: s.seqTo } }) + '\n' + s.text })),
+    ...history.map(item => item.message),
+    { role: 'user', content: opts.message },
+    { role: 'user', content: [text('current'), aiCatalog.text('bob.frame.binding', { project_id: opts.projectId }), text('briefing-trust'),
+      ...(unfinished.length ? [aiCatalog.text('bob.memory.states'), JSON.stringify(unfinished)] : []),
+      ...(opts.currentView ? [text('current-view'), JSON.stringify(opts.currentView)] : []),
+      ...(context.recentWrites?.length ? [text('saved'), JSON.stringify({ recentWrites: context.recentWrites })] : []),
+      ...(context.recentSources?.length ? [text('sources'), JSON.stringify({ recentSources: context.recentSources })] : []),
+      text('briefing-label'), JSON.stringify(orientation),
+      ...(opts.projectFacts ? [JSON.stringify({ project_facts: opts.projectFacts })] : []),
+      ...(opts.catalog ? [text('catalog'), JSON.stringify(opts.catalog)] : []),
+    ].join('\n\n') },
+    ...(Array.isArray(opts.drawingRequests) && opts.drawingRequests.length ? [{ role: 'user' as const, content: text('outstanding') + '\n' + JSON.stringify(opts.drawingRequests) }] : []),
+  ]
 }
 
 /** Derived memory and original conversation stay separate from current saved
@@ -166,6 +206,8 @@ export interface BobAnswerState {
   initial: { briefing: unknown; catalog: unknown; drawingRequests: unknown; orientation?: ProjectOrientation; directory?: unknown; toolPick?: string[] | null }
   /** Tool-sheet manifests: tools whose details are already at the end of this conversation. */
   sheets?: string[]
+  /** Prompt-tier manifests: the tool availability last sent at the end of the input. */
+  availability?: string
   messages: NonNullable<OpenAIServiceOptions['messages']>
   previousResponseId?: string
   preparedEpoch?: number
@@ -284,6 +326,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // detail at the end of the conversation, once each, and called through use_tool.
   const toolSheets = !!(phaseTools && coreTools && opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.tool_sheets_version === 1)
   const sheetsSent = new Set<string>(restored?.sheets ?? [])
+  // Prompt tiers (2026-10-30): the stair-pinned context carries the tiered order; availability is sent at the end, only when it changes.
+  const promptTiers = !!opts.context?.stair
+  let availabilitySent: string | undefined = restored?.availability
   const splitSheets = (specs: NonNullable<OpenAIServiceOptions['tools']>) => {
     if (!toolSheets || !specs.length) return { native: specs, sheets: [] as string[] }
     return { native: [...specs.filter(spec => coreTools!.includes(spec.function.name)), opts.aiCatalog.tool(USE_TOOL, { include_manual: true })],
@@ -390,7 +435,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       ...(opts.buildingLinks ? { buildings: { linked: opts.buildingLinks.linked, owner_can_link: opts.buildingLinks.linkable } } : {}) }) } : undefined
   // Legacy pins retain their original message order. New context explicitly
   // labels pending work as data and ends with source-bound request orientation.
-  let messages: NonNullable<OpenAIServiceOptions['messages']> = restored ? structuredClone(restored.messages) : orientation ? buildManagedMessages(opts.aiCatalog, { ...opts, orientation, catalog, drawingRequests }) : [
+  let messages: NonNullable<OpenAIServiceOptions['messages']> = restored ? structuredClone(restored.messages) : orientation
+    ? opts.context?.stair ? buildTieredMessages(opts.aiCatalog, { ...opts, context: opts.context as WorkingContext & { stair: NonNullable<WorkingContext['stair']> }, orientation, catalog, drawingRequests })
+      : buildManagedMessages(opts.aiCatalog, { ...opts, orientation, catalog, drawingRequests }) : [
     { role: 'user', content: buildTurnFrame(opts.aiCatalog, opts.projectId, briefing, opts.context, opts.currentView, unlimitedWork) + (catalog ? opts.aiCatalog.text('bob.frame.catalog') + JSON.stringify(catalog) : '') },
     ...(Array.isArray(drawingRequests)&&drawingRequests.length?[{role:'user' as const,content:opts.aiCatalog.text('bob.frame.outstanding')+'\n'+JSON.stringify(drawingRequests)}]:[]),
     ...(opts.context ? opts.context.recent.map(m => ({ role: m.role, content: m.text })) : [{ role: 'user' as const, content: opts.message }]),
@@ -412,6 +459,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     await opts.checkpoint.save(structuredClone({ version: 1, projectId: opts.projectId, step, phase,
       initial: { briefing, catalog, drawingRequests, orientation, directory: orientationReader?.exportState(), ...(toolPick ? { toolPick } : {}) },
       ...(toolSheets ? { sheets: [...sheetsSent] } : {}),
+      ...(availabilitySent !== undefined ? { availability: availabilitySent } : {}),
       messages, previousResponseId, preparedEpoch, observation, toolbox: toolbox.exportState(), workResults,
       completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
       tools, closedByLimit, closedByCommentary, request, response: pendingResponse, toolIndex }))
@@ -430,6 +478,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (opts.projectContext && !await opts.projectContext.validate()) return { ok: false, error: 'context_unavailable' }
     const lastStep = !unlimitedWork && step >= steps - 1, lateInTurn = !unlimitedWork && Date.now() + 40000 >= deadline
     let pendingSheets: string[] = []
+    // Prompt tiers: availability lists every tool Bob can call this step, through use_tool too.
+    let callable: string[] = []
     if (phase === 'ready') {
     tools = []
     try {
@@ -441,6 +491,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       if (!lastStep && !lateInTurn && commentaryStreak < 2) tools = await toolbox.prepare()
       else toolbox.closeSurface()
     } catch (error) { rethrowContinuation(error); return { ok: false, error: toolFailureCode(error) } }
+    callable = tools.map(tool => tool.function.name)
     if (toolSheets && tools.length) { const split = splitSheets(tools); tools = split.native; pendingSheets = split.sheets.filter(name => !sheetsSent.has(name)) }
     closedByLimit = lastStep || lateInTurn
     closedByCommentary = completionAware && commentaryStreak >= 2
@@ -456,11 +507,13 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       if (!closedByLimit && !closedByCommentary) tools = await toolbox.prepare()
       else { toolbox.closeSurface(); tools = [] }
       // A rollover summarizes the sheets away: send them again at the end of the next step.
+      callable = tools.map(tool => tool.function.name)
       if (toolSheets) { tools = splitSheets(tools).native; sheetsSent.clear() }
+      availabilitySent = undefined
       shelf = closedByLimit || closedByCommentary ? [] : toolbox.toolbox
       // The returned provider request and its eventual handlers share this
       // refreshed fence. A new describe call remains loaded for the next step.
-      return { systemMessage: [buildBobSystemMessage(opts.aiCatalog, tools, shelf, opts.completeRequest, toolSheets), toolbox.workflowInstructions].filter(Boolean).join('\n\n'), tools: tools.length ? tools : undefined,
+      return { systemMessage: [buildBobSystemMessage(opts.aiCatalog, tools, shelf, opts.completeRequest, toolSheets, promptTiers), toolbox.workflowInstructions].filter(Boolean).join('\n\n'), tools: tools.length ? tools : undefined,
         catalogSchemaParameters: schemaParameters(), catalogToolParameters: toolbox.toolParameters() }
     })
     if (closedByLimit && step > 0 && !closedNoteSent) {
@@ -470,7 +523,11 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     observation.steps = step + 1
     progress({ stage: step === 0 ? 'thinking' : tools.length ? 'thinking' : 'finishing', step: step + 1 })
     // Built once per step: replay rebuilds it for every recorded step too.
-    const systemMessage = [buildBobSystemMessage(opts.aiCatalog, tools, shelf, opts.completeRequest, toolSheets), toolbox.workflowInstructions].filter(Boolean).join('\n\n')
+    const systemMessage = [buildBobSystemMessage(opts.aiCatalog, tools, shelf, opts.completeRequest, toolSheets, promptTiers), toolbox.workflowInstructions].filter(Boolean).join('\n\n')
+    const availability = phase === 'ready' && promptTiers && opts.completeRequest && tools.length
+      ? bobToolAvailability(callable.map(name => ({ type: 'function' as const, function: { name, description: '', parameters: {} } })), shelf) : undefined
+    const availabilityMessage = availability !== undefined && availability !== availabilitySent ? { role: 'user' as const, content: availability } : null
+    if (availabilityMessage) availabilitySent = availability
     // The job's newly available tools, in detail, after everything else in this request.
     const sheetMessage = pendingSheets.length ? { role: 'user' as const, content: opts.aiCatalog.text('bob.toolbox.sheets-intro') + '\n' + JSON.stringify(pendingSheets.map(name => {
       const spec = opts.aiCatalog.tool(name, { ...schemaParameters(), ...(toolbox.toolParameters()?.[name] ?? {}) }).function
@@ -487,7 +544,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
       userId: opts.userId, systemMessage, catalogRoleKey: 'ask-bob', catalogSchemaParameters: schemaParameters(),
       ...(toolbox.toolParameters() ? { catalogToolParameters: toolbox.toolParameters() } : {}),
-      messages: [...messages, ...(opts.projectContext?.carrier() ?? []), ...(step === 0 && initialFooter ? [initialFooter] : []), ...(sheetMessage ? [sheetMessage] : [])], previousResponseId, tools: tools.length ? tools : undefined,
+      messages: [...messages, ...(opts.projectContext?.carrier() ?? []), ...(step === 0 && initialFooter ? [initialFooter] : []), ...(availabilityMessage ? [availabilityMessage] : []), ...(sheetMessage ? [sheetMessage] : [])], previousResponseId, tools: tools.length ? tools : undefined,
       ...(completionAware ? { responsePhaseMode: 'aware' as const } : {}),
       ...(opts.completeRequest ? { responseItemsMode: 'preserve' as const, responsePhaseMode: 'aware' as const } : {}),
       maxOutputTokens: opts.writer ? 8000 : 900, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),

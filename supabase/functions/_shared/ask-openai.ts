@@ -47,7 +47,7 @@ import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
 import { callOpenAIResponses, callOpenAIEmbeddings, generateImage, uploadOpenAIVisionFile } from './openai-service.ts'
 import { createBobContextContinuation, type ContextSurface } from './bob-context-continuation.ts'
-import { BOB_RESULT_WINDOW_TOKENS, BOB_CONSTRUCTION_RESULT_TOKENS } from './bob-result-references.ts'
+import { BOB_RESULT_WINDOW_TOKENS, BOB_CONSTRUCTION_RESULT_TOKENS, BOB_COMPACTION_BATCH } from './bob-result-references.ts'
 import { CONSTRUCTION_VIEW_TOOL, constructionViewBudget } from './construction-views.ts'
 import { readWithStatementRetry, withStatementRetry } from './read-retry.ts'
 import { createMemoryRetrieval, journalMemoryStore } from './bob-memory-retrieval.ts'
@@ -60,6 +60,7 @@ import { createSourceReader } from './source-reader.ts'
 import type { BobAnswerState, ProjectAnswer, TurnProgress } from './project-answer.ts'
 import { compactReceipts, createProjectWriter } from './project-write.ts'
 import { prepareWorkingContext, restoreWorkingContext, type WorkingContextSession, type WorkingContextState } from './bob-working-context.ts'
+import { prepareMemoryStair, journalStairStore } from './bob-memory-stair.ts'
 import { runClaimedProjectTurn } from './project-turn.ts'
 import { createAiCatalogSession, applyCatalogModelOptions, type AiCatalogSession } from './ai-catalog.ts'
 
@@ -187,7 +188,7 @@ export async function answerWithOpenAi(opts: {
   // full timeout, so several calls share one segment; a call cut off at the segment
   // wall yields into a fresh segment, consuming the same bounded retry budget
   // as other dispatched failures. Durable AI waiting does not consume retries.
-  const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'completion-gate': 15000, 'tool-picker': 15000, 'bob-delivery-language': 15000 }
+  const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'completion-gate': 15000, 'tool-picker': 15000, 'memory-stair': 30000, 'bob-delivery-language': 15000 }
   let drawingRequestId:string|null=null
   let drawingBudget:ReturnType<typeof createDrawingBudget>|undefined
   let modelBudget: ReturnType<typeof createBobModelBudget>
@@ -328,7 +329,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -353,6 +354,9 @@ export async function answerWithOpenAi(opts: {
       ...(typeof contract.turn_usd_stop === 'number' && Number.isFinite(contract.turn_usd_stop) && contract.turn_usd_stop > 0 ? { turnUsdStop: contract.turn_usd_stop } : {}),
       memoryManagementVersion: contract.context_strategy_version === 1 ? 2 as const : 1 as const,
       ...(contract.context_strategy_version === 1 ? { contextStrategyVersion: 1 as const } : {}),
+      // Owner decision 2026-10-30: the memory stair and the prompt ordered by how often its parts change.
+      ...(contract.context_strategy_version === 1 && contract.memory_stair_version === 1 && contract.prompt_tiers_version === 1
+        ? { memoryStairVersion: 1 as const, promptTiersVersion: 1 as const } : {}),
     }))
   if (execution.turnUsdStop !== undefined && !(typeof execution.turnUsdStop === 'number' && Number.isFinite(execution.turnUsdStop) && execution.turnUsdStop > 0)) throw new Error('turn_usd_stop_invalid')
   modelBudget = createBobModelBudget(undefined, undefined, undefined, { unlimitedWork, ...(execution.turnUsdStop !== undefined ? { usdStop: execution.turnUsdStop } : {}) })
@@ -365,6 +369,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.resultWindowVersion !== undefined && (![1, 2].includes(execution.resultWindowVersion) || execution.resultReferenceVersion !== 1)) throw new Error('result_window_version_invalid')
   if (execution.constructionPageVersion !== undefined && execution.constructionPageVersion !== 1) throw new Error('construction_page_version_invalid')
   if (execution.corePreloadVersion !== undefined && execution.corePreloadVersion !== 1) throw new Error('core_preload_version_invalid')
+  if (execution.memoryStairVersion !== undefined && (execution.memoryStairVersion !== 1 || execution.promptTiersVersion !== 1 || execution.contextStrategyVersion !== 1)) throw new Error('memory_stair_version_invalid')
   if (execution.buildingLinkVersion !== undefined && execution.buildingLinkVersion !== 1) throw new Error('building_link_version_invalid')
   if (execution.roomDimensionsVersion !== undefined && execution.roomDimensionsVersion !== 1) throw new Error('room_dimensions_version_invalid')
   if (execution.projectFactsVersion !== undefined && execution.projectFactsVersion !== 1) throw new Error('project_facts_version_invalid')
@@ -392,6 +397,7 @@ export async function answerWithOpenAi(opts: {
     ...(execution.resultWindowVersion === 2 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS, resultWindowVersion: 2 as const } : {}),
     ...(execution.constructionPageVersion === 1 ? { literalResultTokens: { [CONSTRUCTION_VIEW_TOOL.function.name]: BOB_CONSTRUCTION_RESULT_TOKENS } } : {}),
     ...(execution.rolloverVersion === 1 ? { rolloverVersion: 1 as const } : {}),
+    ...(execution.promptTiersVersion === 1 ? { compactionBatch: BOB_COMPACTION_BATCH } : {}),
     // Older in-flight journals keep their recorded call sequence and re-page.
     ...(execution.contextPagingVersion === 1 && journal ? { pageBoundaries: (source: string, compute: () => Promise<(number | null)[]>) =>
       memo('context:pages', { source }, compute) } : {}),
@@ -417,7 +423,8 @@ export async function answerWithOpenAi(opts: {
   // One routing key per conversation thread (guest/local turns: per run), so
   // a turn's steps and the thread's next turn reach the provider machine that
   // holds their cached prefix. A hash: no project or user identity is sent.
-  promptCacheKey = 'bob-ask-' + (await fingerprint({ v: 1, scope: threadId ?? execution.id })).slice(0, 32)
+  // Prompt tiers (2026-10-30): one key per project, so every thread of the project shares the fixed start and the locked snapshot.
+  promptCacheKey = 'bob-ask-' + (await fingerprint(execution.promptTiersVersion === 1 ? { v: 2, project: opts.projectId } : { v: 1, scope: threadId ?? execution.id })).slice(0, 32)
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
   let currentView: CurrentView | undefined
   let validateCurrentView: (() => Promise<boolean>) | undefined
@@ -1017,6 +1024,14 @@ export async function answerWithOpenAi(opts: {
         const saved = restart.state.workingContext as WorkingContextState | undefined
         if (!saved) throw new Error('context_checkpoint_invalid')
         return workingContext = restoreWorkingContext(saved, { projectId: opts.projectId, threadId, message: opts.message, store, hasAccess, unlimitedWork, retrieval })
+      }
+      if (execution.memoryStairVersion === 1 && journalled) {
+        const stair = journalStairStore(sourceStore, memo)
+        return workingContext = await prepareMemoryStair({ projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation,
+          message: opts.message, store: { ...store, stairLoad: async () => ({ ...await stair.stairLoad() as object, generation: claimedServer.generation }),
+            stairSave: async (level, seqFrom, seqTo, text, supersede) => ({ ...await stair.stairSave(level, seqFrom, seqTo, text, supersede) as object, generation: claimedServer.generation }) },
+          ...(retrieval ? { retrieval } : {}), callModel, hasAccess, unlimitedWork,
+          deadline: unlimitedWork ? deadline : Math.min(deadline - 60000, Date.now() + 105000) })
       }
       return workingContext = await prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,

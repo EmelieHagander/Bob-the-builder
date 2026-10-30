@@ -32,6 +32,7 @@ let preResultWindowRows:any[]|undefined,preResultWindowVersions:Map<string,numbe
 let preConstructionWorkRows:any[]|undefined,preConstructionWorkVersions:Map<string,number>|undefined
 let preToolPickerRows:any[]|undefined,preToolPickerVersions:Map<string,number>|undefined
 let preToolSheetsRows:any[]|undefined,preToolSheetsVersions:Map<string,number>|undefined
+let preMemoryStairRows:any[]|undefined,preMemoryStairVersions:Map<string,number>|undefined
 // SQL publications drop the seed markers and name themselves, as `(prior.metadata-'seed_version'-'source_revision')||publication`.
 const publishAs=(row:any,publication:string)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication}}
 // Materialise the explicit immutable publication patches in migration order.
@@ -372,6 +373,13 @@ for(const migration of migrations){
   row.metadata={...rest,publication:'bob-workflows-judgement-v1'}
   row.content+='\n'+source.match(/\$bob_judgement_principles\$([\s\S]+?)\$bob_judgement_principles\$/)![1]
   versions.set(row.key,versions.get(row.key)!+1)
+ }
+ const memoryStair=source.match(/\$memory_stair_additions\$([\s\S]+?)\$memory_stair_additions\$/)
+ if(memoryStair){
+  preMemoryStairRows=structuredClone(seed);preMemoryStairVersions=new Map(versions)
+  for(const addition of JSON.parse(memoryStair[1])){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-memory-stair-v1'}});versions.set(addition.key,1)}
+  const contract=seed.find(row=>row.key==='agent-contract.ask-bob')
+  publishAs(contract,'bob-memory-stair-v1');contract.metadata.memory_stair_version=1;contract.metadata.prompt_tiers_version=1;versions.set(contract.key,versions.get(contract.key)!+1)
  }
  const toolSheets=source.match(/\$tool_sheets_additions\$([\s\S]+?)\$tool_sheets_additions\$/)
  if(toolSheets){
@@ -766,6 +774,10 @@ for(const row of preToolPickerRows??[])if(row.kind==='tier_binding'&&row.definit
 const preToolPickerManifest=fixtureManifest(preToolPickerRows??seed,preToolPickerVersions??versions,'fixture-pre-tool-picker-manifest')
 for(const row of preToolSheetsRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preToolSheetsManifest=fixtureManifest(preToolSheetsRows??seed,preToolSheetsVersions??versions,'fixture-pre-tool-sheets-manifest')
+for(const row of preMemoryStairRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preMemoryStairManifest=fixtureManifest(preMemoryStairRows??seed,preMemoryStairVersions??versions,'fixture-pre-memory-stair-manifest')
+/** Manifests pinned before the 2026-10-30 memory stair: one rewritten summary and the per-turn briefing order. */
+export function preMemoryStairCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preMemoryStairManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 /** Manifests pinned before the 2026-10-30 tool-sheets publication: every loaded tool is a native function. */
 export function preToolSheetsCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preToolSheetsManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 /** Manifests pinned before the 2026-10-30 tool-picker publication: the phase alone chooses the flexible tools. */

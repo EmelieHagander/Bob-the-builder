@@ -75,8 +75,8 @@ after a specific outcome. Older pinned manifests keep their five tools and cards
 owner's request.
 
 <a id="tool-picker"></a>
-**The request chooses the four — prepared 2026-10-30, not deployed (owner
-decision; [record](foundation-verification.md#tool-picker-2026-10-30)).** In the
+**The request chooses the four — installed 2026-10-30 (owner decision;
+[evidence](foundation-verification.md#tool-picker-install-2026-10-30)).** In the
 paid box run after #375 every turn started with the concept set, the drawing
 turn too, and Bob loaded eight tools mid-turn; each change to the tool list cost
 the provider cache for that call (about USD 0.33 of 1.17). Prompt assembly now
@@ -92,8 +92,8 @@ phase choice. Source: `20261030020000_bob_tool_picker_catalog.sql` and
 `pickTurnTools` in `supabase/functions/_shared/project-answer.ts`.
 
 <a id="tool-sheets"></a>
-**A fixed base prompt; the job's tools in detail at the end — prepared
-2026-10-30, not deployed (owner decision; [record](foundation-verification.md#tool-picker-2026-10-30)).**
+**A fixed base prompt; the job's tools in detail at the end — installed
+2026-10-30 (owner decision; [evidence](foundation-verification.md#tool-picker-install-2026-10-30)).**
 The provider caches a request from its start, and the tool list comes first:
 a tool added in the middle of the sorted list made everything after it full
 price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
@@ -117,6 +117,10 @@ price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
 - The checkpoint keeps which tools already have their details in the
   conversation; a context rollover summarizes them away, so they are sent again
   on the next step.
+
+With [prompt tiers](ask-bob-conversations.md#memory-stair) the tool
+availability also leaves the system message: it is sent at the end of a step
+when it changes, and a picked tool reached through `use_tool` reads `callable`.
 
 Manifests before the publication keep every loaded tool native. Source:
 `20261030030000_bob_tool_sheets_catalog.sql`, `unwrapToolCall` and the step

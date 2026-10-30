@@ -12,6 +12,13 @@ export interface ContextFrame {
   recentWrites?: ProjectWriteReceipt[];
   recentSources?: RecentSource[];
 }
+/** Owner decision 2026-10-30 (memory stair): summaries written once with their
+ * exact message range, the newer messages, project events since the locked
+ * snapshot, and that snapshot. See bob-memory-stair.ts. */
+export interface StairSummary { id: string; level: 0 | 1 | 2; seqFrom: number; seqTo: number; text: string }
+export interface StairMessage extends ContextMessage { createdAt: string }
+export interface StairEvent { at: string; kind: string; [key: string]: unknown }
+export interface MemoryStair { snapshot: Record<string, unknown>; snapshotLockedAt: string; summaries: StairSummary[]; raw: StairMessage[]; events: StairEvent[] }
 /** A record Bob consulted in his previous reply: a pointer, never current state. */
 export interface RecentSource { dataset: string; recordId: string; label: string }
 const validSource = (v: unknown): v is RecentSource => !!v && typeof v === 'object' && !Array.isArray(v)
@@ -27,6 +34,7 @@ export interface WorkingContext {
   recentWrites?: ProjectWriteReceipt[];
   recentSources?: RecentSource[];
   memoryManagementVersion?: 1 | 2;
+  stair?: MemoryStair;
   history: { readonly remaining: number; search(value: unknown): Promise<{ status: string; [key: string]: unknown }>;
     read?(value: unknown): Promise<{ status: string; [key: string]: unknown }> };
 }
@@ -203,6 +211,20 @@ export async function prepareWorkingContext(opts: {
   }, opts)
 }
 
+function validStair(value: unknown, currentSeq: number): boolean {
+  const v = value as MemoryStair
+  if (!v || typeof v !== 'object' || !v.snapshot || typeof v.snapshot !== 'object' || Array.isArray(v.snapshot) || typeof v.snapshotLockedAt !== 'string'
+    || !Array.isArray(v.summaries) || v.summaries.length > 16 || !Array.isArray(v.raw) || v.raw.length > 200 || !Array.isArray(v.events) || v.events.length > 60) return false
+  let next = 1
+  for (const s of v.summaries) {
+    if (!s || typeof s.id !== 'string' || ![0, 1, 2].includes(s.level) || s.seqFrom !== next || !Number.isSafeInteger(s.seqTo) || s.seqTo < s.seqFrom
+      || typeof s.text !== 'string' || !s.text.trim() || s.text.length > 4000) return false
+    next = s.seqTo + 1
+  }
+  return v.raw.every((m, i) => validMessage(m) && typeof m.createdAt === 'string' && m.seq >= next && m.seq !== currentSeq && (i === 0 || m.seq > v.raw[i - 1].seq))
+    && v.events.every(e => e && typeof e.at === 'string' && typeof e.kind === 'string')
+}
+
 /** Rebuild only the request-bound reader. Preparation products are immutable
  * turn inputs: restoring must not reload/fold memory or reindex older text. */
 export function restoreWorkingContext(saved: WorkingContextState, opts: WorkingContextRestoreOptions): WorkingContextSession {
@@ -218,7 +240,8 @@ export function restoreWorkingContext(saved: WorkingContextState, opts: WorkingC
         && Number.isSafeInteger(entry.seq) && entry.seq > 0 && typeof entry.descriptor === 'string'))
       || value.recentWrites !== undefined && (!Array.isArray(value.recentWrites) || value.recentWrites.length > 16
         || !value.recentWrites.every(receipt => isProjectWriteReceipt(receipt, opts.projectId)))
-      || value.recentSources !== undefined && (!Array.isArray(value.recentSources) || value.recentSources.length > 24 || !value.recentSources.every(validSource))) {
+      || value.recentSources !== undefined && (!Array.isArray(value.recentSources) || value.recentSources.length > 24 || !value.recentSources.every(validSource))
+      || value.stair !== undefined && !validStair(value.stair, value.recent.at(-1)!.seq)) {
       throw new Error('context_checkpoint_invalid')
     }
   }
@@ -234,7 +257,8 @@ export function restoreWorkingContext(saved: WorkingContextState, opts: WorkingC
       validate(state)
       if ((state.context.memoryManagementVersion === 2) !== managed) throw new Error('context_checkpoint_invalid')
       const context = structuredClone(state.context)
-      for (const key of ['historyIndex', 'recentWrites', 'recentSources', 'memoryManagementVersion'] as const) delete session[key]
+      if ((state.context.stair !== undefined) !== (saved.context.stair !== undefined)) throw new Error('context_checkpoint_invalid')
+      for (const key of ['historyIndex', 'recentWrites', 'recentSources', 'memoryManagementVersion', 'stair'] as const) delete session[key]
       Object.assign(session, context)
       searches = state.searches
     },
