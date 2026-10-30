@@ -1083,7 +1083,7 @@ The authenticated worker accepts the old recipe request and a bounded `{recipe,d
 
 ### Plain-language drawing sheets — 2026-10-30
 
-**Status: source only, not deployed.** Owner feedback: the sheets were written
+**Status: deployed 2026-10-30** from `main` `ef55db4` ([run 41020338894](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41020338894): engine tests, Modal deploy and live smoke check of the new sheet text passed). No paid review of a real drawing with the new sheets yet. Owner feedback: the sheets were written
 for AI, and people could not tell what was needed or what X, Y and Z meant.
 `bob_cad/annotations.py` now writes for people without drawing experience. It
 changes presentation text only; geometry, P-number placement, pagination,
@@ -1106,8 +1106,8 @@ manifest notes (`annotations` version 1) and the transport are unchanged.
   strength unchecked, sizes before notches and holes, not approved for building).
 
 The reviewer still receives the exact recipe and manifest with the pixels.
-Saved drawings keep their old sheets until rendered again. Deploying the worker
-and the first paid review with the new sheets need the owner's OK.
+Saved drawings keep their old sheets until rendered again. The first paid review
+with the new sheets needs the owner's OK.
 
 ### Fastener schedule on drawings — annotations version 2, 2026-10-26
 
