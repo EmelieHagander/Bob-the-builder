@@ -556,6 +556,13 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
+**Byggt 2026-10-30, inte installerat — jobbets verktyg tillbaka som riktiga verktyg (ägarbeslut efter [lådprov 5](foundation-verification.md#box-paid-run5-2026-10-30)):**
+lådprov 5 misslyckades (USD 0,68): när alla verktyg utom de sex fasta gick via
+`use_tool` skrev Bob fel argument 20 gånger. [Version 2](ask-bob-tools.md#tool-sheets-v2):
+turens första verktyg är riktiga verktyg hela turen, bara verktyg som hämtas
+senare går via `use_tool`. Nästa: ägarens OK att slå ihop, driftsätta
+`bob-worker` och `ask-bob`, köra `20261030060000` och sedan ett nytt lådprov.
+
 **Installerat 2026-10-30 — prompten i ordning efter hur ofta delarna ändras, och minnet som en trappa (ägarbeslut; `bob-worker` v156, `ask-bob` v188, [kontrakt](ask-bob-conversations.md#memory-stair), [bevis](foundation-verification.md#memory-stair-install-2026-10-30)):**
 fast start (verktyg, roll, kort), en låst projektbild med planens steg som
 checklista, sammanfattningar som skrivs en gång med källa, sedan nya meddelanden

@@ -1,5 +1,30 @@
 # Foundation verification and rollout
 
+<a id="box-paid-run5-2026-10-30"></a>
+## Paid box run 5 failed: the job's tools behind use_tool — 2026-10-30
+
+The owner asked for a test after the [memory stair installation](#memory-stair-install-2026-10-30).
+[Run 41091850978](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41091850978)
+(`live-form-acceptance.yml`, box, on `6b85a0b`) **failed**: the first turn ran
+29 model steps over 15 minutes, saved nothing, and was cancelled by the run's
+time limit. Cost USD 0.68 (30 Bob calls and one picker call). Evidence:
+`Docs/archive/form-box-paid-2026-10-30-run5.json`.
+
+- **Cause: [tool sheets version 1](ask-bob-tools.md#tool-sheets).** Every tool
+  except the permanent six was called through `use_tool` from a text
+  description. 20 calls were rejected for wrong arguments:
+  `create_solution_alternative` 11 times, `read_project_edit_context` 4,
+  `search_material_catalog` 3, `read_material_catalog` and
+  `read_construction_draft` once each. Bob also called `describe_tool` 10
+  times. In run 4 the same tools succeeded first time as native functions.
+- **What worked:** 91% of Bob's input tokens were read from the cache (608,768
+  of 671,989), and the thread's project snapshot was locked as designed.
+- **Fix, owner's choice:** [version 2](ask-bob-tools.md#tool-sheets-v2) keeps
+  the turn's first tools native and puts only tools loaded later behind
+  `use_tool`. Built and tested, not installed: deploy `bob-worker` and
+  `ask-bob`, then apply `20261030060000_bob_tool_sheets_hybrid_catalog.sql`,
+  then repeat the box run.
+
 <a id="memory-stair-install-2026-10-30"></a>
 ## Prompt tiers and the memory stair — installed 2026-10-30
 

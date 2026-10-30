@@ -118,6 +118,33 @@ price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
   conversation; a context rollover summarizes them away, so they are sent again
   on the next step.
 
+<a id="tool-sheets-v2"></a>
+**Version 2: the job's tools stay native — built 2026-10-30, not installed
+(owner decision after [paid box run 5](foundation-verification.md#box-paid-run5-2026-10-30)).**
+Version 1 put every tool except the permanent six behind `use_tool`. Bob then
+read those tools as text and wrote wrong arguments 20 times in one turn
+(`create_solution_alternative` 11 times), until the run's time limit. The same
+tools succeeded first time as native functions in run 4. With
+`tool_sheets_version` 2 (publication `tool-sheets-hybrid-v1`):
+
+- The tools offered at the turn's first step (the permanent tools and the
+  tool picker's choice) are native for the whole turn, in a fixed order with
+  `use_tool` last. The checkpoint keeps that set, so a resumed turn sends the
+  same list.
+- Only a tool loaded later in the turn is described at the end
+  (`bob.toolbox.sheets-late-intro`) and called through `use_tool`; the list
+  still never changes within a turn. A tool loaded with `describe_tool` needs no
+  second copy.
+- The fixed sentence says so (`bob.toolbox.sheets-late`): *Som
+  byggprojektledare har du alltid dina standardverktyg och jobbets verktyg till
+  hands. Verktyg du hämtar senare under jobbet beskrivs i detalj sist i
+  samtalet.*
+
+The tool list can differ between turns, so the first step of a turn may miss
+the cache for everything after the tools; the steps within the turn keep it.
+Source: `20261030060000_bob_tool_sheets_hybrid_catalog.sql` and `splitSheets`
+in `project-answer.ts`.
+
 With [prompt tiers](ask-bob-conversations.md#memory-stair) the tool
 availability also leaves the system message: it is sent at the end of a step
 when it changes, and a picked tool reached through `use_tool` reads `callable`.

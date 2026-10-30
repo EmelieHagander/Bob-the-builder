@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { catalogFixture, catalogCall, preToolSheetsCatalogFixture } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, catalogCall, preToolSheetsCatalogFixture, preToolSheetsHybridCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { catalogCoreTools } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { runProjectAnswer, seedToolPolicy, type BobAnswerState } from '../supabase/functions/_shared/project-answer.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
@@ -16,6 +16,9 @@ import type { OpenAIServiceOptions } from '../supabase/functions/_shared/openai-
 // Owner decision 2026-10-30: Bob's base prompt (role, directory, the permanent
 // tools and use_tool) is always the same; the job's other tools are described in
 // detail at the end of the conversation and called through use_tool.
+// Version 1 (every job tool behind use_tool) is read from the manifest before the
+// hybrid publication; version 2 keeps the turn's first tools native (tests at the end).
+const v1 = () => preToolSheetsHybridCatalogFixture()
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
 const call = (id: string, name: string, args: unknown) => ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } })
 const PICK = ['read_construction_draft', 'check_construction_draft']
@@ -58,7 +61,7 @@ const sheetsIn = (options: OpenAIServiceOptions) => (options.messages ?? []).fil
   .flatMap(m => JSON.parse(String(m.content).slice(String(m.content).indexOf('\n') + 1)) as { name: string; description: string; parameters: any }[])
 
 test('the base prompt is identical on every step; the picked tools come in detail last and are called through use_tool', async () => {
-  const catalog = catalogFixture(), core = catalogCoreTools(catalog)!
+  const catalog = v1(), core = catalogCoreTools(catalog)!
   const { requests, ran } = await turn(catalog, [
     () => ({ success: true, model: 'fixture', usage, responseId: 'r1', toolCalls: [call('c1', 'use_tool', { name: 'check_construction_draft', arguments: {} })] }),
   ])
@@ -82,7 +85,7 @@ test('the base prompt is identical on every step; the picked tools come in detai
 })
 
 test('a tool loaded mid-turn never changes the start of the prompt; unloaded and malformed calls are refused', async () => {
-  const catalog = catalogFixture()
+  const catalog = v1()
   const { requests, ran } = await turn(catalog, [
     () => ({ success: true, model: 'fixture', usage, responseId: 'r1', toolCalls: [call('c1', 'use_tool', { name: 'change_construction_parameters', arguments: {} }), call('c2', 'use_tool', { nope: true })] }),
     () => ({ success: true, model: 'fixture', usage, responseId: 'r2', toolCalls: [call('c3', 'describe_tool', { name: 'change_construction_parameters' })] }),
@@ -100,7 +103,7 @@ test('a tool loaded mid-turn never changes the start of the prompt; unloaded and
 })
 
 test('a resumed turn does not repeat sheets; pinned manifests keep every loaded tool native', async () => {
-  const catalog = catalogFixture(), checkpoint = { saved: [] as BobAnswerState[] }
+  const catalog = v1(), checkpoint = { saved: [] as BobAnswerState[] }
   await turn(catalog, [() => ({ success: true, model: 'fixture', usage, responseId: 'r1', toolCalls: [call('c1', 'use_tool', { name: 'read_construction_draft', arguments: {} })] })], checkpoint)
   const resumable = checkpoint.saved.find(state => state.step === 1 && state.phase === 'ready')!
   assert.deepEqual([...resumable.sheets!].sort(), [...PICK].sort())
@@ -111,4 +114,41 @@ test('a resumed turn does not repeat sheets; pinned manifests keep every loaded 
   assert(PICK.every(n => names(old.requests[0]).includes(n)) && !names(old.requests[0]).includes('use_tool'), JSON.stringify(names(old.requests[0])))
   assert.deepEqual(sheetsIn(old.requests[0]), [])
   assert.doesNotMatch(old.requests[0].systemMessage!, /beskrivs i detalj sist/)
+})
+
+// Version 2, owner decision after paid box run 5: through use_tool Bob wrote wrong
+// arguments for tools that worked first time as native functions. The tools
+// offered at the turn's first step stay native for the whole turn; only a tool
+// loaded later goes through use_tool, so the list still never changes in a turn.
+test('version 2: the picked tools stay native and fixed; a tool loaded mid-turn is described at the end and called through use_tool', async () => {
+  const catalog = catalogFixture(), core = catalogCoreTools(catalog)!
+  assert.equal(catalog.definition('bob.tools', 'tool_contract').definition.tool_sheets_version, 2)
+  const { requests, ran } = await turn(catalog, [
+    () => ({ success: true, model: 'fixture', usage, responseId: 'r1', toolCalls: [call('c1', 'check_construction_draft', {}), call('c2', 'describe_tool', { name: 'change_construction_parameters' })] }),
+    () => ({ success: true, model: 'fixture', usage, responseId: 'r2', toolCalls: [call('c3', 'use_tool', { name: 'change_construction_parameters', arguments: {} })] }),
+  ])
+  const first = names(requests[0])
+  assert(PICK.every(n => first.includes(n)), 'picked tools are native functions: ' + JSON.stringify(first))
+  assert(core.filter(n => first.includes(n)).length > 0 && first.at(-1) === 'use_tool')
+  assert.match(requests[0].systemMessage!, /Verktyg du hämtar senare under jobbet beskrivs i detalj sist/)
+  assert.deepEqual(sheetsIn(requests[0]), [], 'nothing is described at the end at the start of a turn')
+  // A picked tool runs as a direct call; the later tool runs through use_tool under its own name.
+  assert.equal(ran[0].name, 'check_construction_draft'); assert.notEqual(ran[0].status, 'not_offered')
+  assert.equal(ran[1].name, 'describe_tool'); assert.equal(ran[1].status, 'ok')
+  assert.equal(ran[2].name, 'change_construction_parameters'); assert.notEqual(ran[2].status, 'not_offered')
+  for (const request of requests.slice(1)) {
+    assert.equal(JSON.stringify(request.tools), JSON.stringify(requests[0].tools), 'the native list never changes in a turn')
+    assert.equal(request.systemMessage, requests[0].systemMessage)
+  }
+  assert(!names(requests[2]).includes('change_construction_parameters'), 'the later tool stays behind use_tool')
+  assert.deepEqual(requests.flatMap(sheetsIn), [], 'describe_tool already returned its details: no second copy')
+})
+
+test('version 2: a resumed turn keeps the same native tools', async () => {
+  const catalog = catalogFixture(), checkpoint = { saved: [] as BobAnswerState[] }
+  const first = await turn(catalog, [() => ({ success: true, model: 'fixture', usage, responseId: 'r1', toolCalls: [call('c1', 'read_construction_draft', {})] })], checkpoint)
+  const resumable = checkpoint.saved.find(state => state.step === 1 && state.phase === 'ready')!
+  assert.deepEqual([...resumable.native!].sort(), names(first.requests[0]).filter(n => n !== 'use_tool').sort())
+  const resumed = await turn(catalog, [], { state: resumable, saved: [] })
+  assert.equal(JSON.stringify(resumed.requests[0].tools), JSON.stringify(first.requests[0].tools))
 })
