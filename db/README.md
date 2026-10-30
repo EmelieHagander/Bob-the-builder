@@ -1852,3 +1852,32 @@ owns the index/readback distinction and recovery behavior. The migration is
 applied; [hosted verification](../Docs/foundation-verification.md#form-delivery-release-2026-10-27)
 records its managed version, exact function readback and rollback-only caller
 probe. This does not close browser or ordinary model/CAD acceptance.
+
+## Build guides with the drawing revision — source only, 2026-10-30
+
+Migration `20261030170000_cad_build_guide.sql`
+([contract](../Docs/cad-adapter.md#build-guides-ikea-style--slice-1-2026-10-30)):
+
+- **Switch.** `shared.ai_settings` row `bob/bob/cad-build-guide/cad`, inserted with
+  `is_enabled=false` by copying the `cad-reviewer` row's model fields (it makes no
+  model call). A missing row is off. The owner flips it in the Supabase dashboard;
+  bob has no owner/organiser authority yet, so there is no per-project switch.
+- **Storage.** Guide pages are `files.guide-0 … guide-N` (base64 SVG) on the
+  drawing's `bob.artifact_cad_revisions` row, with notes in `manifest.build_guide`
+  (`version 1`, `status` generated | not_generated | failed, `construction`
+  {artifact_id, revision}, `pages` [{key, sha256, …}]). Same row, so project RLS,
+  archive/restore copies and the reviewed commitment cover it.
+- **Trigger `validate_cad_build_guide`** (before insert or update): no `guide-*`
+  file without notes; notes must name exactly the drawing's
+  `bob_construction` artifact and revision; a generated guide has 1–60 unique
+  pages whose files exist and match `sha256`, and no other `guide-*` files; a
+  guide that was not generated or failed has no pages. Drawings without a guide
+  are unaffected.
+- **Volunteer reader.** `bob_volunteer_private.volunteer_drawing` also passes
+  `guide-*` files and `build_guide`, rewritten from its installed body. Its task
+  scope and the rule that an unavailable source hides all content still apply.
+
+Tests: `tests/cad-build-guide-sql.test.ts` (switch off; ten refused guide shapes on
+a copy of the table; volunteer reader passes the guide only on a readable drawing
+and hides it when the construction cannot be checked). Not applied to the hosted
+database.

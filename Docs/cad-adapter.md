@@ -1186,8 +1186,10 @@ case (pages, hashes, pin, rule fasteners, 401/422).
 no owner/organiser authority in the database yet (`has_project_access` is any
 member), so a per-project toggle would let any member start paid work.
 
-Remaining, each safe with the switch off: the database (switch row, guide pages
-saved with the drawing revision, volunteer read), the Edge (Bob proposes the
+**Database (PR 2, source only):** [`20261030170000_cad_build_guide.sql`](../db/README.md#build-guides-with-the-drawing-revision--source-only-2026-10-30) adds the switch row (off), the
+`validate_cad_build_guide` trigger and the volunteer reader change.
+
+Remaining, each safe with the switch off: the Edge (Bob proposes the
 order in the final-drawing request; no order means no guide, never an invented
 one; a failed guide never blocks the drawing; the reviewer does not see the
 guide), the app section, then one paid run to measure the cost.
