@@ -1,9 +1,9 @@
 # Foundation verification and rollout
 
 <a id="tool-picker-2026-10-30"></a>
-## The request chooses the turn's tools; a fixed base prompt — prepared 2026-10-30
+## The request chooses the turn's tools; a fixed base prompt — installed 2026-10-30
 
-**Prepared, not deployed.** Owner decisions after the [passing box run](#box-paid-run4-2026-10-30):
+**Installed; [installation record](#tool-picker-install-2026-10-30) below; no paid run yet.** Owner decisions after the [passing box run](#box-paid-run4-2026-10-30):
 prompt assembly chooses the turn's four flexible tools from the request with a
 small read-only role, not from the project phase alone ([tool picker](ask-bob-tools.md#tool-picker)),
 and the base prompt with Bob's permanent tools is always the same, with every
@@ -24,6 +24,30 @@ pinned manifests.
 Validation: new suites `bob-tool-picker` (4) and `bob-tool-sheets` (3, including
 byte-equal tools and system message across steps), the adjusted `bob-phase-tools`
 and the catalog fixture replay pass.
+
+<a id="tool-picker-install-2026-10-30"></a>
+### Installation, 2026-10-30
+
+The owner approved merging and deployment; a live drawing-tool test the owner
+runs anyway measures the effect, so no separate paid box run was started. The
+focused catalog-dependent run (753 tests) failed only the seven known failures
+on main and two integration tests that asserted native callability; both were
+adapted to `use_tool` and pass. [PR #377](https://github.com/EmelieHagander/Bob-the-builder/pull/377)
+merged as `cfdc58ba2f26a3ba2e7114434f672db5ae424fd5`; its tree
+`453da72661ee2f069ad07972c29436e94fb7fd45` equals the tested head. Zero active
+Bob jobs were read before and after every step.
+
+1. **Functions:** `bob-worker` v155 (verify_jwt false) and `ask-bob` v187
+   (verify_jwt true). Downloaded bodies: 126 of 127 and 128 of 129 files equal
+   the repository byte for byte, including `project-answer.ts` and
+   `ask-openai.ts`; the one difference is the established empty bundle of
+   type-only `cad-intake.ts`. Unauthenticated POSTs returned **401** for both.
+2. **Catalog:** recorded as `20261030072516_bob_tool_picker_catalog` (five
+   `bob-tool-picker-v1` definitions and the `tool-picker` setting: gpt-5.4-mini,
+   low reasoning) and `20261030072533_bob_tool_sheets_catalog` (`bob.tools` v28
+   with `tool_sheets_version` 1 and `tools.use_tool`, the two sheet texts). All
+   320 active Bob definitions equal the tested fixture. The next new Bob job pins
+   the new manifest; earlier jobs keep theirs.
 A paid box run is needed to measure calls, cache share and cost.
 
 <a id="material-sizes-diameter-2026-10-30"></a>
