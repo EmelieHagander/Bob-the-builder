@@ -1083,7 +1083,7 @@ The authenticated worker accepts the old recipe request and a bounded `{recipe,d
 
 ### Plain-language drawing sheets — 2026-10-30
 
-**Status:** sheet text, line key and shared callouts are deployed (2026-10-30, `main` `ef55db4` [run 41020338894](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41020338894) and `6b85a0b` [run 41039257593](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41039257593): engine tests, Modal deploy and live smoke check passed). Position scales are source only, not deployed. No paid review of a real drawing with the new sheets yet. Owner feedback: the sheets were written
+**Status:** sheet text, line key and shared callouts are deployed (2026-10-30, `main` `ef55db4` [run 41020338894](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41020338894) and `6b85a0b` [run 41039257593](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41039257593): engine tests, Modal deploy and live smoke check passed). Position scales are deployed from `065574b` ([run 41093908580](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41093908580), same checks passed). No paid review of a real drawing with the new sheets yet. Owner feedback: the sheets were written
 for AI, and people could not tell what was needed or what X, Y and Z meant.
 `bob_cad/annotations.py` now writes for people without drawing experience. It
 changes presentation text only; geometry, P-number placement, pagination,
