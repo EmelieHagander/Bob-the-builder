@@ -32,9 +32,17 @@ same time, so usage was matched to this run's model events.
   (`domain_fields`, an unknown construction), which reshaping Bob's own values
   cannot fix; Bob fixed each himself one or two steps later.
 - Bob called `describe_tool` 11 times (3 in run 6).
-- The first call of turns 2 and 3 read only 4,608 and 6,656 of about 12,000
-  tokens from the cache, so something besides the tool list still changes
-  between turns; not yet found.
+- The first call of turns 2 and 3 read 4,608 and 6,656 of about 12,000 tokens
+  from the cache. Rebuilt from the thread's stored messages and locked snapshot
+  (no project events, snapshot never re-locked): turn 3 matched the previous
+  turn as far as the design allows, through the previous request (tools, role
+  and directory, snapshot and earlier messages). The rest of a turn's first call
+  is new by design: the previous answer, the new message and the turn frame
+  (screen, briefing, facts, about 5,000 tokens). Turn 2 matched about three
+  quarters of that possible start, most likely because the first turn ran
+  8 minutes and its own start had left the provider cache; the history label
+  that appears from turn 2 onward is after the snapshot and costs nothing
+  measurable. No defect found.
 
 **Owner decision: tool order restored.** Applied with zero active Bob jobs and
 recorded as `20261030194112_bob_tool_order_restore_catalog`: `bob.tools` v31 has
