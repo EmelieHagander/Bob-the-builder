@@ -93,7 +93,8 @@ test('provider cache routing key stays outside the journal, job and drawing-budg
   // Hashed call options are built before invoke; the key is never part of them.
   const dispatch = code.slice(code.indexOf('const dispatchModel'), code.indexOf('const invoke=('))
   assert.doesNotMatch(dispatch, /promptCacheKey/)
-  assert.match(code, /promptCacheKey = 'bob-ask-' \+ \(await fingerprint\(\{ v: 1, scope: threadId \?\? execution\.id \}\)\)\.slice\(0, 32\)/)
+  // Prompt tiers (2026-10-30): one key per project; older pins keep one per thread.
+  assert.match(code, /promptCacheKey = 'bob-ask-' \+ \(await fingerprint\(execution\.promptTiersVersion === 1 \? \{ v: 2, project: opts\.projectId \} : \{ v: 1, scope: threadId \?\? execution\.id \}\)\)\.slice\(0, 32\)/)
   for (const file of ['project-answer.ts', 'drawing-budget.ts', 'bob-job-journal.ts', 'ai-background.ts', 'bob-context-continuation.ts']) {
     assert.doesNotMatch(await readFile(new URL('../supabase/functions/_shared/' + file, import.meta.url), 'utf8'), /promptCacheKey|prompt_cache_key/, file)
   }

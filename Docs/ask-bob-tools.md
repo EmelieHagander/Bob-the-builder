@@ -118,6 +118,10 @@ price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
   conversation; a context rollover summarizes them away, so they are sent again
   on the next step.
 
+With [prompt tiers](ask-bob-conversations.md#memory-stair) the tool
+availability also leaves the system message: it is sent at the end of a step
+when it changes, and a picked tool reached through `use_tool` reads `callable`.
+
 Manifests before the publication keep every loaded tool native. Source:
 `20261030030000_bob_tool_sheets_catalog.sql`, `unwrapToolCall` and the step
 assembly in `supabase/functions/_shared/project-answer.ts`.

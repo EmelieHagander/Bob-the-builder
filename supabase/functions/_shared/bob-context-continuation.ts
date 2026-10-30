@@ -219,6 +219,11 @@ export function createBobContextContinuation(opts: {
    * (it already contains the tool surface) and refreshes only when the part
    * it would summarize is large enough to make the next request smaller. */
   rolloverVersion?: 1
+  /** Pinned with the prompt tiers (2026-10-30). Older exchanges are compacted
+   * (results to references, reasoning removed) this many at a time, so the
+   * start of the input stays byte-identical between batches and is read from
+   * the provider's prompt cache. Absent compacts one exchange per step. */
+  compactionBatch?: number
   snapshot?: (value: { functionName: string; role: string }) => unknown
   onRollover?: (value: { functionName: string; role: string }) => void
   refreshSurface?: (value: { functionName: string; role: string }) => Promise<ContextSurface | undefined>
@@ -422,6 +427,8 @@ export function createBobContextContinuation(opts: {
           ...(references ? { resultReferences: 1 as const } : {}) }
       }
       if (references) {
+        // Groups before this index are compacted; the newest two always stay whole.
+        const settled = opts.compactionBatch ? Math.floor(Math.max(0, chain.groups.length - 2) / opts.compactionBatch) * opts.compactionBatch : chain.groups.length - 2
         // Original results live once in the private operation archive. Keep
         // only bounded projections in the model transcript/checkpoint; native
         // assistant items, images and user constraints remain literal.
@@ -430,6 +437,8 @@ export function createBobContextContinuation(opts: {
         if (opts.resultWindowTokens && opts.resultWindowVersion === 2) {
           const results: Parameters<typeof selectBobResultWindow>[0] = []
           chain.groups.forEach((group, index) => {
+            // Batched: only the settled part decides, so nothing earlier changes between batches.
+            if (opts.compactionBatch && index >= settled) return
             for (const message of group) {
               if (message.role !== 'tool' || !message.tool_call_id) continue
               const operation = chain.operations.get(message.tool_call_id)
@@ -438,14 +447,14 @@ export function createBobContextContinuation(opts: {
               let size = resultTokens.get(key)
               if (size === undefined) resultTokens.set(key, size = countSerializedTokens(message.content))
               results.push({ call_id: message.tool_call_id, tool_name: operation.tool_name, arguments: operation.arguments, tokens: size,
-                older: index < chain.groups.length - 2 })
+                older: index < settled })
             }
           })
           ;({ whole, supersededBy } = selectBobResultWindow(results, opts.resultWindowTokens))
         } else if (opts.resultWindowTokens) {
           // Newest first and contiguous: a demoted result is never restored.
           let used = 0
-          window: for (let i = chain.groups.length - 3; i >= 0; i--) for (const message of [...chain.groups[i]].reverse()) {
+          window: for (let i = settled - 1; i >= 0; i--) for (const message of [...chain.groups[i]].reverse()) {
             if (message.role !== 'tool' || !message.tool_call_id) continue
             const key = message.tool_call_id + '\u0000' + (typeof message.content === 'string' ? message.content.length : 'parts')
             let size = resultTokens.get(key)
@@ -455,7 +464,7 @@ export function createBobContextContinuation(opts: {
           }
         }
         chain.groups = chain.groups.map((group, index) => group.map(message => {
-          if (message.nativeOutput && index < chain.groups.length - 2) {
+          if (message.nativeOutput && index < settled) {
             // Private reasoning belongs to the exchange it led to. Older ones
             // add their full size to every later request, so a long turn ran
             // out of context (40-step probe); their calls and text remain.
@@ -470,8 +479,8 @@ export function createBobContextContinuation(opts: {
           if (!operation) throw new Error('context_operation_unavailable')
           const newer = supersededBy.get(message.tool_call_id)
           // An already demoted reference stays byte-stable for the prompt cache.
-          if (newer !== undefined && index < chain.groups.length - 2) return omittedContent(message.content) ? message : { ...message, content: supersededBobResult(operation, newer) }
-          return index < chain.groups.length - 2 && !whole.has(message.tool_call_id) ? { ...message, content: projectBobResult(operation, true) } : message
+          if (newer !== undefined && index < settled) return omittedContent(message.content) ? message : { ...message, content: supersededBobResult(operation, newer) }
+          return index < settled && !whole.has(message.tool_call_id) ? { ...message, content: projectBobResult(operation, true) } : message
         }))
       }
       if (!references) {

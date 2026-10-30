@@ -17,6 +17,9 @@ export const BOB_RESULT_PAGE_TOKENS = 3000
 export const BOB_CONSTRUCTION_RESULT_TOKENS = 8000
 /** Recent results kept whole across exchanges before older ones become references. */
 export const BOB_RESULT_WINDOW_TOKENS = 20000
+/** Prompt tiers (2026-10-30): older exchanges are compacted this many at a time,
+ * so the start of a long turn's input stays cacheable between batches. */
+export const BOB_COMPACTION_BATCH = 4
 /** Window version 2: when the whole older results exceed the ceiling, keep
  * them down to this share of it, so the transcript prefix changes in fewer,
  * larger steps instead of one demotion per request (prompt cache). */

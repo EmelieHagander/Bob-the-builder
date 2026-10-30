@@ -1,5 +1,6 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.110.2'
 import type { ContextStore } from './bob-working-context.ts'
+import type { StairStore } from './bob-memory-stair.ts'
 import { memoryRetrievalStore } from './bob-memory-retrieval.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { parseBobScreen, type BobScreenPointer } from '../../../src/domain/bobScreen.ts'
@@ -38,7 +39,7 @@ export function createBobConversationStore(client: SupabaseClient<any, 'bob', an
       }).abortSignal(AbortSignal.timeout(12000)) as RpcResult<{ screen: unknown }>, 'conversation focus')
       return parseBobScreen(result.screen)
     },
-    workingContext(binding: { projectId: string; userId: string; threadId: string; turnId: string; generation: number }): ContextStore {
+    workingContext(binding: { projectId: string; userId: string; threadId: string; turnId: string; generation: number }): ContextStore & StairStore {
       const args = { p_project: binding.projectId, p_user: binding.userId, p_thread: binding.threadId, p_turn: binding.turnId, p_generation: binding.generation }
       const rpc = async (name: string, extra = {}) => checked(await client.rpc(name, { ...args, ...extra }).abortSignal(AbortSignal.timeout(12000)) as RpcResult<unknown>, 'conversation context')
       return {
@@ -46,6 +47,9 @@ export function createBobConversationStore(client: SupabaseClient<any, 'bob', an
         load: () => rpc('bob_load_context'),
         save: (expected, through, summary) => rpc('bob_save_context_summary', { p_expected_seq: expected, p_through_seq: through, p_summary: summary }),
         search: (query, before) => rpc('bob_search_context_history', { p_query: query, p_before_seq: before }),
+        stairLoad: () => rpc('bob_load_memory_stair'),
+        stairSave: (level, seqFrom, seqTo, text, supersede) => rpc('bob_save_memory_summary', {
+          p_level: level, p_seq_from: seqFrom, p_seq_to: seqTo, p_text: text, p_supersede: supersede }),
       }
     },
     async claim(projectId: string, userId: string, turnId: string, message: string): Promise<BobTurnClaim> {

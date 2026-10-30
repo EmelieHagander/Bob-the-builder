@@ -556,6 +556,14 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
+**Byggt 2026-10-30, inte installerat — prompten i ordning efter hur ofta delarna ändras, och minnet som en trappa (ägarbeslut; [kontrakt](ask-bob-conversations.md#memory-stair)):**
+fast start (verktyg, roll, kort), en låst projektbild med planens steg som
+checklista, sammanfattningar som skrivs en gång med källa, sedan nya meddelanden
+och projekthändelser oförändrade, sist turen och stegen. Verktygens tillgänglighet
+skickas sist, äldre steg komprimeras fyra åt gången och cachenyckeln gäller per
+projekt. Nästa: ägarens OK att slå ihop, driftsätta `bob-worker` och `ask-bob`
+och sedan köra migreringarna `20261030040000` och `20261030050000`.
+
 **Installerat 2026-10-30 — begäran väljer turens verktyg, och grundprompten är fast (ägarbeslut; `bob-worker` v155, `ask-bob` v187, [bevis](foundation-verification.md#tool-picker-install-2026-10-30)):**
 en liten modell läser ägarens senaste begäran och verktygskorten vid turens start
 och väljer upp till fyra verktyg; fasens fyra är reserv. Grundprompten med Bobs

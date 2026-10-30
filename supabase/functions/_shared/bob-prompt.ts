@@ -7,20 +7,26 @@ type Shelf = { name: string; group: string; state: 'offered' | 'waiting' | 'budg
 
 /** Stable directory before workflow cards and changing callability. Entries
  * come from the freshly authorized bench, never an invented tool count. */
-export function buildBobCompleteHands(aiCatalog: AiCatalogSession, tools: OpenAIServiceOptions['tools'] = [], shelf: Shelf[] = []): string {
+export function buildBobCompleteHands(aiCatalog: AiCatalogSession, tools: OpenAIServiceOptions['tools'] = [], shelf: Shelf[] = [], availability = true): string {
   const entries = [...shelf].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
   const workflows = bobWorkflows(aiCatalog).filter(w => w.tools.some(name => entries.some(entry => entry.name === name)))
   const colleagues = bobColleagues(aiCatalog, entries.map(entry => entry.name))
-  const offered = new Set(tools.map(tool => tool.function.name))
   return [aiCatalog.text('bob.toolbox.intro-lazy'),
     ...entries.map(entry => `- ${entry.name}: ${entry.description ?? aiCatalog.tool(entry.name, { card: true }).function.description}`),
     ...(workflows.length ? [aiCatalog.text('bob.workflows'), ...workflows.map(w => `- ${w.name}: ${w.card}`)] : []),
     ...(colleagues.length ? [aiCatalog.text('bob.colleagues.intro'), ...colleagues.map(c => `- ${c.name} — ${c.title}: ${c.purpose} (${c.invocation_tools.join(', ')})`)] : []),
-    JSON.stringify({ tool_availability: entries.map(entry => ({ name: entry.name,
-      state: entry.state === 'offered' ? offered.has(entry.name) ? 'callable' : 'describe_tool' : entry.state,
-      ...(entry.waitingFor ? { waiting_for: entry.waitingFor } : {}),
-    })) }),
+    ...(availability ? [bobToolAvailability(tools, shelf)] : []),
   ].join('\n')
+}
+
+/** Which listed tools are callable now, need describe_tool, or wait for something. */
+export function bobToolAvailability(tools: OpenAIServiceOptions['tools'] = [], shelf: Shelf[] = []): string {
+  const entries = [...shelf].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
+  const offered = new Set(tools.map(tool => tool.function.name))
+  return JSON.stringify({ tool_availability: entries.map(entry => ({ name: entry.name,
+    state: entry.state === 'offered' ? offered.has(entry.name) ? 'callable' : 'describe_tool' : entry.state,
+    ...(entry.waitingFor ? { waiting_for: entry.waitingFor } : {}),
+  })) })
 }
 
 /** A directory entry describes an implemented delegation path, never a new tool. */
