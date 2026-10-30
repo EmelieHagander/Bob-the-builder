@@ -212,7 +212,7 @@ data columns are nullable; unknown stays unknown. Lengths are `*_mm`, weight `we
 | Concept | Storage |
 |---|---|
 | Standard material | `bob.material_types`: name, material-axis category, description, review status. |
-| Size | `bob.material_sizes`: label, form-axis category, `length_mm`, `width_mm`, `depth_mm`. Fasteners: `width_mm` is the nominal shank diameter, `length_mm` the length, `depth_mm` null. |
+| Size | `bob.material_sizes`: label, form-axis category, `length_mm`, `width_mm`, `depth_mm`. Fasteners: `width_mm` is the nominal shank diameter, `length_mm` the length, `depth_mm` null. Prepared, not migrated: [a diameter column and six decimals](#material-sizes-diameter). |
 | Combination (material + size) | The existing material definition `bob.catalog_items`, now with `material_type_id`, `material_size_id` (both nullable), `unit_code` (`bob.catalog_units`; st = `pcs`), `weight_kg` and `review_status`. Constructions, cut lists and checks keep pinning its exact revision. One shared combination per material and size. |
 | Alias | `bob.material_aliases`: one search word for exactly one material, size or combination (e.g. `2tum4` → the 45 × 95 size). Aliases never convert units. |
 | Stock at home | `bob.household_stock`: household-owned row linked to a combination (or a name), nullable quantity, unit and location, revision and last change. Project stock `bob.stock_items` remains the project allocation ledger, unchanged. |
@@ -273,7 +273,7 @@ profile `bulk` revision 1 (all optional) and category `mineral.aggregate`.
 Rationale and consumers: [material catalog](../Docs/material-catalog.md#optional-dimensions).
 
 <a id="material-hardening"></a>
-**Hardening before the first write path — prepared 2026-10-29, not applied**
+**Hardening before the first write path — installed 2026-10-30**
 (owner decisions after the [independent review](../Docs/archive/material-tables-review-2026-10-29.md)).
 `20261029260000_material_tables_hardening.sql`:
 
@@ -309,7 +309,7 @@ No runtime caller writes household stock, stores, prices or project-to-household
 links yet; Bob's own material saves are the first write path (below).
 
 <a id="material-shared-specs"></a>
-**Bob's materials shared as specifications — prepared 2026-10-29, not applied**
+**Bob's materials shared as specifications — installed 2026-10-30**
 (owner decision, follow-up 1). `20261029270000_material_shared_specs.sql` makes
 `bob_private.catalog_save` call `bob_private.share_material_spec` for every
 saved project material: a complete sheet, timber or fastener definition, or a
@@ -319,6 +319,31 @@ properties and generic notes. Existing sizes with the same dimensions (reviewed
 first) and combinations are reused. Incomplete, parameterised, part-pinned and
 dimensioned-but-unsized definitions (tubes) are not shared; a revision whose
 dimensions no longer fit its size is relinked. [Rationale](../Docs/material-catalog.md#shared-specs).
+
+<a id="material-sizes-diameter"></a>
+**Sizes with a diameter, and the review's small findings — prepared 2026-10-30,
+not migrated** (owner decision; review M2, M3, M6, M8, M9).
+`20261030010000_material_sizes_diameter_and_details.sql` and the search-text
+publication `20261030010100_material_size_text_catalog.sql`:
+
+- `bob.material_sizes` gains `diameter_mm`; all size columns keep six decimals.
+  `depth_mm` is the material thickness (sheet, profile, tube wall) and
+  `diameter_mm` a fastener's shank or a tube's outside diameter, so seeded
+  fastener diameters move out of `width_mm`. Uniqueness, `add_material_size`,
+  the size-conflict check, the definition `spec` and the lookup row include it.
+  Bob's tube definitions are now shared with a size such as `Ø 32 × 2`.
+- Nail labels put the diameter first (`3,4 × 100`) like screws; search matches
+  either order. "Utomhusskruv, C4/rostfri" becomes "Utomhusskruv C4", and a
+  separate reviewed "Rostfri skruv" gets the same two sizes and the
+  "rostfri skruv" alias. Renamed shared definitions get a new revision; earlier
+  revisions keep the old names.
+- `bob.household_stock.piece_length_mm` (also in its history) records "6
+  pieces × 3.0 m": it needs unit `pcs` and also fits a definition counted in
+  length. The lookup's `stock_at_home` shows it.
+- `bob.store_articles` gets an index on `store_id`; the unused
+  `bob.supplier_articles.store_article_id` is dropped; the lookup row reads the
+  current price from `bob.current_store_prices`, so one definition decides it.
+  `bob_private.seed_length` stays so the start-list seed remains re-appliable.
 
 <a id="db-load-relief"></a>
 ## Database load relief — installed 2026-10-29

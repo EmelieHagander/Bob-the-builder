@@ -1,9 +1,89 @@
 # Foundation verification and rollout
 
-<a id="follow-up-1-2026-10-29"></a>
-## Material tables hardened and Bob's materials shared — prepared, 2026-10-29
+<a id="material-sizes-diameter-2026-10-30"></a>
+## Material sizes with a diameter and the small review findings — prepared 2026-10-30
 
-**Source and local verification only; not migrated.** Owner decisions after the
+**Prepared, not migrated.** The owner asked to fix the remaining small findings
+of the [independent review](archive/material-tables-review-2026-10-29.md) and
+the tube gap (M2). Contract: [Database](../db/README.md#material-sizes-diameter),
+[Catalog](material-catalog.md#sizes-diameter).
+
+| Review finding | Change |
+|---|---|
+| M2 tubes cannot be a size; fastener diameter in `width_mm` | `diameter_mm` on sizes; `depth_mm` is the thickness or a tube's wall; fastener diameters moved; Bob's tubes are shared as `Ø 32 × 2` |
+| M3 nail labels length first; "C4/rostfri" lumps two classes | Nails read `3,4 × 100`; "Utomhusskruv C4" and a separate reviewed "Rostfri skruv" with the same two sizes and the stainless alias; renamed definitions get a new revision |
+| M6 missing index | `store_articles(store_id)`; the unindexed supplier link is removed (M8) |
+| M8 unused parts | `supplier_articles.store_article_id` dropped; the lookup reads `current_store_prices`, so one definition picks the current price; `seed_length` stays so the seed can be re-applied |
+| M9 four decimals; no "6 pieces × 3.0 m" | Six decimals on sizes; `household_stock.piece_length_mm` with history and lookup output |
+
+Bob's search text names the new columns
+(`20261030010100_material_size_text_catalog.sql`, `tools.search_material_catalog`
+v6). Not addressed: S6 (lookup not indexed), M4, M7 (who created shared rows is
+readable by every signed-in user) and M10.
+
+Release order with the owner's OK and no running Bob job: apply
+`20261030010000_material_sizes_diameter_and_details.sql`, then
+`20261030010100_material_size_text_catalog.sql`. No function deployment. The
+changed shared definitions bump every project's artifact source epoch, as any
+shared catalog change does.
+
+Validation: `material-tables-hardening` (12, four new), `material-model`,
+`material-catalog-db` and the catalog fixture replay pass; the start-list seed
+still re-applies without change on its own schema.
+
+<a id="box-paid-run4-2026-10-30"></a>
+## Paid box run after #375 — 2026-10-30
+
+**Passed: all three turns delivered, in half the calls and cost of the previous
+run.** The owner authorized the run after the [#375 installation](#follow-up-1-install-2026-10-30).
+[Run 41003769539](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41003769539)
+ran once on `07991cadea50225b109852c57714d4b45df1479b`, scenario `box`, label
+`baseline`, in synthetic project `p_f042bce6d6c247c18d5f63300e9cc6c3`. All three
+turns pinned manifest `163be922-27d3-4a94-ab04-69fb7a92fc03` (`bob.tools` v27).
+
+| Step | Model calls | Cached input | Known model USD | Runner wall time | Result |
+|---|---:|---:|---:|---:|---|
+| Create box | 10 (was 27) | 58.5 % (was 77.2 %) | 0.475343 (was 0.980567) | 219 s (was 705 s) | One Construction, revision 1, 400 × 300 × 250 mm; found the shared 12 mm plywood |
+| Change width | 8 (was 8) | 54.4 % (was 55.7 %) | 0.300934 (was 0.247952) | 133 s (was 229 s) | Same identity, revision 2, 500 × 300 × 250 mm |
+| Final drawing | 10 (was 23) | 50.1 % (was 50.0 %) | 0.390707 (was 1.050060) | 195 s (was cancelled at 900 s) | Drawing revision 1 linked to Construction revision 2, one CAD review |
+| **Total** | **28 (was 58)** | **54.4 %** | **1.166984 (was 2.278579)** | **548 s** | **Acceptance passed** |
+
+Each step includes one `completion-gate` call (gpt-5.4-mini); the drawing also
+has one `cad-reviewer` call. Two memory embeddings cost USD 0.000014. There were
+no invalid saves, timeouts or repeated drawings, and Construction reads fell
+from 24 to 7 (the width turn still read twice after its save). One
+`save_construction_draft` was refused until Bob read its manual. The
+[content-free evidence](archive/form-box-paid-2026-10-30-run4.json) keeps turn
+IDs, per-role cost, tool outcomes and each call's offered-tool changes.
+
+**Remaining cost: the tool list still changes inside a turn.** All three turns
+started with the concept set (the project's phase), including the drawing turn,
+because its drawing request is created during that turn. Bob then loaded eight
+tools outside the set (material search and read, `edit_construction_parts`,
+`change_construction_parameters`, `design_project_cad`,
+`check_construction_draft`, `save_cad_design`). Every call after such a change
+had no or little cached input: 8 of 25 Bob calls, about USD 0.33 (28 %) at the
+cached-input discount. [State](bob-delivery-flow.md#state) owns the decision.
+
+<a id="catalog-fixture-replay-2026-10-30"></a>
+## Catalog fixture equals the SQL replay — 2026-10-30
+
+The eight Bob catalog differences between production and the test fixture were
+in the fixture, not in production: replaying every migration in PGlite gives
+exactly the 312 live definitions. The hand-written fixture replay copied five
+SQL publications wrongly (seed markers kept, publication names missing, the
+concise-communication label and purpose missing, and JavaScript `trim()` where
+SQL `btrim()` keeps line breaks). `tests/ai-catalog-fixture-replay.test.ts` now
+compares the fixture with the SQL replay for every active definition and fails
+on the eight differences without the correction. One pinned legacy fingerprint
+was re-pinned because the role metadata it contains is now the stored one; no
+model text changed. No production change.
+
+<a id="follow-up-1-2026-10-29"></a>
+## Material tables hardened and Bob's materials shared — installed, 2026-10-30
+
+**Installed; no paid run yet.** The [installation record](#follow-up-1-install-2026-10-30)
+follows the preparation notes below. Owner decisions after the
 [independent review](archive/material-tables-review-2026-10-29.md): fix the
 tables before any write path, let project stock point at household stock, and
 share only the specification when Bob's new materials become shared and
@@ -30,6 +110,30 @@ cut-plan and stock suites pass. No production write, deploy, CI or model call.
 Release order with the owner's OK and no running Bob job: apply
 `20261029260000_material_tables_hardening.sql`, then
 `20261029270000_material_shared_specs.sql`. No function deployment.
+
+<a id="follow-up-1-install-2026-10-30"></a>
+### Installation, 2026-10-30
+
+The owner approved the merge and migrations. The final focused run on the
+branch head passed **1,532/1,540**: the seven known failures on main, plus one
+order-dependent assertion in the new sharing test that was fixed and passed three
+consecutive times before merge. [PR #375](https://github.com/EmelieHagander/Bob-the-builder/pull/375)
+merged as `07991cadea50225b109852c57714d4b45df1479b`; its tree
+`a5510f246183154cbb3d1fb520afb68e1e1d85aa` equals the tested head. Zero active Bob
+jobs were read before each step. No function was deployed (`bob-worker` v154,
+`ask-bob` v186 unchanged).
+
+Recorded as `20261030043508_material_tables_hardening` and
+`20261030043511_material_shared_specs`. Readback: `is_bob_participant` no longer
+reads household access; `household_stock_revisions`, the price `review_status`
+and `price_basis` columns and `stock_revisions.household_stock_id` exist;
+`bob_private.stock_command` wraps the renamed `stock_command_before_household_stock`
+(authenticated may execute only the wrapper); the material and size links on
+definitions are `on delete restrict`; the size uniqueness index exists;
+`catalog_save` calls `share_material_spec` (not executable by `authenticated`);
+older-revision reads omit `spec`; the lookup ranks by reviewed tokens. As the test
+owner in a read-only transaction, "utomhusskruv", "2tum4" and "13 mm gips" return
+the same reviewed definitions as before, with null stock and price.
 
 <a id="follow-ups-2026-10-29"></a>
 ## Owner follow-ups before the next paid run — installed, 2026-10-29

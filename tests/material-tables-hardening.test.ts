@@ -156,15 +156,71 @@ test('a new project material is shared as a dimension-only, unreviewed standard 
   // An existing reviewed size with the same dimensions is reused for timber.
   const stud = await save(one, 'A', material('Reglar till väggen', { thickness: len('45'), width: len('95') }, ['wood.softwood', 'rectangular_profile'], 'rectangular_profile'))
   assert.equal((await pg.query<any>('select s.seed_key from bob.catalog_items i join bob.material_sizes s on s.id=i.material_size_id where i.id=$1', [stud.record.id])).rows[0].seed_key, 'p45x95')
-  // Incomplete or unsized-dimension definitions are not shared.
+  // Incomplete definitions are not shared.
   const unknown = await save(one, 'A', material('Okänd skiva', { thickness: len(null) }))
+  assert.deepEqual((await pg.query<any>('select material_type_id,material_size_id from bob.catalog_items where id=$1', [unknown.record.id])).rows[0], { material_type_id: null, material_size_id: null })
+  // A tube's size is its outside diameter and wall (owner decision 2026-10-30); different walls get different sizes.
   const tube = await save(one, 'A', material('Rör till räcket', { outside_diameter: len('32'), wall_thickness: len('2') }, ['plastic.pvc', 'tube'], 'tube_stock'))
-  for (const id of [unknown.record.id, tube.record.id])
-    assert.deepEqual((await pg.query<any>('select material_type_id,material_size_id from bob.catalog_items where id=$1', [id])).rows[0], { material_type_id: null, material_size_id: null })
+  const thick = await save(two, 'B', material('Tjockt rör', { outside_diameter: len('32'), wall_thickness: len('3') }, ['plastic.pvc', 'tube'], 'tube_stock'))
+  const tubeSize = async (id: string) => (await pg.query<any>(`select s.label,s.diameter_mm::float8 dia,s.depth_mm::float8 wall,s.width_mm,s.review_status
+    from bob.catalog_items i join bob.material_sizes s on s.id=i.material_size_id where i.id=$1`, [id])).rows[0]
+  assert.deepEqual(await tubeSize(tube.record.id), { label: 'Ø 32 × 2', dia: 32, wall: 2, width_mm: null, review_status: 'unreviewed' })
+  assert.deepEqual(await tubeSize(thick.record.id), { label: 'Ø 32 × 3', dia: 32, wall: 3, width_mm: null, review_status: 'unreviewed' })
   // Shared entries rank after reviewed ones in the lookup.
   // Rows within one rank follow their ids, so only the order of reviewed before unreviewed is fixed.
   const plywood18 = (await lookup(one, 'plywood 18')).items.map((r: any) => [r.name, r.unreviewed])
   const firstUnreviewed = plywood18.findIndex((r: any) => r[1] === true)
   assert(firstUnreviewed > 0 && plywood18.slice(firstUnreviewed).every((r: any) => r[1] === true), JSON.stringify(plywood18))
   assert(plywood18.some((r: any) => r[0] === 'Plywood 18 mm' && r[1] === true), JSON.stringify(plywood18))
+})
+
+// Owner decision 2026-10-30: the remaining small findings (review M2, M3, M6, M8, M9).
+test('sizes carry a diameter and six decimals; fasteners use the diameter and nails read diameter first', async () => {
+  const sizes = (await pg.query<any>(`select seed_key,label,diameter_mm::float8 dia,width_mm,length_mm::float8 len from bob.material_sizes where form_code='fastener' order by seed_key`)).rows
+  assert(sizes.every(s => s.dia > 0 && s.width_mm === null), JSON.stringify(sizes))
+  assert.deepEqual(sizes.filter(s => s.seed_key.startsWith('n')).map(s => s.label), ['3,4 × 100', '2,8 × 75'])
+  assert(sizes.every(s => Number(s.label.split(' × ')[0].replace(',', '.')) === s.dia), 'every fastener label puts the diameter first')
+  const sixty4th = await call(one, 'bob.add_material_size', { label: '1/64 tum', form_code: 'sheet', depth_mm: '0.396875' })
+  assert.equal(Number(sixty4th.record.depth_mm), 0.396875)
+  const rod = await call(one, 'bob.add_material_size', { label: 'Ø 8', form_code: 'tube', diameter_mm: 8, depth_mm: 1 })
+  assert.equal((await call(two, 'bob.add_material_size', { label: 'Ø 8', form_code: 'tube', diameter_mm: '8', depth_mm: 1 })).record.id, rod.record.id)
+  assert.equal((await call(two, 'bob.add_material_size', { label: 'Ø 8', form_code: 'tube', diameter_mm: 10, depth_mm: 1 })).operation, 'created', 'the diameter is part of a size')
+})
+
+test('C4 and stainless outdoor screws are separate reviewed materials; renamed definitions keep their history', async () => {
+  const rows = (await pg.query<any>(`select t.seed_key,t.name type_name,s.label,i.current_revision,i.review_status,r.name,r.notes,i.identity_hash,md5(r.identity_document::text) doc_hash,
+    (select array_agg(category_code order by category_code) from bob.catalog_item_categories c where c.item_id=i.id and c.item_revision=i.current_revision) cats
+    from bob.catalog_items i join bob.catalog_item_revisions r on r.item_id=i.id and r.revision=i.current_revision join bob.material_types t on t.id=i.material_type_id
+    join bob.material_sizes s on s.id=i.material_size_id where i.project_id is null and t.seed_key in ('outdoor_screw','stainless_screw','wire_nail_zinc') order by t.seed_key,s.label`)).rows
+  assert.deepEqual(rows.map(r => [r.seed_key, r.name, r.current_revision, r.review_status]), [
+    ['outdoor_screw', 'Utomhusskruv C4 4,2 × 55', 2, 'reviewed'], ['outdoor_screw', 'Utomhusskruv C4 5,0 × 60', 2, 'reviewed'],
+    ['stainless_screw', 'Rostfri skruv 4,2 × 55', 1, 'reviewed'], ['stainless_screw', 'Rostfri skruv 5,0 × 60', 1, 'reviewed'],
+    ['wire_nail_zinc', 'Trådspik, förzinkad 2,8 × 75', 2, 'reviewed'], ['wire_nail_zinc', 'Trådspik, förzinkad 3,4 × 100', 2, 'reviewed']])
+  assert(rows.every(r => r.identity_hash === r.doc_hash && r.notes.includes(r.type_name) && r.cats.join() === 'fastener,metal'), JSON.stringify(rows))
+  const first = (await pg.query<any>(`select r.name from bob.catalog_item_revisions r join bob.catalog_items i on i.id=r.item_id join bob.material_types t on t.id=i.material_type_id
+    where t.seed_key='outdoor_screw' and r.revision=1 order by r.name`)).rows.map(r => r.name)
+  assert.deepEqual(first, ['Utomhusskruv, C4/rostfri 4,2 × 55', 'Utomhusskruv, C4/rostfri 5,0 × 60'])
+  const aliases = (await pg.query<any>(`select t.seed_key,array_agg(a.alias order by a.alias) aliases from bob.material_aliases a join bob.material_types t on t.id=a.material_type_id
+    where t.seed_key in ('outdoor_screw','stainless_screw') group by 1 order by 1`)).rows
+  assert.deepEqual(aliases, [{ seed_key: 'outdoor_screw', aliases: ['trallskruv', 'utomhusskruv'] }, { seed_key: 'stainless_screw', aliases: ['rostfri skruv'] }])
+})
+
+test('household stock can say six pieces of 3.0 m, keeps it in history and shows it in the lookup', async () => {
+  const stud = await sharedItem('c24', 'p45x95')
+  await rejects(call(one, 'bob.save_household_stock', homeA, null, 0, { catalog_item_id: stud, quantity: 18, unit_code: 'm', piece_length_mm: 3000 }), 'household_stock_piece_length_needs_pieces')
+  const saved = await call(one, 'bob.save_household_stock', homeA, null, 0, { catalog_item_id: stud, quantity: 6, unit_code: 'pcs', piece_length_mm: '3000', location: 'Garaget' })
+  assert.equal(Number(saved.record.piece_length_mm), 3000)
+  const history = (await pg.query<any>('select piece_length_mm::float8 p from bob.household_stock_revisions where household_stock_id=$1', [saved.record.id])).rows
+  assert.deepEqual(history, [{ p: 3000 }])
+  const row = (await lookup(one, 'c24 45x95')).items.find((r: any) => r.id === stud)
+  assert.deepEqual(row.stock_at_home.map((s: any) => [s.quantity, s.unit, s.piece_length_mm]), [[6, 'pcs', 3000]])
+  await rejects(as(one, 'update bob.household_stock set unit_code=$2 where id=$1', [saved.record.id, 'm']), '42501')
+})
+
+test('store articles are indexed by store, the unused supplier link is gone and the lookup price is the current-price view', async () => {
+  const indexes = (await pg.query<any>("select indexdef from pg_indexes where schemaname='bob' and tablename='store_articles'")).rows.map(r => r.indexdef)
+  assert(indexes.some(d => /store_articles_store_idx ON bob\.store_articles USING btree \(store_id\)$/.test(d)), JSON.stringify(indexes))
+  assert.equal((await pg.query<any>("select count(*)::int n from information_schema.columns where table_schema='bob' and table_name='supplier_articles' and column_name='store_article_id'")).rows[0].n, 0)
+  const source = (await pg.query<any>("select pg_get_functiondef('bob_private.material_lookup_row(uuid,uuid,uuid[])'::regprocedure) d")).rows[0].d
+  assert.match(source, /bob\.current_store_prices/); assert.doesNotMatch(source, /from bob\.store_article_prices/)
 })
