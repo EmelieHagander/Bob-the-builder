@@ -1,9 +1,42 @@
 # Foundation verification and rollout
 
-<a id="follow-ups-2026-10-29"></a>
-## Owner follow-ups before the next paid run — prepared, 2026-10-29
+<a id="follow-up-1-2026-10-29"></a>
+## Material tables hardened and Bob's materials shared — prepared, 2026-10-29
 
-**Source and local verification only; not migrated, deployed or activated.**
+**Source and local verification only; not migrated.** Owner decisions after the
+[independent review](archive/material-tables-review-2026-10-29.md): fix the
+tables before any write path, let project stock point at household stock, and
+share only the specification when Bob's new materials become shared and
+unreviewed.
+
+| Review finding | Change | Owner |
+|---|---|---|
+| B2 ungated shared writes, private text in shared rows | Bob project participants only; shared targets only | [Database](../db/README.md#material-hardening) |
+| B2 alias and price poisoning | Unreviewed aliases and prices are marked and rank after reviewed ones; a reviewed price beats a newer unreviewed one | [Database](../db/README.md#material-hardening) |
+| S1 unversioned links, no checks | Links change only against the current revision, must fit category, form, dimensions and unit; older revisions read without them | [Database](../db/README.md#material-hardening) |
+| S2 duplicated dimensions | A linked size must not contradict the revision's dimensions; the revision owns them | [Database](../db/README.md#material-hardening) |
+| S3 two stock registers, no history | Household history; project stock may point at household stock without over-promising | [Planning](material-planning.md) |
+| S4 ambiguous price units | `price_basis` unit or pack; weight is per unit; empty prices are never current | [Database](../db/README.md#material-hardening) |
+| S7, S8, M5 small defects | Name kept on household stock; labelled, unique sizes; one category per material name; no empty articles; linked rows cannot be deleted | [Database](../db/README.md#material-hardening) |
+| Follow-up 1 | Bob's saved materials link to shared, unreviewed, dimension-only standard materials | [Catalog](material-catalog.md#shared-specs) |
+
+Not addressed: S6 (lookup matching is not indexed; 15 ms live today) and M2
+(tubes cannot be a size). S9 remains for household stock, stores and prices: no
+screen or Bob tool writes them yet.
+
+Validation: `material-tables-hardening` (8) plus the touched material, catalog,
+cut-plan and stock suites pass. No production write, deploy, CI or model call.
+
+Release order with the owner's OK and no running Bob job: apply
+`20261029260000_material_tables_hardening.sql`, then
+`20261029270000_material_shared_specs.sql`. No function deployment.
+
+<a id="follow-ups-2026-10-29"></a>
+## Owner follow-ups before the next paid run — installed, 2026-10-29
+
+**Installed and catalog-activated; no paid run yet.** The
+[installation record](#follow-ups-install-2026-10-29) follows the preparation
+notes below.
 After the [#373 installation](#open-issues-closed-install-2026-10-29) the owner
 took four follow-ups and an independent review of the new material tables before
 the next paid box run. Each change is pinned or backward compatible.
@@ -35,6 +68,56 @@ Release order with the owner's OK and no running Bob job: apply
 `ask-bob`, from the merge commit (a runtime without the receipt function cannot
 save checkpoints); then apply the catalog publication
 `20261029250000_bob_phase_tools_catalog.sql`.
+
+<a id="follow-ups-install-2026-10-29"></a>
+### Installation, 2026-10-29
+
+The owner approved the merge, migrations and deployment. The final focused run
+on the branch head passed **1,510/1,517** across 199 suites; the seven failures
+are the known ones on main. [PR #374](https://github.com/EmelieHagander/Bob-the-builder/pull/374)
+merged as `8c0f2c1c0e2d258d26df5cbed800aa87a787d50d`; its tree
+`e972036021b36cc90c5fc1a7ece2f3de5ddca06a` equals the tested head. Zero queued,
+running or paused Bob jobs were read before each step.
+
+1. **Schema:** recorded as `20261029222235_optional_catalog_dimensions`,
+   `20261029222237_cron_run_history_retention`,
+   `20261029222241_bob_checkpoint_receipt` and
+   `20261029222243_material_lookup_matching`.
+   - `catalog_normalize` marks a left-out required field incomplete; profile
+     fields are unchanged (13 still required); `bulk` and `mineral.aggregate`
+     exist.
+   - `cron.job_run_details` went from 274,975 to 49,733 rows (oldest 7 days);
+     `cron-run-history-retention` runs `23 3 * * *`. The table still occupies
+     76 MB: freed space is reused, not returned.
+   - `bob.bob_save_turn_checkpoint_receipt` exists for `service_role` only, with
+     no packet return left in its private body; the old save is unchanged.
+   - As the test owner in a read-only transaction the lookup returns only outdoor
+     screws for "utomhusskruv", only drywall screws for "gipsskruv", nothing for
+     "12x45", both 45 × 95 timbers for "45x95", the gypsum board for "13 mm gips",
+     batten 25 × 38 for "takläkt", wood and outdoor screws before drywall screws
+     for "skruv", and `stock_at_home` null where nothing is recorded.
+2. **Runtimes,** worker first, from the merge commit (Supabase CLI 2.117.0,
+   server-side bundling):
+
+   | Function | Version | JWT verification | Bundle SHA-256 |
+   |---|---|---|---|
+   | `bob-worker` | 154 | existing custom authentication, `false` | `33c09f5e93539ea71fda24e030b83c596533b69bea18003d51c5f28819af1617` |
+   | `ask-bob` | 186 | `true` | `90c234a5ce85e098ef1be262eb7662b674594926bc569147129f6753eeef05a4` |
+
+   Readback matched **126/127** worker and **128/129** HTTP files byte for byte,
+   including `bob-turn-checkpoint.ts`, `bob-background.ts`, `project-answer.ts`,
+   `session.ts`, `bob-tools.ts` and `material-catalog.ts`; the only difference is
+   the established empty bundle of type-only `cad-intake.ts`. Unauthenticated
+   POSTs returned **401** for both.
+3. **Catalog:** recorded as `20261029222436_bob_phase_tools_catalog`. `bob.tools`
+   v27 holds the six permanent tools and the five phase sets; all 97 changed
+   definitions (`bob.tools` and 96 cards) equal the tested fixture and card data,
+   with their markers. Across the whole Bob catalog only the eight older metadata
+   or text drifts that preceded this release still differ from the fixture. The
+   next new Bob job pins a fresh manifest; earlier jobs keep theirs.
+
+This proves installation only. Bob's call count, cache share and cost on the box
+scenario need the separately authorized paid run.
 
 <a id="construction-work-paid-run3-2026-10-29"></a>
 ## Paid box run after #371 — 2026-10-29

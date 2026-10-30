@@ -9,6 +9,12 @@
 > price history (latest price with its last-changed time) are separate from this
 > document's project-private supplier evidence and pack purchases, which keep
 > their behaviour. [Database contract](../db/README.md#material-model).
+> **Project stock from home — prepared 2026-10-29 (owner decision), not applied:**
+> a project stock item may point at a household stock row (`household_stock_id`
+> on its revision). The household must cover every active project promise in the
+> same unit, so the same planks cannot be promised to two projects; archiving
+> releases a promise. No Bob tool or screen sets the link yet.
+> [Database contract](../db/README.md#material-hardening).
 
 ## User goal
 

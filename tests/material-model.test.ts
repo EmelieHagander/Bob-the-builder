@@ -116,7 +116,7 @@ test('household stock is visible and writable only with active household access,
   await rejects(call(two, 'bob.save_household_stock', homeA, null, 0, { name: 'Intrång' }), '42501')
   await rejects(call(invited, 'bob.save_household_stock', homeA, null, 0, { name: 'Inbjuden' }), '42501')
   await rejects(call(two, 'bob.save_household_stock', homeB, saved.record.id, 1, { name: 'Fel hushåll' }), '42501')
-  await rejects(call(one, 'bob.save_household_stock', homeA, saved.record.id, 7, { catalog_item_id: plywood, quantity: 2 }), '40001')
+  await rejects(call(one, 'bob.save_household_stock', homeA, saved.record.id, 7, { catalog_item_id: plywood, quantity: 2, unit_code: 'pcs' }), '40001')
   const revised = await call(one, 'bob.save_household_stock', homeA, saved.record.id, 1, { catalog_item_id: plywood, quantity: 2, unit_code: 'pcs', location: 'Garaget' })
   assert.equal(revised.record.revision, 2); assert.equal(Number(revised.record.quantity), 2)
   await rejects(as(one, "update bob.household_stock set quantity=99"), '42501')
@@ -228,15 +228,16 @@ test('project definitions read unchanged; Bob\'s reads show the combination and 
   const project = (await pg.transaction(async tx => {
     await tx.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ sub: one })])
     return tx.query<any>(`select bob_private.catalog_save('A',null,0,$1,$2) r`, [JSON.stringify({ action: 'ensure', key: 'k', kind: 'material', name: 'Egen skiva', aliases: [],
-      profile_code: 'sheet_stock', profile_revision: 1, categories: ['wood', 'sheet'], properties: { thickness: { value: '22', unit: 'mm', truth: 'provided_spec', parameter: null, note: '' } },
+      // An incomplete definition is not shared, so it starts without links.
+      profile_code: 'sheet_stock', profile_revision: 1, categories: ['wood', 'sheet'], properties: { thickness: { value: null, unit: 'mm', truth: 'unknown', parameter: null, note: 'Inte mätt' } },
       material_id: null, material_revision: null, notes: '', source_kind: 'design_choice', source_quote: 'x', source_seq: null }),
       JSON.stringify({ kind: 'design_choice', quote: 'x', seq: null, thread: '20000000-0000-4000-8000-000000000001' })])
   })).rows[0].r
   assert.equal(Object.hasOwn(project.record, 'spec'), false, 'definitions without links keep their exact record shape')
-  const linked = await call(one, 'bob.set_catalog_item_spec', project.record.id, { material_type_id: null, material_size_id: null, unit_code: 'pcs', weight_kg: '7,5' })
+  const linked = await call(one, 'bob.set_catalog_item_spec', project.record.id, { revision: 1, material_type_id: null, material_size_id: null, unit_code: 'pcs', weight_kg: '7,5' })
   assert.equal(linked.record.spec.unit, 'pcs'); assert.equal(linked.record.spec.weight_kg, 7.5)
-  await rejects(call(two, 'bob.set_catalog_item_spec', project.record.id, { unit_code: 'pcs' }), '42501')
-  await rejects(call(one, 'bob.set_catalog_item_spec', stud, { unit_code: 'pcs' }), '42501')
+  await rejects(call(two, 'bob.set_catalog_item_spec', project.record.id, { revision: 1, unit_code: 'pcs' }), '42501')
+  await rejects(call(one, 'bob.set_catalog_item_spec', stud, { revision: 1, unit_code: 'pcs' }), '42501')
 })
 
 test('Bob\'s material search reads the combined lookup only for manifests pinned to it', async () => {
