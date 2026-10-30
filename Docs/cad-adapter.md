@@ -1079,11 +1079,11 @@ Construction comparison uses complete JSON values, ignoring object-key order onl
 
 The immutable construction remains the source Artifact. The saved drawing has its own existing CAD Artifact identity and `manifest.bob_construction` pins the exact source and revision-bound K2 report. SQL locks the source/catalog heads, compares the recipe (only requested views may differ), full parameter graph and target/Area, and rejects changed or missing pins at publication. Revisions cannot drop or switch construction identity. Historical drawings remain unchanged and become visibly stale when their construction or catalog sources change. The existing claimed-turn receipt, drawing-request commitment and work-link commands still establish delivery.
 
-The authenticated worker accepts the old recipe request and a bounded `{recipe,drawing_source:{artifact_id,revision}}` envelope. Source identity/revision is printed on every SVG and returned in its manifest; the Edge transport checks it. The kernel assembly and STEP stay in canonical millimetres. SVG page composition is explicitly **not to scale**: it adds overall dimensions to orthographic views, total size to isometric views, P-number callouts and a part column; the manifest notes map each P-number to its saved instance ID and exact local blank. Sheet wording follows [plain-language drawing sheets](#plain-language-drawing-sheets--2026-10-30). These are concept annotations, not manufacturing tolerances, fastener layout, machining allowances or structural certification; drawings carry no fastener schedule ([annotations version 2](#fastener-schedule-on-drawings--annotations-version-2-2026-10-26) is dormant). The 2026-10-17 paged annotation implementation removes the separate 24-instance delivery ceiling: annotations cover the existing recipe limit of 512 instances. Each view is one SVG with numbered sheets of at most 32 callouts, all using the same complete kernel geometry, overall bounds and exact construction revision. Shared SVG geometry avoids copying paths for every sheet. Part numbers stay stable across sheets; coincident projections receive separated, bounded labels. Each sheet is rasterized separately at the existing 1024-pixel preview resolution; the transport requires every deterministic sheet key and validates its hash against metadata bound to the complete SVG. All sheets reach independent review and the review/save commitment. Geometry, parameter-node, collision, time and byte bounds still apply. [Paged annotation verification](foundation-verification.md#paged-cad-annotations--2026-10-17) owns deployment and owner acceptance.
+The authenticated worker accepts the old recipe request and a bounded `{recipe,drawing_source:{artifact_id,revision}}` envelope. Source identity/revision is printed on every SVG and returned in its manifest; the Edge transport checks it. The kernel assembly and STEP stay in canonical millimetres. SVG page composition is explicitly **not to scale**: it adds overall dimensions to orthographic views, total size to isometric views, P-number callouts and a part column; the manifest notes map each P-number to its saved instance ID and exact local blank. Sheet wording follows [plain-language drawing sheets](#plain-language-drawing-sheets--2026-10-30). These are concept annotations, not manufacturing tolerances, fastener layout, machining allowances or structural certification; drawings carry no fastener schedule ([annotations version 2](#fastener-schedule-on-drawings--annotations-version-2-2026-10-26) is dormant). The 2026-10-17 paged annotation implementation removes the separate 24-instance delivery ceiling: annotations cover the existing recipe limit of 512 instances. Each view is one SVG with numbered sheets of at most 32 callouts, all using the same complete kernel geometry, overall bounds and exact construction revision. Shared SVG geometry avoids copying paths for every sheet. Part numbers stay stable across sheets; parts whose centres project onto the same point share one callout (for example `P7-P9`), see [plain-language drawing sheets](#plain-language-drawing-sheets--2026-10-30). Each sheet is rasterized separately at the existing 1024-pixel preview resolution; the transport requires every deterministic sheet key and validates its hash against metadata bound to the complete SVG. All sheets reach independent review and the review/save commitment. Geometry, parameter-node, collision, time and byte bounds still apply. [Paged annotation verification](foundation-verification.md#paged-cad-annotations--2026-10-17) owns deployment and owner acceptance.
 
 ### Plain-language drawing sheets — 2026-10-30
 
-**Status: source only, not deployed.** Owner feedback: the sheets were written
+**Status: deployed 2026-10-30** from `main` `ef55db4` ([run 41020338894](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41020338894): engine tests, Modal deploy and live smoke check of the new sheet text passed). No paid review of a real drawing with the new sheets yet. Owner feedback: the sheets were written
 for AI, and people could not tell what was needed or what X, Y and Z meant.
 `bob_cad/annotations.py` now writes for people without drawing experience. It
 changes presentation text only; geometry, P-number placement, pagination,
@@ -1101,13 +1101,28 @@ manifest notes (`annotations` version 1) and the transport are unchanged.
   length). Names drop tokens with digits, so an earlier size in a stable id is
   never shown as current. The column is "Parts in this drawing", not a cut list,
   because reference instances can appear in it.
+- **Lines and callouts (2026-10-30, second step):** each sheet's key says
+  "Solid line: edge you can see" and "Dashed line: edge hidden behind", using
+  the geometry's strokes. Parts whose centres project within 3 px of each other
+  (one behind the other) share one callout with every P-number listed ("P1, P3",
+  "P7-P9"); long callouts wrap instead of being shortened.
 - **Provenance:** the footer keeps the exact construction version and ID, in
   smaller text. Disclaimers stay in plain words (not to scale, products, fixings and
   strength unchecked, sizes before notches and holes, not approved for building).
 
+In the app (`CadDrawingView`), each saved view has its own zoom (100-400 %)
+inside the shared `box-drawing-viewport`, so a 1000 px sheet can be read on a
+phone and multi-sheet views are no longer squeezed into 480 px. `useSheetZoom`
+gives pinch to zoom and one-finger drag on phones, mouse drag to pan, and
+Ctrl/⌘ + wheel (also a trackpad pinch) to zoom on computers; a plain wheel keeps
+scrolling the page so tall views never trap it. The +/− buttons remain. "Parts and
+sizes" uses the same words: plain name, quantity, size with the length named,
+notches or holes, and the drawing's P-numbers from the saved annotation notes
+(hidden for drawings without notes). The CSV cut list is unchanged.
+
 The reviewer still receives the exact recipe and manifest with the pixels.
-Saved drawings keep their old sheets until rendered again. Deploying the worker
-and the first paid review with the new sheets need the owner's OK.
+Saved drawings keep their old sheets until rendered again. The first paid review
+with the new sheets needs the owner's OK.
 
 ### Fastener schedule on drawings — annotations version 2, 2026-10-26
 

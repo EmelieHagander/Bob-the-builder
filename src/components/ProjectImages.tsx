@@ -1,3 +1,4 @@
+import { ZoomableImage } from './ZoomableImage'
 import { useEffect, useRef, useState } from 'react'
 import * as db from '../data/database'
 import type { MediaAsset, MediaPurpose, MediaTarget } from '../data/types'
@@ -14,7 +15,7 @@ export const IMAGE_PURPOSES: Record<MediaPurpose, string> = {
 const message = (err: unknown) => userErrorMessage(err, 'Could not update project images. Try again.')
 
 /** Fetch only visible previews; an open original performs a new authorized read. */
-export function StoredImage({ projectId, image, original = false, allowRetry = true }: { projectId: string; image: Pick<MediaAsset, 'id' | 'title'>; original?: boolean; allowRetry?: boolean }) {
+export function StoredImage({ projectId, image, original = false, allowRetry = true, zoomable = false }: { projectId: string; image: Pick<MediaAsset, 'id' | 'title'>; original?: boolean; allowRetry?: boolean; zoomable?: boolean }) {
   const container = useRef<HTMLSpanElement>(null)
   const [url, setUrl] = useState('')
   const [error, setError] = useState('')
@@ -38,9 +39,10 @@ export function StoredImage({ projectId, image, original = false, allowRetry = t
     {allowRetry && <button type="button" className="btn" onClick={e => { e.stopPropagation(); setAttempt(n => n + 1) }}>Retry image</button>}
   </span>
   if (!url) return <span ref={container} className="image-loading" role="status">Loading image…</span>
+  const failed = () => setError('The stored image could not be displayed. Try loading it again.')
+  if (original && zoomable) return <ZoomableImage src={url} alt={image.title} label={image.title} imgClassName="project-image-original" onError={failed} />
   return <img src={url} alt={image.title} className={original ? 'project-image-original' : 'project-image-thumbnail'}
-    decoding="async"
-    onError={() => setError('The stored image could not be displayed. Try loading it again.')} />
+    decoding="async" onError={failed} />
 }
 
 function UploadImage({ projectId, target, onClose, onSaved }: { projectId: string; target: MediaTarget; onClose: () => void; onSaved: () => void }) {
@@ -163,7 +165,7 @@ export function ProjectImages({ projectId, target, title = 'Images', selectImage
         selectImage={async image => { await db.attachProjectImage(projectId, image.id, target); setDialog(null); reload() }} />
     </Modal>}
     {dialog?.kind === 'view' && <Modal title={dialog.image.title} wide onClose={() => setDialog(null)}>
-      <StoredImage projectId={projectId} image={dialog.image} original />
+      <StoredImage projectId={projectId} image={dialog.image} original zoomable />
       <p className="foundation-hint">{IMAGE_PURPOSES[dialog.image.purpose]} · {dialog.image.width} × {dialog.image.height} pixels · {dialog.image.originalName}</p>
     </Modal>}
     {dialog?.kind === 'remove' && <Modal title="Remove image?" onClose={() => { if (!busy) setDialog(null) }}>

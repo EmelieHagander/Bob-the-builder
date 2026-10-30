@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {createCadAdapter,parseCadAssemblyRequest,parseCadAssemblyResult,CAD_VIEW_NAMES,CAD_MAX_VIEWS,type CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
 import {fastenerSchedule} from './support/fastener-schedule-fixture.ts'
-import {cadParts,cadCutListCsv} from '../src/data/cadParts.ts'
+import {cadParts,cadCutListCsv,cadPartMarkers,cadPartSize} from '../src/data/cadParts.ts'
 const req=():CadAssemblyRequest=>({contract_version:1,units:'mm',assembly_id:'assembly.test',
   definitions:[{id:'post',primitive:'box',material_ref:'mat.45x70',x_mm:45,y_mm:70,z_mm:1600},{id:'tube',primitive:'tube',material_ref:'mat.pvc',outside_diameter_mm:32,wall_thickness_mm:2,length_mm:500}],
   instances:[{id:'left',definition_id:'post',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}},{id:'right',definition_id:'post',placement:{x:955,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front','top']})
@@ -67,6 +67,17 @@ test('cut list counts actual instances, omits unused definitions and retains ori
  const parts=cadParts(r);assert.equal(parts.length,1);assert.equal(parts[0].quantity,2);assert.equal(parts[0].dimensions,'45 × 70 × 1600');assert.equal(parts[0].cuts,1)
  assert.match(cadCutListCsv(r),/"post","mat.45x70","2"/)
  assert.match(cadCutListCsv({...r,definitions:[{...r.definitions[0],material_ref:'=SUM(1)'}]}),/'=SUM\(1\)/)
+})
+test('parts read in plain words like the drawing sheets: name without sizes, length named, P-numbers grouped',()=>{
+ const r=req();const part=cadParts(r)[0]
+ assert.equal(part.name,'Post');assert.equal(part.size,'45 × 70 mm, length 1600 mm')
+ assert.equal(cadParts({...r,definitions:[{...r.definitions[0],id:'leg_45x45x430'}],instances:r.instances.map((i:any)=>({...i,definition_id:'leg_45x45x430'}))})[0].name,'Leg')
+ assert.equal(cadPartSize({primitive:'tube',outside_diameter_mm:42.4,wall_thickness_mm:2.6,length_mm:900}),'Tube, diameter 42.4 mm, wall 2.6 mm, length 900 mm')
+ assert.equal(cadPartSize({primitive:'cylinder',diameter_mm:8,length_mm:40}),'Round, diameter 8 mm, length 40 mm')
+ const parts=[1,2,3,5].map(n=>({number:'P'+n,instance_id:'i'+n,definition_id:'leg'})).concat([{number:'P4',instance_id:'i4',definition_id:'rail'}])
+ const markers=cadPartMarkers({annotations:{version:1,coverage:'complete',views:{front:{dimensions:[],parts,coverage:'complete'}}}})
+ assert.equal(markers.get('leg'),'P1–P3, P5');assert.equal(markers.get('rail'),'P4')
+ assert.equal(cadPartMarkers({}).size,0,'older drawings without notes show no P-number column')
 })
 test('requested geometry checks cannot disappear or claim a different clearance',async()=>{
  const r=req();r.clearances=[{id:'gap',first_id:'left',second_id:'right',min_mm:20}]

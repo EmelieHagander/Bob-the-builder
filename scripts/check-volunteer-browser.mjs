@@ -190,6 +190,7 @@ try {
     await layout(page,viewport,'drawing-box')
     await dialog.getByRole('button',{name:'View drawing: Saved drawing image',exact:true}).click()
     const savedImage=reader.getByRole('img',{name:'Saved drawing image — saved drawing',exact:true})
+    await reader.getByRole('button',{name:'Zoom Saved drawing image in',exact:true}).waitFor()
     await savedImage.waitFor();assert(await savedImage.evaluate(img=>img.complete&&img.naturalWidth>0),'Drawing image bytes render through the exact revision proxy')
     state.drawingRevision=2
     await reader.getByRole('button',{name:'Refresh drawing',exact:true}).click()

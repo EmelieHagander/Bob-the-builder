@@ -1,3 +1,4 @@
+import { ZoomableImage } from './ZoomableImage'
 import { useEffect, useRef, useState } from 'react'
 import * as db from '../data/database'
 import type { VolunteerDrawing, VolunteerDrawingSummary } from '../data/volunteers'
@@ -90,7 +91,7 @@ export function VolunteerDrawings({ secret, projectId, taskId, onDenied }: {
         {content.roomLayout && <RoomLayoutDrawing value={content.roomLayout} title={drawing.title} source={`v${drawing.revision} · ${statusName[drawing.status]}`} lineageChanged={drawing.sourceState === 'changed'} participant />}
         {content.multifloorPlan && <BuildingPlanDrawing value={content.multifloorPlan} title={drawing.title} source={`v${drawing.revision} · ${statusName[drawing.status]}`} lineageChanged={drawing.sourceState === 'changed'} participant />}
         {content.stairStudy && <StairStudyDrawing value={content.stairStudy} title={drawing.title} participant />}
-        {image && <figure className="volunteer-image"><img src={image} alt={`${drawing.title} — saved drawing`} /></figure>}
+        {image && <figure className="volunteer-image"><ZoomableImage src={image} alt={`${drawing.title} — saved drawing`} label={drawing.title} /></figure>}
         {!content.cad && !content.parametricRecipe && !geometry && !content.roomLayout && !content.multifloorPlan && !content.stairStudy && !image && <p>No viewable geometry or image is saved for this version. Read the description and ask the organiser for details.</p>}
       </>}
       <button className="btn" disabled={busy} onClick={() => void open(drawing)}>Refresh drawing</button>

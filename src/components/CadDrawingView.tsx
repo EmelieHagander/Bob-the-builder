@@ -1,11 +1,21 @@
 import type { CadDrawing } from '../data/artifacts'
-import { cadParts, cadCutListCsv } from '../data/cadParts'
+import { cadParts, cadCutListCsv, cadPartMarkers } from '../data/cadParts'
 import type { DrawingSourceStatus } from '../data/drawingSources'
 import { CadSourceMap } from './CadSourceMap'
 import { lazy, Suspense, useCallback, useState } from 'react'
+import './StorageBoxDrawing.css'
+import { ZoomableImage } from './ZoomableImage'
 const WireframeView = lazy(() => import('./CadWireframeView').catch(() => ({ default: WireframeUnavailable })))
 function WireframeUnavailable({onFallback}:{onFallback:(message:string)=>void}) {
  return <div role="alert"><p>The 3D viewer could not be loaded. Check the connection and try again.</p><button type="button" className="btn" onClick={()=>onFallback('')}>Show saved drawing</button></div>
+}
+
+/** One saved view. Sheets are 1000 px wide, so on a phone they need zoom to be read. */
+function CadSheet({src,label,title,file}:{src:string;label:string;title:string;file:string}){
+ return <figure className="cad-sheet">
+  <figcaption><strong>{label}</strong> · <a download={file} href={src}>download drawing</a></figcaption>
+  <ZoomableImage src={src} alt={`${title} — ${label}`} label={label} fit="width" />
+ </figure>
 }
 
 /** SVG is an image document, never injected into the page's DOM. */
@@ -13,7 +23,7 @@ export function CadDrawingView({value,title,projectId,artifactId,revision,source
  const [interactive,setInteractive]=useState(false),[notice,setNotice]=useState('')
  const fallback=useCallback((message:string)=>{setInteractive(false);setNotice(message)},[])
  const names:Record<string,string>={front:'Front',back:'Back',left:'Left',right:'Right',top:'Top',bottom:'Bottom',isometric:'Overview',isometric_front_left:'Overview front-left',isometric_back_left:'Overview back-left',isometric_back_right:'Overview back-right'}
- const checks=value.manifest?.checks
+ const checks=value.manifest?.checks,markers=cadPartMarkers(value.manifest)
  if(sourceStatus?.source_state==='unavailable')return <section aria-label={`${title} CAD drawings`}>
   <p className="solution-attention">Current-use drawing preview is withheld until source access and freshness can be checked. This saved revision remains part of the project history.</p>
   <CadSourceMap recipe={value.recipe} manifest={value.manifest} projectId={projectId} sourceStatus={sourceStatus} />
@@ -29,16 +39,14 @@ export function CadDrawingView({value,title,projectId,artifactId,revision,source
   {interactive&&projectId&&artifactId&&revision&&<Suspense fallback={<p role="status">Loading the 3D viewer…</p>}>
    <WireframeView projectId={projectId} artifactId={artifactId} revision={revision} title={title} onFallback={fallback}/>
   </Suspense>}
-  {Object.entries(names).filter(([key])=>value.files[key]).map(([key,label])=><figure key={key} style={{margin:'12px 0'}}>
-   <img alt={`${title} — ${label}`} src={`data:image/svg+xml;base64,${value.files[key]}`} style={{width:'100%',maxHeight:480,objectFit:'contain',background:'white',border:'1px solid var(--line)'}} />
-   <figcaption><a download={`${key}.svg`} href={`data:image/svg+xml;base64,${value.files[key]}`}>{label} · download drawing</a></figcaption>
-  </figure>)}
+  {Object.keys(names).some(key=>value.files[key])&&<p className="foundation-hint">Each view fits the screen. To read part numbers and sizes, pinch or press + to zoom (on a computer: Ctrl + scroll wheel), then drag to move around.</p>}
+  {Object.entries(names).filter(([key])=>value.files[key]).map(([key,label])=><CadSheet key={key} label={label} title={title} file={`${key}.svg`} src={`data:image/svg+xml;base64,${value.files[key]}`} />)}
   {value.files.step&&<a className="btn" download="assembly.step" href={`data:application/step;base64,${value.files.step}`}>Download 3D model</a>}
-  <details><summary>Parts and dimensions</summary>
-   <p>Blank sizes before holes and notches. Check grain, joints and saw allowance before cutting.</p>
+  <details><summary>Parts and sizes</summary>
+   <p>Sizes are before notches and holes, with nothing added for saw cuts. Check grain and joints before cutting.</p>
    <a download="cut-list.csv" href={`data:text/csv;charset=utf-8,${encodeURIComponent(cadCutListCsv(value.recipe))}`}>Download cut list</a>
-   <div style={{overflowX:'auto'}}><table><thead><tr><th>Part</th><th>Quantity</th><th>Blank dimensions (mm)</th><th>Cuts</th></tr></thead><tbody>
-   {cadParts(value.recipe).map(d=><tr key={d.id}><td>{d.id}</td><td>{d.quantity}</td><td>{d.dimensions}</td><td>{d.cuts}</td></tr>)}
+   <div className="box-parts"><table><thead><tr>{markers.size>0&&<th scope="col">On drawing</th>}<th scope="col">Part</th><th scope="col">Quantity</th><th scope="col">Size</th><th scope="col">Notches or holes</th></tr></thead><tbody>
+   {cadParts(value.recipe).map(d=><tr key={d.id}>{markers.size>0&&<td>{markers.get(d.id)??'—'}</td>}<th scope="row">{d.name}</th><td>{d.quantity}</td><td>{d.size}</td><td>{d.cuts||'None'}</td></tr>)}
   </tbody></table></div></details>
   <details><summary>Geometry checks</summary>
    {!checks?<p>No collision or clearance check was recorded for this version.</p>:<>

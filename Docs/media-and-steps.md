@@ -221,6 +221,12 @@ notes, never as uploaded-image tiles. Show purpose/source/time, complete origina
 loading, errors, pending uploads, retryable deletion and permission failures honestly.
 Use existing theme/form/modal primitives, 44px actions and mobile layouts.
 
+Opened originals (View original, Solution and fact references, drawing images,
+Bob chat images) and volunteer task/drawing images use `ZoomableImage`
+(2026-10-30): pinch or Ctrl/⌘ + wheel to zoom, drag to move, +/− buttons, up to
+400 %. At 100 % a photo fits the viewport width and 72vh height. A plain wheel
+keeps scrolling the page. Thumbnails and composer previews do not zoom.
+
 Live mode persists through Supabase. Demo mode must explicitly disclose its limited
 persistence and must not claim an image was uploaded to the project backend.
 

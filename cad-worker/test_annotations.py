@@ -8,6 +8,13 @@ annotate,PARTS_PER_PAGE=annotations.annotate,annotations.PARTS_PER_PAGE
 
 NS='{http://www.w3.org/2000/svg}'
 
+def callout_numbers(value):
+    numbers=[]
+    for mark in value.replace(',',' ').split():
+        first,_,last=mark.partition('-')
+        numbers+=range(int(first[1:]),int((last or first)[1:])+1)
+    return numbers
+
 class AnnotationPagesTest(unittest.TestCase):
     def test_every_instance_has_one_readable_sheet_and_stable_number(self):
         for count in (24,25,32,33,128,512):
@@ -27,16 +34,16 @@ class AnnotationPagesTest(unittest.TestCase):
                 seen=[]
                 for page in pages:
                     texts=[el.text for el in page.iter(NS+'text')]
-                    numbers=[el for el in page.iter(NS+'text') if el.get('text-anchor')=='middle' and (el.text or '').startswith('P')]
-                    self.assertLessEqual(len(numbers),PARTS_PER_PAGE)
-                    seen.extend(el.text for el in numbers)
+                    callouts=[el for el in page.iter(NS+'text') if el.get('text-anchor')=='middle' and (el.text or '').startswith('P')]
+                    self.assertLessEqual(len(callouts),PARTS_PER_PAGE)
+                    seen.extend(n for el in callouts for n in callout_numbers(el.text))
                     self.assertIn('Construction version 7 - ID source',texts)
-                    for i,a in enumerate(numbers):
-                        x,y=float(a.get('x')),float(a.get('y'))
-                        self.assertTrue(100<=x<=660 and 110<=y<=610)
-                        for b in numbers[:i]:
-                            self.assertTrue(abs(x-float(b.get('x')))>=48 or abs(y-float(b.get('y')))>=22)
-                self.assertEqual(seen,[f'P{i}' for i in range(1,count+1)])
+                    for el in callouts:
+                        x,y=float(el.get('x')),float(el.get('y'))
+                        self.assertTrue(100<=x<=660 and 110<=y<=610+18*PARTS_PER_PAGE)
+                    # Identical boxes project onto one spot: one shared callout per sheet.
+                    self.assertEqual(len({(el.get('x'),) for el in callouts}),1)
+                self.assertEqual(seen,list(range(1,count+1)))
                 self.assertEqual(len(list(root.iter(NS+'path'))),1,'Geometry paths are shared, never copied per sheet')
 
 def schedule(joints=None,totals=None):
@@ -160,5 +167,38 @@ class PlainLanguageTest(unittest.TestCase):
             for page in [g for g in root if g.get('id','').startswith('DrawingPage')]:
                 column=[float(el.get('y')) for el in page.iter(NS+'text') if float(el.get('x'))==annotations.COLUMN_X]
                 self.assertLessEqual(max(column),height-75)
+
+class CalloutTest(unittest.TestCase):
+    def test_parts_behind_each_other_share_one_callout_and_separate_parts_keep_their_own(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=blank_svg(tmp)
+            req={'definitions':[{'id':'leg','primitive':'box','x_mm':45,'y_mm':45,'z_mm':430}]}
+            box=lambda x,y:{'min':[x,y,0],'max':[x+45,y+45,430],'size':[45,45,430]}
+            rows=[{'id':'a_front_left','definition_id':'leg','bounding_box_mm':box(0,0)},{'id':'b_front_right','definition_id':'leg','bounding_box_mm':box(1155,0)},
+                  {'id':'c_back_left','definition_id':'leg','bounding_box_mm':box(0,315)},{'id':'d_back_right','definition_id':'leg','bounding_box_mm':box(1155,315)}]
+            bounds={'min':[0,0,0],'max':[1200,360,430],'size':[1200,360,430]}
+            annotate(path,req,rows,bounds,'front',[600,-5000,215],[0,0,1],[600,180,215])
+            callouts=sorted(el.text for el in ET.parse(path).getroot().iter(NS+'text') if el.get('text-anchor')=='middle' and (el.text or '').startswith('P'))
+            self.assertEqual(callouts,['P1, P3','P2, P4'])
+            path=blank_svg(tmp)
+            annotate(path,req,rows,bounds,'top',[600,180,5000],[0,1,0],[600,180,215])
+            callouts=sorted(el.text for el in ET.parse(path).getroot().iter(NS+'text') if el.get('text-anchor')=='middle' and (el.text or '').startswith('P'))
+            self.assertEqual(callouts,['P1','P2','P3','P4'])
+
+    def test_long_shared_callouts_wrap_and_list_every_number(self):
+        lines=annotations.wrap_marks(annotations.marker_ranges(list(range(1,32,2))),annotations.LABEL_CHARS)
+        self.assertTrue(all(len(line)<=annotations.LABEL_CHARS+1 for line in lines))
+        self.assertEqual([n for line in lines for n in callout_numbers(line)],list(range(1,32,2)))
+
+    def test_every_sheet_explains_solid_and_dashed_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=blank_svg(tmp)
+            box={'min':[0,0,0],'max':[10,20,30],'size':[10,20,30]}
+            rows=[{'id':f'part{i:03}','definition_id':'part','bounding_box_mm':box} for i in range(40)]
+            annotate(path,{'definitions':[{'id':'part','primitive':'box','x_mm':10,'y_mm':20,'z_mm':30}]},rows,box,'isometric',[100,-100,100],[0,0,1],[5,10,15])
+            for page in [g for g in ET.parse(path).getroot() if g.get('id','').startswith('DrawingPage')]:
+                texts=[el.text for el in page.iter(NS+'text')]
+                self.assertIn('Solid line: edge you can see',texts)
+                self.assertIn('Dashed line: edge hidden behind',texts)
 
 if __name__=='__main__': unittest.main()
