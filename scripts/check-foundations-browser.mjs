@@ -347,11 +347,47 @@ try {
     artifacts.cad.set(`${cadId}:1`,{project_id:'A',artifact_id:cadId,artifact_revision:1,recipe:sourceGraph.recipe,manifest:{...sourceGraph.manifest,checks:{collisions:{status:'complete',tested_pairs:0,skipped_pairs:0,overlaps:[]},clearances:[],motions:[]}},files:{front:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><rect x="5" y="5" width="790" height="90" fill="none" stroke="black"/></svg>').toString('base64'),step:Buffer.from('ISO-10303-21;').toString('base64')},step_id:null,source_artifact_id:null,source_revision:null})
     await page.goto(base+`#/artifacts?drawing=${cadId}&revision=1`)
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    // Sheets are 1000 px wide; on a phone they are read by zooming inside their own viewport.
+    const sheet=page.locator('.cad-sheet').first(), sheetImage=sheet.getByRole('img',{name:'CAD shelf detail — Front',exact:true})
+    const fitted=(await sheetImage.boundingBox()).width
+    for (const name of ['Zoom Front in','Zoom Front out']) {
+      const box=await sheet.getByRole('button',{name,exact:true}).boundingBox()
+      assert(Math.round(box.width)>=44&&Math.round(box.height)>=44,'Drawing zoom needs 44px targets')
+    }
+    await sheet.getByRole('button',{name:'Zoom Front in',exact:true}).click()
+    await sheet.getByRole('button',{name:'Zoom Front in',exact:true}).click()
+    await sheet.getByText('200%',{exact:true}).waitFor()
+    assert((await sheetImage.boundingBox()).width>fitted*1.9,'Zooming enlarges the sheet')
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'A zoomed sheet scrolls inside its viewport, not the page')
+    await page.screenshot({animations:'disabled',path:`test-results/cad-drawing-zoom-${viewport.width}.png`})
+    const sheetViewport=sheet.locator('.box-drawing-viewport'), scrollOf=()=>sheetViewport.evaluate(el=>el.scrollLeft)
+    await sheetViewport.scrollIntoViewIfNeeded()
+    const frame=await sheetViewport.boundingBox(), cx=frame.x+frame.width/2, cy=frame.y+frame.height/2
+    const panStart=await scrollOf()
+    await page.mouse.move(cx,cy);await page.mouse.down();await page.mouse.move(cx-60,cy,{steps:4});await page.mouse.up()
+    assert(await scrollOf()>panStart+30,'A mouse drag pans the zoomed sheet')
+    await sheet.getByRole('button',{name:'Reset zoom',exact:true}).click()
+    await sheet.getByText('100%',{exact:true}).waitFor()
+    // A plain wheel keeps scrolling the page; Ctrl + wheel (also a trackpad pinch) zooms the sheet.
+    await page.mouse.move(cx,cy);await page.mouse.wheel(0,-120)
+    await sheet.getByText('100%',{exact:true}).waitFor()
+    await page.keyboard.down('Control');await page.mouse.wheel(0,-120);await page.keyboard.up('Control')
+    await sheet.getByText(/^(?!100%)\d+%$/).waitFor()
+    await sheet.getByRole('button',{name:'Reset zoom',exact:true}).click()
+    // Two fingers moving apart zoom around their midpoint.
+    await sheetViewport.evaluate(el=>{
+      const box=el.getBoundingClientRect(), x=box.left+box.width/2, y=box.top+box.height/2
+      const fingers=d=>[new Touch({identifier:1,target:el,clientX:x-d,clientY:y}),new Touch({identifier:2,target:el,clientX:x+d,clientY:y})]
+      const fire=(type,list)=>el.dispatchEvent(new TouchEvent(type,{touches:list,targetTouches:list,changedTouches:list,cancelable:true,bubbles:true}))
+      fire('touchstart',fingers(20));fire('touchmove',fingers(40));fire('touchend',[])
+    })
+    await sheet.getByText('200%',{exact:true}).waitFor()
+    await sheet.getByRole('button',{name:'Reset zoom',exact:true}).click()
     await page.getByRole('link',{name:'Download 3D model',exact:true}).focus()
     await page.keyboard.press('Tab')
-    assert(await page.getByText('Parts and dimensions',{exact:true}).evaluate(element=>element===document.activeElement),'Drawing disclosures remain reachable inside the keyboard focus trap')
-    await page.getByText('Parts and dimensions',{exact:true}).click()
-    await page.getByRole('cell',{name:'980 × 18 × 300',exact:true}).waitFor()
+    assert(await page.getByText('Parts and sizes',{exact:true}).evaluate(element=>element===document.activeElement),'Drawing disclosures remain reachable inside the keyboard focus trap')
+    await page.getByText('Parts and sizes',{exact:true}).click()
+    await page.getByRole('cell',{name:'18 × 300 mm, length 980 mm',exact:true}).waitFor()
     assert.equal(await page.getByRole('link',{name:'Download cut list',exact:true}).count(),1)
     await page.getByText('Geometry checks',{exact:true}).click()
     await page.getByText('Overlap check: complete.',{exact:false}).waitFor()

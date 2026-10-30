@@ -8,6 +8,13 @@ annotate,PARTS_PER_PAGE=annotations.annotate,annotations.PARTS_PER_PAGE
 
 NS='{http://www.w3.org/2000/svg}'
 
+def callout_numbers(value):
+    numbers=[]
+    for mark in value.replace(',',' ').split():
+        first,_,last=mark.partition('-')
+        numbers+=range(int(first[1:]),int((last or first)[1:])+1)
+    return numbers
+
 class AnnotationPagesTest(unittest.TestCase):
     def test_every_instance_has_one_readable_sheet_and_stable_number(self):
         for count in (24,25,32,33,128,512):
@@ -27,16 +34,16 @@ class AnnotationPagesTest(unittest.TestCase):
                 seen=[]
                 for page in pages:
                     texts=[el.text for el in page.iter(NS+'text')]
-                    numbers=[el for el in page.iter(NS+'text') if el.get('text-anchor')=='middle' and (el.text or '').startswith('P')]
-                    self.assertLessEqual(len(numbers),PARTS_PER_PAGE)
-                    seen.extend(el.text for el in numbers)
+                    callouts=[el for el in page.iter(NS+'text') if el.get('text-anchor')=='middle' and (el.text or '').startswith('P')]
+                    self.assertLessEqual(len(callouts),PARTS_PER_PAGE)
+                    seen.extend(n for el in callouts for n in callout_numbers(el.text))
                     self.assertIn('Construction version 7 - ID source',texts)
-                    for i,a in enumerate(numbers):
-                        x,y=float(a.get('x')),float(a.get('y'))
-                        self.assertTrue(100<=x<=660 and 110<=y<=610)
-                        for b in numbers[:i]:
-                            self.assertTrue(abs(x-float(b.get('x')))>=48 or abs(y-float(b.get('y')))>=22)
-                self.assertEqual(seen,[f'P{i}' for i in range(1,count+1)])
+                    for el in callouts:
+                        x,y=float(el.get('x')),float(el.get('y'))
+                        self.assertTrue(100<=x<=660 and 110<=y<=610+18*PARTS_PER_PAGE)
+                    # Identical boxes project onto one spot: one shared callout per sheet.
+                    self.assertEqual(len({(el.get('x'),) for el in callouts}),1)
+                self.assertEqual(seen,list(range(1,count+1)))
                 self.assertEqual(len(list(root.iter(NS+'path'))),1,'Geometry paths are shared, never copied per sheet')
 
 def schedule(joints=None,totals=None):
@@ -160,5 +167,98 @@ class PlainLanguageTest(unittest.TestCase):
             for page in [g for g in root if g.get('id','').startswith('DrawingPage')]:
                 column=[float(el.get('y')) for el in page.iter(NS+'text') if float(el.get('x'))==annotations.COLUMN_X]
                 self.assertLessEqual(max(column),height-75)
+
+class CalloutTest(unittest.TestCase):
+    def test_parts_behind_each_other_share_one_callout_and_separate_parts_keep_their_own(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=blank_svg(tmp)
+            req={'definitions':[{'id':'leg','primitive':'box','x_mm':45,'y_mm':45,'z_mm':430}]}
+            box=lambda x,y:{'min':[x,y,0],'max':[x+45,y+45,430],'size':[45,45,430]}
+            rows=[{'id':'a_front_left','definition_id':'leg','bounding_box_mm':box(0,0)},{'id':'b_front_right','definition_id':'leg','bounding_box_mm':box(1155,0)},
+                  {'id':'c_back_left','definition_id':'leg','bounding_box_mm':box(0,315)},{'id':'d_back_right','definition_id':'leg','bounding_box_mm':box(1155,315)}]
+            bounds={'min':[0,0,0],'max':[1200,360,430],'size':[1200,360,430]}
+            annotate(path,req,rows,bounds,'front',[600,-5000,215],[0,0,1],[600,180,215])
+            callouts=sorted(el.text for el in ET.parse(path).getroot().iter(NS+'text') if el.get('text-anchor')=='middle' and (el.text or '').startswith('P'))
+            self.assertEqual(callouts,['P1, P3','P2, P4'])
+            path=blank_svg(tmp)
+            annotate(path,req,rows,bounds,'top',[600,180,5000],[0,1,0],[600,180,215])
+            callouts=sorted(el.text for el in ET.parse(path).getroot().iter(NS+'text') if el.get('text-anchor')=='middle' and (el.text or '').startswith('P'))
+            self.assertEqual(callouts,['P1','P2','P3','P4'])
+
+    def test_long_shared_callouts_wrap_and_list_every_number(self):
+        lines=annotations.wrap_marks(annotations.marker_ranges(list(range(1,32,2))),annotations.LABEL_CHARS)
+        self.assertTrue(all(len(line)<=annotations.LABEL_CHARS+1 for line in lines))
+        self.assertEqual([n for line in lines for n in callout_numbers(line)],list(range(1,32,2)))
+
+    def test_every_sheet_explains_solid_and_dashed_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=blank_svg(tmp)
+            box={'min':[0,0,0],'max':[10,20,30],'size':[10,20,30]}
+            rows=[{'id':f'part{i:03}','definition_id':'part','bounding_box_mm':box} for i in range(40)]
+            annotate(path,{'definitions':[{'id':'part','primitive':'box','x_mm':10,'y_mm':20,'z_mm':30}]},rows,box,'isometric',[100,-100,100],[0,0,1],[5,10,15])
+            for page in [g for g in ET.parse(path).getroot() if g.get('id','').startswith('DrawingPage')]:
+                texts=[el.text for el in page.iter(NS+'text')]
+                self.assertIn('Solid line: edge you can see',texts)
+                self.assertIn('Dashed line: edge hidden behind',texts)
+
+def bench():
+    req={'definitions':[{'id':'leg','primitive':'box','x_mm':45,'y_mm':45,'z_mm':430},{'id':'rail','primitive':'box','x_mm':1110,'y_mm':45,'z_mm':45}]}
+    box=lambda x,y,z,sx,sy,sz:{'min':[x,y,z],'max':[x+sx,y+sy,z+sz],'size':[sx,sy,sz]}
+    rows=[{'id':'leg_a','definition_id':'leg','bounding_box_mm':box(0,0,0,45,45,430)},{'id':'leg_b','definition_id':'leg','bounding_box_mm':box(1155,0,0,45,45,430)},
+          {'id':'rail','definition_id':'rail','bounding_box_mm':box(45,0,385,1110,45,45)}]
+    return req,rows,{'min':[0,0,0],'max':[1200,45,430],'size':[1200,45,430]}
+
+def scale_texts(path):
+    return [el for el in ET.parse(path).getroot().iter(NS+'text') if el.get('font-size')=='11' and (el.text or '').replace('.','').isdigit()]
+
+class PositionScaleTest(unittest.TestCase):
+    """Where parts start, in mm from the 0 mark, from the same bounds as the geometry."""
+    def test_front_view_marks_part_starts_along_both_axes(self):
+        req,rows,bounds=bench()
+        with tempfile.TemporaryDirectory() as tmp:
+            path=blank_svg(tmp)
+            notes=annotate(path,req,rows,bounds,'front',[600,-5000,215],[0,0,1],[600,22.5,215])
+            marks=scale_texts(path)
+            horizontal=sorted({el.text for el in marks if el.get('text-anchor')=='middle'},key=float)
+            vertical=sorted({el.text for el in marks if el.get('text-anchor')=='start'},key=float)
+            self.assertEqual(horizontal,['0','45','1155'])
+            self.assertEqual(vertical,['0','385'])
+            texts=texts_of(path)
+            self.assertIn('Scales: mm measured from the 0 mark',texts)
+            self.assertFalse(any('too close together' in t for t in texts))
+            self.assertEqual(set(notes),{'dimensions','parts','coverage'},'exact notes keep their shape')
+            ys=[float(el.get('y')) for el in marks if el.get('text-anchor')=='start']
+            self.assertEqual(ys,sorted(ys,reverse=True),'heights rise up the sheet')
+
+    def test_overviews_have_no_scales(self):
+        req,rows,bounds=bench()
+        with tempfile.TemporaryDirectory() as tmp:
+            path=blank_svg(tmp)
+            annotate(path,req,rows,bounds,'isometric',[5000,-5000,5000],[0,0,1],[600,22.5,215])
+            self.assertEqual(scale_texts(path),[])
+            self.assertNotIn('Scales: mm measured from the 0 mark',texts_of(path))
+
+    def test_close_marks_never_overlap_and_unnumbered_ones_are_counted(self):
+        req={'definitions':[{'id':'slat','primitive':'box','x_mm':10,'y_mm':45,'z_mm':500}]}
+        rows=[{'id':f'slat{i:02}','definition_id':'slat','bounding_box_mm':{'min':[i*12,0,0],'max':[i*12+10,45,500],'size':[10,45,500]}} for i in range(60)]
+        bounds={'min':[0,0,0],'max':[718,45,500],'size':[718,45,500]}
+        with tempfile.TemporaryDirectory() as tmp:
+            # The kernel's view is in mm around the camera axis, like the real export.
+            path=Path(tmp,'front.svg')
+            path.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="-359 -250 718 500"><g id="Visible"><path d="M-359 -250 L359 250"/></g></svg>')
+            annotate(path,req,rows,bounds,'front',[359,-5000,250],[0,0,1],[359,22.5,250])
+            pages=[g for g in ET.parse(path).getroot() if g.get('id','').startswith('DrawingPage')]
+            self.assertEqual(len(pages),2)
+            for page in pages:
+                marks=[el for el in page.iter(NS+'text') if el.get('font-size')=='11' and el.get('text-anchor')=='middle' and (el.text or '').isdigit()]
+                for i,a in enumerate(marks):
+                    for b in marks[:i]:
+                        if a.get('y')==b.get('y'):
+                            gap=abs(float(a.get('x'))-float(b.get('x')))
+                            self.assertGreaterEqual(gap,(len(a.text)+len(b.text))*3.3+8,'labels in one row never overlap')
+                hidden=[el.text for el in page.iter(NS+'text') if 'too close together to number' in (el.text or '')]
+                self.assertEqual(len(hidden),1)
+                # 60 slat starts on X plus the single 0 on Z: each is numbered or counted.
+                self.assertEqual(len(marks)+int(hidden[0].split()[0]),60)
 
 if __name__=='__main__': unittest.main()

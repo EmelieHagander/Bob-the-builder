@@ -261,5 +261,5 @@ For State, handoff and open-finding maintenance, follow [Archie's forward-lookin
 
 September 2026 context extension: `ask-bob-conversations.md` supersedes its earlier provider-only memory plan with five full recent messages, a private incremental older brief, exact history retrieval, paged construction records and compact/expandable chat. Deployment evidence belongs in the merged release PR, not a source-only status claim.
 
-- [Plain-language drawing sheets](cad-adapter.md#plain-language-drawing-sheets--2026-10-30) — words and direction arrows for X/Y/Z, grouped parts; source only, not deployed.
+- [Plain-language drawing sheets](cad-adapter.md#plain-language-drawing-sheets--2026-10-30) — words and direction arrows for X/Y/Z, grouped parts, line key, shared callouts (deployed 2026-10-30) and position scales (source only); paid review with new sheets not yet run.
 - [K3 exact construction drawings](cad-adapter.md#k3-checked-construction-drawings--2026-10-04) — checked checkpoint rendering, annotations and revision pins; [release/acceptance evidence](foundation-verification.md#k3-checked-construction-drawings--2026-10-04).

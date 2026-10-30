@@ -29,8 +29,13 @@ VIEW_TITLES = {'front':'Front view - seen from the front','back':'Back view - se
 # Assembly X, Y, Z in the same words as the app (src/lib/labels.ts).
 AXIS_WORDS = ('Width','Depth','Height')
 COLUMN_X = 740
-PARTS_TOP = 222
+PARTS_TOP = 296
+# Orthographic views share the sheet with position scales below and right of the geometry.
+VIEW_AXES = {'front':(0,2),'back':(0,2),'left':(1,2),'right':(1,2),'top':(0,1),'bottom':(0,1)}
 COLUMN_CHARS = 32
+# Parts whose centres project within this distance (one behind the other) share one callout.
+COINCIDENT_PX = 3
+LABEL_CHARS = 14
 
 def part_name(identifier):
     """A Bob-authored id as plain words. Tokens with digits are dropped: stable
@@ -78,6 +83,15 @@ def part_lines(numbered, definitions):
         lines.append((0,''))
     return lines[:-1]
 
+def wrap_marks(marks, limit):
+    lines=[]
+    for mark in marks:
+        if lines and len(lines[-1])+2+len(mark)<=limit: lines[-1]+=', '+mark
+        else:
+            if lines: lines[-1]+=','
+            lines.append(mark)
+    return lines
+
 def _column_bottom(lines):
     y=PARTS_TOP+22
     for size,_ in lines: y+={13:14,11:12,0:4}[size]
@@ -106,9 +120,10 @@ def fastener_lines(fasteners):
 def annotate(path, req, rows, bounds, view, camera, up, center, source=None, fasteners=None):
     tree=ET.parse(path); root=tree.getroot()
     left,top,width,height=map(float,root.attrib['viewBox'].split())
-    scale=min(610/width,550/height)
-    dx=75+(610-width*scale)/2-left*scale
-    dy=85+(550-height*scale)/2-top*scale
+    fit_width,fit_height=(560,500) if view in VIEW_AXES else (610,550)
+    scale=min(fit_width/width,fit_height/height)
+    dx=75+(fit_width-width*scale)/2-left*scale
+    dy=85+(fit_height-height*scale)/2-top*scale
     # Reuse the exact exported geometry on every sheet, without duplicating its
     # paths or splitting the source construction. Only the numbered subset varies.
     model=ET.Element(f'{{{NS}}}g',{'id':'ModelGeometry'})
@@ -148,13 +163,57 @@ def annotate(path, req, rows, bounds, view, camera, up, center, source=None, fas
             line([ox,oy],tip,stroke='#111',width=1.5)
             for side in (1,-1): line(tip,[tip[0]-ux*7-side*uy*4,tip[1]-uy*7+side*ux*4],stroke='#111',width=1.5)
             text(tip[0]+ux*8,tip[1]+uy*14+5,label,13,'start' if ux>0.3 else 'end' if ux<-0.3 else 'middle')
+        # Line key: the same solid and dashed strokes as the geometry layers.
+        line([COLUMN_X,218],[COLUMN_X+28,218],stroke='#111',width=1.25);text(COLUMN_X+36,222,'Solid line: edge you can see',12)
+        line([COLUMN_X,236],[COLUMN_X+28,236],dash=True,stroke='#111',width=0.8);text(COLUMN_X+36,240,'Dashed line: edge hidden behind',12)
+        if marks:
+            text(COLUMN_X,262,'Scales: mm measured from the 0 mark',12)
+            if hidden: text(COLUMN_X,277,f'{_plural(hidden,"mark","marks")} too close together to number',12)
+    def callouts(page_rows):
+        # One callout per spot: parts whose centres project onto the same point share a label such as P7-P9.
+        spots=[]
+        for index,row in page_rows:
+            target=point([(row['bounding_box_mm']['min'][k]+row['bounding_box_mm']['max'][k])/2 for k in range(3)])
+            spot=next((s for s in spots if math.dist(s[0],target)<=COINCIDENT_PX),None)
+            if spot: spot[1].append(index)
+            else: spots.append((target,[index]))
+        placed=[]
+        for target,numbers in spots:
+            rows_of_text=wrap_marks(marker_ranges(numbers),LABEL_CHARS)
+            width=max(len(t) for t in rows_of_text)*9+8;height=20+18*(len(rows_of_text)-1)
+            def free(a):
+                return all(abs(a[0]-x)>=max(48,(width+w)/2+4) or (abs(a[1]-y)>=22 and (a[1]-14>=y-14+h+2 or y-14>=a[1]-14+height+2)) for x,y,w,h in placed)
+            right,bottom=(620,570) if view in view_axes else (660,610)
+            near=[min(right,max(100,target[0])),min(bottom,max(110,target[1]-5))]
+            candidates=[near]+sorted(([100+x*40,110+y*24] for x in range(15) for y in range(21) if 100+x*40<=right and 110+y*24<=bottom),key=lambda a:math.dist(a,target))
+            anchor=next((a for a in candidates if free(a)),near)
+            placed.append((anchor[0],anchor[1],width,height))
+            if math.dist(anchor,target)>10: line(target,anchor)
+            ET.SubElement(layer,f'{{{NS}}}rect',{'x':str(anchor[0]-width/2),'y':str(anchor[1]-14),'width':str(width),'height':str(height),'fill':'white'})
+            for i,value in enumerate(rows_of_text): text(anchor[0],anchor[1]+i*18,value,14,'middle')
     corners=[point(c) for c in itertools.product(*zip(bounds['min'],bounds['max']))]
     x0,x1=min(p[0] for p in corners),max(p[0] for p in corners)
     y0,y1=min(p[1] for p in corners),max(p[1] for p in corners)
-    view_axes={'front':(0,2),'back':(0,2),'left':(1,2),'right':(1,2),'top':(0,1),'bottom':(0,1)}
+    view_axes=VIEW_AXES
+    # Position scales: where each part starts along the two axes in this view, in mm
+    # from the assembly's near edge, from the same kernel bounds as the geometry.
+    marks=[];hidden=0
+    if view in view_axes:
+        def at(axis,value):
+            place=list(bounds['min']);place[axis]+=value
+            return point(place)
+        for kind,axis in zip('hv',view_axes[view]):
+            values=sorted({round(r['bounding_box_mm']['min'][axis]-bounds['min'][axis],1) for r in rows}|{0.0})
+            taken=[[],[]]
+            for value in values:
+                label=_number(value);spot=at(axis,value)[0 if kind=='h' else 1];half=len(label)*3.3+2
+                slot=next((i for i in (0,1) if all(abs(spot-q)>=(half+w+4 if kind=='h' else 12) for q,w in taken[i])),None)
+                if slot is None: hidden+=1
+                else: taken[slot].append((spot,half))
+                marks.append((kind,spot,slot,label))
     dimensions=[{'axis':'xyz'[axis],'mm':bounds['size'][axis]} for axis in view_axes.get(view,[])]
     def sized(axis): return f'{AXIS_WORDS[axis]} {_number(bounds["size"][axis])} mm ({"XYZ"[axis]})'
-    parts=[];labels=[]
+    parts=[]
     for index,row in numbered:
         slot=(index-1)%PARTS_PER_PAGE
         if slot==0:
@@ -164,7 +223,6 @@ def annotate(path, req, rows, bounds, view, camera, up, center, source=None, fas
                 'data-model-scale':str(scale),'transform':f'translate({dx},{dy}) scale({scale})'})
             ET.SubElement(geometry,f'{{{NS}}}use',{'href':'#ModelGeometry'})
             layer=ET.SubElement(sheet,f'{{{NS}}}g',{'id':f'Annotations{page+1}','font-family':'sans-serif','font-size':'15','fill':'#111'})
-            labels=[]
             # Stable identities can contain obsolete dimensions; keep them out
             # of the presentation title. Every sheet pins the same exact source.
             text(30,32,VIEW_TITLES[view],20)
@@ -172,7 +230,19 @@ def annotate(path, req, rows, bounds, view, camera, up, center, source=None, fas
             text(30,56,'Concept drawing - measurements in mm - not to scale - products, fixings and strength not yet checked',13)
             if view in view_axes:
                 horizontal,vertical=view_axes[view]
-                y=y1+28;line([x0,y1],[x0,y+7]);line([x1,y1],[x1,y+7]);line([x0,y],[x1,y])
+                ys,xs=y1+14,x1+16
+                line([x0,ys],[x1,ys]);line([xs,y0],[xs,y1])
+                for kind,spot,slot,label in marks:
+                    if kind=='h':
+                        line([spot,ys-4],[spot,ys+4])
+                        if slot is not None: text(spot,ys+15+slot*12,label,11,'middle')
+                    else:
+                        line([xs-4,spot],[xs+4,spot])
+                        if slot is not None: text(xs+8+slot*42,spot+4,label,11)
+                # Extension lines stop around the scale numbers so a 0 is never crossed out.
+                y=y1+48
+                for x in (x0,x1): line([x,y1],[x,ys]);line([x,ys+31],[x,y+7])
+                line([x0,y],[x1,y])
                 for x in [x0,x1]: line([x-4,y-4],[x+4,y+4])
                 text((x0+x1)/2,y+20,sized(horizontal),16,'middle')
                 x=x0-28;line([x0,y0],[x-7,y0]);line([x0,y1],[x-7,y1]);line([x,y0],[x,y1])
@@ -195,17 +265,9 @@ def annotate(path, req, rows, bounds, view, camera, up, center, source=None, fas
                     else: text(30,y,value,14 if kind=='title' else 13)
             if source: text(30,page_height-48,f'Construction version {source["revision"]} - ID {source["artifact_id"]}',12)
             text(30,page_height-25,'Part sizes are before notches and holes, with nothing added for saw cuts. Concept only - not approved for building.',13)
+            callouts(numbered[page*PARTS_PER_PAGE:(page+1)*PARTS_PER_PAGE])
         number=f'P{index}';definition=definitions[row['definition_id']]
         dims={k:definition[k] for k in ['x_mm','y_mm','z_mm','diameter_mm','outside_diameter_mm','wall_thickness_mm','length_mm'] if k in definition}
         parts.append({'number':number,'instance_id':row['id'],'definition_id':row['definition_id'],'blank_mm':dims})
-        target=point([(row['bounding_box_mm']['min'][k]+row['bounding_box_mm']['max'][k])/2 for k in range(3)])
-        near=[min(660,max(100,target[0])),min(610,max(110,target[1]-5))]
-        candidates=[near]+sorted(([100+x*40,110+y*24] for x in range(15) for y in range(21)),key=lambda a:math.dist(a,target))
-        anchor=next(a for a in candidates if all(abs(a[0]-p[0])>=48 or abs(a[1]-p[1])>=22 for p in labels))
-        labels.append(anchor)
-        if math.dist(anchor,target)>10: line(target,anchor)
-        label_width=len(number)*9+8
-        ET.SubElement(layer,f'{{{NS}}}rect',{'x':str(anchor[0]-label_width/2),'y':str(anchor[1]-14),'width':str(label_width),'height':'20','fill':'white'})
-        text(*anchor,number,14,'middle')
     ET.register_namespace('',NS);tree.write(path,encoding='utf-8',xml_declaration=True)
     return {'dimensions':dimensions,'parts':parts,'coverage':'complete'}

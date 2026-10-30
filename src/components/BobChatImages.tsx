@@ -12,7 +12,7 @@ export function BobChatImages({ projectId, ids, label = 'Attached image' }: { pr
       <StoredImage projectId={projectId} image={{ id, title: `${label} ${i + 1}` }} allowRetry={false} />
     </button>)}</div>
     {selected && <Modal title={label} layer={100} onClose={() => setSelected(null)}>
-      <StoredImage projectId={projectId} image={{ id: selected, title: label }} original />
+      <StoredImage projectId={projectId} image={{ id: selected, title: label }} original zoomable />
     </Modal>}
   </>
 }

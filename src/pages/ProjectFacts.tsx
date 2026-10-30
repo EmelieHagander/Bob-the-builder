@@ -24,7 +24,7 @@ function SourceImage({ projectId, imageId, title }: { projectId: string; imageId
   return <>
     <button type="button" className="btn" style={compactPrimary} onClick={() => setOpen(true)}>View source image</button>
     {open && <Modal title={title} wide onClose={() => setOpen(false)}>
-      <StoredImage projectId={projectId} image={{ id: imageId, title }} original />
+      <StoredImage projectId={projectId} image={{ id: imageId, title }} original zoomable />
     </Modal>}
   </>
 }
