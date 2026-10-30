@@ -118,6 +118,29 @@ price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
   conversation; a context rollover summarizes them away, so they are sent again
   on the next step.
 
+<a id="tool-order"></a>
+**Tool order: every tool native again — built 2026-10-30, not installed
+(owner decision after [paid box run 5](foundation-verification.md#box-paid-run5-2026-10-30)).**
+Tool sheets put every tool except the permanent six behind `use_tool`. Bob
+then read those tools as text and wrote wrong arguments 20 times in one turn
+(`create_solution_alternative` 11 times), until the run's time limit. The same
+tools succeeded first time as native functions in run 4. With
+`tool_order_version` 1 (publication `tool-order-v1`, replacing
+`tool_sheets_version` 1):
+
+- Every tool is a native function; there is no `use_tool` and nothing is
+  described at the end.
+- The tools offered at the turn's first step (the permanent tools and the tool
+  picker's choice) keep their order for the whole turn. A tool loaded later is
+  added at the end, so the list only grows within a turn. The checkpoint keeps
+  the order, so a resumed turn sends the same list.
+- Tool availability is sent at the end of a step when it changes, never in the
+  instructions, so the system message stays the same as the list grows.
+
+Each mid-turn load costs one cache miss (about USD 0.04 in run 4); the steps
+in between keep the cache. Source: `20261030060000_bob_tool_order_catalog.sql`
+and `orderTools` in `project-answer.ts`.
+
 With [prompt tiers](ask-bob-conversations.md#memory-stair) the tool
 availability also leaves the system message: it is sent at the end of a step
 when it changes, and a picked tool reached through `use_tool` reads `callable`.

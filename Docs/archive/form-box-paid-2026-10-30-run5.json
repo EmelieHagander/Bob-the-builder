@@ -1,0 +1,130 @@
+{
+ "run": "https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41091850978",
+ "workflow": "live-form-acceptance.yml",
+ "scenario": "box",
+ "config": "baseline",
+ "head": "6b85a0b6bcf7b1c1269e1c57b8352492cc21ad72",
+ "functions": {
+  "bob-worker": 156,
+  "ask-bob": 188
+ },
+ "catalog": {
+  "bob.tools": "tool_sheets_version 1",
+  "agent-contract.ask-bob": "v13, memory_stair 1, prompt_tiers 1"
+ },
+ "passed": false,
+ "turns": [
+  {
+   "step": "concept",
+   "turn": "d214d8ad-fe7f-40e4-ac4c-a38661b7773b",
+   "status": "cancelled by the run's time limit",
+   "wallMs": 897874,
+   "modelSteps": 29,
+   "claims": 31,
+   "saved": 0
+  }
+ ],
+ "usage": {
+  "ask-bob": {
+   "calls": 30,
+   "input_tokens": 671989,
+   "cached_input_tokens": 608768,
+   "output_tokens": 24440,
+   "usd": 0.6769
+  },
+  "tool-picker": {
+   "calls": 1,
+   "input_tokens": 5695,
+   "cached_input_tokens": 0,
+   "output_tokens": 670,
+   "usd": 0.0073
+  }
+ },
+ "cached_share": 0.906,
+ "tools": [
+  {
+   "tool": "create_solution_alternative",
+   "status": "invalid",
+   "count": 11
+  },
+  {
+   "tool": "describe_tool",
+   "status": "ok",
+   "count": 10
+  },
+  {
+   "tool": "read_construction_draft",
+   "status": "invalid",
+   "count": 1
+  },
+  {
+   "tool": "read_material_catalog",
+   "status": "invalid",
+   "count": 1
+  },
+  {
+   "tool": "read_material_catalog",
+   "status": "ok",
+   "count": 1
+  },
+  {
+   "tool": "read_project_edit_context",
+   "status": "invalid",
+   "count": 4
+  },
+  {
+   "tool": "read_solution_context",
+   "status": "ok",
+   "count": 3
+  },
+  {
+   "tool": "save_construction_draft",
+   "status": "conflict",
+   "count": 1
+  },
+  {
+   "tool": "search_material_catalog",
+   "status": "invalid",
+   "count": 3
+  },
+  {
+   "tool": "search_material_catalog",
+   "status": "ok",
+   "count": 1
+  },
+  {
+   "tool": "search_project_data",
+   "status": "empty",
+   "count": 4
+  },
+  {
+   "tool": "search_project_data",
+   "status": "ok",
+   "count": 1
+  }
+ ],
+ "invalid_validation_codes": [
+  [
+   "create_solution_alternative",
+   "unspecified"
+  ],
+  [
+   "read_construction_draft",
+   "unspecified"
+  ],
+  [
+   "read_material_catalog",
+   "domain_fields"
+  ],
+  [
+   "read_project_edit_context",
+   "edit_read_selection"
+  ],
+  [
+   "search_material_catalog",
+   "domain_fields"
+  ]
+ ],
+ "snapshot_locked": "2026-10-30T16:39:55Z (project, plan null, areas [])",
+ "finding": "Every tool but the six permanent ones was called through use_tool from a text description; Bob wrote wrong arguments 20 times (create_solution_alternative 11 times). The same tools succeeded first time as native functions in run 4."
+}

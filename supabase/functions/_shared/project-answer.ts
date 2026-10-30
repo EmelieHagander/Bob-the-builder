@@ -206,6 +206,8 @@ export interface BobAnswerState {
   initial: { briefing: unknown; catalog: unknown; drawingRequests: unknown; orientation?: ProjectOrientation; directory?: unknown; toolPick?: string[] | null }
   /** Tool-sheet manifests: tools whose details are already at the end of this conversation. */
   sheets?: string[]
+  /** Tool-order manifests: the native tool names in the order sent; later loads are appended. */
+  native?: string[]
   /** Prompt-tier manifests: the tool availability last sent at the end of the input. */
   availability?: string
   messages: NonNullable<OpenAIServiceOptions['messages']>
@@ -326,8 +328,18 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // detail at the end of the conversation, once each, and called through use_tool.
   const toolSheets = !!(phaseTools && coreTools && opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.tool_sheets_version === 1)
   const sheetsSent = new Set<string>(restored?.sheets ?? [])
+  // Owner decision after paid box run 5: every tool is native. The turn's first tools keep their
+  // order and a tool loaded later is added at the end, so the list only grows within a turn.
+  const toolOrder = !!(phaseTools && coreTools && opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.tool_order_version === 1)
+  const nativeOrder: string[] = [...(restored?.native ?? [])]
+  const orderTools = (specs: NonNullable<OpenAIServiceOptions['tools']>) => {
+    if (!toolOrder || !specs.length) return specs
+    for (const spec of specs) if (!nativeOrder.includes(spec.function.name)) nativeOrder.push(spec.function.name)
+    return nativeOrder.flatMap(name => specs.filter(spec => spec.function.name === name))
+  }
   // Prompt tiers (2026-10-30): the stair-pinned context carries the tiered order; availability is sent at the end, only when it changes.
-  const promptTiers = !!opts.context?.stair
+  // With tool order the list grows within a turn, so availability is never part of the instructions either.
+  const promptTiers = !!opts.context?.stair || toolOrder
   let availabilitySent: string | undefined = restored?.availability
   const splitSheets = (specs: NonNullable<OpenAIServiceOptions['tools']>) => {
     if (!toolSheets || !specs.length) return { native: specs, sheets: [] as string[] }
@@ -459,6 +471,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     await opts.checkpoint.save(structuredClone({ version: 1, projectId: opts.projectId, step, phase,
       initial: { briefing, catalog, drawingRequests, orientation, directory: orientationReader?.exportState(), ...(toolPick ? { toolPick } : {}) },
       ...(toolSheets ? { sheets: [...sheetsSent] } : {}),
+      ...(toolOrder ? { native: [...nativeOrder] } : {}),
       ...(availabilitySent !== undefined ? { availability: availabilitySent } : {}),
       messages, previousResponseId, preparedEpoch, observation, toolbox: toolbox.exportState(), workResults,
       completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
@@ -493,6 +506,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     } catch (error) { rethrowContinuation(error); return { ok: false, error: toolFailureCode(error) } }
     callable = tools.map(tool => tool.function.name)
     if (toolSheets && tools.length) { const split = splitSheets(tools); tools = split.native; pendingSheets = split.sheets.filter(name => !sheetsSent.has(name)) }
+    tools = orderTools(tools)
     closedByLimit = lastStep || lateInTurn
     closedByCommentary = completionAware && commentaryStreak >= 2
     }
@@ -509,6 +523,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       // A rollover summarizes the sheets away: send them again at the end of the next step.
       callable = tools.map(tool => tool.function.name)
       if (toolSheets) { tools = splitSheets(tools).native; sheetsSent.clear() }
+      tools = orderTools(tools)
       availabilitySent = undefined
       shelf = closedByLimit || closedByCommentary ? [] : toolbox.toolbox
       // The returned provider request and its eventual handlers share this

@@ -556,13 +556,22 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Byggt 2026-10-30, inte installerat — prompten i ordning efter hur ofta delarna ändras, och minnet som en trappa (ägarbeslut; [kontrakt](ask-bob-conversations.md#memory-stair)):**
+**Byggt 2026-10-30, inte installerat — alla verktyg tillbaka som riktiga verktyg (ägarbeslut efter [lådprov 5](foundation-verification.md#box-paid-run5-2026-10-30)):**
+lådprov 5 misslyckades (USD 0,68): när alla verktyg utom de sex fasta gick via
+`use_tool` skrev Bob fel argument 20 gånger. [Verktygsordning](ask-bob-tools.md#tool-order):
+alla verktyg är riktiga verktyg; turens första behåller sin ordning och ett
+verktyg som hämtas senare läggs sist. Nästa: ägarens OK att slå ihop,
+driftsätta `bob-worker` och `ask-bob`, köra `20261030060000` och sedan ett
+nytt lådprov.
+
+**Installerat 2026-10-30 — prompten i ordning efter hur ofta delarna ändras, och minnet som en trappa (ägarbeslut; `bob-worker` v156, `ask-bob` v188, [kontrakt](ask-bob-conversations.md#memory-stair), [bevis](foundation-verification.md#memory-stair-install-2026-10-30)):**
 fast start (verktyg, roll, kort), en låst projektbild med planens steg som
 checklista, sammanfattningar som skrivs en gång med källa, sedan nya meddelanden
 och projekthändelser oförändrade, sist turen och stegen. Verktygens tillgänglighet
 skickas sist, äldre steg komprimeras fyra åt gången och cachenyckeln gäller per
-projekt. Nästa: ägarens OK att slå ihop, driftsätta `bob-worker` och `ask-bob`
-och sedan köra migreringarna `20261030040000` och `20261030050000`.
+projekt. Nästa: ägarens live-test av ritverktyget mäter anrop, cacheandel
+och kostnad för både verktygsvalet och den nya prompten; #369–#379 ska inte
+driftsättas igen.
 
 **Installerat 2026-10-30 — begäran väljer turens verktyg, och grundprompten är fast (ägarbeslut; `bob-worker` v155, `ask-bob` v187, [bevis](foundation-verification.md#tool-picker-install-2026-10-30)):**
 en liten modell läser ägarens senaste begäran och verktygskorten vid turens start
