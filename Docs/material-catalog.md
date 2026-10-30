@@ -150,9 +150,21 @@ notes, which stay in the project definition. A material is never guessed: 45 ×
 pressure-treated timber, though it reuses the seeded 45 × 95 size. Unreviewed
 entries rank after reviewed ones in the lookup and say so. Incomplete
 definitions, parameterised or part-pinned ones, and tubes or dimensioned rolls
-(the size table cannot hold them) are not shared. [Database contract](../db/README.md#material-shared-specs);
+(the size table cannot hold them) are not shared; tubes get a size once the
+[prepared diameter change](#sizes-diameter) is migrated. [Database contract](../db/README.md#material-shared-specs);
 the [hardening](../db/README.md#material-hardening) the independent review asked
 for comes first.
+
+<a id="sizes-diameter"></a>
+**Sizes with a diameter — prepared 2026-10-30, not migrated (owner decision).**
+A size now says what each number is: `depth_mm` is the thickness (a tube's
+wall), `diameter_mm` a fastener's shank or a tube's outside diameter, all with
+six decimals like definition properties. A PVC tube Ø 32 × 2 becomes a shared,
+unreviewed size like a sheet's thickness. Labels put the diameter first for
+every fastener. The starting list's outdoor screw is split into "Utomhusskruv
+C4" and "Rostfri skruv", since C4 and stainless are different corrosion
+classes. Household stock can record pieces of one length (6 × 3.0 m).
+[Database contract](../db/README.md#material-sizes-diameter).
 
 <a id="optional-dimensions"></a>
 **Every property may be left out — installed 2026-10-29 (owner decision;

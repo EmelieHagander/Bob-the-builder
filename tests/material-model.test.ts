@@ -38,14 +38,20 @@ before(async () => {
 after(() => pg.close())
 
 test('the seed holds the reviewed starting list once, through the catalog identity rules, and re-applies without changes', async () => {
-  const counts = async () => (await pg.query<any>(`select (select count(*)::int from bob.material_types where review_status='reviewed') t,
+  const counts = async (db: PGlite = pg) => (await db.query<any>(`select (select count(*)::int from bob.material_types where review_status='reviewed') t,
     (select count(*)::int from bob.material_sizes where review_status='reviewed') s,(select count(*)::int from bob.material_aliases) a,
     (select count(*)::int from bob.catalog_items where project_id is null and material_type_id is not null and review_status='reviewed') c`)).rows[0]
   const aliases = data.materials.reduce((n, m) => n + m.aliases.length, 0) + data.sizes.reduce((n, s) => n + s.aliases.length, 0)
-  const expected = { t: data.materials.length, s: data.sizes.length, a: aliases, c: data.combinations.length }
+  // 2026-10-30: "Utomhusskruv, C4/rostfri" became C4 plus a separate stainless screw with the same two sizes.
+  const expected = { t: data.materials.length + 1, s: data.sizes.length, a: aliases, c: data.combinations.length + 2 }
   assert.deepEqual(await counts(), expected)
-  await pg.exec(readFileSync(SEED, 'utf8'))
-  assert.deepEqual(await counts(), expected)
+  // Re-applying the seed on the schema it was written for changes nothing; later
+  // migrations (such as the 2026-10-30 split) are not the seed's to keep.
+  const seeded = await projectSchema(undefined, '20261029160100_standard_materials_seed.sql')
+  try {
+    const once = await counts(seeded); assert.deepEqual(once, { ...expected, t: data.materials.length, c: data.combinations.length })
+    await seeded.exec(readFileSync(SEED, 'utf8')); assert.deepEqual(await counts(seeded), once)
+  } finally { await seeded.close() }
   assert.equal(readFileSync(SEED, 'utf8'), standardMaterialsSeedSql(data))
   execFileSync(process.execPath, ['--import', 'tsx', 'scripts/build-standard-materials-seed.ts', SEED, '--check'])
   // Every combination is an ordinary catalog material definition Bob can pin.
@@ -72,8 +78,8 @@ test('dimensions map onto existing profiles; unknown required values stay unknow
   const roofSteel = await props('roof_steel', null)
   assert.equal(roofSteel.properties.thickness.truth, 'unknown'); assert.equal(roofSteel.properties.thickness.value, null)
   assert.equal((await props('concrete_tile', null)).profile_code, 'piece')
-  const fastener = (await pg.query<any>("select width_mm,length_mm,depth_mm from bob.material_sizes where seed_key='f50x80'")).rows[0]
-  assert.equal(Number(fastener.width_mm), 5); assert.equal(Number(fastener.length_mm), 80); assert.equal(fastener.depth_mm, null)
+  const fastener = (await pg.query<any>("select diameter_mm,width_mm,length_mm,depth_mm from bob.material_sizes where seed_key='f50x80'")).rows[0]
+  assert.equal(Number(fastener.diameter_mm), 5); assert.equal(Number(fastener.length_mm), 80); assert.equal(fastener.width_mm, null); assert.equal(fastener.depth_mm, null)
 })
 
 test('the source list is validated before any SQL is generated', () => {
@@ -150,7 +156,7 @@ test('the combined lookup returns one row per purchase place, null when unknown,
   const stud = await shared('c24', 'p45x95')
   const onePlace = await lookup(one, { id: stud })
   assert.equal(onePlace.items.length, 1); assert.equal(onePlace.items[0].store, 'Bygghandeln'); assert.equal(onePlace.items[0].price, 27.5)
-  assert.deepEqual(onePlace.items[0].size, { label: '45 × 95', length_mm: null, width_mm: 95, depth_mm: 45, review_status: 'reviewed' })
+  assert.deepEqual(onePlace.items[0].size, { label: '45 × 95', length_mm: null, width_mm: 95, depth_mm: 45, diameter_mm: null, review_status: 'reviewed' })
   assert(onePlace.items[0].aliases.includes('2tum4')); assert.equal(onePlace.items[0].unreviewed, false)
   const plywood = await shared('plywood_birch', 's12')
   const home = (await lookup(one, { id: plywood })).items[0]
@@ -173,7 +179,7 @@ test('the combined lookup returns one row per purchase place, null when unknown,
   assert.deepEqual(byAlias.items.map((r: any) => r.name).sort(), ['Konstruktionsvirke C24, gran/furu 45 × 95', 'Tryckimpregnerat virke, NTR/AB 45 × 95'])
   const rows: any[] = []; let after: string | null = null, pages = 0
   do { const page: any = await lookup(one, { after }); rows.push(...page.items); after = page.next_cursor; pages++ } while (after && pages < 20)
-  assert.equal(rows.length, data.combinations.length + 1, 'one extra row for the second plywood store')
+  assert.equal(rows.length, data.combinations.length + 2 + 1, 'the two stainless screws (2026-10-30), and one extra row for the second plywood store')
   assert.equal(new Set(rows.map(r => r.id + ':' + r.store_article_id)).size, rows.length)
   assert(pages >= 4)
   await rejects(lookup(one, { after: 'not-a-cursor' }), '22023')
@@ -200,7 +206,9 @@ test('alias and price indexes exist and a lookup page takes milliseconds', async
 test('the lookup matches whole words, finds compound words by their last part and lists exact hits first', async () => {
   // Independent review 2026-10-29: these returned unrelated definitions when the query merely contained an alias.
   const names = async (query: string, after: string | null = null) => (await lookup(one, { query, after })).items.map((r: any) => r.name)
-  assert.deepEqual((await names('utomhusskruv')).sort(), ['Utomhusskruv, C4/rostfri 4,2 × 55', 'Utomhusskruv, C4/rostfri 5,0 × 60'])
+  assert.deepEqual((await names('utomhusskruv')).sort(), ['Utomhusskruv C4 4,2 × 55', 'Utomhusskruv C4 5,0 × 60'])
+  assert.deepEqual((await names('rostfri skruv')).sort(), ['Rostfri skruv 4,2 × 55', 'Rostfri skruv 5,0 × 60'])
+  assert.deepEqual((await names('trådspik 100x3,4')), ['Trådspik, förzinkad 3,4 × 100'], 'nails read diameter first and match either order')
   assert.deepEqual((await names('gipsskruv')).sort(), ['Gipsskruv 3,9 × 25', 'Gipsskruv 3,9 × 35'])
   assert.deepEqual((await names('ankarspik')).sort(), ['Ankarspik, varmförzinkad 4,0 × 40', 'Ankarspik, varmförzinkad 4,0 × 50'])
   assert.deepEqual(await names('takläkt'), ['Läkt, gran 25 × 38'])
@@ -211,9 +219,9 @@ test('the lookup matches whole words, finds compound words by their last part an
   assert.deepEqual(await names('träskruv 4x40'), ['Träskruv, förzinkad (inomhus) 4,0 × 40'])
   // A general word still finds compound words; exact word hits come first.
   const screws = await names('skruv')
-  assert.equal(screws.length, 10)
-  assert(screws.slice(0, 8).every(n => /^(Träskruv|Utomhusskruv)/.test(n)), JSON.stringify(screws))
-  assert(screws.slice(8).every(n => n.startsWith('Gipsskruv')), JSON.stringify(screws))
+  assert.equal(screws.length, 12)
+  assert(screws.slice(0, 8).every(n => /^(Träskruv|Rostfri skruv)/.test(n)), JSON.stringify(screws))
+  assert(screws.slice(8).every(n => /^(Utomhusskruv|Gipsskruv)/.test(n)), JSON.stringify(screws))
   // A cursor whose definition no longer matches is rejected, never read as the end of the list.
   await rejects(lookup(one, { query: 'gips', after: (await shared('plywood_birch', 's12')) + ':-' }), 'material_lookup_cursor_stale')
   assert.deepEqual(catalogRejection('material_lookup_cursor_stale')?.fields, ['after'])
@@ -243,7 +251,10 @@ test('project definitions read unchanged; Bob\'s reads show the combination and 
 test('Bob\'s material search reads the combined lookup only for manifests pinned to it', async () => {
   const fresh = catalogFixture(), pinned = preMaterialLookupCatalogFixture()
   assert.equal(fresh.definition('tools.search_material_catalog').metadata.material_lookup_version, 1)
-  assert(String(fresh.definition('tools.search_material_catalog').definition.description).endsWith(MATERIAL_LOOKUP_NOTE))
+  // 2026-10-30: the size and household-stock wording was refined in place.
+  const note = MATERIAL_LOOKUP_NOTE.replace('(fasteners: width_mm is the shank diameter)', "(depth_mm is the thickness or a tube's wall; diameter_mm a fastener's shank or a tube's outside diameter)")
+    .replace("the caller's household stock at home", "the caller's household stock at home (piece_length_mm when counted in pieces of one length)")
+  assert(String(fresh.definition('tools.search_material_catalog').definition.description).endsWith(note))
   assert.equal(pinned.definition('tools.search_material_catalog').metadata.material_lookup_version, undefined)
   const calls: string[] = []
   const transport = Object.assign(async (input: Record<string, unknown>) => { calls.push('catalog_read:' + input.action); return { data: { status: 'empty', projectId: 'A', items: [], next_cursor: null, truncated: false }, error: null } })

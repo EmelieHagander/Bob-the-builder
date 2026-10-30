@@ -1,5 +1,36 @@
 # Foundation verification and rollout
 
+<a id="material-sizes-diameter-2026-10-30"></a>
+## Material sizes with a diameter and the small review findings — prepared 2026-10-30
+
+**Prepared, not migrated.** The owner asked to fix the remaining small findings
+of the [independent review](archive/material-tables-review-2026-10-29.md) and
+the tube gap (M2). Contract: [Database](../db/README.md#material-sizes-diameter),
+[Catalog](material-catalog.md#sizes-diameter).
+
+| Review finding | Change |
+|---|---|
+| M2 tubes cannot be a size; fastener diameter in `width_mm` | `diameter_mm` on sizes; `depth_mm` is the thickness or a tube's wall; fastener diameters moved; Bob's tubes are shared as `Ø 32 × 2` |
+| M3 nail labels length first; "C4/rostfri" lumps two classes | Nails read `3,4 × 100`; "Utomhusskruv C4" and a separate reviewed "Rostfri skruv" with the same two sizes and the stainless alias; renamed definitions get a new revision |
+| M6 missing index | `store_articles(store_id)`; the unindexed supplier link is removed (M8) |
+| M8 unused parts | `supplier_articles.store_article_id` dropped; the lookup reads `current_store_prices`, so one definition picks the current price; `seed_length` stays so the seed can be re-applied |
+| M9 four decimals; no "6 pieces × 3.0 m" | Six decimals on sizes; `household_stock.piece_length_mm` with history and lookup output |
+
+Bob's search text names the new columns
+(`20261030010100_material_size_text_catalog.sql`, `tools.search_material_catalog`
+v6). Not addressed: S6 (lookup not indexed), M4, M7 (who created shared rows is
+readable by every signed-in user) and M10.
+
+Release order with the owner's OK and no running Bob job: apply
+`20261030010000_material_sizes_diameter_and_details.sql`, then
+`20261030010100_material_size_text_catalog.sql`. No function deployment. The
+changed shared definitions bump every project's artifact source epoch, as any
+shared catalog change does.
+
+Validation: `material-tables-hardening` (12, four new), `material-model`,
+`material-catalog-db` and the catalog fixture replay pass; the start-list seed
+still re-applies without change on its own schema.
+
 <a id="box-paid-run4-2026-10-30"></a>
 ## Paid box run after #375 — 2026-10-30
 

@@ -99,6 +99,19 @@ for(const migration of migrations){
    versions.set(spec.key,versions.get(spec.key)!+1)
   }
  }
+ const materialSizeText=source.match(/\$material_size_text_spec\$([\s\S]+?)\$material_size_text_spec\$/)
+ if(materialSizeText){
+  for(const spec of JSON.parse(materialSizeText[1])){
+   const row=seed.find(row=>row.key===spec.key)
+   for(const [from,to] of spec.replacements){
+    const fields=['description','additional_description','card_description'].filter(field=>typeof row.definition[field]==='string'&&row.definition[field].includes(from))
+    if(!fields.length)throw Error('material_size_text_missing: '+spec.key)
+    for(const field of fields)row.definition[field]=row.definition[field].replaceAll(from,to)
+   }
+   publishAs(row,'material-size-text-v1');row.metadata.material_size_text_version=1
+   versions.set(spec.key,versions.get(spec.key)!+1)
+  }
+ }
  const phaseTools=source.match(/\$phase_tools_spec\$([\s\S]+?)\$phase_tools_spec\$/)
  if(phaseTools){
   prePhaseToolsRows=structuredClone(seed);prePhaseToolsVersions=new Map(versions)

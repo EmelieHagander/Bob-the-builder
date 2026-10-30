@@ -116,8 +116,11 @@ test('PVC sheet and tube share a material category but use different dynamic pro
   const tube=await write(c,payload(definition('pvc-tube',{name:'PVC-rör',categories:['plastic.pvc','tube'],profile_code:'tube_stock',properties:{outside_diameter:val('32'),wall_thickness:val('2')}})))
   const result=await read({categories:['plastic']});assert(result.items.some((i:any)=>i.id===sheet.recordId));assert(result.items.some((i:any)=>i.id===tube.recordId))
   const filtered=await read({categories:['plastic.pvc'],profile_code:'tube_stock',revision:1,properties:{outside_diameter:val('3.2','cm')}})
-  // Tubes have no size model, so a tube definition is not shared (owner decision 2026-10-29).
-  assert.deepEqual(filtered.items.map((i:any)=>i.id),[tube.recordId])
+  // A tube's size is its outside diameter and wall, so it is also shared as an unreviewed standard material (owner decision 2026-10-30).
+  const shared=filtered.items.find((i:any)=>i.scope==='shared')
+  assert.deepEqual(filtered.items.map((i:any)=>i.id).sort(),[tube.recordId,shared.id].sort());assert.equal(shared.name,'PVC Ø 32 × 2')
+  assert.deepEqual(shared.spec.size,{...shared.spec.size,form:'tube',label:'Ø 32 × 2',diameter_mm:32,depth_mm:2,width_mm:null,length_mm:null,review_status:'unreviewed'})
+  assert.equal(filtered.items.find((i:any)=>i.id===tube.recordId).spec.size.id,shared.spec.size.id)
   await assert.rejects(write(c,payload(definition('bad-tube',{categories:['plastic.pvc','tube'],profile_code:'tube_stock',properties:{outside_diameter:val('32'),wall_thickness:val('16')}}))),/catalog_rule_failed:hollow/)
  }finally{await fail(c)}
 })
