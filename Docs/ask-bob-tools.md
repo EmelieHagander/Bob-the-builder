@@ -118,10 +118,48 @@ price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
   conversation; a context rollover summarizes them away, so they are sent again
   on the next step.
 
+<a id="materials-worker"></a>
+**Bob with a worker: Mattias (materials) — pilot built 2026-10-30, not installed
+(owner decision: one worker, measured before anything else moves).**
+Bob carried 100 tools; most rejected calls in runs 5–7 were about meaning in a
+specialised area. The pilot moves one area to a worker with its own tools:
+
+- Bob no longer offers the Materials, stock and Shopping tools (the eight on
+  that shelf); the tool picker does not offer them either. He gets
+  `ask_materials_worker` (`job`, `findings`), loaded from the first step. The
+  catalog's six permanent tools are unchanged, so a runtime without the worker
+  code ignores the pilot and keeps the materials tools with Bob.
+- Mattias (`role.materials-worker`, same profile as Bob) has a fixed native
+  list: the eight materials tools and four reading tools
+  (`search_project_data`, `open_project_item`, `read_construction_draft`,
+  `read_solution_context`), with full manuals, at most 12 steps per job.
+- His input, fixed first: his tools and instructions, the locked project
+  snapshot, a line saying the conversation is background, the same summaries
+  and history Bob reads (`stairConversation`), then Bob's brief last: the job,
+  what Bob found this turn, and the project's current materials (read at the
+  start of the job). The material list changes as he works, so it sits with the
+  brief, not above the conversation.
+- He reads and saves through a tool session with the same gates, receipts and
+  turn budgets as Bob's; his saves count as the turn's work. He does only the
+  job, keeps unknown values unknown, and reports to Bob (what he found or saved,
+  with ids, and what is open). He never answers the owner.
+- Bob gets `{status, report, calls}` and checks it before he answers.
+
+The worker definition lives in `bob.tools` (`workers.materials`,
+`materials_worker_version` 1), so further workers are catalog data. Source:
+`20261030090000_bob_materials_worker_catalog.sql`, `bob-workers.ts` and the
+toolbox setup in `project-answer.ts`. Not yet measured; further workers and
+the trade specialists (electrician, plumber, roofer, carpenter and drywaller,
+tiler) are a proposal that waits for the pilot's numbers.
+
 <a id="tool-repair"></a>
-**A fixed tool list with a small helper for rejected calls ("wrench wench") —
-built 2026-10-30, not installed (owner decision after
-[run 6](foundation-verification.md#tool-order-install-2026-10-30)).**
+**Rolled back after [paid box run 7](foundation-verification.md#box-paid-run7-2026-10-30):
+new jobs use [tool order](#tool-order) again; manifests pinned in between keep
+this behaviour. A fixed tool list with a small helper for rejected calls
+("wrench wench") — installed and rolled back 2026-10-30 (owner decision after
+[run 6](foundation-verification.md#tool-order-install-2026-10-30)).** In run 7
+Bob needed 40 calls instead of 20 and 9 calls stayed rejected: most rejections
+were about meaning, which a shape-only helper cannot fix (it fixed 1 of 10).
 OpenAI places the tool list before the instructions and the conversation, so
 any change to the list makes the rest of that call full price. With
 [tool order](#tool-order) each turn started with a different list (the picker's
@@ -153,7 +191,7 @@ out of time. Source: `20261030070000_bob_tool_repair_catalog.sql`,
 `bob-tool-repair.ts` and the step loop in `project-answer.ts`.
 
 <a id="tool-order"></a>
-**Superseded by [tool repair](#tool-repair) for new jobs once installed. Tool order: every tool native again — installed 2026-10-30
+**Current for new jobs (restored after [run 7](foundation-verification.md#box-paid-run7-2026-10-30)). Tool order: every tool native again — installed 2026-10-30
 (owner decision after [paid box run 5](foundation-verification.md#box-paid-run5-2026-10-30);
 [installation and run 6](foundation-verification.md#tool-order-install-2026-10-30)).**
 Tool sheets put every tool except the permanent six behind `use_tool`. Bob

@@ -1,7 +1,74 @@
 # Foundation verification and rollout
 
+<a id="materials-worker-2026-10-30"></a>
+## Materials worker pilot — built 2026-10-30, not installed
+
+Owner decision: try Bob as coordinator with one worker, Mattias (materials),
+and measure before settling ([contract](ask-bob-tools.md#materials-worker)).
+Release order with the owner's OK and no running Bob job: deploy `bob-worker`
+and `ask-bob`, then apply `20261030090000_bob_materials_worker_catalog.sql`
+(new role, setting, tool contract, a `bob.tool_catalog` policy row and
+`bob.tools` with the worker), then a box run compared with run 6.
+
+Validation: `bob-materials-worker` (4: Bob hands over and has no materials
+tools, Mattias's fixed tools and input order with Bob's brief last, refused
+hand-overs and out-of-set calls, pinned manifests unchanged), the bench test
+pinned to the manifest before the pilot, the catalog fixture replay and the
+related suites pass.
+
+<a id="box-paid-run7-2026-10-30"></a>
+## Repair helper installed; paid box run 7 passed but cost more; tool order restored — 2026-10-30
+
+With the owner's OK, [PR #384](https://github.com/EmelieHagander/Bob-the-builder/pull/384)
+merged as `d554caabf586de9d2bba4bb765230653213a94e7` (tree equal to the tested
+head). There were zero active Bob jobs before the deploy.
+
+1. **Functions:** `bob-worker` v158 and `ask-bob` v190. 128 of 129 and 130 of
+   131 files equal the repository byte for byte (the established empty
+   `cad-intake.ts`); both return **401** without login.
+2. **Catalog:** recorded as `20261030191105_bob_tool_repair_catalog`; `bob.tools`
+   v30 (`tool_sheets_version` 1, `tool_repair_version` 1); all 328 active Bob
+   definitions equal the fixture. One owner job had started on the previous
+   manifest a minute before; it keeps that manifest, which the new runtime
+   supports.
+
+**[Run 41113184182](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41113184182)
+passed** (concept partial, width change and final drawing saved). Evidence:
+`Docs/archive/form-box-paid-2026-10-30-run7.json`. Another owner job ran at the
+same time, so usage was matched to this run's model events.
+
+| | Run 4 | Run 6 (tool order) | Run 7 (repair helper) |
+|---|---|---|---|
+| Bob calls | 24 | 20 | 40 |
+| Rejected tool calls (final) | 0 | 1 | 9 |
+| Read from cache | 54% | 57% | 78% |
+| Cost | USD 1.17 | USD 0.93 | USD 1.22 |
+
+- The helper ran 10 times and fixed 1 call. Most rejections were about meaning
+  (`domain_fields`, an unknown construction), which reshaping Bob's own values
+  cannot fix; Bob fixed each himself one or two steps later.
+- Bob called `describe_tool` 11 times (3 in run 6).
+- The first call of turns 2 and 3 read 4,608 and 6,656 of about 12,000 tokens
+  from the cache. Rebuilt from the thread's stored messages and locked snapshot
+  (no project events, snapshot never re-locked): turn 3 matched the previous
+  turn as far as the design allows, through the previous request (tools, role
+  and directory, snapshot and earlier messages). The rest of a turn's first call
+  is new by design: the previous answer, the new message and the turn frame
+  (screen, briefing, facts, about 5,000 tokens). Turn 2 matched about three
+  quarters of that possible start, most likely because the first turn ran
+  8 minutes and its own start had left the provider cache; the history label
+  that appears from turn 2 onward is after the snapshot and costs nothing
+  measurable. No defect found.
+
+**Owner decision: tool order restored.** Applied with zero active Bob jobs and
+recorded as `20261030194112_bob_tool_order_restore_catalog`: `bob.tools` v31 has
+`tool_order_version` 1 and no sheets or repair version; all 328 active Bob
+definitions equal the fixture. Catalog only; `bob-worker` v158 and `ask-bob`
+v190 already carry the tool-order path. The repair role stays published, unused
+by new jobs.
+
 <a id="tool-repair-2026-10-30"></a>
-## Fixed tool list with a repair helper — built 2026-10-30, not installed
+## Fixed tool list with a repair helper — built 2026-10-30 (installed and rolled back, see above)
 
 Owner decision after [run 6](#tool-order-install-2026-10-30): keep the base
 prompt fixed as first decided, and put a small model between Bob and a tool
