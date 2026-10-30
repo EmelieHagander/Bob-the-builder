@@ -757,6 +757,16 @@ for(const migration of migrations){
    const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'cad-all-views-v1'};versions.set(key,versions.get(key)!+1)
   }
  }
+ // Build guides (cad-build-guide-v1): the same append as the migration.
+ const buildGuide=source.match(/\$cad_build_guide_spec\$([\s\S]+?)\$cad_build_guide_spec\$/)
+ if(buildGuide){
+  const spec=JSON.parse(buildGuide[1]),row=seed.find(row=>row.key===spec.key)
+  if(row&&!('assembly_dependencies' in row.definition.parameters.properties)){
+   row.definition.parameters.properties.assembly_dependencies=structuredClone(spec.property)
+   row.definition.parameters.required=[...(row.definition.parameters.required??[]),'assembly_dependencies']
+   const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'cad-build-guide-v1'};versions.set(row.key,versions.get(row.key)!+1)
+  }
+ }
  const resumeViews=source.match(/\$cad_resume_views_spec\$([\s\S]+?)\$cad_resume_views_spec\$/)
  if(resumeViews){
   const spec=JSON.parse(resumeViews[1]),row=seed.find(row=>row.key===spec.key)

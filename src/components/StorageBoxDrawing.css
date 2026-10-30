@@ -6,6 +6,8 @@
 .box-drawing-sheet svg { display: block; width: 100%; height: auto; }
 .box-drawing-sheet img { display: block; width: 100%; height: auto; background: white; }
 .cad-sheet { margin: 16px 0; min-width: 0; max-width: 100%; }
+.cad-build-guide { margin: 16px 0; min-width: 0; max-width: 100%; }
+.cad-build-guide > summary { min-height: 44px; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
 .sheet-pan { cursor: grab; user-select: none; -webkit-user-select: none; }
 .sheet-pan.is-panning { cursor: grabbing; }
 /* Zoom sets the size of an opened original; its fixed preview cap would fight it. */

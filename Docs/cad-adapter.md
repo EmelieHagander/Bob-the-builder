@@ -1083,7 +1083,7 @@ The authenticated worker accepts the old recipe request and a bounded `{recipe,d
 
 ### Plain-language drawing sheets — 2026-10-30
 
-**Status:** sheet text, line key and shared callouts are deployed (2026-10-30, `main` `ef55db4` [run 41020338894](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41020338894) and `6b85a0b` [run 41039257593](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41039257593): engine tests, Modal deploy and live smoke check passed). Position scales are source only, not deployed. No paid review of a real drawing with the new sheets yet. Owner feedback: the sheets were written
+**Status:** sheet text, line key and shared callouts are deployed (2026-10-30, `main` `ef55db4` [run 41020338894](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41020338894) and `6b85a0b` [run 41039257593](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41039257593): engine tests, Modal deploy and live smoke check passed). Position scales are deployed from `065574b` ([run 41093908580](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41093908580), same checks passed). No paid review of a real drawing with the new sheets yet. Owner feedback: the sheets were written
 for AI, and people could not tell what was needed or what X, Y and Z meant.
 `bob_cad/annotations.py` now writes for people without drawing experience. It
 changes presentation text only; geometry, P-number placement, pagination,
@@ -1133,6 +1133,124 @@ notches or holes, and the drawing's P-numbers from the saved annotation notes
 The reviewer still receives the exact recipe and manifest with the pixels.
 Saved drawings keep their old sheets until rendered again. The first paid review
 with the new sheets needs the owner's OK.
+
+### Build guides (IKEA-style) — slice 1, 2026-10-30
+
+**Status: source only, behind an off switch.** Worker route, database, Edge and
+app are written (PR #383); nothing is deployed or applied. Owner decisions
+2026-10-30: a guide is made together with every final drawing, in the same Bob
+request, and the first live run measures what that adds; build pages show
+screws, nails, bolts and glue per step. The ordinary drawing sheets keep no
+fastener table ([2026-10-26 decision](#fastener-schedule-on-drawings--annotations-version-2-2026-10-26)
+still holds); fasteners appear only on guide pages.
+The [workshop pack](https://claude.ai/artifact/Ub7frcych8Yhm8mSMp2tXh) holds the
+open questions.
+
+`bob_cad/guide.py` `render_guide(recipe, joints, steps, output_dir, fasteners,
+context_ids)` draws, from the exact saved construction:
+
+- **What is in the box:** one tile per part kind (count, P-numbers, plain size)
+  and one per fastener size, from the schedule.
+- **One page per step:** a step is an ordered list of saved joint ids (Bob's
+  proposed order, the stages of `derive_construction_lists`). Parts already in
+  place are grey; the step's new parts are black, and parts that join existing
+  ones are lifted out along a free direction (never into a part they join;
+  straight up when free) with solid arrows that project with the geometry.
+  Identical sub-assemblies in one step are drawn once with "2×" and the other
+  copies named. The parts box lists the step's new parts and its hardware
+  (grouped by kind and size), glue, and joints without a rule ("?", never a
+  guess). Screw heads are drawn on faces the chosen camera can see; the camera
+  is the overview corner that shows the most of them. Rule notes from the
+  schedule (short contact, short screw) are printed for the step.
+- **Done:** the whole assembly with its total size; parts in no step are named.
+
+It returns notes (`version`, `basis: proposed_order`, per page the joints, new
+and lifted parts, camera, hardware, unsized joints). Fasteners come only from
+`bob_private.construction_fastener_schedule`; without a schedule nothing is
+claimed. `cad-worker/fixtures/bench_guide.json` is the example bench with end
+rails and the rule schedule computed for its 16 joints (38 screws).
+`test_guide.py` covers order, repeats, lift directions, hardware grouping,
+unsized joints, loose parts and refused orders. One bench guide renders in
+about 0.5 s locally.
+
+**Worker route `/guide` (PR 1, source only).** Same bearer token and child
+process as `/render`, its own 40 s limit. Strict envelope `{recipe,
+drawing_source, joints, steps, fasteners, context_ids}` (2 MiB; `fasteners` may
+be null, `drawing_source` may not); any other shape answers 422. Answers
+`{guide, files}`: SVG pages only (`guide-0` … `guide-N`, at most 60, 1 MiB
+each, 6 MiB in all), each page's `sha256` in `guide.pages`, the construction
+version and ID printed on every page and echoed as `guide.drawing_source`.
+Working files stay in the job's own temporary folder. `/render`, its envelope
+and `CAD_TRANSPORT_CONTRACT` are unchanged. `modal_smoke.py` adds a `/guide`
+case (pages, hashes, pin, rule fasteners, 401/422).
+
+**Switch (owner decision 2026-10-30):** one global row in `shared.ai_settings`
+(`cad-build-guide`, off by default), toggled in the Supabase dashboard. bob has
+no owner/organiser authority in the database yet (`has_project_access` is any
+member), so a per-project toggle would let any member start paid work.
+
+**Database (PR 2, source only):** [`20261030170000_cad_build_guide.sql`](../db/README.md#build-guides-with-the-drawing-revision--source-only-2026-10-30) adds the switch row (off), the
+`validate_cad_build_guide` trigger and the volunteer reader change.
+
+**Edge (PR 3, source only).**
+
+- **Catalog.** Publication `cad-build-guide-v1`
+  (`20261030171000_cad_build_guide_catalog.sql`) gives `design_project_cad` a
+  nullable, required `assembly_dependencies` argument: for every saved joint,
+  the joints that must be done before it. The runtime hides it from Bob unless
+  the switch is on (`withoutAssemblyOrder` in `catalogTool`), so with the switch
+  off Bob neither sees nor pays for it. Historical publications are rebuilt
+  without it.
+- **Switch read.** `ask-openai.ts` reads `shared.ai_settings` `cad-build-guide`
+  once per job (journaled `cad:build_guide_switch`; missing or failed = off), and
+  only for catalogs that offer the argument. It is not part of
+  `drawingRuntimeVersion`, so flipping it never wakes waiting drawing requests.
+- **Order.** With the switch on, `cad-assistant.ts` checks the order with
+  `assemblyStages` (the same rule as `derive_construction_lists`) right after
+  the construction check. An invalid order is answered before any render or
+  review. No order, or no joints, records
+  `build_guide.status: not_generated`; code never invents an order. The order
+  is excluded from the drawing input fingerprint, so changing only the order
+  buys no new render or review.
+- **Render step.** The guide input (recipe, pin, saved joints, steps, the
+  server's fastener schedule from `read_construction_fasteners`, context parts
+  with role reference or existing_part) joins the drawing's `cad:render` step;
+  `cadRenderInput` is unchanged when there is no guide. The step calls `/guide`
+  through `createCadGuideTransport` after `/render` (90 s reserve). A failed
+  guide, or drawing and guide files over 5.5 MB, records `status: failed` and
+  the drawing continues.
+- **Saved with the drawing.** Pages join `files` (`guide-N`); notes join
+  `manifest.build_guide` (`generated`, `construction`, `fasteners`
+  rule_version/complete, `pages`, `reviewed: false`). `verifyCadFiles` accepts
+  guide pages only with matching notes, both in transport and on save.
+- **Reviewer.** The independent reviewer gets the manifest without
+  `build_guide` and only the drawing previews; review cost is unchanged.
+
+Tests: `tests/cad-build-guide.test.ts` (switch off unchanged; order, schedule
+and notes; no order; invalid orders cost nothing; failure keeps the drawing;
+the reviewer never sees the guide; the parameter is hidden when off; catalog
+equals runtime), `tests/cad-transport.test.ts`, `tests/construction-lists.test.ts`.
+The Edge type check (`npm run check:edge`) could not run in this session
+because the network blocks `esm.sh`.
+
+Release order, each step manual with the owner's OK: deploy the Modal worker
+(PR 1), apply `20261030170000`, deploy `ask-bob` and `bob-worker`, then apply
+`20261030171000`. With the switch off this changes nothing for Bob.
+
+**App (PR 4, source only).** `CadBuildGuide` shows a "Build guide · N pages"
+section under the drawing sheets, in the owner view and the volunteer view
+(which receives guide pages only where it receives the drawing). Each page is a
+zoomable sheet with a download link; pages are labelled "What is in the box",
+"Step N (build R×)" and "Done". The section says the guide is not reviewed and
+that fastener counts are rule-of-thumb proposals. `not_generated` and `failed`
+show one plain sentence; a drawing made with the switch off shows nothing.
+Browser checks: `check-volunteer-browser.mjs` (pages, labels, zoom at
+320/390/1280) and `check-foundations-browser.mjs` (not-generated message).
+
+Release order, continued: deploy Pages after the Edge.
+
+Remaining: one paid run to measure the cost, with the owner's OK and the switch
+turned on.
 
 ### Fastener schedule on drawings — annotations version 2, 2026-10-26
 

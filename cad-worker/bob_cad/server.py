@@ -11,6 +11,10 @@ import os
 # A 1,024-joint fastener schedule plus a 512-instance recipe stays below 1 MiB.
 MAX_REQUEST = 1024 * 1024
 MAX_RESPONSE = 6 * 1024 * 1024
+# A guide carries the recipe, its joints, the order and the fastener schedule.
+MAX_GUIDE_REQUEST = 2 * 1024 * 1024
+MAX_GUIDE_PAGE = 1024 * 1024
+GUIDE_KEYS = {'recipe', 'drawing_source', 'joints', 'steps', 'fasteners', 'context_ids'}
 
 def render_to_pipe(recipe, connection):
     try:
@@ -43,6 +47,30 @@ def render_to_pipe(recipe, connection):
     finally:
         connection.close()
 
+def guide_to_pipe(request, connection):
+    """Build-guide pages (SVG) for one exact construction revision and its proposed order."""
+    try:
+        from .guide import render_guide
+        if not isinstance(request, dict) or set(request) != GUIDE_KEYS or request['drawing_source'] is None:
+            raise ValueError('guide_request')
+        with TemporaryDirectory() as directory:
+            guide = render_guide(request['recipe'], request['joints'], request['steps'], directory, request['fasteners'],
+                                 request['context_ids'], drawing_source=request['drawing_source'], svg_only=True)
+            files = {}
+            for page in guide['pages']:
+                raw = (Path(directory) / (page['key'] + '.svg')).read_bytes()
+                if len(raw) > MAX_GUIDE_PAGE:
+                    raise ValueError('guide_page_too_large')
+                files[page['key']] = base64.b64encode(raw).decode('ascii')
+            body = json.dumps({'guide': guide, 'files': files}, separators=(',', ':')).encode()
+            if len(body) > MAX_RESPONSE:
+                raise ValueError('guide_output_too_large')
+            connection.send_bytes(body)
+    except Exception:
+        connection.send_bytes(b'')
+    finally:
+        connection.close()
+
 def wireframe_to_pipe(request, connection):
     try:
         from .wireframe import render_wireframe
@@ -64,12 +92,12 @@ class Handler(BaseHTTPRequestHandler):
         if not token or not hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + token):
             self.send_error(401)
             return
-        if self.path not in ('/render', '/wireframe'):
+        if self.path not in ('/render', '/wireframe', '/guide'):
             self.send_error(404)
             return
         try:
             length = int(self.headers.get('Content-Length', '0'))
-            if not 0 < length <= MAX_REQUEST:
+            if not 0 < length <= (MAX_GUIDE_REQUEST if self.path == '/guide' else MAX_REQUEST):
                 raise ValueError()
             self.connection.settimeout(10)
             recipe = json.loads(self.rfile.read(length))
@@ -78,7 +106,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         context = multiprocessing.get_context('spawn')
         receive, send = context.Pipe(duplex=False)
-        worker = context.Process(target=wireframe_to_pipe if self.path == '/wireframe' else render_to_pipe, args=(recipe, send))
+        target = {'/wireframe': wireframe_to_pipe, '/guide': guide_to_pipe}.get(self.path, render_to_pipe)
+        worker = context.Process(target=target, args=(recipe, send))
         worker.start()
         send.close()
         try:

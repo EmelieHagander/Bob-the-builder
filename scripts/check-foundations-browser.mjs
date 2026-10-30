@@ -344,9 +344,11 @@ try {
     const cadId=randomUUID(), cadOriginal=[...artifacts.records.values()].find(r=>r.project_id==='A')
     const cadRow={...cadOriginal,id:cadId,artifact_id:cadId,title:'CAD shelf detail',revision:1,kind:'detail',status:'concept',generator:null,generator_version:null,parametric_recipe:null,has_room_layout:false,has_stair_study:false,has_multifloor_plan:false,area_id:null,archived:false,measurements:[],recorded_at:timestamp()}
     artifacts.records.set(cadId,cadRow);artifacts.histories.set(cadId,[cadRow])
-    artifacts.cad.set(`${cadId}:1`,{project_id:'A',artifact_id:cadId,artifact_revision:1,recipe:sourceGraph.recipe,manifest:{...sourceGraph.manifest,checks:{collisions:{status:'complete',tested_pairs:0,skipped_pairs:0,overlaps:[]},clearances:[],motions:[]}},files:{front:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><rect x="5" y="5" width="790" height="90" fill="none" stroke="black"/></svg>').toString('base64'),step:Buffer.from('ISO-10303-21;').toString('base64')},step_id:null,source_artifact_id:null,source_revision:null})
+    artifacts.cad.set(`${cadId}:1`,{project_id:'A',artifact_id:cadId,artifact_revision:1,recipe:sourceGraph.recipe,manifest:{...sourceGraph.manifest,build_guide:{version:1,status:'not_generated',reason:'no_assembly_order',construction:{artifact_id:cadId,revision:1},reviewed:false},checks:{collisions:{status:'complete',tested_pairs:0,skipped_pairs:0,overlaps:[]},clearances:[],motions:[]}},files:{front:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><rect x="5" y="5" width="790" height="90" fill="none" stroke="black"/></svg>').toString('base64'),step:Buffer.from('ISO-10303-21;').toString('base64')},step_id:null,source_artifact_id:null,source_revision:null})
     await page.goto(base+`#/artifacts?drawing=${cadId}&revision=1`)
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    // A guide that was not made says why, plainly (2026-10-30).
+    await page.getByText('Bob did not propose a build order, so no build guide was made with this drawing version.',{exact:true}).waitFor()
     // Sheets are 1000 px wide; on a phone they are read by zooming inside their own viewport.
     const sheet=page.locator('.cad-sheet').first(), sheetImage=sheet.getByRole('img',{name:'CAD shelf detail — Front',exact:true})
     const fitted=(await sheetImage.boundingBox()).width

@@ -134,6 +134,34 @@ def main():
         with Image.open(BytesIO(raw)) as image:
             if max(image.size)!=1024 or sum(image.convert('L').histogram()[:200])<100:
                 raise RuntimeError('Review sheet is not visible at full preview resolution')
+    # Build-guide pages (2026-10-30): two blocks, one screwed joint, one step, a synthetic schedule.
+    guide_recipe = {**recipe, 'assembly_id': 'deployment.guide', 'views': ['isometric'],
+                    'instances': recipe['instances'] + [{'id': 'block.two', 'definition_id': 'block', 'placement':
+                                 {'x': 45, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}}]}
+    guide_joints = [{'id': 'smoke', 'method': 'screwed_butt', 'first': {'instance_id': 'block.one', 'face': 'x_max'},
+                     'second': {'instance_id': 'block.two', 'face': 'x_min'}, 'reason': 'Smoke joint'}]
+    guide_started = time.monotonic()
+    guide = request({'recipe': guide_recipe, 'drawing_source': source, 'joints': guide_joints,
+                     'steps': [{'joint_ids': ['smoke']}], 'fasteners': fasteners, 'context_ids': []}, os.environ['BOB_CAD_TOKEN'], '/guide')
+    if time.monotonic() - guide_started >= 45:
+        raise RuntimeError('Build guide exceeded the Edge transport deadline')
+    if guide['guide'].get('drawing_source') != source or set(guide['files']) != {'guide-0', 'guide-1', 'guide-2'}:
+        raise RuntimeError('Build guide pages or construction pin missing')
+    for page in guide['guide']['pages']:
+        raw = base64.b64decode(guide['files'][page['key']], validate=True)
+        if not raw.startswith(b'<svg') or hashlib.sha256(raw).hexdigest() != page['sha256'] or b'Construction version 3' not in raw:
+            raise RuntimeError('Build guide page is not bound to its notes')
+    if guide['guide']['pages'][1].get('fasteners') != [{'kind': 'screw', 'diameter_mm': 5.0, 'length_mm': 120, 'count': 2}]:
+        raise RuntimeError('Build guide step lost its rule fasteners')
+    for path in ('/guide',):
+        for body, token, status in [({}, "", 401), ({}, "invalid-smoke-token", 401), ({}, os.environ["BOB_CAD_TOKEN"], 422)]:
+            try:
+                request(body, token, path)
+            except urllib.error.HTTPError as error:
+                if error.code != status:
+                    raise RuntimeError(f'{path} returned {error.code}, expected {status}')
+                continue
+            raise RuntimeError(f'{path} accepted an invalid request')
     for body, token, status in [({}, "", 401), ({}, "invalid-smoke-token", 401),
                                 ({}, os.environ["BOB_CAD_TOKEN"], 422)]:
         try:

@@ -236,6 +236,8 @@ export interface BobAnswerCheckpoint {
 }
 export type ProjectAnswerOptions = {
   aiCatalog: AiCatalogSession;
+  /** Build guides (2026-10-30): the owner's switch. Off hides design_project_cad's assembly order. */
+  buildGuideTools?: boolean;
   projectId: string; userId: string; message: string;
   lookup: ReturnType<typeof createProjectLookup>; callModel: ModelCall;
   hasAccess: () => Promise<boolean>; previousResponseId?: string;

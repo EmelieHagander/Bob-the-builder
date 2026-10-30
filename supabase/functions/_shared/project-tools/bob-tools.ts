@@ -12,7 +12,7 @@ import type { OperationalReader } from '../project-operations.ts'
 import type { KnowledgeReader } from '../building-knowledge.ts'
 import type { RecordDetailReader } from '../project-record-detail.ts'
 import type { ProjectImageTools } from '../project-image-tools.ts'
-import { SAVE_CAD_TOOL, type CadAssistant } from '../cad-assistant.ts'
+import { SAVE_CAD_TOOL, withoutAssemblyOrder, type CadAssistant } from '../cad-assistant.ts'
 import { SEARCH_TOOL, type createProjectLookup } from '../project-lookup.ts'
 import { PROJECTION_TOOL } from '../project-building-plan.ts'
 import { STAIR_INSPECT_TOOL } from '../project-stair.ts'
@@ -88,6 +88,8 @@ export const DRAWING_CONTINUATION_PRELOAD = ['read_construction_draft', 'check_c
 
 export function createBobToolSession(opts: {
   aiCatalog?: AiCatalogSession;
+  /** Build guides (2026-10-30): the owner's switch. Off hides design_project_cad's assembly order. */
+  buildGuideTools?: boolean;
   /** Tools of work already in progress, loaded without a describe_tool round. */
   preloadTools?: (phase: string | null) => string[];
   calculator?: ProjectCalculator;
@@ -228,7 +230,10 @@ export function createBobToolSession(opts: {
       autoLoadReady:true,followups:opts.aiCatalog.definition('bob.tools','tool_contract').definition.operation_followups as import('./session.ts').ToolFollowup[],
     }:{}),
     selectiveTools: opts.aiCatalog?.manifest().definitions.some(row => row.prompt_key === 'bob.workflows' && row.metadata?.selective_tools_version === 1),
-    ...(opts.aiCatalog ? { catalogTool: (name, parameters) => opts.aiCatalog!.tool(name, parameters),
+    ...(opts.aiCatalog ? { catalogTool: (name, parameters) => {
+        const definition = opts.aiCatalog!.tool(name, parameters)
+        return name === 'design_project_cad' && !opts.buildGuideTools ? withoutAssemblyOrder(definition) : definition
+      },
       ...(opts.toolInstructions === 'lazy' ? { catalogColleagues: (name: string) => bobColleagues(opts.aiCatalog!, [name]),
         catalogWorkflows: () => bobWorkflows(opts.aiCatalog!) } : {}),
       feedback: (key, variables) => opts.aiCatalog!.text('tools.feedback.' + key, variables),
