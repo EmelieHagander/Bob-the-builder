@@ -556,7 +556,13 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — ägarbeslut om stabil verktygslista inom en tur (2026-10-30):**
+**Förberett, ej driftsatt — begäran väljer turens fyra verktyg (ägarbeslut 2026-10-30; [ändringar](foundation-verification.md#tool-picker-2026-10-30)):**
+en liten modell läser ägarens senaste begäran och verktygskorten vid turens start
+och väljer upp till fyra verktyg; fasens fyra är reserv. Ägaren beslutar också
+var verktyg som laddas mitt i turen ska ligga (fast ingång i samtalet eller sist
+i listan). Därefter driftsättning och ett betalt lådprov.
+
+**Tidigare nästa steg — ägarbeslut om stabil verktygslista inom en tur (2026-10-30):**
 [lådprovet efter #375 godkändes](foundation-verification.md#box-paid-run4-2026-10-30):
 alla tre turer levererade med 28 anrop och USD 1,17 (tidigare 58 anrop, USD 2,28,
 avbrutet ritsteg). Kvar är kostnaden när Bob laddar ett verktyg utanför fasens

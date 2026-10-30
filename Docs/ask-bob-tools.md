@@ -74,6 +74,23 @@ after a specific outcome. Older pinned manifests keep their five tools and cards
 `search_project_data` returns to the permanent set (removed in #372) at the
 owner's request.
 
+<a id="tool-picker"></a>
+**The request chooses the four — prepared 2026-10-30, not deployed (owner
+decision; [record](foundation-verification.md#tool-picker-2026-10-30)).** In the
+paid box run after #375 every turn started with the concept set, the drawing
+turn too, and Bob loaded eight tools mid-turn; each change to the tool list cost
+the provider cache for that call (about USD 0.33 of 1.17). Prompt assembly now
+asks a small read-only role, `role.tool-picker` (mini tier, schema
+`schema.bob_tool_pick`), once at the start of a fresh turn: it reads the owner's
+latest instruction, a short conversation excerpt, the number of pending drawing
+requests and every non-permanent tool card, and names at most four tools. Those
+replace the phase set for the turn; unknown names are dropped, and an empty,
+invalid or failed answer keeps the phase set. The choice is saved in the turn's
+checkpoint, so a resumed turn neither asks again nor changes its list. Manifests
+without the role, and offline callers that do not set `toolPicker`, keep the
+phase choice. Source: `20261030020000_bob_tool_picker_catalog.sql` and
+`pickTurnTools` in `supabase/functions/_shared/project-answer.ts`.
+
 <a id="coherent-construction-work"></a>
 ### Coherent construction operations — installed, 2026-10-28
 

@@ -94,6 +94,32 @@ export type TurnEnd = 'answered' | 'asked' | 'step_budget' | 'time_budget' | 're
 export interface TurnObservation { steps: number; tool_calls: number; deferred_calls: number; completion_checks: number; nudges: number; completion_gate?: 'done' | 'review' | 'unavailable'; answer_text?: AnswerTextOutcome; answer_text_issues?: number; end: TurnEnd | 'failed'; output_phase?: OpenAIServiceResponse['outputPhase'] }
 export interface TurnProgress { stage: 'thinking' | 'tool' | 'finishing'; tool?: string; step: number; saved: number }
 
+/** Owner decision 2026-10-30: at a fresh turn's start a small read-only role
+ * reads the owner's latest instruction and the tool cards and names up to four
+ * tools for the turn, so the offered list is right from the first step and
+ * stays fixed. Any failure, invalid answer or empty choice keeps the phase set. */
+export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], drawingRequests: unknown, deadline: number): Promise<string[] | null> {
+  const candidates = opts.aiCatalog.manifest().definitions.flatMap(row => {
+    const name = row.prompt_key.startsWith('tools.') ? row.prompt_key.slice(6) : ''
+    const card = row.definition.card_description
+    return row.definition_kind === 'tool_contract' && name && !core.includes(name) && typeof card === 'string' && card ? [{ name, card }] : []
+  })
+  if (!candidates.length) return null
+  const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'tool-picker', aiFunction: 'tool-picker', module: 'global',
+    userId: opts.userId, catalogRoleKey: 'tool-picker', catalogSchemaKey: 'bob_tool_pick',
+    messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, memory_summary: opts.context?.summary ?? null,
+      recent_conversation: (opts.context?.recent ?? []).slice(-4).map(({ role, text }) => ({ role, text: text.slice(0, 1000) })),
+      pending_drawing_requests: Array.isArray(drawingRequests) ? drawingRequests.length : 0,
+      always_loaded: core, candidates }) }],
+    timeoutMs: Math.max(1000, Math.min(opts.modelTimeoutMs ?? 45_000, 15_000, deadline - Date.now())) })
+  let value: unknown = result.data
+  try { if (typeof value === 'string') value = JSON.parse(value) } catch { return null }
+  const names = (value as { tools?: unknown } | null)?.tools
+  if (!result.success || !Array.isArray(names)) return null
+  const known = new Set(candidates.map(c => c.name))
+  const picked = [...new Set(names.filter((name): name is string => typeof name === 'string' && known.has(name)))].slice(0, 4)
+  return picked.length ? picked : null
+}
 /** Embedded seed is for injected/offline callers only. Production supplies the
  * caller-JWT reader in ask-openai.ts; a failed live read NEVER falls back here. */
 export const seedToolPolicy: ToolPolicyReader = async () => checkedToolSnapshot({ phase: null, tools: catalogSeed })
@@ -123,7 +149,7 @@ export interface BobAnswerState {
   projectId: string
   step: number
   phase: 'ready' | 'model' | 'response' | 'tools'
-  initial: { briefing: unknown; catalog: unknown; drawingRequests: unknown; orientation?: ProjectOrientation; directory?: unknown }
+  initial: { briefing: unknown; catalog: unknown; drawingRequests: unknown; orientation?: ProjectOrientation; directory?: unknown; toolPick?: string[] | null }
   messages: NonNullable<OpenAIServiceOptions['messages']>
   previousResponseId?: string
   preparedEpoch?: number
@@ -164,6 +190,9 @@ export type ProjectAnswerOptions = {
   carryLoadedTools?: boolean;
   /** Pinned per execution: the core reading tools are loaded from the first step. */
   corePreload?: boolean;
+  /** Production turns ask the small tool picker when the manifest publishes it;
+   * offline callers keep the phase choice unless they opt in. */
+  toolPicker?: boolean;
   /** Pinned per execution: which buildings this project links, read once at turn start. */
   buildingLinks?: BuildingLinks;
   /** Pinned per execution (projectFactsVersion): orientation blocks are cut,
@@ -231,8 +260,12 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // offered tool list (and the provider cache) stays stable for the turn.
   // Pending drawing work counts as work in progress and wins over the phase.
   let drawingWork = false, flexiblePhase: string | null | undefined
+  // Owner decision 2026-10-30: when the manifest publishes the tool picker, the
+  // tools it named for this request replace the phase set; the phase set is the fallback.
+  let toolPick: string[] | null = restored?.initial.toolPick ?? null
   const turnPreload = (phase: string | null) => {
     if (!phaseTools) return preloadTools
+    if (toolPick) return [...preloadTools, ...toolPick]
     if (flexiblePhase === undefined) flexiblePhase = drawingWork ? 'design' : phase
     return [...preloadTools, ...(flexiblePhase ? phaseTools[flexiblePhase] ?? [] : [])]
   }
@@ -314,6 +347,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   if (!coreTools && Array.isArray(drawingRequests) && drawingRequests.length) preloadTools = [...preloadTools, ...DRAWING_CONTINUATION_PRELOAD]
   if (phaseTools && Array.isArray(drawingRequests) && drawingRequests.length) drawingWork = true
   const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
+  if (!restored && opts.toolPicker === true && phaseTools && coreTools
+    && opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.tool-picker')) toolPick = await pickTurnTools(opts, coreTools, drawingRequests, deadline)
   if (restored?.initial.directory) {
     const directory = restoreOrientationDirectory(restored.initial.directory as Parameters<typeof restoreOrientationDirectory>[0], { projectId: opts.projectId, hasAccess: opts.hasAccess })
     orientationReader = directory.reader
@@ -349,7 +384,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const save = async (step: number) => {
     if (!opts.checkpoint) return
     await opts.checkpoint.save(structuredClone({ version: 1, projectId: opts.projectId, step, phase,
-      initial: { briefing, catalog, drawingRequests, orientation, directory: orientationReader?.exportState() },
+      initial: { briefing, catalog, drawingRequests, orientation, directory: orientationReader?.exportState(), ...(toolPick ? { toolPick } : {}) },
       messages, previousResponseId, preparedEpoch, observation, toolbox: toolbox.exportState(), workResults,
       completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
       tools, closedByLimit, closedByCommentary, request, response: pendingResponse, toolIndex }))

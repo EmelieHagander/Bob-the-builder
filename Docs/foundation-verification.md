@@ -1,5 +1,25 @@
 # Foundation verification and rollout
 
+<a id="tool-picker-2026-10-30"></a>
+## The request chooses the turn's tools — prepared 2026-10-30
+
+**Prepared, not deployed.** Owner decision after the [passing box run](#box-paid-run4-2026-10-30):
+prompt assembly chooses the turn's four flexible tools from the request with a
+small read-only role, not from the project phase alone. Contract:
+[tools](ask-bob-tools.md#tool-picker).
+
+Each fresh turn makes one extra mini-tier call (a few thousand input tokens of
+cards, about USD 0.002). Where tools loaded mid-turn should go so they no longer
+cost the cache is a separate owner decision ([State](bob-delivery-flow.md#state)).
+
+Release order with the owner's OK and no running Bob job: deploy `bob-worker`
+and `ask-bob` (both carry the `toolPicker` consumer), then apply
+`20261030020000_bob_tool_picker_catalog.sql`. Running and older jobs keep their
+pinned manifests.
+
+Validation: new suite `bob-tool-picker` (4) and the catalog fixture replay pass.
+A paid box run is needed to measure calls, cache share and cost.
+
 <a id="material-sizes-diameter-2026-10-30"></a>
 ## Material sizes with a diameter and the small review findings — installed 2026-10-30
 

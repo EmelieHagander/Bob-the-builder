@@ -30,6 +30,7 @@ let preCreateSelectRows:any[]|undefined,preCreateSelectVersions:Map<string,numbe
 let preMaterialLookupRows:any[]|undefined,preMaterialLookupVersions:Map<string,number>|undefined
 let preResultWindowRows:any[]|undefined,preResultWindowVersions:Map<string,number>|undefined
 let preConstructionWorkRows:any[]|undefined,preConstructionWorkVersions:Map<string,number>|undefined
+let preToolPickerRows:any[]|undefined,preToolPickerVersions:Map<string,number>|undefined
 // SQL publications drop the seed markers and name themselves, as `(prior.metadata-'seed_version'-'source_revision')||publication`.
 const publishAs=(row:any,publication:string)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication}}
 // Materialise the explicit immutable publication patches in migration order.
@@ -370,6 +371,11 @@ for(const migration of migrations){
   row.metadata={...rest,publication:'bob-workflows-judgement-v1'}
   row.content+='\n'+source.match(/\$bob_judgement_principles\$([\s\S]+?)\$bob_judgement_principles\$/)![1]
   versions.set(row.key,versions.get(row.key)!+1)
+ }
+ const toolPicker=source.match(/\$tool_picker_additions\$([\s\S]+?)\$tool_picker_additions\$/)
+ if(toolPicker){
+  preToolPickerRows=structuredClone(seed);preToolPickerVersions=new Map(versions)
+  for(const addition of JSON.parse(toolPicker[1])){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-tool-picker-v1'}});versions.set(addition.key,1)}
  }
  const completionGate=source.match(/\$completion_gate_additions\$([\s\S]+?)\$completion_gate_additions\$/)
  if(completionGate)for(const addition of JSON.parse(completionGate[1])){
@@ -747,6 +753,10 @@ for(const row of preTextHygieneRows??[])if(row.kind==='tier_binding'&&row.defini
 const preTextHygieneManifest=fixtureManifest(preTextHygieneRows??seed,preTextHygieneVersions??versions,'fixture-pre-text-hygiene-manifest')
 for(const row of prePhaseToolsRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const prePhaseToolsManifest=fixtureManifest(prePhaseToolsRows??seed,prePhaseToolsVersions??versions,'fixture-pre-phase-tools-manifest')
+for(const row of preToolPickerRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preToolPickerManifest=fixtureManifest(preToolPickerRows??seed,preToolPickerVersions??versions,'fixture-pre-tool-picker-manifest')
+/** Manifests pinned before the 2026-10-30 tool-picker publication: the phase alone chooses the flexible tools. */
+export function preToolPickerCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preToolPickerManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 /** Manifests pinned before the 2026-10-29 phase-tools publication: five permanent tools, earlier cards. */
 export function prePhaseToolsCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(prePhaseToolsManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 /** Manifests pinned before the 2026-10-29 text-hygiene publication. */
