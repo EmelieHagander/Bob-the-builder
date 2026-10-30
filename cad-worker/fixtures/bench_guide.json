@@ -1,0 +1,764 @@
+{
+ "note": "Example bench with end rails. The schedule was computed by bob_private.construction_fastener_schedule (fastener-rules-v1) for exactly these joints.",
+ "recipe": {
+  "contract_version": 1,
+  "units": "mm",
+  "assembly_id": "bench",
+  "views": [
+   "isometric"
+  ],
+  "definitions": [
+   {
+    "id": "leg",
+    "primitive": "box",
+    "material_ref": null,
+    "x_mm": 45,
+    "y_mm": 45,
+    "z_mm": 430
+   },
+   {
+    "id": "rail",
+    "primitive": "box",
+    "material_ref": null,
+    "x_mm": 1110,
+    "y_mm": 45,
+    "z_mm": 45
+   },
+   {
+    "id": "end_rail",
+    "primitive": "box",
+    "material_ref": null,
+    "x_mm": 45,
+    "y_mm": 270,
+    "z_mm": 45
+   },
+   {
+    "id": "seat_board",
+    "primitive": "box",
+    "material_ref": null,
+    "x_mm": 1200,
+    "y_mm": 120,
+    "z_mm": 28
+   }
+  ],
+  "instances": [
+   {
+    "id": "leg_fl",
+    "definition_id": "leg",
+    "placement": {
+     "x": 0,
+     "y": 0,
+     "z": 0,
+     "rx": 0,
+     "ry": 0,
+     "rz": 0
+    }
+   },
+   {
+    "id": "leg_fr",
+    "definition_id": "leg",
+    "placement": {
+     "x": 1155,
+     "y": 0,
+     "z": 0,
+     "rx": 0,
+     "ry": 0,
+     "rz": 0
+    }
+   },
+   {
+    "id": "leg_bl",
+    "definition_id": "leg",
+    "placement": {
+     "x": 0,
+     "y": 315,
+     "z": 0,
+     "rx": 0,
+     "ry": 0,
+     "rz": 0
+    }
+   },
+   {
+    "id": "leg_br",
+    "definition_id": "leg",
+    "placement": {
+     "x": 1155,
+     "y": 315,
+     "z": 0,
+     "rx": 0,
+     "ry": 0,
+     "rz": 0
+    }
+   },
+   {
+    "id": "rail_front",
+    "definition_id": "rail",
+    "placement": {
+     "x": 45,
+     "y": 0,
+     "z": 385,
+     "rx": 0,
+     "ry": 0,
+     "rz": 0
+    }
+   },
+   {
+    "id": "rail_back",
+    "definition_id": "rail",
+    "placement": {
+     "x": 45,
+     "y": 315,
+     "z": 385,
+     "rx": 0,
+     "ry": 0,
+     "rz": 0
+    }
+   },
+   {
+    "id": "end_rail_left",
+    "definition_id": "end_rail",
+    "placement": {
+     "x": 0,
+     "y": 45,
+     "z": 385,
+     "rx": 0,
+     "ry": 0,
+     "rz": 0
+    }
+   },
+   {
+    "id": "end_rail_right",
+    "definition_id": "end_rail",
+    "placement": {
+     "x": 1155,
+     "y": 45,
+     "z": 385,
+     "rx": 0,
+     "ry": 0,
+     "rz": 0
+    }
+   },
+   {
+    "id": "seat_board_1",
+    "definition_id": "seat_board",
+    "placement": {
+     "x": 0,
+     "y": 0,
+     "z": 430,
+     "rx": 0,
+     "ry": 0,
+     "rz": 0
+    }
+   },
+   {
+    "id": "seat_board_2",
+    "definition_id": "seat_board",
+    "placement": {
+     "x": 0,
+     "y": 120,
+     "z": 430,
+     "rx": 0,
+     "ry": 0,
+     "rz": 0
+    }
+   },
+   {
+    "id": "seat_board_3",
+    "definition_id": "seat_board",
+    "placement": {
+     "x": 0,
+     "y": 240,
+     "z": 430,
+     "rx": 0,
+     "ry": 0,
+     "rz": 0
+    }
+   }
+  ]
+ },
+ "joints": [
+  {
+   "id": "left_front",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "leg_fl",
+    "face": "y_max"
+   },
+   "second": {
+    "instance_id": "end_rail_left",
+    "face": "y_min"
+   },
+   "reason": "End frame"
+  },
+  {
+   "id": "left_back",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "leg_bl",
+    "face": "y_min"
+   },
+   "second": {
+    "instance_id": "end_rail_left",
+    "face": "y_max"
+   },
+   "reason": "End frame"
+  },
+  {
+   "id": "right_front",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "leg_fr",
+    "face": "y_max"
+   },
+   "second": {
+    "instance_id": "end_rail_right",
+    "face": "y_min"
+   },
+   "reason": "End frame"
+  },
+  {
+   "id": "right_back",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "leg_br",
+    "face": "y_min"
+   },
+   "second": {
+    "instance_id": "end_rail_right",
+    "face": "y_max"
+   },
+   "reason": "End frame"
+  },
+  {
+   "id": "front_left",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "leg_fl",
+    "face": "x_max"
+   },
+   "second": {
+    "instance_id": "rail_front",
+    "face": "x_min"
+   },
+   "reason": "Long rail"
+  },
+  {
+   "id": "front_right",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "leg_fr",
+    "face": "x_min"
+   },
+   "second": {
+    "instance_id": "rail_front",
+    "face": "x_max"
+   },
+   "reason": "Long rail"
+  },
+  {
+   "id": "back_left",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "leg_bl",
+    "face": "x_max"
+   },
+   "second": {
+    "instance_id": "rail_back",
+    "face": "x_min"
+   },
+   "reason": "Long rail"
+  },
+  {
+   "id": "back_right",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "leg_br",
+    "face": "x_min"
+   },
+   "second": {
+    "instance_id": "rail_back",
+    "face": "x_max"
+   },
+   "reason": "Long rail"
+  },
+  {
+   "id": "seat1_left",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "seat_board_1",
+    "face": "z_min"
+   },
+   "second": {
+    "instance_id": "end_rail_left",
+    "face": "z_max"
+   },
+   "reason": "Seat"
+  },
+  {
+   "id": "seat1_right",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "seat_board_1",
+    "face": "z_min"
+   },
+   "second": {
+    "instance_id": "end_rail_right",
+    "face": "z_max"
+   },
+   "reason": "Seat"
+  },
+  {
+   "id": "seat2_left",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "seat_board_2",
+    "face": "z_min"
+   },
+   "second": {
+    "instance_id": "end_rail_left",
+    "face": "z_max"
+   },
+   "reason": "Seat"
+  },
+  {
+   "id": "seat2_right",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "seat_board_2",
+    "face": "z_min"
+   },
+   "second": {
+    "instance_id": "end_rail_right",
+    "face": "z_max"
+   },
+   "reason": "Seat"
+  },
+  {
+   "id": "seat3_left",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "seat_board_3",
+    "face": "z_min"
+   },
+   "second": {
+    "instance_id": "end_rail_left",
+    "face": "z_max"
+   },
+   "reason": "Seat"
+  },
+  {
+   "id": "seat3_right",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "seat_board_3",
+    "face": "z_min"
+   },
+   "second": {
+    "instance_id": "end_rail_right",
+    "face": "z_max"
+   },
+   "reason": "Seat"
+  },
+  {
+   "id": "seat1_front",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "seat_board_1",
+    "face": "z_min"
+   },
+   "second": {
+    "instance_id": "rail_front",
+    "face": "z_max"
+   },
+   "reason": "Seat"
+  },
+  {
+   "id": "seat3_back",
+   "method": "screwed_butt",
+   "first": {
+    "instance_id": "seat_board_3",
+    "face": "z_min"
+   },
+   "second": {
+    "instance_id": "rail_back",
+    "face": "z_max"
+   },
+   "reason": "Seat"
+  }
+ ],
+ "steps": [
+  {
+   "joint_ids": [
+    "left_front",
+    "left_back",
+    "right_front",
+    "right_back"
+   ]
+  },
+  {
+   "joint_ids": [
+    "front_left",
+    "front_right",
+    "back_left",
+    "back_right"
+   ]
+  },
+  {
+   "joint_ids": [
+    "seat1_left",
+    "seat1_right",
+    "seat2_left",
+    "seat2_right",
+    "seat3_left",
+    "seat3_right",
+    "seat1_front",
+    "seat3_back"
+   ]
+  }
+ ],
+ "fasteners": {
+  "rule_version": "fastener-rules-v1",
+  "complete": true,
+  "joints": [
+   {
+    "gaps": [
+     "short_contact"
+    ],
+    "kind": "screw",
+    "count": 1,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 270,
+    "joint_id": "left_front",
+    "proposal": null,
+    "length_mm": 120,
+    "spacing_mm": null,
+    "through_mm": 45,
+    "diameter_mm": 5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 45,
+    "through_instance_id": "leg_fl"
+   },
+   {
+    "gaps": [
+     "short_contact"
+    ],
+    "kind": "screw",
+    "count": 1,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 270,
+    "joint_id": "left_back",
+    "proposal": null,
+    "length_mm": 120,
+    "spacing_mm": null,
+    "through_mm": 45,
+    "diameter_mm": 5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 45,
+    "through_instance_id": "leg_bl"
+   },
+   {
+    "gaps": [
+     "short_contact"
+    ],
+    "kind": "screw",
+    "count": 1,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 270,
+    "joint_id": "right_front",
+    "proposal": null,
+    "length_mm": 120,
+    "spacing_mm": null,
+    "through_mm": 45,
+    "diameter_mm": 5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 45,
+    "through_instance_id": "leg_fr"
+   },
+   {
+    "gaps": [
+     "short_contact"
+    ],
+    "kind": "screw",
+    "count": 1,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 270,
+    "joint_id": "right_back",
+    "proposal": null,
+    "length_mm": 120,
+    "spacing_mm": null,
+    "through_mm": 45,
+    "diameter_mm": 5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 45,
+    "through_instance_id": "leg_br"
+   },
+   {
+    "gaps": [
+     "short_contact"
+    ],
+    "kind": "screw",
+    "count": 1,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 1110,
+    "joint_id": "front_left",
+    "proposal": null,
+    "length_mm": 120,
+    "spacing_mm": null,
+    "through_mm": 45,
+    "diameter_mm": 5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 45,
+    "through_instance_id": "leg_fl"
+   },
+   {
+    "gaps": [
+     "short_contact"
+    ],
+    "kind": "screw",
+    "count": 1,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 1110,
+    "joint_id": "front_right",
+    "proposal": null,
+    "length_mm": 120,
+    "spacing_mm": null,
+    "through_mm": 45,
+    "diameter_mm": 5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 45,
+    "through_instance_id": "leg_fr"
+   },
+   {
+    "gaps": [
+     "short_contact"
+    ],
+    "kind": "screw",
+    "count": 1,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 1110,
+    "joint_id": "back_left",
+    "proposal": null,
+    "length_mm": 120,
+    "spacing_mm": null,
+    "through_mm": 45,
+    "diameter_mm": 5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 45,
+    "through_instance_id": "leg_bl"
+   },
+   {
+    "gaps": [
+     "short_contact"
+    ],
+    "kind": "screw",
+    "count": 1,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 1110,
+    "joint_id": "back_right",
+    "proposal": null,
+    "length_mm": 120,
+    "spacing_mm": null,
+    "through_mm": 45,
+    "diameter_mm": 5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 45,
+    "through_instance_id": "leg_br"
+   },
+   {
+    "gaps": [
+     "short_penetration"
+    ],
+    "kind": "screw",
+    "count": 2,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 45,
+    "joint_id": "seat1_left",
+    "proposal": null,
+    "length_mm": 60,
+    "spacing_mm": 30,
+    "through_mm": 28,
+    "diameter_mm": 4.5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 75,
+    "through_instance_id": "seat_board_1"
+   },
+   {
+    "gaps": [
+     "short_penetration"
+    ],
+    "kind": "screw",
+    "count": 2,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 45,
+    "joint_id": "seat1_right",
+    "proposal": null,
+    "length_mm": 60,
+    "spacing_mm": 30,
+    "through_mm": 28,
+    "diameter_mm": 4.5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 75,
+    "through_instance_id": "seat_board_1"
+   },
+   {
+    "gaps": [
+     "short_penetration"
+    ],
+    "kind": "screw",
+    "count": 2,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 45,
+    "joint_id": "seat2_left",
+    "proposal": null,
+    "length_mm": 60,
+    "spacing_mm": 75,
+    "through_mm": 28,
+    "diameter_mm": 4.5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 120,
+    "through_instance_id": "seat_board_2"
+   },
+   {
+    "gaps": [
+     "short_penetration"
+    ],
+    "kind": "screw",
+    "count": 2,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 45,
+    "joint_id": "seat2_right",
+    "proposal": null,
+    "length_mm": 60,
+    "spacing_mm": 75,
+    "through_mm": 28,
+    "diameter_mm": 4.5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 120,
+    "through_instance_id": "seat_board_2"
+   },
+   {
+    "gaps": [
+     "short_penetration"
+    ],
+    "kind": "screw",
+    "count": 2,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 45,
+    "joint_id": "seat3_left",
+    "proposal": null,
+    "length_mm": 60,
+    "spacing_mm": 30,
+    "through_mm": 28,
+    "diameter_mm": 4.5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 75,
+    "through_instance_id": "seat_board_3"
+   },
+   {
+    "gaps": [
+     "short_penetration"
+    ],
+    "kind": "screw",
+    "count": 2,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 45,
+    "joint_id": "seat3_right",
+    "proposal": null,
+    "length_mm": 60,
+    "spacing_mm": 30,
+    "through_mm": 28,
+    "diameter_mm": 4.5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 75,
+    "through_instance_id": "seat_board_3"
+   },
+   {
+    "gaps": [
+     "short_penetration"
+    ],
+    "kind": "screw",
+    "count": 9,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 45,
+    "joint_id": "seat1_front",
+    "proposal": null,
+    "length_mm": 60,
+    "spacing_mm": 133,
+    "through_mm": 28,
+    "diameter_mm": 4.5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 1110,
+    "through_instance_id": "seat_board_1"
+   },
+   {
+    "gaps": [
+     "short_penetration"
+    ],
+    "kind": "screw",
+    "count": 9,
+    "method": "screwed_butt",
+    "source": "rule",
+    "embed_mm": 45,
+    "joint_id": "seat3_back",
+    "proposal": null,
+    "length_mm": 60,
+    "spacing_mm": 133,
+    "through_mm": 28,
+    "diameter_mm": 4.5,
+    "contact_width_mm": 45,
+    "contact_length_mm": 1110,
+    "through_instance_id": "seat_board_3"
+   }
+  ],
+  "totals": [
+   {
+    "kind": "screw",
+    "count": 30,
+    "joint_ids": [
+     "seat1_front",
+     "seat1_left",
+     "seat1_right",
+     "seat2_left",
+     "seat2_right",
+     "seat3_back",
+     "seat3_left",
+     "seat3_right"
+    ],
+    "length_mm": 60,
+    "diameter_mm": 4.5
+   },
+   {
+    "kind": "screw",
+    "count": 8,
+    "joint_ids": [
+     "back_left",
+     "back_right",
+     "front_left",
+     "front_right",
+     "left_back",
+     "left_front",
+     "right_back",
+     "right_front"
+    ],
+    "length_mm": 120,
+    "diameter_mm": 5
+   }
+  ],
+  "glue_packages": 0
+ }
+}

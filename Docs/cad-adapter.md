@@ -1134,6 +1134,46 @@ The reviewer still receives the exact recipe and manifest with the pixels.
 Saved drawings keep their old sheets until rendered again. The first paid review
 with the new sheets needs the owner's OK.
 
+### Build guides (IKEA-style) — slice 1, 2026-10-30
+
+**Status: source only.** Not wired to the worker's HTTP route, the Edge or the
+app, and not deployed. Owner decisions 2026-10-30: a guide is made together
+with every final drawing, in the same Bob request, and the first live run
+measures what that adds; build pages show screws, nails, bolts and glue per step.
+The [workshop pack](https://claude.ai/artifact/Ub7frcych8Yhm8mSMp2tXh) holds the
+open questions.
+
+`bob_cad/guide.py` `render_guide(recipe, joints, steps, output_dir, fasteners,
+context_ids)` draws, from the exact saved construction:
+
+- **What is in the box:** one tile per part kind (count, P-numbers, plain size)
+  and one per fastener size, from the schedule.
+- **One page per step:** a step is an ordered list of saved joint ids (Bob's
+  proposed order, the stages of `derive_construction_lists`). Parts already in
+  place are grey; the step's new parts are black, and parts that join existing
+  ones are lifted out along a free direction (never into a part they join;
+  straight up when free) with solid arrows that project with the geometry.
+  Identical sub-assemblies in one step are drawn once with "2×" and the other
+  copies named. The parts box lists the step's new parts and its hardware
+  (grouped by kind and size), glue, and joints without a rule ("?", never a
+  guess). Screw heads are drawn on faces the chosen camera can see; the camera
+  is the overview corner that shows the most of them. Rule notes from the
+  schedule (short contact, short screw) are printed for the step.
+- **Done:** the whole assembly with its total size; parts in no step are named.
+
+It returns notes (`version`, `basis: proposed_order`, per page the joints, new
+and lifted parts, camera, hardware, unsized joints). Fasteners come only from
+`bob_private.construction_fastener_schedule`; without a schedule nothing is
+claimed. `cad-worker/fixtures/bench_guide.json` is the example bench with end
+rails and the rule schedule computed for its 16 joints (38 screws).
+`test_guide.py` covers order, repeats, lift directions, hardware grouping,
+unsized joints, loose parts and refused orders. One bench guide renders in
+about 0.5 s locally.
+
+Next: the final-drawing request has Bob propose the order, sends joints, steps
+and the schedule with the drawing render, and saves the pages with the drawing;
+the app shows them; then a paid run measures the cost.
+
 ### Fastener schedule on drawings — annotations version 2, 2026-10-26
 
 **Status: dormant by owner decision 2026-10-26.** "We do not need to send
