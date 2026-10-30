@@ -92,3 +92,44 @@ test('every numbered sheet is required, hash checked and retained for independen
  assert.equal(cadPreviewKeys(boundary).length,64)
  assert(cadPreviewKeys(boundary).includes('isometric.sheet16'))
 })
+
+// Build-guide pages (2026-10-30): own route, exact pin, pages bound to their hashes.
+import {createCadGuideTransport,verifyCadFiles} from '../supabase/functions/_shared/cad-transport.ts'
+import {createHash} from 'node:crypto'
+const guideSource={artifact_id:'11111111-1111-4111-8111-111111111111',revision:4}
+const page=(n:number)=>Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg"><text>${n}</text></svg>`).toString('base64')
+const sha256Of=(b64:string)=>createHash('sha256').update(Buffer.from(b64,'base64')).digest('hex')
+function guidePacket(change:(p:any)=>void=()=>{}){
+ const files:Record<string,string>={'guide-0':page(0),'guide-1':page(1)}
+ const p:any={guide:{version:1,basis:'proposed_order',drawing_source:{...guideSource},pages:Object.keys(files).map((key,i)=>({key,kind:i?'step':'parts',sha256:sha256Of(files[key])}))},files}
+ change(p);return p
+}
+const guideRequest:any={recipe:{contract_version:1},drawing_source:guideSource,joints:[],steps:[{joint_ids:['a']}],fasteners:null,context_ids:[]}
+test('build guide transport posts to /guide and returns pages bound to their notes and the exact construction',async()=>{
+ let seen:URL|undefined,body:any
+ const fetcher=(async(url:URL,init:any)=>{seen=url;body=JSON.parse(init.body);return new Response(JSON.stringify(guidePacket()))}) as unknown as typeof fetch
+ const result=await createCadGuideTransport('https://fixture.invalid/render','fixture',fetcher)(guideRequest)
+ assert.equal(seen?.pathname,'/guide');assert.deepEqual(body,guideRequest)
+ assert.deepEqual(Object.keys(result.files),['guide-0','guide-1']);assert.equal(result.notes.pages.length,2);assert.equal((result.notes as any).drawing_source,undefined)
+ await assert.rejects(createCadGuideTransport('http://fixture.invalid/render','fixture',fetcher)(guideRequest),/invalid_cad_host/)
+ for(const [name,change,error] of [
+  ['other revision',(p:any)=>{p.guide.drawing_source.revision=3},/cad_construction_source_mismatch/],
+  ['hash mismatch',(p:any)=>{p.guide.pages[1].sha256='f'.repeat(64)},/cad_guide_hash_mismatch/],
+  ['extra file',(p:any)=>{p.files['guide-2']=page(2)},/invalid_cad_guide/],
+  ['not svg',(p:any)=>{p.files['guide-1']=Buffer.from('<png>').toString('base64');p.guide.pages[1].sha256=sha256Of(p.files['guide-1'])},/cad_guide_hash_mismatch/],
+  ['bad key',(p:any)=>{p.files['../x']=p.files['guide-1'];delete p.files['guide-1'];p.guide.pages[1].key='../x'},/invalid_cad_guide/],
+ ] as const){
+  const f=(async()=>new Response(JSON.stringify(guidePacket(change))))as unknown as typeof fetch
+  await assert.rejects(createCadGuideTransport('https://fixture.invalid/render','fixture',f)(guideRequest),error,name)
+ }
+})
+test('saved drawing files accept guide pages only when their notes list them with matching hashes',async()=>{
+ const step=Buffer.from('ISO-10303-21;').toString('base64'),front=page(9)
+ const exports={step:{sha256:sha256Of(step)},front:{sha256:sha256Of(front)}}
+ const guide={status:'generated',pages:[{key:'guide-0',sha256:sha256Of(page(0))}]}
+ await verifyCadFiles({step,front},['front'],exports)
+ await verifyCadFiles({step,front,'guide-0':page(0)},['front'],exports,guide)
+ await assert.rejects(verifyCadFiles({step,front,'guide-0':page(0)},['front'],exports),/invalid_cad_files/,'no notes')
+ await assert.rejects(verifyCadFiles({step,front,'guide-0':page(1)},['front'],exports,guide),/cad_hash_mismatch/)
+ await assert.rejects(verifyCadFiles({step,front,'guide-0':page(0)},['front'],exports,{...guide,status:'failed'}),/invalid_cad_files/,'failed guide has no pages')
+})
