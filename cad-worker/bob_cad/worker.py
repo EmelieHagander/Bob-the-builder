@@ -210,10 +210,14 @@ def validate_fasteners(raw:Any)->dict[str,Any]:
         _num(t["diameter_mm"],"fastener_total",True); _num(t["length_mm"],"fastener_total",True)
     return raw
 
-def render_assembly(raw:Any,output_dir:str|Path,drawing_source=None,fasteners=None)->dict[str,Any]:
+def validate_drawing_source(drawing_source)->None:
+    """The exact construction Artifact and revision a drawing or guide is made from."""
     if drawing_source is not None and (not isinstance(drawing_source,dict) or set(drawing_source)!={'artifact_id','revision'}
         or not isinstance(drawing_source['artifact_id'],str) or not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}',drawing_source['artifact_id'],re.I)
         or type(drawing_source['revision']) is not int or not 1<=drawing_source['revision']<=999999999): raise CadContractError('drawing_source')
+
+def render_assembly(raw:Any,output_dir:str|Path,drawing_source=None,fasteners=None)->dict[str,Any]:
+    validate_drawing_source(drawing_source)
     # A schedule belongs to one exact construction revision; never to a bare recipe.
     if fasteners is not None:
         if drawing_source is None: raise CadContractError('fasteners')

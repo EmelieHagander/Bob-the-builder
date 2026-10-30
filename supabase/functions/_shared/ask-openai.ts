@@ -36,7 +36,7 @@ import type { OpenAIServiceOptions } from './openai-service.ts'
 import { createRecordDetailReader } from './project-record-detail.ts'
 import { createProjectImageTools } from './project-image-tools.ts'
 import { createCadAssistant, cadRenderInput } from './cad-assistant.ts'
-import { createCadTransport } from './cad-transport.ts'
+import { createCadGuideTransport, createCadTransport } from './cad-transport.ts'
 import { createMaterialCatalogReader } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
@@ -140,6 +140,11 @@ export async function answerWithOpenAi(opts: {
     const { p_generation: _generation, ...stable } = args
     const signal = AbortSignal.timeout(26000)
     return memo('rpc:' + name, stable, () => readWithRetry(name, args, signal), 0, signal)
+  }
+  // The server's fastener schedule, for construction lists and build guides.
+  const readFasteners = async (id: string, revision: number) => {
+    const { data, error } = await readRpc('read_construction_fasteners', { p_project: opts.projectId, p_artifact: id, p_revision: revision })
+    return error ? null : data
   }
   // Project writes keep their journal stream and recorded { data, error }. A
   // write the database cancelled at the statement timeout saved nothing, so it
@@ -660,10 +665,7 @@ export async function answerWithOpenAi(opts: {
     // Jobs pinned to the joint-fasteners catalog read the server schedule in
     // derive_construction_lists; earlier manifests keep their journal sequence.
     ...(aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.derive_construction_lists'&&row.metadata?.joint_fastener_version===1)?{
-      readFasteners:async(id:string,revision:number)=>{
-        const {data,error}=await readRpc('read_construction_fasteners',{p_project:opts.projectId,p_artifact:id,p_revision:revision})
-        return error?null:data
-      }}:{}),
+      readFasteners}:{}),
     readSources:async (pins:ReturnType<typeof parameterSourcePins>)=>{
       const project=new Map<string,Record<string,any>>()
       if(pins.project.length){
@@ -743,6 +745,14 @@ export async function answerWithOpenAi(opts: {
       },
     }) : undefined
 
+  const buildGuideOffered=aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.design_project_cad'&&(row.definition as any)?.parameters?.properties?.assembly_dependencies!==undefined)
+  // Read at most once per job: the first call's journal entry serves every later one.
+  let buildGuideSwitch:Promise<boolean>|null=null
+  const buildGuideOn=()=>buildGuideSwitch??=buildGuideOffered?memo('cad:build_guide_switch',{},async()=>{
+   const {data,error}=await internal.schema('shared').from('ai_settings').select('is_enabled').eq('app','bob').eq('coworker_id','bob')
+    .eq('function_name','cad-build-guide').eq('module_id','cad').maybeSingle().abortSignal(AbortSignal.timeout(10000))
+   return !error&&data?.is_enabled===true
+  }):Promise.resolve(false)
   const cadAssistant = createCadAssistant({ unlimitedWork,
     // Same fixed grounding read order as Bob's own call: parallel reads can swap journal positions on resume.
     groundingReadOrder: execution.groundingReadOrderVersion === 1 ? 'serial' : 'parallel',
@@ -764,15 +774,30 @@ export async function answerWithOpenAi(opts: {
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
     makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,lookupPinned.timeoutMs,40,undefined,lookupOptions),
     callModel,
-    render:(recipe,source,beforeDispatch)=>{
+    render:(recipe,source,beforeDispatch,guide)=>{
      if(!source)throw new Error('checked_construction_source_required')
-     return memo('cad:render',cadRenderInput(recipe,source),async()=>{
+     return memo('cad:render',cadRenderInput(recipe,source,guide),async()=>{
       await beforeDispatch?.()
       // Drawings carry no fasteners (owner decision 2026-10-26): they live in
       // Bob's construction lists and the material list only.
-      return createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source)
-     },45000)
+      const packet=await createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source)
+      if(!guide)return packet
+      // Build guide (2026-10-30), same step as its drawing: a failed or oversized
+      // guide is recorded and never blocks the drawing.
+      try{
+       const result=await createCadGuideTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(guide)
+       if(JSON.stringify({...packet.files,...result.files}).length>5_500_000)return {...packet,build_guide:{failure:'guide_too_large'}}
+       return {...packet,files:{...packet.files,...result.files},build_guide:{notes:result.notes}}
+      }catch(error){
+       console.error('[Build guide unavailable]',JSON.stringify({error:error instanceof Error?error.message.slice(0,120):'unknown'}))
+       return {...packet,build_guide:{failure:'guide_unavailable'}}
+      }
+     },guide?90000:45000)
     },
+    // The owner's global switch (shared.ai_settings cad-build-guide; missing = off),
+    // read once per job and only for catalogs that offer the order parameter.
+    ...(buildGuideOffered?{buildGuide:{
+     enabled:()=>buildGuideOn(),readFasteners}}:{}),
     checkConstruction:async(id,revision,fresh)=>{
      // One check reads the same exact revision twice (the check itself and
      // the final pin comparison). Within one check those reads observe the
@@ -979,7 +1004,7 @@ export async function answerWithOpenAi(opts: {
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
-    ...opts, unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
+    ...opts, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
     readToolPolicy,
     checkpoint: answerCheckpoint,
     // Older in-flight journals keep their recorded post-rollover requests.

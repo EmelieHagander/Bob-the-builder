@@ -5,7 +5,29 @@ import { constructionInstancePolicy } from './construction-instance-policy.ts'
 import type { FastenerSchedule } from './construction-fasteners.ts'
 export const CONSTRUCTION_LIST_VERSION = 'construction-blanks-role-v1'
 type Row = Record<string, any>
-type Dependency = { joint_id: string; depends_on: string[] }
+export type Dependency = { joint_id: string; depends_on: string[] }
+
+/** Bob's proposed assembly order as numbered stages of joint ids: every saved
+ * joint exactly once, prerequisites among the saved joints, no cycles. The
+ * physical joint graph may have cycles; only this order may not. */
+export function assemblyStages(jointIds: readonly string[], dependencies: Dependency[]):
+ { status: 'ok'; layers: string[][] } | { status: 'invalid'; message: string; joint_ids?: string[] } {
+ const ids = new Set(jointIds)
+ if (dependencies.length !== ids.size || new Set(dependencies.map(d => d.joint_id)).size !== ids.size
+  || dependencies.some(d => !ids.has(d.joint_id) || new Set(d.depends_on).size !== d.depends_on.length
+   || d.depends_on.some(id => !ids.has(id) || id === d.joint_id)))
+  return { status: 'invalid', message: 'Supply each saved joint exactly once, with distinct existing prerequisite joint IDs. Physical joint contacts and assembly dependencies are different graphs.' }
+ const remaining = new Map(dependencies.map(d => [d.joint_id, new Set(d.depends_on)]))
+ const layers: string[][] = []
+ while (remaining.size) {
+  const ready = [...remaining].filter(([, deps]) => !deps.size).map(([id]) => id).sort()
+  if (!ready.length) return { status: 'invalid', message: 'Assembly dependencies contain a cycle. Correct only the order; physical joint cycles are permitted.', joint_ids: [...remaining.keys()].sort() }
+  layers.push(ready)
+  for (const id of ready) remaining.delete(id)
+  for (const deps of remaining.values()) for (const id of ready) deps.delete(id)
+ }
+ return { status: 'ok', layers }
+}
 
 /** fasteners: undefined keeps the original unverified-hardware list; null means
  * the server schedule could not be read; otherwise its proposals fill the joints. */
@@ -18,19 +40,11 @@ export function constructionLists(draft: Row, catalog: Map<string, Row>, depende
   message:'Classify these exact saved instances with change_construction_roles. Names do not establish manufacturing or ownership.'}
  const manufactured=new Set(policy.instances.filter(i=>i.quantity_policy==='manufacture').map(i=>i.instance_id))
  const joints: Row[] = draft.joints
- const ids = new Set(joints.map(j => j.id))
- if (dependencies.length && (dependencies.length !== ids.size || new Set(dependencies.map(d => d.joint_id)).size !== ids.size
-  || dependencies.some(d => !ids.has(d.joint_id) || new Set(d.depends_on).size !== d.depends_on.length
-   || d.depends_on.some(id => !ids.has(id) || id === d.joint_id))))
-  return { status: 'invalid' as const, message: 'Supply each saved joint exactly once, with distinct existing prerequisite joint IDs. Physical joint contacts and assembly dependencies are different graphs.' }
- const remaining = new Map(dependencies.map(d => [d.joint_id, new Set(d.depends_on)]))
- const layers: string[][] = []
- while (remaining.size) {
-  const ready = [...remaining].filter(([, deps]) => !deps.size).map(([id]) => id).sort()
-  if (!ready.length) return { status: 'invalid' as const, message: 'Assembly dependencies contain a cycle. Correct only the order; physical joint cycles are permitted.', joint_ids: [...remaining.keys()].sort() }
-  layers.push(ready)
-  for (const id of ready) remaining.delete(id)
-  for (const deps of remaining.values()) for (const id of ready) deps.delete(id)
+ let layers: string[][] = []
+ if (dependencies.length) {
+  const order = assemblyStages(joints.map(j => j.id), dependencies)
+  if (order.status === 'invalid') return order.joint_ids ? { status: 'invalid' as const, message: order.message, joint_ids: order.joint_ids } : { status: 'invalid' as const, message: order.message }
+  layers = order.layers
  }
  const bom: Row[] = [], cuts: Row[] = []
  for (const definition of draft.recipe.definitions as Row[]) {
