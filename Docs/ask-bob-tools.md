@@ -119,9 +119,13 @@ price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
   on the next step.
 
 <a id="tool-repair"></a>
-**A fixed tool list with a small helper for rejected calls ("wrench wench") —
-built 2026-10-30, not installed (owner decision after
-[run 6](foundation-verification.md#tool-order-install-2026-10-30)).**
+**Rolled back after [paid box run 7](foundation-verification.md#box-paid-run7-2026-10-30):
+new jobs use [tool order](#tool-order) again; manifests pinned in between keep
+this behaviour. A fixed tool list with a small helper for rejected calls
+("wrench wench") — installed and rolled back 2026-10-30 (owner decision after
+[run 6](foundation-verification.md#tool-order-install-2026-10-30)).** In run 7
+Bob needed 40 calls instead of 20 and 9 calls stayed rejected: most rejections
+were about meaning, which a shape-only helper cannot fix (it fixed 1 of 10).
 OpenAI places the tool list before the instructions and the conversation, so
 any change to the list makes the rest of that call full price. With
 [tool order](#tool-order) each turn started with a different list (the picker's
@@ -153,7 +157,7 @@ out of time. Source: `20261030070000_bob_tool_repair_catalog.sql`,
 `bob-tool-repair.ts` and the step loop in `project-answer.ts`.
 
 <a id="tool-order"></a>
-**Superseded by [tool repair](#tool-repair) for new jobs once installed. Tool order: every tool native again — installed 2026-10-30
+**Current for new jobs (restored after [run 7](foundation-verification.md#box-paid-run7-2026-10-30)). Tool order: every tool native again — installed 2026-10-30
 (owner decision after [paid box run 5](foundation-verification.md#box-paid-run5-2026-10-30);
 [installation and run 6](foundation-verification.md#tool-order-install-2026-10-30)).**
 Tool sheets put every tool except the permanent six behind `use_tool`. Bob

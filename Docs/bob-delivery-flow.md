@@ -556,12 +556,12 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Byggt 2026-10-30, inte installerat — fast verktygslista och en hjälpare för avvisade anrop (ägarbeslut, ["wrench wench"](ask-bob-tools.md#tool-repair)):**
-Bobs verktygslista är alltid densamma (standardverktygen och `use_tool`), som
-först bestämt. När servern avvisar Bobs argument sätter en liten modell anropet
-i rätt form med bara Bobs egna värden; servern kontrollerar att inget lagts
-till eller ändrats. Nästa: ägarens OK att slå ihop, driftsätta `bob-worker` och
-`ask-bob`, köra `20261030070000` och sedan ett nytt lådprov.
+**2026-10-30 — hjälparen ("wrench wench") provad och borttagen; verktygsordning gäller igen ([bevis](foundation-verification.md#box-paid-run7-2026-10-30)):**
+lådprov 7 klarades men Bob behövde 40 anrop i stället för 20 och kostnaden blev
+USD 1,22 i stället för 0,93. Hjälparen rättade 1 av 10 avvisade anrop, eftersom
+de flesta gällde innehåll, inte form. Nya jobb använder alla verktyg som riktiga
+verktyg igen. Kvar: att hitta vad mer som ändras mellan turerna och kostar cache
+(cirka USD 0,06 per lådprov).
 
 **Installerat 2026-10-30 — alla verktyg tillbaka som riktiga verktyg; lådprov 6 godkänt (`bob-worker` v157, `ask-bob` v189, [bevis](foundation-verification.md#tool-order-install-2026-10-30)):**
 lådprov 5 misslyckades (USD 0,68) när verktygen gick via `use_tool`. Med
