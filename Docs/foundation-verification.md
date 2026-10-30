@@ -1,5 +1,46 @@
 # Foundation verification and rollout
 
+<a id="tool-order-install-2026-10-30"></a>
+## Tool order installed; paid box run 6 passed — 2026-10-30
+
+The owner approved the fix and a new box run.
+[PR #381](https://github.com/EmelieHagander/Bob-the-builder/pull/381) merged as
+`ba3f42e9b11c06ea2a0caa9955a968c4d389770a`. Its tree
+`4ac808d83295fd95ebd745ef859fe2cc8607062e` equals the tested head. There were
+zero active Bob jobs before every step.
+
+1. **Functions:** `bob-worker` v157 (verify_jwt false) and `ask-bob` v189
+   (verify_jwt true). 127 of 128 and 129 of 130 files equal the repository byte
+   for byte; the difference is the established empty `cad-intake.ts`. Both
+   return **401** without login.
+2. **Catalog:** recorded as `20261030173447_bob_tool_order_catalog`. `bob.tools`
+   v29 has `tool_order_version` 1 and no `tool_sheets_version`. All 324 active
+   Bob definitions equal the tested fixture.
+
+**[Run 41100059733](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41100059733)
+passed.** All three turns completed: concept 263 s (ended with a question),
+width change 125 s (saved), final drawing 388 s (saved). Evidence:
+`Docs/archive/form-box-paid-2026-10-30-run6.json`.
+
+| | Run 4 | Run 5 | Run 6 |
+|---|---|---|---|
+| Passed | yes | no | yes |
+| Model calls | 28 (24 Bob) | 31 (one turn) | 29 (20 Bob) |
+| Input tokens | 615,139 | 677,684 | 468,044 |
+| Read from cache | 54% | 90% | 57% |
+| Rejected tool calls | 0 | 20 | 1 |
+| Cost | USD 1.17 | USD 0.68 | USD 0.93 |
+
+- Every tool was a native function. One `save_construction_draft` call was
+  rejected once and then saved.
+- Each turn's first Bob call read nothing from the cache: the tool picker
+  chooses a different list per request, and the tools come first in the prompt.
+  That costs about 12,000–15,000 uncached tokens per turn (about USD 0.02).
+  Within a turn the cache held; each tool loaded mid-turn cost one partial miss
+  (5 in the run).
+- The memory stair locked the thread's snapshot; no summary was written,
+  because the history stayed under 4,000 tokens.
+
 <a id="box-paid-run5-2026-10-30"></a>
 ## Paid box run 5 failed: the job's tools behind use_tool — 2026-10-30
 

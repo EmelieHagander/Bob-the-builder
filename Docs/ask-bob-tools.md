@@ -92,7 +92,7 @@ phase choice. Source: `20261030020000_bob_tool_picker_catalog.sql` and
 `pickTurnTools` in `supabase/functions/_shared/project-answer.ts`.
 
 <a id="tool-sheets"></a>
-**A fixed base prompt; the job's tools in detail at the end — installed
+**Superseded by [tool order](#tool-order) for new jobs. A fixed base prompt; the job's tools in detail at the end — installed
 2026-10-30 (owner decision; [evidence](foundation-verification.md#tool-picker-install-2026-10-30)).**
 The provider caches a request from its start, and the tool list comes first:
 a tool added in the middle of the sorted list made everything after it full
@@ -119,8 +119,9 @@ price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
   on the next step.
 
 <a id="tool-order"></a>
-**Tool order: every tool native again — built 2026-10-30, not installed
-(owner decision after [paid box run 5](foundation-verification.md#box-paid-run5-2026-10-30)).**
+**Tool order: every tool native again — installed 2026-10-30
+(owner decision after [paid box run 5](foundation-verification.md#box-paid-run5-2026-10-30);
+[installation and run 6](foundation-verification.md#tool-order-install-2026-10-30)).**
 Tool sheets put every tool except the permanent six behind `use_tool`. Bob
 then read those tools as text and wrote wrong arguments 20 times in one turn
 (`create_solution_alternative` 11 times), until the run's time limit. The same
