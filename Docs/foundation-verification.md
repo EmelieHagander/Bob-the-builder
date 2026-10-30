@@ -1,5 +1,21 @@
 # Foundation verification and rollout
 
+<a id="tool-repair-2026-10-30"></a>
+## Fixed tool list with a repair helper — built 2026-10-30, not installed
+
+Owner decision after [run 6](#tool-order-install-2026-10-30): keep the base
+prompt fixed as first decided, and put a small model between Bob and a tool
+whose arguments the server rejects ([contract](ask-bob-tools.md#tool-repair)).
+Release order with the owner's OK and no running Bob job: deploy `bob-worker`
+and `ask-bob`, then apply `20261030070000_bob_tool_repair_catalog.sql`, then
+repeat the box run.
+
+Validation: `bob-tool-repair` (5: value checks, the repaired call runs and Bob
+sees its shape, refused or failed repairs leave the original rejection, pinned
+manifests never repair, the role is read-only mini tier), the sheets and
+tool-order suites pinned to their manifests, the catalog fixture replay and the
+related suites pass.
+
 <a id="tool-order-install-2026-10-30"></a>
 ## Tool order installed; paid box run 6 passed — 2026-10-30
 

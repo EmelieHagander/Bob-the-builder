@@ -118,8 +118,42 @@ price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
   conversation; a context rollover summarizes them away, so they are sent again
   on the next step.
 
+<a id="tool-repair"></a>
+**A fixed tool list with a small helper for rejected calls ("wrench wench") —
+built 2026-10-30, not installed (owner decision after
+[run 6](foundation-verification.md#tool-order-install-2026-10-30)).**
+OpenAI places the tool list before the instructions and the conversation, so
+any change to the list makes the rest of that call full price. With
+[tool order](#tool-order) each turn started with a different list (the picker's
+choice) and every tool loaded mid-turn changed it: about USD 0.25 of run 6's
+USD 0.93. The owner's original decision was a base prompt that never changes,
+which needs a fixed list. Manifests with `tool_sheets_version` 1 and
+`tool_repair_version` 1 (publication `bob-tool-repair-v1`, replacing
+`tool_order_version` 1):
+
+- Bob's native tools are the permanent tools and `use_tool`, the same in every
+  step, turn and thread. Every other tool works as with [tool sheets](#tool-sheets):
+  described at the end (the picker's choice) or by `describe_tool`, and called
+  through `use_tool`.
+- The server checks Bob's arguments first. Only when it rejects them does
+  `role.tool-repair` (mini tier, low reasoning, read-only) receive the tool's
+  real function definition, Bob's arguments and the rejection, and call that
+  function once.
+- The server then checks the repaired call (`bob-tool-repair.ts`): it may move,
+  rename, nest and JSON-encode Bob's values and add null or empty lists, but
+  every value it carries must be one Bob wrote. An added, changed, rounded or
+  flipped value is refused and Bob gets the original rejection. Values the tool
+  has no field for are reported back (`values_not_used`).
+- The repaired call runs through the same session gates. Bob gets the result
+  with `arguments_reshaped` and, when short, `arguments_used`, so he learns the
+  shape. At most 12 repairs per turn.
+
+Run 5 had this path without the repair step: 20 rejections and a turn that ran
+out of time. Source: `20261030070000_bob_tool_repair_catalog.sql`,
+`bob-tool-repair.ts` and the step loop in `project-answer.ts`.
+
 <a id="tool-order"></a>
-**Tool order: every tool native again — installed 2026-10-30
+**Superseded by [tool repair](#tool-repair) for new jobs once installed. Tool order: every tool native again — installed 2026-10-30
 (owner decision after [paid box run 5](foundation-verification.md#box-paid-run5-2026-10-30);
 [installation and run 6](foundation-verification.md#tool-order-install-2026-10-30)).**
 Tool sheets put every tool except the permanent six behind `use_tool`. Bob

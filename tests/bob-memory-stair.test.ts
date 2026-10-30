@@ -128,6 +128,8 @@ async function tieredTurn(stair: MemoryStair, message: string, seq: number, step
     callModel: catalogCall(async options => {
       if (options.functionName === 'completion-gate') return { success: true, model: 'fixture', usage, data: JSON.stringify({ work_remaining: false, reason: '' }) }
       if (options.functionName === 'tool-picker') return { success: true, model: 'fixture', usage, data: JSON.stringify({ tools: ['read_construction_draft'], reason: '' }) }
+      // Rejected arguments go to the small repair role (bob-tool-repair.test.ts); here it has nothing to offer.
+      if (options.functionName === 'tool-repair') return { success: false, model: 'fixture', error: 'unavailable' }
       requests.push(structuredClone(options))
       const step = steps[requests.length - 1]
       return (step ? step(options) : { success: true, model: 'fixture', usage, responseId: 'done' + requests.length, data: 'Klart.' }) as any

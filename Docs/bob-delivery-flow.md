@@ -556,6 +556,13 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
+**Byggt 2026-10-30, inte installerat — fast verktygslista och en hjälpare för avvisade anrop (ägarbeslut, ["wrench wench"](ask-bob-tools.md#tool-repair)):**
+Bobs verktygslista är alltid densamma (standardverktygen och `use_tool`), som
+först bestämt. När servern avvisar Bobs argument sätter en liten modell anropet
+i rätt form med bara Bobs egna värden; servern kontrollerar att inget lagts
+till eller ändrats. Nästa: ägarens OK att slå ihop, driftsätta `bob-worker` och
+`ask-bob`, köra `20261030070000` och sedan ett nytt lådprov.
+
 **Installerat 2026-10-30 — alla verktyg tillbaka som riktiga verktyg; lådprov 6 godkänt (`bob-worker` v157, `ask-bob` v189, [bevis](foundation-verification.md#tool-order-install-2026-10-30)):**
 lådprov 5 misslyckades (USD 0,68) när verktygen gick via `use_tool`. Med
 [verktygsordning](ask-bob-tools.md#tool-order) klarade lådprov 6 alla tre turer:
