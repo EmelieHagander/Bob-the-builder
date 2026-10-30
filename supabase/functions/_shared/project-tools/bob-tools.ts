@@ -58,7 +58,7 @@ export const CORE_READ_PRELOAD = ['search_project_data', 'list_project_category'
 export function catalogCoreTools(catalog: AiCatalogSession): string[] | null {
   const names = catalog.definition('bob.tools', 'tool_contract').definition.core_tools
   if (names === undefined) return null // Existing pinned jobs retain their preload behavior.
-  if (!Array.isArray(names) || names.length < 1 || names.length > 7 || !names.includes('describe_tool')
+  if (!Array.isArray(names) || names.length < 1 || names.length > 6 || !names.includes('describe_tool')
     || new Set(names).size !== names.length || names.some(name => typeof name !== 'string'
       || !catalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + name && row.definition_kind === 'tool_contract')))
     throw new Error('core_tool_catalog_invalid')

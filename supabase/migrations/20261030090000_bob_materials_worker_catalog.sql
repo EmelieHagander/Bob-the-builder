@@ -7,9 +7,11 @@
 -- and history, then Bob's brief with what Bob found this turn and the project's
 -- current materials. He reads and saves through the same session gates,
 -- receipts and turn budgets, and reports back to Bob; he never answers the owner.
--- bob.tools: materials_worker_version 1 and the worker definition. Deploy both
--- Bob runtimes with the worker consumer before activation. Pinned manifests
--- keep their behaviour.
+-- bob.tools: materials_worker_version 1 and the worker definition. The six
+-- permanent tools are unchanged: the worker runtime adds the hand-over itself, so
+-- a runtime without it ignores the worker and keeps offering the materials tools
+-- to Bob. Deploy both Bob runtimes with the worker consumer before activation.
+-- Pinned manifests keep their behaviour.
 begin;
 set local lock_timeout='5s';
 set local statement_timeout='60s';
@@ -121,7 +123,6 @@ begin
  if not found then raise exception 'materials_worker_toolbox_missing'; end if;
  if prior.metadata->>'tool_order_version' is distinct from '1' then raise exception 'materials_worker_requires_tool_order'; end if;
  definition:=prior.definition||jsonb_build_object('materials_worker_version',1,'workers',jsonb_build_object('materials',worker),
-  'core_tools',(prior.definition->'core_tools')||'["ask_materials_worker"]'::jsonb,
   'contract_keys',(prior.definition->'contract_keys')||'["tools.ask_materials_worker"]'::jsonb,
   'catalog',(prior.definition->'catalog')||jsonb_build_array(policy));
  definition:=jsonb_set(definition,'{shelves}',(select jsonb_agg(case when shelf->>'label'='Materials, stock and Shopping'

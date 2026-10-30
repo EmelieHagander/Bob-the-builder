@@ -365,7 +365,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     return { native: [...specs.filter(spec => coreTools!.includes(spec.function.name)), opts.aiCatalog.tool(USE_TOOL, { include_manual: true })],
       sheets: specs.map(spec => spec.function.name).filter(name => !coreTools!.includes(name)) }
   }
-  const turnPreload = (phase: string | null) => {
+  const turnPreload = (phase: string | null) => [...turnTools(phase), ...workerHandOverNames]
+  const turnTools = (phase: string | null) => {
     if (!phaseTools) return preloadTools
     if (toolPick) return [...preloadTools, ...toolPick]
     if (flexiblePhase === undefined) flexiblePhase = drawingWork ? 'design' : phase
@@ -385,10 +386,15 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // Worker pilot (2026-10-30): a worker's tools are offered to the worker, not to Bob;
   // Bob hands the job over through the worker's tool. See bob-workers.ts.
   const workers = phaseTools && coreTools ? catalogWorkers(opts.aiCatalog) : null
-  const workerTools = workerOwnedTools(workers)
-  const bobPolicy: ToolPolicyReader = workerTools.size ? async () => {
+  // The hand-over is loaded from the first step like a permanent tool; the
+  // catalog's six permanent tools stay unchanged for runtimes without workers.
+  const workerHandOverNames = Object.values(workers ?? {}).map(worker => worker.tool)
+  const workerOwned = workerOwnedTools(workers)
+  // Never picker candidates: the workers' own tools, and the hand-overs Bob always has.
+  const workerTools = new Set([...workerOwned, ...workerHandOverNames])
+  const bobPolicy: ToolPolicyReader = workerOwned.size ? async () => {
     const policy = await basePolicy()
-    return { ...policy, tools: policy.tools.map(row => workerTools.has(row.name) ? { ...row, active: false } : row) }
+    return { ...policy, tools: policy.tools.map(row => workerOwned.has(row.name) ? { ...row, active: false } : row) }
   } : basePolicy
   const workerSessions = new Map<string, ReturnType<typeof createBobToolSession>>()
   let currentStep = restored?.step ?? 0

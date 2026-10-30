@@ -125,8 +125,10 @@ Bob carried 100 tools; most rejected calls in runs 5–7 were about meaning in a
 specialised area. The pilot moves one area to a worker with its own tools:
 
 - Bob no longer offers the Materials, stock and Shopping tools (the eight on
-  that shelf); the tool picker does not offer them either. His standard tools
-  gain one: `ask_materials_worker` (`job`, `findings`).
+  that shelf); the tool picker does not offer them either. He gets
+  `ask_materials_worker` (`job`, `findings`), loaded from the first step. The
+  catalog's six permanent tools are unchanged, so a runtime without the worker
+  code ignores the pilot and keeps the materials tools with Bob.
 - Mattias (`role.materials-worker`, same profile as Bob) has a fixed native
   list: the eight materials tools and four reading tools
   (`search_project_data`, `open_project_item`, `read_construction_draft`,

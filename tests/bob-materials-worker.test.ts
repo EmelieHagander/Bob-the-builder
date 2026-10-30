@@ -73,12 +73,14 @@ const handOver = [() => ({ success: true, model: 'fixture', usage, responseId: '
 
 test('Bob hands the materials job to Mattias; Mattias works with his own fixed tools and the same conversation', async () => {
   const catalog = catalogFixture(), core = catalogCoreTools(catalog)!
-  assert(core.includes('ask_materials_worker'))
+  // The six permanent tools are unchanged, so a runtime without workers ignores the pilot.
+  assert.equal(core.length, 6); assert(!core.includes('ask_materials_worker'))
   const { bob, worker, pickerInputs, ran, catalogCalls, reads } = await turn(catalog, handOver, [
     () => ({ success: true, model: 'fixture', usage, responseId: 'w1', toolCalls: [call('w1c', 'search_material_catalog', { entity: 'materials', query: 'plywood 12', categories: [], profile_code: null, profile_revision: null, properties: {} })] }),
   ])
   // Bob: the hand-over tool, none of the materials tools, and no materials candidates for the picker.
-  assert(names(bob[0]).includes('ask_materials_worker'))
+  assert(names(bob[0]).includes('ask_materials_worker'), 'the hand-over is loaded from the first step')
+  assert(!pickerInputs[0].candidates.some((c: any) => c.name === 'ask_materials_worker'))
   assert(!names(bob[0]).some(n => MATERIALS.includes(n)), JSON.stringify(names(bob[0])))
   assert(!pickerInputs[0].candidates.some((c: any) => MATERIALS.includes(c.name)))
   // Mattias: his tools only, fixed across his steps, with full manuals.
@@ -118,7 +120,7 @@ test('Mattias cannot call tools outside his set; an invalid hand-over is refused
 
 test('manifests before the pilot keep the materials tools with Bob and never start a worker', async () => {
   const pinned = preMaterialsWorkerCatalogFixture()
-  assert.equal(catalogWorkers(pinned), null); assert(!catalogCoreTools(pinned)!.includes('ask_materials_worker'))
+  assert.equal(catalogWorkers(pinned), null)
   const { worker, pickerInputs } = await turn(pinned, [], [])
   assert.equal(worker.length, 0)
   assert(pickerInputs[0].candidates.some((c: any) => c.name === 'search_material_catalog'))

@@ -394,7 +394,7 @@ for(const migration of migrations){
   const tool=additions.find((a:any)=>a.key==='tools.ask_materials_worker').definition
   const policy={name:'ask_materials_worker',description:tool.description,how_to:tool.additional_description,schema_version:1,always_load:false,preload_phases:[],active:true}
   const box=seed.find(row=>row.key==='bob.tools')
-  box.definition={...box.definition,materials_worker_version:1,workers:{materials:worker},core_tools:[...box.definition.core_tools,'ask_materials_worker'],
+  box.definition={...box.definition,materials_worker_version:1,workers:{materials:worker},
    contract_keys:[...box.definition.contract_keys,'tools.ask_materials_worker'],catalog:[...box.definition.catalog,policy],
    shelves:box.definition.shelves.map((shelf:any)=>shelf.label==='Materials, stock and Shopping'?{...shelf,tools:['ask_materials_worker',...shelf.tools]}:shelf)}
   publishAs(box,'bob-materials-worker-v1');box.metadata.materials_worker_version=1;versions.set(box.key,versions.get(box.key)!+1)

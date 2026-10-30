@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { catalogFixture, catalogCall, prePhaseToolsCatalogFixture, preToolSheetsCatalogFixture, preMaterialsWorkerCatalogFixture } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, catalogCall, prePhaseToolsCatalogFixture, preToolSheetsCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { catalogCoreTools, catalogPhaseTools, TOOL_PHASES } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { runProjectAnswer, seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
@@ -61,12 +61,9 @@ async function offeredTools(catalog: AiCatalogSession, phases: (string | null)[]
 }
 
 test('the published bench holds six permanent tools and four distinct tools per phase', () => {
-  // The six permanent tools, read from the manifest before the worker pilot; the
-  // pilot (2026-10-30) adds Bob's hand-over to Mattias as a seventh.
-  const catalog = preMaterialsWorkerCatalogFixture(), core = catalogCoreTools(catalog)!, phases = catalogPhaseTools(catalog, core)!
+  const catalog = catalogFixture(), core = catalogCoreTools(catalog)!, phases = catalogPhaseTools(catalog, core)!
   assert.deepEqual(core, data.core_tools)
   assert.equal(core.length, 6); assert(core.includes('describe_tool') && core.includes('search_project_data'))
-  assert.deepEqual(catalogCoreTools(catalogFixture()), [...data.core_tools, 'ask_materials_worker'])
   assert.deepEqual(Object.keys(phases).sort(), [...TOOL_PHASES].sort())
   for (const [phase, names] of Object.entries(phases)) {
     assert.equal(names.length, 4, phase); assert(names.every(n => !core.includes(n)), phase)
