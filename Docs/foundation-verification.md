@@ -1,7 +1,44 @@
 # Foundation verification and rollout
 
+<a id="materials-worker-install-2026-10-30"></a>
+## Materials worker installed; paid box run 9 passed — 2026-10-30
+
+The owner chose to install while another session was still working on #383
+(its run 8 had stopped on slow model steps, not on code).
+[PR #385](https://github.com/EmelieHagander/Bob-the-builder/pull/385) merged as
+`918f7cd7df332085237a9417f9c9b1cbc8aa4687` (tree equal to the tested head, which
+contains #383). Zero active Bob jobs before every step.
+
+1. **Functions:** `bob-worker` v160 and `ask-bob` v192. 129 of 130 and 131 of
+   132 files equal the repository (the established empty `cad-intake.ts`);
+   both return **401** without login.
+2. **Catalog:** recorded as `20261030220351_bob_materials_worker_catalog`.
+   `bob.tools` v32: `materials_worker_version` 1, tool order, six permanent
+   tools unchanged; the `ask_materials_worker` policy row is active; the
+   `materials-worker` setting is gpt-5.4, high. All 336 active Bob definitions
+   equal the fixture.
+
+**[Run 41135551980](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41135551980)
+passed;** all three turns saved. Evidence: `Docs/archive/form-box-paid-2026-10-30-run9.json`.
+
+| | Run 6 (tool order) | Run 9 (with Mattias) |
+|---|---|---|
+| Deliveries | question, saved, saved | saved, saved, saved |
+| Bob calls | 20 | 22 |
+| Mattias calls | — | 3 |
+| Rejected tool calls | 1 | 1 (Bob's own) |
+| Read from cache | 57% | 59% |
+| Cost | USD 0.93 | USD 1.02 |
+
+- Bob handed one materials job to Mattias in the concept turn. Mattias
+  searched the catalog, read two definitions and reported in 3 calls (about
+  40 seconds, USD 0.08), with no rejected call; his second and third calls read
+  7,680 and 8,704 tokens from the cache.
+- The box scenario has one materials job, so this run measures the hand-over,
+  not a turn with much materials work.
+
 <a id="materials-worker-2026-10-30"></a>
-## Materials worker pilot — built 2026-10-30, not installed
+## Materials worker pilot — built 2026-10-30 (installed, see above)
 
 Owner decision: try Bob as coordinator with one worker, Mattias (materials),
 and measure before settling ([contract](ask-bob-tools.md#materials-worker)).

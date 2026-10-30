@@ -119,8 +119,9 @@ price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
   on the next step.
 
 <a id="materials-worker"></a>
-**Bob with a worker: Mattias (materials) — pilot built 2026-10-30, not installed
-(owner decision: one worker, measured before anything else moves).**
+**Bob with a worker: Mattias (materials) — pilot installed 2026-10-30
+(owner decision: one worker, measured before anything else moves;
+[installation and run 9](foundation-verification.md#materials-worker-install-2026-10-30)).**
 Bob carried 100 tools; most rejected calls in runs 5–7 were about meaning in a
 specialised area. The pilot moves one area to a worker with its own tools:
 
@@ -148,7 +149,7 @@ specialised area. The pilot moves one area to a worker with its own tools:
 The worker definition lives in `bob.tools` (`workers.materials`,
 `materials_worker_version` 1), so further workers are catalog data. Source:
 `20261030090000_bob_materials_worker_catalog.sql`, `bob-workers.ts` and the
-toolbox setup in `project-answer.ts`. Not yet measured; further workers and
+toolbox setup in `project-answer.ts`. Measured once (run 9); further workers and
 the trade specialists (electrician, plumber, roofer, carpenter and drywaller,
 tiler) are a proposal that waits for the pilot's numbers.
 

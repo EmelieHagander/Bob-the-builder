@@ -556,13 +556,12 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Byggt 2026-10-30, inte installerat — pilot: Bob som samordnare med en arbetare, Mattias (material) ([kontrakt](ask-bob-tools.md#materials-worker)):**
-Bob lämnar materialjobb till Mattias, som har egna fasta verktyg, samma samtal
-och sammanfattning som Bob, och Bobs uppdrag sist. Fler arbetare och
-fackspecialister (elektriker, rörmokare, takläggare, snickare och gipsare,
-plattsättare) är ett förslag som väntar på pilotens mätning. Nästa: ägarens OK
-att slå ihop, driftsätta, köra `20261030090000` och ett lådprov jämfört med
-lådprov 6.
+**Installerat 2026-10-30 — pilot: Bob som samordnare med en arbetare, Mattias (material) (`bob-worker` v160, `ask-bob` v192, [bevis](foundation-verification.md#materials-worker-install-2026-10-30)):**
+lådprov 9 klarades med alla tre turer sparade: 32 anrop, USD 1,02 (lådprov 6:
+29 anrop, USD 0,93). Bob gav Mattias ett materialjobb; Mattias gjorde det på 3
+anrop utan avvisade anrop. Lådprovet har bara ett materialjobb, så piloten
+behöver mätas där materialarbetet är större innan fler arbetare och
+fackspecialister byggs.
 
 **2026-10-30 — hjälparen ("wrench wench") provad och borttagen; verktygsordning gäller igen ([bevis](foundation-verification.md#box-paid-run7-2026-10-30)):**
 lådprov 7 klarades men Bob behövde 40 anrop i stället för 20 och kostnaden blev
