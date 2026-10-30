@@ -556,16 +556,14 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — nytt lådprov efter #373 (2026-10-29):**
-det betalda lådprovet efter #371 [sparade ritningen men underkändes](foundation-verification.md#construction-work-paid-run3-2026-10-29)
-(58 anrop, USD 2,28, avbrutet ritsteg). Rotorsakerna är rättade och installerade
-i två steg: [#372](foundation-verification.md#controlled-completion-install-2026-10-29)
-(styrd färdigkontroll, snabb exakt läsning v10, skrivningar som returnerar sitt
-läge) och [#373](foundation-verification.md#open-issues-closed-install-2026-10-29)
-(sju kvarvarande orsaker: inaktuella mått i titlar, ID:n i svar, lösning i ett
-steg, upprepade serverläsningar, resultatfönstret, databaslast och loggade
-avvisningsorsaker). Nu körs `bob-worker` v153 och `ask-bob` v185.
-#369–#373 ska inte driftsättas igen.
+**Aktivt nästa steg — ägarbeslut om stabil verktygslista inom en tur (2026-10-30):**
+[lådprovet efter #375 godkändes](foundation-verification.md#box-paid-run4-2026-10-30):
+alla tre turer levererade med 28 anrop och USD 1,17 (tidigare 58 anrop, USD 2,28,
+avbrutet ritsteg). Kvar är kostnaden när Bob laddar ett verktyg utanför fasens
+fyra: alla turer startade med konceptuppsättningen, och de 8 anrop som följde
+på en ändrad verktygslista saknade cache (cirka USD 0,33, 28 %). Ägaren väljer
+åtgärd innan nästa betalda prov. `bob-worker` v154 och `ask-bob` v186 körs;
+#369–#375 ska inte driftsättas igen.
 
 **Installerat — ägarens uppföljningar före lådprovet (2026-10-29; `bob-worker` v154, `ask-bob` v186, [bevis](foundation-verification.md#follow-ups-install-2026-10-29)):**
 6 fasta verktyg plus 4 efter projektfas och kort som säger när varje annat
@@ -592,7 +590,7 @@ uppslagning med en rad per inköpsplats. Den godkända startlistan (21 material,
 delade och ogranskade är ett föreslaget uppföljningssteg.
 [Modell och åtkomst](material-catalog.md#normalized-material-model).
 
-**Förberett, ej migrerat — alla egenskaper får utelämnas (ägarbeslut 2026-10-29):**
+**Installerat 2026-10-29 (#374) — alla egenskaper får utelämnas (ägarbeslut 2026-10-29):**
 ett utelämnat mått stoppar inte längre en sparning, men definitionen blir
 ofullständig och slås aldrig ihop med en annan. Lösvikt och ballast läggs till,
 så att till exempel grus passar. Bara en migrering, ingen driftsättning av

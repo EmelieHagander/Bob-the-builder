@@ -227,7 +227,9 @@ test('legacy pinned strategy retains frame order, tools and unbounded historical
     // Verified against the pre-change project-answer source, using the same
     // immutable pre-strategy catalog. Timeout/read timestamps are normalized
     // by the production journal itself; every other input byte is pinned.
-    assert.equal(await fingerprint(options), '587b50cf205cab7aa9a0b58c30a2e7d3033ab8a34cf31e3303f6d27f12c5bc07')
+    // Re-pinned 2026-10-30 when the fixture's role metadata was corrected to the
+    // SQL replay (calculator publication marker, no seed markers); no text changed.
+    assert.equal(await fingerprint(options), '0842e1598ff5a3a91d7c605a580b1c8974f030d96b089f8ee0ada9b00be21e24')
     assert(String(options.messages![0].content).startsWith(session.text('bob.frame.current') + '\n\n'))
     assert(String(options.messages![0].content).includes(JSON.stringify({ throughSeq: f.context.throughSeq, summary: f.context.summary, index: f.context.historyIndex })))
     assert.deepEqual(options.messages!.slice(1), f.context.recent.map(message => ({ role: message.role, content: message.text })))

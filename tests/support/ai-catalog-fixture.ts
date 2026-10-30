@@ -30,6 +30,8 @@ let preCreateSelectRows:any[]|undefined,preCreateSelectVersions:Map<string,numbe
 let preMaterialLookupRows:any[]|undefined,preMaterialLookupVersions:Map<string,number>|undefined
 let preResultWindowRows:any[]|undefined,preResultWindowVersions:Map<string,number>|undefined
 let preConstructionWorkRows:any[]|undefined,preConstructionWorkVersions:Map<string,number>|undefined
+// SQL publications drop the seed markers and name themselves, as `(prior.metadata-'seed_version'-'source_revision')||publication`.
+const publishAs=(row:any,publication:string)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication}}
 // Materialise the explicit immutable publication patches in migration order.
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
@@ -455,7 +457,7 @@ for(const migration of migrations){
  if(resumeGuidance){
   const oldGuard=source.match(/\$old_guard\$([\s\S]+?)\$old_guard\$/)![1]
   const tool=seed.find(row=>row.key==='tools.design_project_cad')
-  tool.definition.additional_description=(tool.definition.additional_description??'').replace(oldGuard,'').trim()
+  tool.definition.additional_description=(tool.definition.additional_description??'').replace(oldGuard,'').replace(/^ +| +$/g,'')
   versions.set(tool.key,versions.get(tool.key)!+1)
   const resume=seed.find(row=>row.key==='feedback.bob-budget-stop.resume.9c3a74e182d5')
   resume.content=resumeGuidance[1];versions.set(resume.key,versions.get(resume.key)!+1)
@@ -463,7 +465,8 @@ for(const migration of migrations){
  if(source.includes('do $communication$')){
   const content=source.match(/'(När du formulerar besked[^']+)'/)?.[1]
   if(!content)throw new Error('Concise communication migration content missing')
-  seed.push({key:'communication.concise',kind:'instruction_fragment',content,definition:{},metadata:{},variables:[]})
+  const [,label,purpose]=source.match(/jsonb_build_object\('label','([^']+)',\s*'purpose','([^']+)'\)/)!
+  seed.push({key:'communication.concise',kind:'instruction_fragment',content,definition:{},metadata:{label,purpose},variables:[]})
   versions.set('communication.concise',1)
   for(const row of seed)if(row.kind==='role'&&!row.definition.prompt_keys.includes('communication.concise')){row.definition.prompt_keys.splice(1,0,'communication.concise');versions.set(row.key,versions.get(row.key)!+1)}
  }
@@ -520,7 +523,7 @@ for(const migration of migrations){
    if(contract)row.definition={...row.definition,description:contract.description,parameters:contract.parameters,required_parameters:contract.parameters.required,optional_parameters:[]}
    if(extra){if(row.kind==='instruction_fragment')row.content+='\n\n'+extra.content;else row.definition.additional_description=(row.definition.additional_description??'')+'\n\n'+extra.content}
    if(feedback.key===key)row.content=feedback.content
-   row.metadata={...row.metadata,publication:'checked-construction-required'};versions.set(key,versions.get(key)!+1)
+   publishAs(row,'checked-construction-required');versions.set(key,versions.get(key)!+1)
   }
  }
  const intakePatches=source.match(/\$cad_intake_recovery\$([\s\S]+?)\$cad_intake_recovery\$/)
@@ -573,9 +576,9 @@ for(const migration of migrations){
    if(!row){row=structuredClone(seed.find(row=>row.key==='tools.save_construction_draft'));row.key=key;seed.push(row);newRow=true}
    if(patch.contract)row.definition={...row.definition,...patch.contract,handler:name,required_parameters:patch.contract.parameters.required,optional_parameters:[]}
    row.definition.additional_description=(newRow?'':row.definition.additional_description??'')+patch.text
-   versions.set(key,(versions.get(key)??0)+1)
+   publishAs(row,'construction-instance-roles-and-consequences');versions.set(key,(versions.get(key)??0)+1)
   }
-  const box=seed.find(row=>row.key==='bob.tools');box.definition.catalog.push(...policies)
+  const box=seed.find(row=>row.key==='bob.tools');box.definition.catalog.push(...policies);publishAs(box,'construction-instance-roles-and-consequences')
   box.definition.contract_keys.push(...policies.map((p:any)=>'tools.'+p.name));box.definition.shelves.find((s:any)=>s.label==='Drawings and CAD').tools.push(...policies.map((p:any)=>p.name))
   versions.set(box.key,versions.get(box.key)!+1)
  }
@@ -605,16 +608,16 @@ for(const migration of migrations){
   const contract=JSON.parse(calculatorContract[1]),policy=JSON.parse(source.match(/\$calculator_policy\$([\s\S]+?)\$calculator_policy\$/)![1])
   const row=structuredClone(seed.find(row=>row.key==='tools.inspect_stair_options'));row.key='tools.calculate_project'
   row.definition={...row.definition,...contract,handler:contract.name,required_parameters:contract.parameters.required,optional_parameters:[],additional_description:policy.how_to}
-  seed.push(row);versions.set(row.key,1)
-  const box=seed.find(row=>row.key==='bob.tools');box.definition.catalog.push(policy);box.definition.contract_keys.push(row.key)
+  row.metadata={publication:'project-calculator-v1'};seed.push(row);versions.set(row.key,1)
+  const box=seed.find(row=>row.key==='bob.tools');box.definition.catalog.push(policy);box.definition.contract_keys.push(row.key);publishAs(box,'project-calculator-v1')
   box.definition.shelves.push({label:'Calculations',tools:['calculate_project']});versions.set(box.key,versions.get(box.key)!+1)
   for(const patch of JSON.parse(source.match(/\$calculator_text_patches\$([\s\S]+?)\$calculator_text_patches\$/)![1])){
    let row=seed.find(row=>row.key===patch.key)
-   if(!row){row={key:patch.key,kind:'instruction_fragment',content:patch.content,definition:{},metadata:{},variables:[]};seed.push(row);versions.set(row.key,1)}
-   else{row.content+='\n\n'+patch.append;versions.set(row.key,versions.get(row.key)!+1)}
+   if(!row){row={key:patch.key,kind:'instruction_fragment',content:patch.content,definition:{},metadata:{publication:'project-calculator-v1'},variables:[]};seed.push(row);versions.set(row.key,1)}
+   else{row.content+='\n\n'+patch.append;publishAs(row,'project-calculator-v1');versions.set(row.key,versions.get(row.key)!+1)}
   }
   for(const name of JSON.parse(source.match(/\$calculator_roles\$([\s\S]+?)\$calculator_roles\$/)![1])){
-   const row=seed.find(row=>row.key==='role.'+name);row.definition.tool_keys.push('tools.calculate_project');versions.set(row.key,versions.get(row.key)!+1)
+   const row=seed.find(row=>row.key==='role.'+name);row.definition.tool_keys.push('tools.calculate_project');publishAs(row,'project-calculator-v1');versions.set(row.key,versions.get(row.key)!+1)
   }
  }
  const taskWorkflowContracts=source.match(/\$task_workflow_contracts\$([\s\S]+?)\$task_workflow_contracts\$/)

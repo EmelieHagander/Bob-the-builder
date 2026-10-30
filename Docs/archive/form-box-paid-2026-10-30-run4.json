@@ -1,0 +1,577 @@
+{
+ "run": {
+  "runId": 41003769539,
+  "url": "https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41003769539",
+  "commit": "07991cadea50225b109852c57714d4b45df1479b",
+  "scenario": "box",
+  "config": "baseline",
+  "conclusion": "success",
+  "passed": true
+ },
+ "project_id": "p_f042bce6d6c247c18d5f63300e9cc6c3",
+ "construction_revisions": [
+  1,
+  2
+ ],
+ "drawing_saved": {
+  "drawing_revision": 1,
+  "construction_revision": 2
+ },
+ "embeddings": {
+  "n": 2,
+  "usd": "0.000014"
+ },
+ "turns": [
+  {
+   "step": "concept",
+   "turn_id": "ef4b1465-33ec-4ba3-b62d-707976e4040d",
+   "runner_wall_ms": 219345,
+   "first_event": "2026-10-30 04:36:37.821233+00",
+   "last_event": "2026-10-30 04:39:41.943246+00",
+   "manifest_id": "163be922-27d3-4a94-ab04-69fb7a92fc03",
+   "first_offered_tools": [
+    "create_solution_alternative",
+    "describe_tool",
+    "get_work_history",
+    "list_project_category",
+    "open_project_item",
+    "read_construction_draft",
+    "read_solution_context",
+    "read_work_context",
+    "save_construction_draft",
+    "search_project_data",
+    "select_solution_alternative"
+   ],
+   "model_by_role": [
+    {
+     "role": "ask-bob",
+     "n": 9,
+     "usd": "0.473983",
+     "inp": 219524,
+     "cached": 129024,
+     "outp": 14365
+    },
+    {
+     "role": "completion-gate",
+     "n": 1,
+     "usd": "0.001360",
+     "inp": 979,
+     "cached": 0,
+     "outp": 139
+    }
+   ],
+   "tools": [
+    {
+     "tool": "create_solution_alternative",
+     "status": "saved",
+     "n": 1
+    },
+    {
+     "tool": "describe_tool",
+     "status": "ok",
+     "n": 1
+    },
+    {
+     "tool": "read_construction_draft",
+     "status": "ok",
+     "n": 1
+    },
+    {
+     "tool": "read_material_catalog",
+     "status": "ok",
+     "n": 1
+    },
+    {
+     "tool": "read_solution_context",
+     "status": "ok",
+     "n": 2
+    },
+    {
+     "tool": "save_construction_draft",
+     "status": "denied",
+     "n": 1
+    },
+    {
+     "tool": "save_construction_draft",
+     "status": "saved",
+     "n": 1
+    },
+    {
+     "tool": "search_material_catalog",
+     "status": "ok",
+     "n": 1
+    },
+    {
+     "tool": "search_project_data",
+     "status": "empty",
+     "n": 1
+    }
+   ],
+   "delivery": {
+    "status": "saved",
+    "duration_ms": 213134,
+    "counts": {
+     "steps": 9,
+     "nudges": 0,
+     "end_reason": "answered",
+     "tool_calls": 10,
+     "answer_text": "rewritten",
+     "cad_renders": 0,
+     "cad_reviews": 0,
+     "output_phase": "final_answer",
+     "saved_records": 3,
+     "deferred_calls": 0,
+     "cad_consultations": 0,
+     "cad_review_passed": false,
+     "completion_checks": 0,
+     "uncertain_resends": 0,
+     "answer_text_issues": 0,
+     "reused_model_calls": 0,
+     "cad_input_corrections": 0,
+     "cad_review_rejections": 0,
+     "cad_review_unavailable": 0
+    }
+   },
+   "calls": [
+    {
+     "step": "model:ask-bob:0",
+     "cached_input_tokens": 0,
+     "input_tokens": 15506,
+     "returned_tools": [
+      "read_solution_context",
+      "read_solution_context",
+      "search_project_data"
+     ]
+    },
+    {
+     "step": "model:ask-bob:1",
+     "cached_input_tokens": 14848,
+     "input_tokens": 16352,
+     "returned_tools": [
+      "create_solution_alternative"
+     ]
+    },
+    {
+     "step": "model:ask-bob:2",
+     "cached_input_tokens": 0,
+     "input_tokens": 18339,
+     "returned_tools": [
+      "read_construction_draft",
+      "search_material_catalog"
+     ],
+     "offered_added": [
+      "read_material_catalog",
+      "search_material_catalog"
+     ],
+     "offered_removed": []
+    },
+    {
+     "step": "model:ask-bob:3",
+     "cached_input_tokens": 0,
+     "input_tokens": 23878,
+     "returned_tools": [
+      "read_material_catalog"
+     ],
+     "offered_added": [
+      "edit_construction_parts"
+     ],
+     "offered_removed": []
+    },
+    {
+     "step": "model:ask-bob:4",
+     "cached_input_tokens": 20992,
+     "input_tokens": 24385,
+     "returned_tools": [
+      "save_construction_draft"
+     ]
+    },
+    {
+     "step": "model:ask-bob:5",
+     "cached_input_tokens": 20992,
+     "input_tokens": 29124,
+     "returned_tools": [
+      "describe_tool"
+     ]
+    },
+    {
+     "step": "model:ask-bob:6",
+     "cached_input_tokens": 23040,
+     "input_tokens": 29832,
+     "returned_tools": [
+      "save_construction_draft"
+     ]
+    },
+    {
+     "step": "model:ask-bob:7",
+     "cached_input_tokens": 23040,
+     "input_tokens": 31293,
+     "returned_tools": []
+    },
+    {
+     "step": "model:completion-gate:0",
+     "cached_input_tokens": 0,
+     "input_tokens": 979,
+     "returned_tools": []
+    },
+    {
+     "step": "model:ask-bob:8",
+     "cached_input_tokens": 26112,
+     "input_tokens": 30815,
+     "returned_tools": []
+    }
+   ]
+  },
+  {
+   "step": "width_change",
+   "turn_id": "9a7b967b-3bdb-41ce-913c-6309d419b858",
+   "runner_wall_ms": 133352,
+   "first_event": "2026-10-30 04:40:07.518415+00",
+   "last_event": "2026-10-30 04:41:53.881702+00",
+   "manifest_id": "163be922-27d3-4a94-ab04-69fb7a92fc03",
+   "first_offered_tools": [
+    "create_solution_alternative",
+    "describe_tool",
+    "get_work_history",
+    "list_project_category",
+    "open_project_item",
+    "read_construction_draft",
+    "read_solution_context",
+    "read_work_context",
+    "save_construction_draft",
+    "search_project_data",
+    "select_solution_alternative"
+   ],
+   "model_by_role": [
+    {
+     "role": "ask-bob",
+     "n": 7,
+     "usd": "0.297317",
+     "inp": 178691,
+     "cached": 97792,
+     "outp": 4708
+    },
+    {
+     "role": "completion-gate",
+     "n": 1,
+     "usd": "0.003617",
+     "inp": 1157,
+     "cached": 0,
+     "outp": 611
+    }
+   ],
+   "tools": [
+    {
+     "tool": "change_construction_parameters",
+     "status": "saved",
+     "n": 1
+    },
+    {
+     "tool": "describe_tool",
+     "status": "ok",
+     "n": 1
+    },
+    {
+     "tool": "read_construction_draft",
+     "status": "ok",
+     "n": 5
+    },
+    {
+     "tool": "read_solution_context",
+     "status": "ok",
+     "n": 1
+    }
+   ],
+   "delivery": {
+    "status": "saved",
+    "duration_ms": 126534,
+    "counts": {
+     "steps": 7,
+     "nudges": 0,
+     "end_reason": "answered",
+     "tool_calls": 8,
+     "answer_text": "rewritten",
+     "cad_renders": 0,
+     "cad_reviews": 0,
+     "output_phase": "final_answer",
+     "saved_records": 3,
+     "deferred_calls": 0,
+     "cad_consultations": 0,
+     "cad_review_passed": false,
+     "completion_checks": 0,
+     "uncertain_resends": 0,
+     "answer_text_issues": 0,
+     "reused_model_calls": 0,
+     "cad_input_corrections": 0,
+     "cad_review_rejections": 0,
+     "cad_review_unavailable": 0
+    }
+   },
+   "calls": [
+    {
+     "step": "model:ask-bob:0",
+     "cached_input_tokens": 13824,
+     "input_tokens": 16461,
+     "returned_tools": [
+      "read_solution_context",
+      "read_construction_draft",
+      "read_construction_draft"
+     ]
+    },
+    {
+     "step": "model:ask-bob:1",
+     "cached_input_tokens": 15872,
+     "input_tokens": 19308,
+     "returned_tools": [
+      "describe_tool"
+     ]
+    },
+    {
+     "step": "model:ask-bob:2",
+     "cached_input_tokens": 0,
+     "input_tokens": 20532,
+     "returned_tools": [
+      "read_construction_draft"
+     ],
+     "offered_added": [
+      "change_construction_parameters"
+     ],
+     "offered_removed": []
+    },
+    {
+     "step": "model:ask-bob:3",
+     "cached_input_tokens": 16896,
+     "input_tokens": 25085,
+     "returned_tools": [
+      "change_construction_parameters"
+     ]
+    },
+    {
+     "step": "model:ask-bob:4",
+     "cached_input_tokens": 0,
+     "input_tokens": 31560,
+     "returned_tools": [
+      "read_construction_draft",
+      "read_construction_draft"
+     ],
+     "offered_added": [
+      "edit_construction_parts"
+     ],
+     "offered_removed": []
+    },
+    {
+     "step": "model:ask-bob:5",
+     "cached_input_tokens": 23040,
+     "input_tokens": 32760,
+     "returned_tools": []
+    },
+    {
+     "step": "model:completion-gate:0",
+     "cached_input_tokens": 0,
+     "input_tokens": 1157,
+     "returned_tools": []
+    },
+    {
+     "step": "model:ask-bob:6",
+     "cached_input_tokens": 28160,
+     "input_tokens": 32985,
+     "returned_tools": []
+    }
+   ]
+  },
+  {
+   "step": "final_drawing",
+   "turn_id": "88136c62-e112-40ca-8b54-558c8afd15d6",
+   "runner_wall_ms": 195475,
+   "first_event": "2026-10-30 04:42:15.28105+00",
+   "last_event": "2026-10-30 04:45:08.248045+00",
+   "manifest_id": "163be922-27d3-4a94-ab04-69fb7a92fc03",
+   "first_offered_tools": [
+    "create_solution_alternative",
+    "describe_tool",
+    "get_work_history",
+    "list_project_category",
+    "open_project_item",
+    "read_construction_draft",
+    "read_solution_context",
+    "read_work_context",
+    "save_construction_draft",
+    "search_project_data",
+    "select_solution_alternative"
+   ],
+   "model_by_role": [
+    {
+     "role": "ask-bob",
+     "n": 8,
+     "usd": "0.300610",
+     "inp": 196125,
+     "cached": 107520,
+     "outp": 3481
+    },
+    {
+     "role": "cad-reviewer",
+     "n": 1,
+     "usd": "0.087707",
+     "inp": 17271,
+     "cached": 0,
+     "outp": 16612
+    },
+    {
+     "role": "completion-gate",
+     "n": 1,
+     "usd": "0.002390",
+     "inp": 1392,
+     "cached": 0,
+     "outp": 299
+    }
+   ],
+   "tools": [
+    {
+     "tool": "check_construction_draft",
+     "status": "checked",
+     "n": 1
+    },
+    {
+     "tool": "describe_tool",
+     "status": "ok",
+     "n": 2
+    },
+    {
+     "tool": "design_project_cad",
+     "status": "ready",
+     "n": 1
+    },
+    {
+     "tool": "read_construction_draft",
+     "status": "ok",
+     "n": 1
+    },
+    {
+     "tool": "save_cad_design",
+     "status": "saved",
+     "n": 1
+    },
+    {
+     "tool": "search_project_data",
+     "status": "ok",
+     "n": 1
+    }
+   ],
+   "delivery": {
+    "status": "saved",
+    "duration_ms": 186811,
+    "counts": {
+     "steps": 8,
+     "nudges": 0,
+     "end_reason": "answered",
+     "tool_calls": 7,
+     "answer_text": "rewritten",
+     "cad_renders": 1,
+     "cad_reviews": 1,
+     "output_phase": "final_answer",
+     "saved_records": 1,
+     "deferred_calls": 0,
+     "cad_consultations": 1,
+     "cad_review_passed": true,
+     "completion_checks": 0,
+     "uncertain_resends": 0,
+     "answer_text_issues": 0,
+     "reused_model_calls": 0,
+     "cad_input_corrections": 0,
+     "cad_review_rejections": 0,
+     "cad_review_unavailable": 0
+    }
+   },
+   "calls": [
+    {
+     "step": "model:ask-bob:0",
+     "cached_input_tokens": 13824,
+     "input_tokens": 18135,
+     "returned_tools": [
+      "describe_tool",
+      "read_construction_draft"
+     ]
+    },
+    {
+     "step": "model:ask-bob:1",
+     "cached_input_tokens": 0,
+     "input_tokens": 21489,
+     "returned_tools": [
+      "describe_tool"
+     ],
+     "offered_added": [
+      "design_project_cad"
+     ],
+     "offered_removed": []
+    },
+    {
+     "step": "model:ask-bob:2",
+     "cached_input_tokens": 0,
+     "input_tokens": 23172,
+     "returned_tools": [
+      "check_construction_draft"
+     ],
+     "offered_added": [
+      "check_construction_draft"
+     ],
+     "offered_removed": []
+    },
+    {
+     "step": "model:ask-bob:3",
+     "cached_input_tokens": 20992,
+     "input_tokens": 25555,
+     "returned_tools": [
+      "design_project_cad"
+     ]
+    },
+    {
+     "step": "model:cad-reviewer:0",
+     "cached_input_tokens": 0,
+     "input_tokens": 17271,
+     "returned_tools": []
+    },
+    {
+     "step": "model:ask-bob:4",
+     "cached_input_tokens": 3584,
+     "input_tokens": 26213,
+     "returned_tools": [
+      "save_cad_design"
+     ],
+     "offered_added": [
+      "save_cad_design"
+     ],
+     "offered_removed": []
+    },
+    {
+     "step": "model:ask-bob:5",
+     "cached_input_tokens": 20992,
+     "input_tokens": 26715,
+     "returned_tools": [
+      "search_project_data"
+     ],
+     "offered_added": [],
+     "offered_removed": [
+      "save_cad_design"
+     ]
+    },
+    {
+     "step": "model:ask-bob:6",
+     "cached_input_tokens": 24064,
+     "input_tokens": 27148,
+     "returned_tools": []
+    },
+    {
+     "step": "model:completion-gate:0",
+     "cached_input_tokens": 0,
+     "input_tokens": 1392,
+     "returned_tools": []
+    },
+    {
+     "step": "model:ask-bob:7",
+     "cached_input_tokens": 24064,
+     "input_tokens": 27698,
+     "returned_tools": []
+    }
+   ]
+  }
+ ]
+}

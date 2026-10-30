@@ -1,5 +1,53 @@
 # Foundation verification and rollout
 
+<a id="box-paid-run4-2026-10-30"></a>
+## Paid box run after #375 — 2026-10-30
+
+**Passed: all three turns delivered, in half the calls and cost of the previous
+run.** The owner authorized the run after the [#375 installation](#follow-up-1-install-2026-10-30).
+[Run 41003769539](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41003769539)
+ran once on `07991cadea50225b109852c57714d4b45df1479b`, scenario `box`, label
+`baseline`, in synthetic project `p_f042bce6d6c247c18d5f63300e9cc6c3`. All three
+turns pinned manifest `163be922-27d3-4a94-ab04-69fb7a92fc03` (`bob.tools` v27).
+
+| Step | Model calls | Cached input | Known model USD | Runner wall time | Result |
+|---|---:|---:|---:|---:|---|
+| Create box | 10 (was 27) | 58.5 % (was 77.2 %) | 0.475343 (was 0.980567) | 219 s (was 705 s) | One Construction, revision 1, 400 × 300 × 250 mm; found the shared 12 mm plywood |
+| Change width | 8 (was 8) | 54.4 % (was 55.7 %) | 0.300934 (was 0.247952) | 133 s (was 229 s) | Same identity, revision 2, 500 × 300 × 250 mm |
+| Final drawing | 10 (was 23) | 50.1 % (was 50.0 %) | 0.390707 (was 1.050060) | 195 s (was cancelled at 900 s) | Drawing revision 1 linked to Construction revision 2, one CAD review |
+| **Total** | **28 (was 58)** | **54.4 %** | **1.166984 (was 2.278579)** | **548 s** | **Acceptance passed** |
+
+Each step includes one `completion-gate` call (gpt-5.4-mini); the drawing also
+has one `cad-reviewer` call. Two memory embeddings cost USD 0.000014. There were
+no invalid saves, timeouts or repeated drawings, and Construction reads fell
+from 24 to 7 (the width turn still read twice after its save). One
+`save_construction_draft` was refused until Bob read its manual. The
+[content-free evidence](archive/form-box-paid-2026-10-30-run4.json) keeps turn
+IDs, per-role cost, tool outcomes and each call's offered-tool changes.
+
+**Remaining cost: the tool list still changes inside a turn.** All three turns
+started with the concept set (the project's phase), including the drawing turn,
+because its drawing request is created during that turn. Bob then loaded eight
+tools outside the set (material search and read, `edit_construction_parts`,
+`change_construction_parameters`, `design_project_cad`,
+`check_construction_draft`, `save_cad_design`). Every call after such a change
+had no or little cached input: 8 of 25 Bob calls, about USD 0.33 (28 %) at the
+cached-input discount. [State](bob-delivery-flow.md#state) owns the decision.
+
+<a id="catalog-fixture-replay-2026-10-30"></a>
+## Catalog fixture equals the SQL replay — 2026-10-30
+
+The eight Bob catalog differences between production and the test fixture were
+in the fixture, not in production: replaying every migration in PGlite gives
+exactly the 312 live definitions. The hand-written fixture replay copied five
+SQL publications wrongly (seed markers kept, publication names missing, the
+concise-communication label and purpose missing, and JavaScript `trim()` where
+SQL `btrim()` keeps line breaks). `tests/ai-catalog-fixture-replay.test.ts` now
+compares the fixture with the SQL replay for every active definition and fails
+on the eight differences without the correction. One pinned legacy fingerprint
+was re-pinned because the role metadata it contains is now the stored one; no
+model text changed. No production change.
+
 <a id="follow-up-1-2026-10-29"></a>
 ## Material tables hardened and Bob's materials shared — installed, 2026-10-30
 
