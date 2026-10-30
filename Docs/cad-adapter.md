@@ -1083,7 +1083,7 @@ The authenticated worker accepts the old recipe request and a bounded `{recipe,d
 
 ### Plain-language drawing sheets — 2026-10-30
 
-**Status: deployed 2026-10-30** from `main` `ef55db4` ([run 41020338894](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41020338894): engine tests, Modal deploy and live smoke check of the new sheet text passed). No paid review of a real drawing with the new sheets yet. Owner feedback: the sheets were written
+**Status:** sheet text, line key and shared callouts are deployed (2026-10-30, `main` `ef55db4` [run 41020338894](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41020338894) and `6b85a0b` [run 41039257593](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41039257593): engine tests, Modal deploy and live smoke check passed). Position scales are source only, not deployed. No paid review of a real drawing with the new sheets yet. Owner feedback: the sheets were written
 for AI, and people could not tell what was needed or what X, Y and Z meant.
 `bob_cad/annotations.py` now writes for people without drawing experience. It
 changes presentation text only; geometry, P-number placement, pagination,
@@ -1106,6 +1106,16 @@ manifest notes (`annotations` version 1) and the transport are unchanged.
   the geometry's strokes. Parts whose centres project within 3 px of each other
   (one behind the other) share one callout with every P-number listed ("P1, P3",
   "P7-P9"); long callouts wrap instead of being shortened.
+- **Position scales (third step):** front, back, side, top and bottom views get
+  a scale below and to the right of the geometry. A tick marks where each part
+  starts (its bounding-box minimum) along the view's two axes, numbered in mm
+  from the 0 mark at the assembly's near edge, from the same kernel bounds as the
+  geometry. Numbers that would overlap use a second row or column; any still
+  without room are counted on the sheet ("N marks too close together to
+  number"). The geometry box shrinks to 560 x 500 in these views to make room.
+  This is presentation from saved geometry, not the planned typed annotation
+  contract below: no extra manifest data and no model-supplied numbers.
+  Overviews have no scales.
 - **Provenance:** the footer keeps the exact construction version and ID, in
   smaller text. Disclaimers stay in plain words (not to scale, products, fixings and
   strength unchecked, sizes before notches and holes, not approved for building).
