@@ -92,7 +92,7 @@ phase choice. Source: `20261030020000_bob_tool_picker_catalog.sql` and
 `pickTurnTools` in `supabase/functions/_shared/project-answer.ts`.
 
 <a id="tool-sheets"></a>
-**A fixed base prompt; the job's tools in detail at the end — installed
+**Superseded by [tool order](#tool-order) for new jobs. A fixed base prompt; the job's tools in detail at the end — installed
 2026-10-30 (owner decision; [evidence](foundation-verification.md#tool-picker-install-2026-10-30)).**
 The provider caches a request from its start, and the tool list comes first:
 a tool added in the middle of the sorted list made everything after it full
@@ -117,6 +117,64 @@ price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
 - The checkpoint keeps which tools already have their details in the
   conversation; a context rollover summarizes them away, so they are sent again
   on the next step.
+
+<a id="tool-repair"></a>
+**A fixed tool list with a small helper for rejected calls ("wrench wench") —
+built 2026-10-30, not installed (owner decision after
+[run 6](foundation-verification.md#tool-order-install-2026-10-30)).**
+OpenAI places the tool list before the instructions and the conversation, so
+any change to the list makes the rest of that call full price. With
+[tool order](#tool-order) each turn started with a different list (the picker's
+choice) and every tool loaded mid-turn changed it: about USD 0.25 of run 6's
+USD 0.93. The owner's original decision was a base prompt that never changes,
+which needs a fixed list. Manifests with `tool_sheets_version` 1 and
+`tool_repair_version` 1 (publication `bob-tool-repair-v1`, replacing
+`tool_order_version` 1):
+
+- Bob's native tools are the permanent tools and `use_tool`, the same in every
+  step, turn and thread. Every other tool works as with [tool sheets](#tool-sheets):
+  described at the end (the picker's choice) or by `describe_tool`, and called
+  through `use_tool`.
+- The server checks Bob's arguments first. Only when it rejects them does
+  `role.tool-repair` (mini tier, low reasoning, read-only) receive the tool's
+  real function definition, Bob's arguments and the rejection, and call that
+  function once.
+- The server then checks the repaired call (`bob-tool-repair.ts`): it may move,
+  rename, nest and JSON-encode Bob's values and add null or empty lists, but
+  every value it carries must be one Bob wrote. An added, changed, rounded or
+  flipped value is refused and Bob gets the original rejection. Values the tool
+  has no field for are reported back (`values_not_used`).
+- The repaired call runs through the same session gates. Bob gets the result
+  with `arguments_reshaped` and, when short, `arguments_used`, so he learns the
+  shape. At most 12 repairs per turn.
+
+Run 5 had this path without the repair step: 20 rejections and a turn that ran
+out of time. Source: `20261030070000_bob_tool_repair_catalog.sql`,
+`bob-tool-repair.ts` and the step loop in `project-answer.ts`.
+
+<a id="tool-order"></a>
+**Superseded by [tool repair](#tool-repair) for new jobs once installed. Tool order: every tool native again — installed 2026-10-30
+(owner decision after [paid box run 5](foundation-verification.md#box-paid-run5-2026-10-30);
+[installation and run 6](foundation-verification.md#tool-order-install-2026-10-30)).**
+Tool sheets put every tool except the permanent six behind `use_tool`. Bob
+then read those tools as text and wrote wrong arguments 20 times in one turn
+(`create_solution_alternative` 11 times), until the run's time limit. The same
+tools succeeded first time as native functions in run 4. With
+`tool_order_version` 1 (publication `tool-order-v1`, replacing
+`tool_sheets_version` 1):
+
+- Every tool is a native function; there is no `use_tool` and nothing is
+  described at the end.
+- The tools offered at the turn's first step (the permanent tools and the tool
+  picker's choice) keep their order for the whole turn. A tool loaded later is
+  added at the end, so the list only grows within a turn. The checkpoint keeps
+  the order, so a resumed turn sends the same list.
+- Tool availability is sent at the end of a step when it changes, never in the
+  instructions, so the system message stays the same as the list grows.
+
+Each mid-turn load costs one cache miss (about USD 0.04 in run 4); the steps
+in between keep the cache. Source: `20261030060000_bob_tool_order_catalog.sql`
+and `orderTools` in `project-answer.ts`.
 
 With [prompt tiers](ask-bob-conversations.md#memory-stair) the tool
 availability also leaves the system message: it is sent at the end of a step

@@ -1,5 +1,121 @@
 # Foundation verification and rollout
 
+<a id="tool-repair-2026-10-30"></a>
+## Fixed tool list with a repair helper — built 2026-10-30, not installed
+
+Owner decision after [run 6](#tool-order-install-2026-10-30): keep the base
+prompt fixed as first decided, and put a small model between Bob and a tool
+whose arguments the server rejects ([contract](ask-bob-tools.md#tool-repair)).
+Release order with the owner's OK and no running Bob job: deploy `bob-worker`
+and `ask-bob`, then apply `20261030070000_bob_tool_repair_catalog.sql`, then
+repeat the box run.
+
+Validation: `bob-tool-repair` (5: value checks, the repaired call runs and Bob
+sees its shape, refused or failed repairs leave the original rejection, pinned
+manifests never repair, the role is read-only mini tier), the sheets and
+tool-order suites pinned to their manifests, the catalog fixture replay and the
+related suites pass.
+
+<a id="tool-order-install-2026-10-30"></a>
+## Tool order installed; paid box run 6 passed — 2026-10-30
+
+The owner approved the fix and a new box run.
+[PR #381](https://github.com/EmelieHagander/Bob-the-builder/pull/381) merged as
+`ba3f42e9b11c06ea2a0caa9955a968c4d389770a`. Its tree
+`4ac808d83295fd95ebd745ef859fe2cc8607062e` equals the tested head. There were
+zero active Bob jobs before every step.
+
+1. **Functions:** `bob-worker` v157 (verify_jwt false) and `ask-bob` v189
+   (verify_jwt true). 127 of 128 and 129 of 130 files equal the repository byte
+   for byte; the difference is the established empty `cad-intake.ts`. Both
+   return **401** without login.
+2. **Catalog:** recorded as `20261030173447_bob_tool_order_catalog`. `bob.tools`
+   v29 has `tool_order_version` 1 and no `tool_sheets_version`. All 324 active
+   Bob definitions equal the tested fixture.
+
+**[Run 41100059733](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41100059733)
+passed.** All three turns completed: concept 263 s (ended with a question),
+width change 125 s (saved), final drawing 388 s (saved). Evidence:
+`Docs/archive/form-box-paid-2026-10-30-run6.json`.
+
+| | Run 4 | Run 5 | Run 6 |
+|---|---|---|---|
+| Passed | yes | no | yes |
+| Model calls | 28 (24 Bob) | 31 (one turn) | 29 (20 Bob) |
+| Input tokens | 615,139 | 677,684 | 468,044 |
+| Read from cache | 54% | 90% | 57% |
+| Rejected tool calls | 0 | 20 | 1 |
+| Cost | USD 1.17 | USD 0.68 | USD 0.93 |
+
+- Every tool was a native function. One `save_construction_draft` call was
+  rejected once and then saved.
+- Each turn's first Bob call read nothing from the cache: the tool picker
+  chooses a different list per request, and the tools come first in the prompt.
+  That costs about 12,000–15,000 uncached tokens per turn (about USD 0.02).
+  Within a turn the cache held; each tool loaded mid-turn cost one partial miss
+  (5 in the run).
+- The memory stair locked the thread's snapshot; no summary was written,
+  because the history stayed under 4,000 tokens.
+
+<a id="box-paid-run5-2026-10-30"></a>
+## Paid box run 5 failed: the job's tools behind use_tool — 2026-10-30
+
+The owner asked for a test after the [memory stair installation](#memory-stair-install-2026-10-30).
+[Run 41091850978](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41091850978)
+(`live-form-acceptance.yml`, box, on `6b85a0b`) **failed**: the first turn ran
+29 model steps over 15 minutes, saved nothing, and was cancelled by the run's
+time limit. Cost USD 0.68 (30 Bob calls and one picker call). Evidence:
+`Docs/archive/form-box-paid-2026-10-30-run5.json`.
+
+- **Cause: [tool sheets version 1](ask-bob-tools.md#tool-sheets).** Every tool
+  except the permanent six was called through `use_tool` from a text
+  description. 20 calls were rejected for wrong arguments:
+  `create_solution_alternative` 11 times, `read_project_edit_context` 4,
+  `search_material_catalog` 3, `read_material_catalog` and
+  `read_construction_draft` once each. Bob also called `describe_tool` 10
+  times. In run 4 the same tools succeeded first time as native functions.
+- **What worked:** 91% of Bob's input tokens were read from the cache (608,768
+  of 671,989), and the thread's project snapshot was locked as designed.
+- **Fix, owner's choice:** [tool order](ask-bob-tools.md#tool-order) makes
+  every tool native again: the turn's first tools keep their order and a tool
+  loaded later is added at the end. Built and tested, not installed: deploy
+  `bob-worker` and `ask-bob`, then apply
+  `20261030060000_bob_tool_order_catalog.sql`, then repeat the box run.
+
+<a id="memory-stair-install-2026-10-30"></a>
+## Prompt tiers and the memory stair — installed 2026-10-30
+
+The owner approved merging and installation. Contract: [prompt tiers and the
+memory stair](ask-bob-conversations.md#memory-stair). [PR #379](https://github.com/EmelieHagander/Bob-the-builder/pull/379)
+merged as `9bd667e13ef8f67d27bbc7c1f5ed9ddbbb10c3bb`. Its tree
+`0ba06da416b5844d1445c943c300b4bbc6434696` equals the tested head. There were
+zero active Bob jobs before every step and after the last one.
+
+1. **Functions:** `bob-worker` v156 (verify_jwt false) and `ask-bob` v188
+   (verify_jwt true).
+   - Downloaded bodies: 127 of 128 and 129 of 130 files equal the repository
+     byte for byte. This includes `bob-memory-stair.ts`, `project-answer.ts`,
+     `ask-openai.ts`, `bob-context-continuation.ts` and `bob-prompt.ts`.
+   - The one difference is the established empty bundle of type-only
+     `cad-intake.ts`.
+   - Unauthenticated POSTs returned **401** for both.
+2. **Tables and functions:** recorded as `20261030091251_bob_memory_stair`.
+   - Both tables exist with row-level security.
+   - `bob_load_memory_stair` and `bob_save_memory_summary` are executable
+     only by `service_role`; the snapshot and event helpers only by their
+     owner.
+   - The installed load function re-locks the snapshot at the 60-event cap.
+3. **Catalog:** recorded as `20261030091319_bob_memory_stair_catalog`.
+   - `agent-contract.ask-bob` v13 has `memory_stair_version`,
+     `prompt_tiers_version` and `context_strategy_version` all set to 1.
+   - The `memory-stair` setting is gpt-5.4-mini, low reasoning, enabled.
+   - All 324 active Bob definitions equal the tested fixture (329 rows, five
+     tier bindings not compared).
+
+The next new Bob job pins the new manifest; earlier jobs keep theirs. No paid
+run has been made. The owner's live drawing-tool test is the first measurement
+of calls, cache share and cost.
+
 <a id="tool-picker-2026-10-30"></a>
 ## The request chooses the turn's tools; a fixed base prompt — installed 2026-10-30
 

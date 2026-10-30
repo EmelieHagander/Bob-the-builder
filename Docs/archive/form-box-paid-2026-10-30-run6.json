@@ -1,0 +1,239 @@
+{
+ "run": "https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41100059733",
+ "workflow": "live-form-acceptance.yml",
+ "scenario": "box",
+ "config": "baseline",
+ "head": "ba3f42e9b11c06ea2a0caa9955a968c4d389770a",
+ "functions": {
+  "bob-worker": 157,
+  "ask-bob": 189
+ },
+ "catalog": {
+  "bob.tools": "v29, tool_order_version 1",
+  "agent-contract.ask-bob": "v13, memory_stair 1, prompt_tiers 1"
+ },
+ "passed": true,
+ "turns": [
+  {
+   "step": "concept",
+   "turn": "10ec8b94-2274-49d4-8321-c277453312d0",
+   "wallMs": 262632,
+   "delivery": "asked",
+   "usage": {
+    "tool-picker": {
+     "calls": 1,
+     "input_tokens": 5695,
+     "cached_input_tokens": 0,
+     "output_tokens": 782,
+     "usd": 0.00779
+    },
+    "ask-bob": {
+     "calls": 10,
+     "input_tokens": 223235,
+     "cached_input_tokens": 152064,
+     "output_tokens": 14319,
+     "usd": 0.430732
+    },
+    "completion-gate": {
+     "calls": 1,
+     "input_tokens": 889,
+     "cached_input_tokens": 0,
+     "output_tokens": 175,
+     "usd": 0.001454
+    }
+   },
+   "tools": [
+    {
+     "tool": "create_solution_alternative",
+     "status": "saved",
+     "count": 1
+    },
+    {
+     "tool": "describe_tool",
+     "status": "ok",
+     "count": 3
+    },
+    {
+     "tool": "read_construction_draft",
+     "status": "ok",
+     "count": 2
+    },
+    {
+     "tool": "read_material_catalog",
+     "status": "ok",
+     "count": 1
+    },
+    {
+     "tool": "read_solution_context",
+     "status": "ok",
+     "count": 2
+    },
+    {
+     "tool": "read_work_context",
+     "status": "ok",
+     "count": 1
+    },
+    {
+     "tool": "save_construction_draft",
+     "status": "invalid",
+     "count": 1
+    },
+    {
+     "tool": "save_construction_draft",
+     "status": "saved",
+     "count": 1
+    },
+    {
+     "tool": "search_material_catalog",
+     "status": "ok",
+     "count": 1
+    },
+    {
+     "tool": "search_project_data",
+     "status": "empty",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "step": "width_change",
+   "turn": "b675cd84-8a98-4129-80e7-2fc94559f215",
+   "wallMs": 124551,
+   "delivery": "saved",
+   "usage": {
+    "memory-embedding": {
+     "calls": 1,
+     "input_tokens": 291,
+     "cached_input_tokens": 0,
+     "output_tokens": 0,
+     "usd": 6e-06
+    },
+    "tool-picker": {
+     "calls": 1,
+     "input_tokens": 5625,
+     "cached_input_tokens": 0,
+     "output_tokens": 505,
+     "usd": 0.006491
+    },
+    "ask-bob": {
+     "calls": 4,
+     "input_tokens": 83570,
+     "cached_input_tokens": 40448,
+     "output_tokens": 4114,
+     "usd": 0.179627
+    },
+    "completion-gate": {
+     "calls": 1,
+     "input_tokens": 660,
+     "cached_input_tokens": 0,
+     "output_tokens": 195,
+     "usd": 0.001373
+    }
+   },
+   "tools": [
+    {
+     "tool": "change_construction_parameters",
+     "status": "saved",
+     "count": 1
+    },
+    {
+     "tool": "read_construction_draft",
+     "status": "ok",
+     "count": 1
+    },
+    {
+     "tool": "read_solution_context",
+     "status": "ok",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "step": "final_drawing",
+   "turn": "65e33309-3894-48dd-a1db-e796cf0d9602",
+   "wallMs": 387707,
+   "delivery": "saved",
+   "usage": {
+    "memory-embedding": {
+     "calls": 1,
+     "input_tokens": 216,
+     "cached_input_tokens": 0,
+     "output_tokens": 0,
+     "usd": 4e-06
+    },
+    "tool-picker": {
+     "calls": 1,
+     "input_tokens": 5617,
+     "cached_input_tokens": 0,
+     "output_tokens": 522,
+     "usd": 0.006562
+    },
+    "ask-bob": {
+     "calls": 6,
+     "input_tokens": 123582,
+     "cached_input_tokens": 73216,
+     "output_tokens": 3442,
+     "usd": 0.195851
+    },
+    "cad-reviewer": {
+     "calls": 1,
+     "input_tokens": 18028,
+     "cached_input_tokens": 0,
+     "output_tokens": 18666,
+     "usd": 0.097518
+    },
+    "completion-gate": {
+     "calls": 1,
+     "input_tokens": 636,
+     "cached_input_tokens": 0,
+     "output_tokens": 231,
+     "usd": 0.001517
+    }
+   },
+   "tools": [
+    {
+     "tool": "design_project_cad",
+     "status": "ready",
+     "count": 1
+    },
+    {
+     "tool": "read_construction_draft",
+     "status": "ok",
+     "count": 4
+    },
+    {
+     "tool": "read_solution_context",
+     "status": "ok",
+     "count": 1
+    },
+    {
+     "tool": "save_cad_design",
+     "status": "saved",
+     "count": 1
+    }
+   ]
+  }
+ ],
+ "total": {
+  "calls": 29,
+  "usd": 0.9289,
+  "input_tokens": 468044,
+  "cached_input_tokens": 265728,
+  "cached_share": 0.568
+ },
+ "comparison": {
+  "run4": {
+   "calls": 28,
+   "usd": 1.17,
+   "passed": true
+  },
+  "run5": {
+   "usd": 0.68,
+   "passed": false,
+   "invalid_tool_calls": 20
+  },
+  "run6_invalid_tool_calls": 1
+ },
+ "cache_notes": "Each turn's first Bob call reads nothing from the cache: the tool picker chooses a different list per request and tools come first. Within a turn the cache holds; a tool loaded mid-turn costs one partial miss.",
+ "memory_stair": "Snapshot locked at 17:36:02 for the thread; no summary written (raw history under 4,000 tokens)."
+}

@@ -556,13 +556,29 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Byggt 2026-10-30, inte installerat — prompten i ordning efter hur ofta delarna ändras, och minnet som en trappa (ägarbeslut; [kontrakt](ask-bob-conversations.md#memory-stair)):**
+**Byggt 2026-10-30, inte installerat — fast verktygslista och en hjälpare för avvisade anrop (ägarbeslut, ["wrench wench"](ask-bob-tools.md#tool-repair)):**
+Bobs verktygslista är alltid densamma (standardverktygen och `use_tool`), som
+först bestämt. När servern avvisar Bobs argument sätter en liten modell anropet
+i rätt form med bara Bobs egna värden; servern kontrollerar att inget lagts
+till eller ändrats. Nästa: ägarens OK att slå ihop, driftsätta `bob-worker` och
+`ask-bob`, köra `20261030070000` och sedan ett nytt lådprov.
+
+**Installerat 2026-10-30 — alla verktyg tillbaka som riktiga verktyg; lådprov 6 godkänt (`bob-worker` v157, `ask-bob` v189, [bevis](foundation-verification.md#tool-order-install-2026-10-30)):**
+lådprov 5 misslyckades (USD 0,68) när verktygen gick via `use_tool`. Med
+[verktygsordning](ask-bob-tools.md#tool-order) klarade lådprov 6 alla tre turer:
+29 anrop, USD 0,93 (lådprov 4: 28 anrop, USD 1,17), ett avvisat verktygsanrop.
+Kvar att mäta: minnestrappans sammanfattningar i längre samtal, och om turens
+första anrop (utan cache, cirka USD 0,02 per tur) är värt att åtgärda.
+#369–#381 ska inte driftsättas igen.
+
+**Installerat 2026-10-30 — prompten i ordning efter hur ofta delarna ändras, och minnet som en trappa (ägarbeslut; `bob-worker` v156, `ask-bob` v188, [kontrakt](ask-bob-conversations.md#memory-stair), [bevis](foundation-verification.md#memory-stair-install-2026-10-30)):**
 fast start (verktyg, roll, kort), en låst projektbild med planens steg som
 checklista, sammanfattningar som skrivs en gång med källa, sedan nya meddelanden
 och projekthändelser oförändrade, sist turen och stegen. Verktygens tillgänglighet
 skickas sist, äldre steg komprimeras fyra åt gången och cachenyckeln gäller per
-projekt. Nästa: ägarens OK att slå ihop, driftsätta `bob-worker` och `ask-bob`
-och sedan köra migreringarna `20261030040000` och `20261030050000`.
+projekt. Nästa: ägarens live-test av ritverktyget mäter anrop, cacheandel
+och kostnad för både verktygsvalet och den nya prompten; #369–#379 ska inte
+driftsättas igen.
 
 **Installerat 2026-10-30 — begäran väljer turens verktyg, och grundprompten är fast (ägarbeslut; `bob-worker` v155, `ask-bob` v187, [bevis](foundation-verification.md#tool-picker-install-2026-10-30)):**
 en liten modell läser ägarens senaste begäran och verktygskorten vid turens start
