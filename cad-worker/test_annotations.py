@@ -201,4 +201,64 @@ class CalloutTest(unittest.TestCase):
                 self.assertIn('Solid line: edge you can see',texts)
                 self.assertIn('Dashed line: edge hidden behind',texts)
 
+def bench():
+    req={'definitions':[{'id':'leg','primitive':'box','x_mm':45,'y_mm':45,'z_mm':430},{'id':'rail','primitive':'box','x_mm':1110,'y_mm':45,'z_mm':45}]}
+    box=lambda x,y,z,sx,sy,sz:{'min':[x,y,z],'max':[x+sx,y+sy,z+sz],'size':[sx,sy,sz]}
+    rows=[{'id':'leg_a','definition_id':'leg','bounding_box_mm':box(0,0,0,45,45,430)},{'id':'leg_b','definition_id':'leg','bounding_box_mm':box(1155,0,0,45,45,430)},
+          {'id':'rail','definition_id':'rail','bounding_box_mm':box(45,0,385,1110,45,45)}]
+    return req,rows,{'min':[0,0,0],'max':[1200,45,430],'size':[1200,45,430]}
+
+def scale_texts(path):
+    return [el for el in ET.parse(path).getroot().iter(NS+'text') if el.get('font-size')=='11' and (el.text or '').replace('.','').isdigit()]
+
+class PositionScaleTest(unittest.TestCase):
+    """Where parts start, in mm from the 0 mark, from the same bounds as the geometry."""
+    def test_front_view_marks_part_starts_along_both_axes(self):
+        req,rows,bounds=bench()
+        with tempfile.TemporaryDirectory() as tmp:
+            path=blank_svg(tmp)
+            notes=annotate(path,req,rows,bounds,'front',[600,-5000,215],[0,0,1],[600,22.5,215])
+            marks=scale_texts(path)
+            horizontal=sorted({el.text for el in marks if el.get('text-anchor')=='middle'},key=float)
+            vertical=sorted({el.text for el in marks if el.get('text-anchor')=='start'},key=float)
+            self.assertEqual(horizontal,['0','45','1155'])
+            self.assertEqual(vertical,['0','385'])
+            texts=texts_of(path)
+            self.assertIn('Scales: mm measured from the 0 mark',texts)
+            self.assertFalse(any('too close together' in t for t in texts))
+            self.assertEqual(set(notes),{'dimensions','parts','coverage'},'exact notes keep their shape')
+            ys=[float(el.get('y')) for el in marks if el.get('text-anchor')=='start']
+            self.assertEqual(ys,sorted(ys,reverse=True),'heights rise up the sheet')
+
+    def test_overviews_have_no_scales(self):
+        req,rows,bounds=bench()
+        with tempfile.TemporaryDirectory() as tmp:
+            path=blank_svg(tmp)
+            annotate(path,req,rows,bounds,'isometric',[5000,-5000,5000],[0,0,1],[600,22.5,215])
+            self.assertEqual(scale_texts(path),[])
+            self.assertNotIn('Scales: mm measured from the 0 mark',texts_of(path))
+
+    def test_close_marks_never_overlap_and_unnumbered_ones_are_counted(self):
+        req={'definitions':[{'id':'slat','primitive':'box','x_mm':10,'y_mm':45,'z_mm':500}]}
+        rows=[{'id':f'slat{i:02}','definition_id':'slat','bounding_box_mm':{'min':[i*12,0,0],'max':[i*12+10,45,500],'size':[10,45,500]}} for i in range(60)]
+        bounds={'min':[0,0,0],'max':[718,45,500],'size':[718,45,500]}
+        with tempfile.TemporaryDirectory() as tmp:
+            # The kernel's view is in mm around the camera axis, like the real export.
+            path=Path(tmp,'front.svg')
+            path.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="-359 -250 718 500"><g id="Visible"><path d="M-359 -250 L359 250"/></g></svg>')
+            annotate(path,req,rows,bounds,'front',[359,-5000,250],[0,0,1],[359,22.5,250])
+            pages=[g for g in ET.parse(path).getroot() if g.get('id','').startswith('DrawingPage')]
+            self.assertEqual(len(pages),2)
+            for page in pages:
+                marks=[el for el in page.iter(NS+'text') if el.get('font-size')=='11' and el.get('text-anchor')=='middle' and (el.text or '').isdigit()]
+                for i,a in enumerate(marks):
+                    for b in marks[:i]:
+                        if a.get('y')==b.get('y'):
+                            gap=abs(float(a.get('x'))-float(b.get('x')))
+                            self.assertGreaterEqual(gap,(len(a.text)+len(b.text))*3.3+8,'labels in one row never overlap')
+                hidden=[el.text for el in page.iter(NS+'text') if 'too close together to number' in (el.text or '')]
+                self.assertEqual(len(hidden),1)
+                # 60 slat starts on X plus the single 0 on Z: each is numbered or counted.
+                self.assertEqual(len(marks)+int(hidden[0].split()[0]),60)
+
 if __name__=='__main__': unittest.main()
