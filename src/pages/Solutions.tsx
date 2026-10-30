@@ -65,7 +65,7 @@ function DesignChoices({ value, contextActive, contextAreaId }: { value: Solutio
     </div>)}
     <p className="foundation-hint">{intent.alignment.basis || 'Shared direction has not been settled.'}</p>
     {image && <Modal title={image.title} wide onClose={() => setImage(null)}>
-      <StoredImage projectId={value.projectId} image={image} original />
+      <StoredImage projectId={value.projectId} image={image} original zoomable />
     </Modal>}
   </section>
 }
@@ -80,7 +80,7 @@ function VersionDetails({ value, contextActive = true, contextAreaId = null }: {
     {value.imageId ? <button className="btn" onClick={() => setImage(true)}>View reference image</button>
       : value.imageTitle && <p>Reference image removed: {value.imageTitle}</p>}
     {image && <Modal title={value.imageTitle} wide onClose={() => setImage(false)}>
-      <StoredImage projectId={value.projectId} image={{ id: value.imageId!, title: value.imageTitle }} original />
+      <StoredImage projectId={value.projectId} image={{ id: value.imageId!, title: value.imageTitle }} original zoomable />
       <p className="foundation-hint">Reference image. This does not make the solution a measured drawing.</p>
     </Modal>}
   </div>

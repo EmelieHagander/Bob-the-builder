@@ -1,3 +1,4 @@
+import { ZoomableImage } from '../components/ZoomableImage'
 import { formatEventDay } from '../lib/eventDay'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
@@ -220,7 +221,7 @@ function VolunteerTaskPanel({ secret, projectId, taskId, onClose, onChanged, onD
     } catch (reason) { if (mounted.current) { setError(message(reason)); onDenied(reason) } }
     finally { if (mounted.current) setBusy(false) }
   }
-  const imageFigures = (items: VolunteerImage[]) => items.map(image => <figure key={image.id} className="volunteer-image"><figcaption>{image.title}{image.purpose && <span className="foundation-hint"> · {IMAGE_PURPOSES[image.purpose]}</span>}</figcaption>{images[image.id] ? <img src={images[image.id]} alt={image.title} /> : <button className="btn" disabled={busy} onClick={() => void showImage(image.id)}>View image</button>}</figure>)
+  const imageFigures = (items: VolunteerImage[]) => items.map(image => <figure key={image.id} className="volunteer-image"><figcaption>{image.title}{image.purpose && <span className="foundation-hint"> · {IMAGE_PURPOSES[image.purpose]}</span>}</figcaption>{images[image.id] ? <ZoomableImage src={images[image.id]} alt={image.title} label={image.title} /> : <button className="btn" disabled={busy} onClick={() => void showImage(image.id)}>View image</button>}</figure>)
   const contextImages = task?.contextImages ?? task?.images ?? []
   return <Modal title={task?.name ?? 'Task'} onClose={() => { if (!busy) onClose() }} wide>
     {loading ? <Loading /> : loadError ? <FormError>{message(loadError)}</FormError> : task && <div className="foundation-form">

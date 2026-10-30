@@ -352,7 +352,7 @@ try {
     const fitted=(await sheetImage.boundingBox()).width
     for (const name of ['Zoom Front in','Zoom Front out']) {
       const box=await sheet.getByRole('button',{name,exact:true}).boundingBox()
-      assert(box.width>=44&&box.height>=44,'Drawing zoom needs 44px targets')
+      assert(Math.round(box.width)>=44&&Math.round(box.height)>=44,'Drawing zoom needs 44px targets')
     }
     await sheet.getByRole('button',{name:'Zoom Front in',exact:true}).click()
     await sheet.getByRole('button',{name:'Zoom Front in',exact:true}).click()

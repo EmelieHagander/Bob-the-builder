@@ -138,7 +138,7 @@ function VersionDetails({ value, target, details = false, onShellChanged, onShel
     {value.hasStairStudy && <StairStudyDrawing value={value.stairStudy ?? null} title={value.title} areaId={value.areaId} />}
     <GeneratedDetails value={value} preview />
     {value.imageId ? <figure className="drawing-image">
-      <StoredImage projectId={value.projectId} image={{ id: value.imageId, title: value.imageTitle || value.title }} original />
+      <StoredImage projectId={value.projectId} image={{ id: value.imageId, title: value.imageTitle || value.title }} original zoomable />
       <figcaption>Saved drawing image · version {value.revision}</figcaption>
     </figure> : value.imageTitle && <p>Drawing image removed: {value.imageTitle}</p>}
     {!value.isConstruction && !value.cad && !value.shell && !value.parametricRecipe && !value.hasRoomLayout && !value.hasMultifloorPlan && !value.hasStairStudy && !value.generation && !value.imageId && <p>No viewable drawing is saved for this version. Its description and recorded evidence remain available in Details.</p>}

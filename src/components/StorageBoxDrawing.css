@@ -8,6 +8,8 @@
 .cad-sheet { margin: 16px 0; min-width: 0; max-width: 100%; }
 .sheet-pan { cursor: grab; user-select: none; -webkit-user-select: none; }
 .sheet-pan.is-panning { cursor: grabbing; }
+/* Zoom sets the size of an opened original; its fixed preview cap would fight it. */
+.box-drawing-sheet img.project-image-original { max-height: none; }
 .box-dimensions { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .box-dimensions dt { font-size: 13px; color: var(--ink-soft); }
 .box-dimensions dd { margin: 4px 0 0; font-weight: 700; font-variant-numeric: tabular-nums; }

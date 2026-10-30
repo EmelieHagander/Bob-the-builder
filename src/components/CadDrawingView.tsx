@@ -4,7 +4,7 @@ import type { DrawingSourceStatus } from '../data/drawingSources'
 import { CadSourceMap } from './CadSourceMap'
 import { lazy, Suspense, useCallback, useState } from 'react'
 import './StorageBoxDrawing.css'
-import { SHEET_ZOOM_MAX, useSheetZoom } from '../lib/useSheetZoom'
+import { ZoomableImage } from './ZoomableImage'
 const WireframeView = lazy(() => import('./CadWireframeView').catch(() => ({ default: WireframeUnavailable })))
 function WireframeUnavailable({onFallback}:{onFallback:(message:string)=>void}) {
  return <div role="alert"><p>The 3D viewer could not be loaded. Check the connection and try again.</p><button type="button" className="btn" onClick={()=>onFallback('')}>Show saved drawing</button></div>
@@ -12,18 +12,9 @@ function WireframeUnavailable({onFallback}:{onFallback:(message:string)=>void}) 
 
 /** One saved view. Sheets are 1000 px wide, so on a phone they need zoom to be read. */
 function CadSheet({src,label,title,file}:{src:string;label:string;title:string;file:string}){
- const {viewport,zoom,panning,pan,zoomBy,reset}=useSheetZoom()
  return <figure className="cad-sheet">
   <figcaption><strong>{label}</strong> · <a download={file} href={src}>download drawing</a></figcaption>
-  <div className="foundation-actions box-drawing-controls">
-   <button type="button" className="btn" onClick={()=>zoomBy(-0.5)} disabled={zoom<=1} aria-label={`Zoom ${label} out`}>−</button>
-   <span aria-live="polite">{Math.round(zoom*100)}%</span>
-   <button type="button" className="btn" onClick={()=>zoomBy(0.5)} disabled={zoom>=SHEET_ZOOM_MAX} aria-label={`Zoom ${label} in`}>+</button>
-   <button type="button" className="btn" onClick={reset} disabled={zoom===1}>Reset zoom</button>
-  </div>
-  <div ref={viewport} {...pan} className={`box-drawing-viewport sheet-pan${panning?' is-panning':''}`} tabIndex={0} aria-label={`${label}. Scroll or drag to read the full drawing.`}>
-   <div className="box-drawing-sheet" style={{width:`${zoom*100}%`}}><img alt={`${title} — ${label}`} src={src} draggable={false} /></div>
-  </div>
+  <ZoomableImage src={src} alt={`${title} — ${label}`} label={label} fit="width" />
  </figure>
 }
 
