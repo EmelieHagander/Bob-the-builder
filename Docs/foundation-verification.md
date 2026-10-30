@@ -19,11 +19,11 @@ time limit. Cost USD 0.68 (30 Bob calls and one picker call). Evidence:
   times. In run 4 the same tools succeeded first time as native functions.
 - **What worked:** 91% of Bob's input tokens were read from the cache (608,768
   of 671,989), and the thread's project snapshot was locked as designed.
-- **Fix, owner's choice:** [version 2](ask-bob-tools.md#tool-sheets-v2) keeps
-  the turn's first tools native and puts only tools loaded later behind
-  `use_tool`. Built and tested, not installed: deploy `bob-worker` and
-  `ask-bob`, then apply `20261030060000_bob_tool_sheets_hybrid_catalog.sql`,
-  then repeat the box run.
+- **Fix, owner's choice:** [tool order](ask-bob-tools.md#tool-order) makes
+  every tool native again: the turn's first tools keep their order and a tool
+  loaded later is added at the end. Built and tested, not installed: deploy
+  `bob-worker` and `ask-bob`, then apply
+  `20261030060000_bob_tool_order_catalog.sql`, then repeat the box run.
 
 <a id="memory-stair-install-2026-10-30"></a>
 ## Prompt tiers and the memory stair — installed 2026-10-30

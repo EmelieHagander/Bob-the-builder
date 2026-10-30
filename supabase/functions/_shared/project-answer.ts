@@ -38,11 +38,11 @@ import { type ToolPolicyReader, type ToolboxEntry, type ToolInstructions, checke
 import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' }
 
 /** Instruction content comes from the pinned database manifest; shelf state is data. */
-export function buildBobSystemMessage(aiCatalog: AiCatalogSession, tools: OpenAIServiceOptions['tools'] = [], toolbox: ToolboxEntry[] = [], completeRequest = false, toolSheets: boolean | 1 | 2 = false, promptTiers = false): string {
+export function buildBobSystemMessage(aiCatalog: AiCatalogSession, tools: OpenAIServiceOptions['tools'] = [], toolbox: ToolboxEntry[] = [], completeRequest = false, toolSheets = false, promptTiers = false): string {
   const shelf = sortToolbox(toolbox, aiCatalog.definition('bob.tools', 'tool_contract').definition.shelves as { label: string; tools: string[] }[])
   // Prompt tiers: the availability states move to the end of the input, so the instructions never change.
   return [aiCatalog.role('ask-bob').systemMessage, completeRequest ? buildBobCompleteHands(aiCatalog, tools, shelf, !promptTiers) : buildBobHands(aiCatalog, tools, shelf),
-    ...(toolSheets && tools.length ? [aiCatalog.text(toolSheets === 2 ? 'bob.toolbox.sheets-late' : 'bob.toolbox.sheets-at-end')] : [])].join('\n\n')
+    ...(toolSheets && tools.length ? [aiCatalog.text('bob.toolbox.sheets-at-end')] : [])].join('\n\n')
 }
 
 /** Owner decision 2026-10-30 (tool sheets): a provider call to use_tool runs the
@@ -206,7 +206,7 @@ export interface BobAnswerState {
   initial: { briefing: unknown; catalog: unknown; drawingRequests: unknown; orientation?: ProjectOrientation; directory?: unknown; toolPick?: string[] | null }
   /** Tool-sheet manifests: tools whose details are already at the end of this conversation. */
   sheets?: string[]
-  /** Tool-sheet version 2: the tools native for the whole turn (those offered at its first step). */
+  /** Tool-order manifests: the native tool names in the order sent; later loads are appended. */
   native?: string[]
   /** Prompt-tier manifests: the tool availability last sent at the end of the input. */
   availability?: string
@@ -326,21 +326,25 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // Owner decision 2026-10-30: the base prompt (role, directory, the permanent
   // tools and use_tool) never changes; the job's other tools are described in
   // detail at the end of the conversation, once each, and called through use_tool.
-  // Version 2 (after paid box run 5): the tools offered at the turn's first step stay native for the
-  // whole turn; only a tool loaded later is described at the end and called through use_tool.
-  const sheetsVersion = phaseTools && coreTools ? opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.tool_sheets_version : undefined
-  const toolSheets: false | 1 | 2 = sheetsVersion === 1 || sheetsVersion === 2 ? sheetsVersion : false
-  let turnNative: string[] | undefined = restored?.native
+  const toolSheets = !!(phaseTools && coreTools && opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.tool_sheets_version === 1)
   const sheetsSent = new Set<string>(restored?.sheets ?? [])
+  // Owner decision after paid box run 5: every tool is native. The turn's first tools keep their
+  // order and a tool loaded later is added at the end, so the list only grows within a turn.
+  const toolOrder = !!(phaseTools && coreTools && opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.tool_order_version === 1)
+  const nativeOrder: string[] = [...(restored?.native ?? [])]
+  const orderTools = (specs: NonNullable<OpenAIServiceOptions['tools']>) => {
+    if (!toolOrder || !specs.length) return specs
+    for (const spec of specs) if (!nativeOrder.includes(spec.function.name)) nativeOrder.push(spec.function.name)
+    return nativeOrder.flatMap(name => specs.filter(spec => spec.function.name === name))
+  }
   // Prompt tiers (2026-10-30): the stair-pinned context carries the tiered order; availability is sent at the end, only when it changes.
-  const promptTiers = !!opts.context?.stair
+  // With tool order the list grows within a turn, so availability is never part of the instructions either.
+  const promptTiers = !!opts.context?.stair || toolOrder
   let availabilitySent: string | undefined = restored?.availability
   const splitSheets = (specs: NonNullable<OpenAIServiceOptions['tools']>) => {
     if (!toolSheets || !specs.length) return { native: specs, sheets: [] as string[] }
-    if (toolSheets === 2 && !turnNative) turnNative = specs.map(spec => spec.function.name)
-    const native = toolSheets === 2 ? turnNative! : coreTools!
-    return { native: [...specs.filter(spec => native.includes(spec.function.name)), opts.aiCatalog.tool(USE_TOOL, { include_manual: true })],
-      sheets: specs.map(spec => spec.function.name).filter(name => !native.includes(name)) }
+    return { native: [...specs.filter(spec => coreTools!.includes(spec.function.name)), opts.aiCatalog.tool(USE_TOOL, { include_manual: true })],
+      sheets: specs.map(spec => spec.function.name).filter(name => !coreTools!.includes(name)) }
   }
   const turnPreload = (phase: string | null) => {
     if (!phaseTools) return preloadTools
@@ -467,7 +471,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     await opts.checkpoint.save(structuredClone({ version: 1, projectId: opts.projectId, step, phase,
       initial: { briefing, catalog, drawingRequests, orientation, directory: orientationReader?.exportState(), ...(toolPick ? { toolPick } : {}) },
       ...(toolSheets ? { sheets: [...sheetsSent] } : {}),
-      ...(toolSheets === 2 && turnNative ? { native: turnNative } : {}),
+      ...(toolOrder ? { native: [...nativeOrder] } : {}),
       ...(availabilitySent !== undefined ? { availability: availabilitySent } : {}),
       messages, previousResponseId, preparedEpoch, observation, toolbox: toolbox.exportState(), workResults,
       completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
@@ -502,6 +506,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     } catch (error) { rethrowContinuation(error); return { ok: false, error: toolFailureCode(error) } }
     callable = tools.map(tool => tool.function.name)
     if (toolSheets && tools.length) { const split = splitSheets(tools); tools = split.native; pendingSheets = split.sheets.filter(name => !sheetsSent.has(name)) }
+    tools = orderTools(tools)
     closedByLimit = lastStep || lateInTurn
     closedByCommentary = completionAware && commentaryStreak >= 2
     }
@@ -518,6 +523,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       // A rollover summarizes the sheets away: send them again at the end of the next step.
       callable = tools.map(tool => tool.function.name)
       if (toolSheets) { tools = splitSheets(tools).native; sheetsSent.clear() }
+      tools = orderTools(tools)
       availabilitySent = undefined
       shelf = closedByLimit || closedByCommentary ? [] : toolbox.toolbox
       // The returned provider request and its eventual handlers share this
@@ -538,7 +544,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     const availabilityMessage = availability !== undefined && availability !== availabilitySent ? { role: 'user' as const, content: availability } : null
     if (availabilityMessage) availabilitySent = availability
     // The job's newly available tools, in detail, after everything else in this request.
-    const sheetMessage = pendingSheets.length ? { role: 'user' as const, content: opts.aiCatalog.text(toolSheets === 2 ? 'bob.toolbox.sheets-late-intro' : 'bob.toolbox.sheets-intro') + '\n' + JSON.stringify(pendingSheets.map(name => {
+    const sheetMessage = pendingSheets.length ? { role: 'user' as const, content: opts.aiCatalog.text('bob.toolbox.sheets-intro') + '\n' + JSON.stringify(pendingSheets.map(name => {
       const spec = opts.aiCatalog.tool(name, { ...schemaParameters(), ...(toolbox.toolParameters()?.[name] ?? {}) }).function
       return { name: spec.name, description: spec.description, parameters: spec.parameters }
     })) } : null

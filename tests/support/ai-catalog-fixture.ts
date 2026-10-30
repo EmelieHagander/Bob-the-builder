@@ -32,7 +32,7 @@ let preResultWindowRows:any[]|undefined,preResultWindowVersions:Map<string,numbe
 let preConstructionWorkRows:any[]|undefined,preConstructionWorkVersions:Map<string,number>|undefined
 let preToolPickerRows:any[]|undefined,preToolPickerVersions:Map<string,number>|undefined
 let preToolSheetsRows:any[]|undefined,preToolSheetsVersions:Map<string,number>|undefined
-let preToolSheetsHybridRows:any[]|undefined,preToolSheetsHybridVersions:Map<string,number>|undefined
+let preToolOrderRows:any[]|undefined,preToolOrderVersions:Map<string,number>|undefined
 let preMemoryStairRows:any[]|undefined,preMemoryStairVersions:Map<string,number>|undefined
 // SQL publications drop the seed markers and name themselves, as `(prior.metadata-'seed_version'-'source_revision')||publication`.
 const publishAs=(row:any,publication:string)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication}}
@@ -382,13 +382,11 @@ for(const migration of migrations){
   const contract=seed.find(row=>row.key==='agent-contract.ask-bob')
   publishAs(contract,'bob-memory-stair-v1');contract.metadata.memory_stair_version=1;contract.metadata.prompt_tiers_version=1;versions.set(contract.key,versions.get(contract.key)!+1)
  }
- const toolSheetsHybrid=source.match(/\$tool_sheets_hybrid_additions\$([\s\S]+?)\$tool_sheets_hybrid_additions\$/)
- if(toolSheetsHybrid){
-  preToolSheetsHybridRows=structuredClone(seed);preToolSheetsHybridVersions=new Map(versions)
-  for(const addition of JSON.parse(toolSheetsHybrid[1])){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'tool-sheets-hybrid-v1'}});versions.set(addition.key,1)}
+ if(/\$bob_tool_order\$/.test(source)){
+  preToolOrderRows=structuredClone(seed);preToolOrderVersions=new Map(versions)
   const box=seed.find(row=>row.key==='bob.tools')
-  box.definition={...box.definition,tool_sheets_version:2}
-  publishAs(box,'tool-sheets-hybrid-v1');box.metadata.tool_sheets_version=2;versions.set(box.key,versions.get(box.key)!+1)
+  const{tool_sheets_version:_d,...definition}=box.definition;box.definition={...definition,tool_order_version:1}
+  publishAs(box,'tool-order-v1');delete box.metadata.tool_sheets_version;box.metadata.tool_order_version=1;versions.set(box.key,versions.get(box.key)!+1)
  }
  const toolSheets=source.match(/\$tool_sheets_additions\$([\s\S]+?)\$tool_sheets_additions\$/)
  if(toolSheets){
@@ -787,10 +785,10 @@ for(const row of preMemoryStairRows??[])if(row.kind==='tier_binding'&&row.defini
 const preMemoryStairManifest=fixtureManifest(preMemoryStairRows??seed,preMemoryStairVersions??versions,'fixture-pre-memory-stair-manifest')
 /** Manifests pinned before the 2026-10-30 memory stair: one rewritten summary and the per-turn briefing order. */
 export function preMemoryStairCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preMemoryStairManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
-for(const row of preToolSheetsHybridRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
-const preToolSheetsHybridManifest=fixtureManifest(preToolSheetsHybridRows??seed,preToolSheetsHybridVersions??versions,'fixture-pre-tool-sheets-hybrid-manifest')
-/** The manifest with tool_sheets_version 1 (every job tool behind use_tool), before the hybrid publication. */
-export function preToolSheetsHybridCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preToolSheetsHybridManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
+for(const row of preToolOrderRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preToolOrderManifest=fixtureManifest(preToolOrderRows??seed,preToolOrderVersions??versions,'fixture-pre-tool-order-manifest')
+/** The manifest with tool_sheets_version 1 (every job tool behind use_tool), before the tool-order publication. */
+export function preToolOrderCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preToolOrderManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 /** Manifests pinned before the 2026-10-30 tool-sheets publication: every loaded tool is a native function. */
 export function preToolSheetsCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preToolSheetsManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 /** Manifests pinned before the 2026-10-30 tool-picker publication: the phase alone chooses the flexible tools. */
