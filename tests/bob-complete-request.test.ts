@@ -130,7 +130,9 @@ test('main loop resumes complete requests across every boundary with manuals and
   const loaded = requests.slice(1)
   for (const request of loaded) {
     assert.deepEqual(request.catalogToolParameters?.save_project_task, { card: false, include_manual: true })
-    assert(request.tools!.some(t => t.function.name === 'save_project_task'))
+    // Native, or (tool-sheet manifests, 2026-10-30) described in the conversation and callable through use_tool.
+    assert(request.tools!.some(t => t.function.name === 'save_project_task') || request.tools!.some(t => t.function.name === 'use_tool')
+      && request.messages!.some(m => typeof m.content === 'string' && m.content.includes('"name":"save_project_task"')))
   }
   assert.deepEqual(resumed.receipts, baseline.receipts)
 })
