@@ -90,6 +90,9 @@ test('provider cache routing key stays outside the journal, job and drawing-budg
   const code = await readFile(new URL('../supabase/functions/_shared/ask-openai.ts', import.meta.url), 'utf8')
   const invoke = code.slice(code.indexOf('const invoke=('), code.indexOf('result=boundDrawing'))
   assert.match(invoke, /promptCacheKey && \(options\.catalogRoleKey \?\? options\.functionName\) === 'ask-bob' \? \{ promptCacheKey \} : \{\}/)
+  // Build-team workers (2026-10-31) get their own per-project key, also inside invoke only.
+  assert.match(invoke, /WORKER_ROLES\.has\(options\.catalogRoleKey \?\? options\.functionName\) \? \{ promptCacheKey: workerCacheKey\(promptCacheKey,/)
+  assert.match(code, /new Set\(\['materials-worker', 'structure-worker', 'drawing-worker'\]\)/)
   // Hashed call options are built before invoke; the key is never part of them.
   const dispatch = code.slice(code.indexOf('const dispatchModel'), code.indexOf('const invoke=('))
   assert.doesNotMatch(dispatch, /promptCacheKey/)
