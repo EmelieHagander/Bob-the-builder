@@ -161,8 +161,8 @@ himself. Manifests with `bob.tools` `build_workers_version` 1
   the check) is retired for new jobs (`retired_tools`). Floor plans, room layouts
   and stair studies stay with Bob.
 - Bob keeps the reads (`read_construction_draft`, drawing requests and their
-  controls). With `bob.tools` `report_readback_version` 1 (built 2026-10-31, not
-  installed), the hand-over result is `{status, worker, report, calls, receipts,
+  controls). With `bob.tools` `report_readback_version` 1 (installed 2026-10-31,
+  [run 14](foundation-verification.md#report-readback-install-2026-10-31)), the hand-over result is `{status, worker, report, calls, receipts,
   readback}`: `receipts` are the ids, dataset, revision and operation of each save
   or check, copied by code; `readback` is, after Konrad's or Rita's job, each saved
   or checked construction's overview (with its check results) and each saved
