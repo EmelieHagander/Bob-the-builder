@@ -6,7 +6,9 @@
 -- They read and save through the same session gates, receipts and turn budgets
 -- and report to Bob; they never answer the owner. Bob no longer offers their
 -- tools; he hands jobs over through ask_structure_worker and ask_drawing_worker.
--- The independent drawing review gets its own identity, since Rita now draws.
+-- No AI reviews the drawing any more: cad.drawing-check mode code lets the
+-- code findings decide (the drawing is generated exactly from the checked
+-- construction; Konrad checks the construction against the owner's intent).
 -- The legacy box drawing (save_project_drawing), which skipped both the
 -- construction and the review, is retired for new jobs (retired_tools).
 -- Prompt texts drafted by Saoirse and approved by the owner (OLD -> NEW).
@@ -239,6 +241,14 @@ declare additions jsonb:=$build_workers_additions$[
     "contract": "DRAFT"
    },
    "card_description": "DRAFT"
+  }
+ },
+ {
+  "key": "cad.drawing-check",
+  "kind": "agent_contract",
+  "definition": {
+   "mode": "code",
+   "version": 1
   }
  }
 ]$build_workers_additions$::jsonb;

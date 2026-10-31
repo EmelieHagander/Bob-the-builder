@@ -1,6 +1,6 @@
 /** Explicit catalog injection for domain tests. Provider-wire tests use the
  * same database seed and catalog binder before the real provider adapter. */
-import {catalogFixture,catalogCall,DRAWING_REVIEW_INSTRUCTION} from './ai-catalog-fixture.ts'
+import {catalogFixture,catalogCall,DRAWING_REVIEW_INSTRUCTION,preBuildWorkersCatalogFixture} from './ai-catalog-fixture.ts'
 import type {AiCatalogSession} from '../../supabase/functions/_shared/ai-catalog.ts'
 import {createCadAssistant as cad} from '../../supabase/functions/_shared/cad-assistant.ts'
 import {createPlanAssistant as plan} from '../../supabase/functions/_shared/plan-assistant.ts'
@@ -23,7 +23,8 @@ export function fixtureDesignReadiness(project_id:string,solution_id:string,targ
  return {status:'ready',project_id,area_id,target_revision,solution_id,solution_revision:1,purpose,design_intent:{version:1,purpose,summary:'Synthetic fixture scope already discussed',references:[],features:[],choices:[],alignment:{status:'aligned',basis:'Explicit synthetic fixture instruction'}},issues:[],deferred_choice_ids:[],pin}
 }
 export function createCadAssistant(opts:Omit<Parameters<typeof cad>[0],'aiCatalog'>&{aiCatalog?:AiCatalogSession}){
- const session=opts.aiCatalog??catalogFixture()
+ // The AI drawing review is what pinned jobs keep; new manifests check drawings in code only (2026-10-31).
+ const session=opts.aiCatalog??preBuildWorkersCatalogFixture()
  const makeLookup=()=>{
   const source=opts.makeLookup()
   return {...source,get remaining(){return source.remaining},get partial(){return source.partial},search:async(input:unknown)=>{

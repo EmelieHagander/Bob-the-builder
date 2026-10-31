@@ -28,7 +28,7 @@ import { verifyCadFiles, type CadGuideRequest } from './cad-transport.ts'
 import { assemblyStages } from './construction-lists.ts'
 import { constructionInstancePolicy } from './construction-instance-policy.ts'
 import { parseFastenerSchedule } from './construction-fasteners.ts'
-import { applyTargetedReuse, buildCadReviewPacket, codeFindingReview, formEvidenceCoverage, parseTargetedCadAnswers, parseTargetedReviewRecord, previewHashes, reusedTargetedReview, targetedReuseKey, targetedReviewBasis, targetedReviewEnabled, targetedReviewRecord, withReusedRequirements, type CadReviewPacket, type TargetedReuse } from './cad-targeted-review.ts'
+import { applyTargetedReuse, buildCadReviewPacket, codeCheckBasis, codeDrawingCheckEnabled, codeFindingReview, codePassReview, formEvidenceCoverage, parseTargetedCadAnswers, parseTargetedReviewRecord, previewHashes, reusedTargetedReview, targetedReuseKey, targetedReviewBasis, targetedReviewEnabled, targetedReviewRecord, withReusedRequirements, type CadReviewPacket, type TargetedReuse } from './cad-targeted-review.ts'
 
 const object=(v:unknown):v is Record<string,any>=>!!v&&typeof v==='object'&&!Array.isArray(v)
 const text=(v:unknown,n:number)=>typeof v==='string'&&v.trim().length>0&&v.length<=n
@@ -97,7 +97,7 @@ export interface CadAssistantState {
  requiredTools:string[]
  savedRequest:{id:string;revision:number;payload:DrawingRequest['payload']}|null
  terminalFailure:Record<string,unknown>|null
- acceptedReview:{fingerprint:string;review:CadReview;basis?:{mode:'targeted';version:string;packet:string;reused:'none'|'requirements'|'all'}}|null
+ acceptedReview:{fingerprint:string;review:CadReview;basis?:{mode:'targeted'|'code';version:string;packet:string;reused:'none'|'requirements'|'all'}}|null
  metrics:{consultations:number;renders:number;input_corrections:number;reviews:number;review_rejections:number;review_unavailable:number}
  sources:ReturnType<typeof createProjectLookup>['sources']
  pieces:CadPiecesState
@@ -569,7 +569,8 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
      // Prepared FORM package 3 path. Unless the pinned catalog enables it, the
      // full review below runs with an unchanged call sequence and input.
      let packet:CadReviewPacket|null=null,reuse:TargetedReuse|null=null,reuseKey='',presentation:{owner_request:string;views:Record<string,string>}={owner_request:'',views:{}}
-     if(targetedReviewEnabled(opts.aiCatalog.manifest())){
+     const codeOnly=codeDrawingCheckEnabled(opts.aiCatalog.manifest())
+     if(codeOnly||targetedReviewEnabled(opts.aiCatalog.manifest())){
       packet=await buildCadReviewPacket({handoff,requiredFeatureIds,candidateFingerprint:pinned,
        construction:construction?{artifact_id:construction.artifact_id,revision:construction.revision}:null,designIntentPin:readiness.pin,
        renderedViews:candidate.packet.recipe.views,referenceRefs:opts.context?.openedImageRefs()??[],formEvidence:await readFormEvidence(reviewDraft)})
@@ -583,13 +584,16 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
       }
       // An accepted answer for the same construction, requirements, sources and
       // runtime is reused across turns; a changed owner text or sheet asks again.
+      if(!codeOnly){
       reuseKey=await targetedReuseKey({packet,runtimeVersion,pins:{measurements:candidate.measurements,physical:physicalPins},
        referenceVersions:[...(opts.context?.imageEvidence?.()??new Map())].sort(([a],[b])=>a.localeCompare(b))})
       presentation={owner_request:await fingerprint(ownerRequest??''),views:previewHashes(candidate.packet.manifest)}
       ;({packet,reuse}=applyTargetedReuse(packet,parseTargetedReviewRecord(payload.targeted_review),reuseKey,presentation))
+      }
      }
      let review:CadReview|null,referenceStatus:string='not_applicable'
      if(packet&&reuse?.complete){review=reusedTargetedReview(packet,reuse);referenceStatus=packet.questions.reference?'met':'not_applicable'}
+     else if(codeOnly&&packet)review=codePassReview(packet)
      else{
      reviews++;metrics.reviews++
      const reviewCandidate={title:candidate.title,description:candidate.description,assumptions:candidate.assumptions,recipe:candidate.packet.recipe,manifest:forReview(candidate.packet.manifest),measurements:candidate.measurements}
@@ -624,9 +628,9 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
      if(missingViews.length){review.verdict='revise';review.issues.push({severity:'error',code:'views',correction:'Render missing requested views: '+missingViews.join(', ')})}
      if(review.verdict==='pass'){
       if(construction){const fresh=await refreshConstruction();if(fresh?.status!=='ready'){candidate=null;acceptedReview=null;return constructionFailure(fresh)}}
-      acceptedReview={fingerprint:pinned,review,...(packet?{basis:await targetedReviewBasis(packet,reuse?reuse.complete?'all':'requirements':'none')}:{})}
+      acceptedReview={fingerprint:pinned,review,...(packet?{basis:codeOnly?await codeCheckBasis(packet):await targetedReviewBasis(packet,reuse?reuse.complete?'all':'requirements':'none')}:{})}
       await persist('reviewed',{reviewed_candidate:drawingCandidateCommitment(candidate),
-       ...(packet?{targeted_review:targetedReviewRecord(review,referenceStatus,reuseKey,presentation)??undefined}:{})})
+       ...(packet&&!codeOnly?{targeted_review:targetedReviewRecord(review,referenceStatus,reuseKey,presentation)??undefined}:{})})
       if(request&&opts.requestStore?.atomicSave)candidate.drawing_request={id:request.id,revision:request.revision}
       savedRequest=opts.requestStore?.atomicSave||!request?null:{id:request.id,revision:request.revision,payload:structuredClone(payload)}
       return {status:'ready',request_id:request?.id??null,saved:false,summary:review.summary,quality:acceptedReview,candidate:{title:candidate.title,part_count:candidate.packet.recipe.instances.length,assumptions:candidate.assumptions}}
