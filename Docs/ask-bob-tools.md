@@ -118,9 +118,63 @@ price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
   conversation; a context rollover summarizes them away, so they are sent again
   on the next step.
 
+<a id="build-team"></a>
+**Bob's build team: Konrad (construction), Rita (drawing) and Mattias
+(materials) — built 2026-10-31, not installed (owner decisions; [build
+record](foundation-verification.md#build-team-2026-10-31)).** Bob coordinates and
+is the owner's contact; the work goes to colleagues with their own tools. In paid
+box run 11 Bob on the small model failed because he still built the construction
+himself. Manifests with `bob.tools` `build_workers_version` 1
+(`20261031040000_bob_build_workers_catalog.sql`):
+
+- **Konrad** (`role.structure-worker`) owns the construction: save, check,
+  change parameters and parts, part roles, affected outputs, lists and older
+  drawings that need a construction. He checks the construction against the
+  owner's intent and images before he hands it on, and decides the pieces of a
+  large build.
+- **Rita** (`role.drawing-worker`) draws the checked construction
+  (`design_project_cad`), saves it (`save_cad_design`), links drawings to plan
+  Steps, composes shells from pieces and handles drawing gaps. She is no longer
+  the drawing reviewer: **code alone checks a drawing**
+  ([CAD adapter](cad-adapter.md#code-drawing-check)).
+- **Mattias** keeps the materials shelf and now works the same way.
+- **Bob hands over no values.** Each hand-over (`ask_structure_worker`,
+  `ask_drawing_worker`, `ask_materials_worker` v2) takes one `request`, written as
+  to a colleague; a call with other fields is refused. The worker reads the
+  project itself.
+- **Project knowledge.** Each worker's definition lists fixed reads (`knowledge`:
+  label, tool, arguments), run in order at the start of the job through the
+  worker's session. Konrad: selected solutions, measurements, image metadata and
+  the construction drafts. Rita: the construction drafts, drawing requests, the
+  approved plan and the selected solutions. Mattias: the project's materials and
+  the construction drafts.
+- **Input, fixed first:** the persona (with the project's name,
+  `{{project_name}}`) and the shared team text `worker.team`, the locked project
+  snapshot, the conversation summaries and history, then project knowledge and
+  Bob's request last.
+- **A fixed tool list per job.** A worker's session also offers tools that wait
+  for a prerequisite (saving a checked drawing), so the list is the same in every
+  step and the cached prompt start holds; calling one too early answers "not
+  available yet".
+- Bob does not offer the workers' tools, and the tool picker does not either.
+  The legacy box drawing `save_project_drawing` (it skipped the construction and
+  the check) is retired for new jobs (`retired_tools`). Floor plans, room layouts
+  and stair studies stay with Bob.
+- Bob keeps the reads (`read_construction_draft`, drawing requests and their
+  controls) to check a report before he answers.
+
+Pinned manifests keep their behaviour: before this publication Bob holds the
+construction and drawing tools, Mattias gets Bob's brief, and the AI reviewer
+checks drawings. Source: `bob-workers.ts`, the toolbox setup in
+`project-answer.ts`, `project-tools/session.ts` (`offerWaiting`). Not yet
+measured; the next paid box run includes it.
+
 <a id="materials-worker"></a>
-**Bob with a worker: Mattias (materials) — pilot built 2026-10-30, not installed
-(owner decision: one worker, measured before anything else moves).**
+**Superseded for new manifests by [the build team](#build-team) (built
+2026-10-31): Mattias's first form, kept by pinned manifests.**
+**Bob with a worker: Mattias (materials) — pilot installed 2026-10-30
+(owner decision: one worker, measured before anything else moves;
+[installation and run 9](foundation-verification.md#materials-worker-install-2026-10-30)).**
 Bob carried 100 tools; most rejected calls in runs 5–7 were about meaning in a
 specialised area. The pilot moves one area to a worker with its own tools:
 
@@ -148,7 +202,7 @@ specialised area. The pilot moves one area to a worker with its own tools:
 The worker definition lives in `bob.tools` (`workers.materials`,
 `materials_worker_version` 1), so further workers are catalog data. Source:
 `20261030090000_bob_materials_worker_catalog.sql`, `bob-workers.ts` and the
-toolbox setup in `project-answer.ts`. Not yet measured; further workers and
+toolbox setup in `project-answer.ts`. Measured once (run 9); further workers and
 the trade specialists (electrician, plumber, roofer, carpenter and drywaller,
 tiler) are a proposal that waits for the pilot's numbers.
 

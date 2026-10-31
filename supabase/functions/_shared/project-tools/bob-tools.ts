@@ -92,6 +92,8 @@ export function createBobToolSession(opts: {
   buildGuideTools?: boolean;
   /** Tools of work already in progress, loaded without a describe_tool round. */
   preloadTools?: (phase: string | null) => string[];
+  /** Workers: waiting tools are offered too, so a job's tool list is fixed. */
+  offerWaiting?: boolean;
   calculator?: ProjectCalculator;
   orientationReader?: OrientationDirectoryReader;
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter;
@@ -228,7 +230,7 @@ export function createBobToolSession(opts: {
     }] : []),
     ...(opts.extraTools ?? []),
   ]
-  return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions, ...(opts.preloadTools ? { preloadTools: opts.preloadTools } : {}),
+  return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions, ...(opts.preloadTools ? { preloadTools: opts.preloadTools } : {}), ...(opts.offerWaiting ? { offerWaiting: true } : {}),
     ...(opts.aiCatalog?.manifest().definitions.some(row=>row.prompt_key==='bob.tools'&&row.metadata?.construction_work_version===1)?{
       autoLoadReady:true,followups:opts.aiCatalog.definition('bob.tools','tool_contract').definition.operation_followups as import('./session.ts').ToolFollowup[],
     }:{}),

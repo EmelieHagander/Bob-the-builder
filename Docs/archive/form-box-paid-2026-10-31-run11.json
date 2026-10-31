@@ -1,0 +1,64 @@
+{
+ "run": "https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41173010760",
+ "workflow": "live-form-acceptance.yml",
+ "scenario": "box",
+ "config": "baseline",
+ "head": "918f7cd7df332085237a9417f9c9b1cbc8aa4687",
+ "functions": {
+  "bob-worker": 160,
+  "ask-bob": 192
+ },
+ "catalog": {
+  "routing.ask-bob": "v2 default_profile_key profile.ask-bob-mini (20261031053231); restored to profile.ask-bob by 20261031055104",
+  "bob_model": "gpt-5.4-mini on every ask-bob call",
+  "mattias_model": "gpt-5.4"
+ },
+ "passed": false,
+ "failure": "concept turn cancelled by the scenario's 15-minute limit (user_cancelled); turns 2 and 3 never ran",
+ "turns": [
+  {
+   "step": "concept",
+   "turn": "a6a196c7-1a9b-499e-a252-4042167918dc",
+   "delivery": "cancelled",
+   "wall": "15 min",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 22,
+    "materials-worker": 31,
+    "completion-gate": 1
+   },
+   "usd_by_role": {
+    "tool-picker": 0.003,
+    "ask-bob": 0.343,
+    "materials-worker": 0.544,
+    "completion-gate": 0.002
+   },
+   "usd": 0.892,
+   "hand_overs": 5,
+   "hand_over_results": [
+    "ok",
+    "ok",
+    "step_budget",
+    "ok",
+    "unfinished at cancel"
+   ],
+   "rejected": {
+    "save_construction_draft (Bob)": 7,
+    "read_work_context (Bob)": 2,
+    "save_catalog_definition (Mattias)": 6,
+    "search_material_catalog (Mattias)": 1
+   },
+   "input_tokens": 928493,
+   "cached_input_tokens": 795008,
+   "cached_share": 0.856
+  }
+ ],
+ "compared_with_run10_concept": {
+  "calls": "55 vs 16",
+  "usd": "0.89 (unfinished) vs 0.47",
+  "wall": "15 min (cancelled) vs 5 min",
+  "bob_calls": "22 vs 10",
+  "mattias_calls": "31 in 5 jobs vs 4 in 1 job",
+  "construction": "7 rejected saves, none saved vs saved on the first try"
+ }
+}

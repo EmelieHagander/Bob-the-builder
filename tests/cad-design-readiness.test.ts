@@ -2,7 +2,7 @@ import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {createCadAssistant} from '../supabase/functions/_shared/cad-assistant.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
-import {catalogFixture,catalogCall} from './support/ai-catalog-fixture.ts'
+import {catalogCall,preBuildWorkersCatalogFixture} from './support/ai-catalog-fixture.ts'
 import {fixtureDesignReadiness,createProjectContext} from './support/colleague-catalog-fixture.ts'
 import {checkedCadFixture,fixtureConstructionId} from './support/checked-cad-fixture.ts'
 import {parameterPlan} from './support/cad-parameter-fixture.ts'
@@ -17,7 +17,8 @@ const request={request_id:null,brief:'Draw the discussed object',handoff,area_id
 const reply=(data:unknown)=>({success:true,data,model:'fixture',responseId:'fixture',usage:{input_tokens:1,output_tokens:1,total_tokens:2}})
 const renderReply=()=>({...reply(null),toolCalls:[{id:'render',type:'function' as const,function:{name:'render_cad_candidate',arguments:JSON.stringify({purpose:'project',recipe,parameter_plan:parameterPlan(recipe),dimension_bindings:[],title:'Discussed object',description:'A scoped concept',assumptions:'Physical fit still needs verification',target_revision:1,measurements:[]})}}]})
 function fixture(){
- const catalog=catalogFixture(),seen:any[]=[]
+ // The AI review path, which pinned jobs keep; new manifests check drawings in code only (2026-10-31).
+ const catalog=preBuildWorkersCatalogFixture(),seen:any[]=[]
  let readiness=fixtureDesignReadiness('A',solution,1,null,'construction'),renders=0
  const model=async(o:any)=>{
   seen.push(o)

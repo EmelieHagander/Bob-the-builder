@@ -15,6 +15,26 @@ export function targetedReviewEnabled(manifest: { definitions: { prompt_key: str
  return manifest.definitions.some(row => row.prompt_key === CAD_TARGETED_REVIEW_ROLE && row.definition?.enabled === true)
 }
 
+/** Owner decision 2026-10-31: Rita draws and code alone checks her drawing. The
+ * drawing is generated exactly from Konrad's checked construction; Konrad checks
+ * that construction against the owner's intent before it is drawn. With this
+ * catalog switch the code findings of the review packet decide and no model is
+ * called. Its key starts with "cad." so it enters the drawing runtime fingerprint. */
+export const CAD_DRAWING_CHECK = 'cad.drawing-check'
+export function codeDrawingCheckEnabled(manifest: { definitions: { prompt_key: string; definition: Record<string, any> }[] }) {
+ return manifest.definitions.some(row => row.prompt_key === CAD_DRAWING_CHECK && row.definition?.mode === 'code')
+}
+/** A passed code check. Requirements stay unresolved: no model judged the pictures. */
+export function codePassReview(packet: CadReviewPacket): CadReview {
+ return { verdict: 'pass', summary: 'Code checks passed: the drawing shows the exact checked construction revision with every requested view, and no stored check failed. No model judged the pictures.',
+  requirements: packet.requirements.map(r => ({ id: r.id, status: 'unresolved' as const,
+   evidence: r.code_evidence?.status === 'properties_passed' ? 'Stored property checks passed; not judged by a model.' : 'Not judged by a model or a stored check.' })),
+  issues: [] }
+}
+export async function codeCheckBasis(packet: CadReviewPacket) {
+ return { mode: 'code' as const, version: CAD_TARGETED_REVIEW_VERSION, packet: await fingerprint(packet), reused: 'none' as const }
+}
+
 type Row = Record<string, any>
 type Status = 'met' | 'unresolved' | 'failed'
 export type FeatureCodeEvidence = { status: 'failed' | 'unsupported' | 'unknown' | 'not_checked' | 'properties_passed'; functional_fidelity: 'unverified'; checks: { id: string; kind: string; status: string; code: string }[] }

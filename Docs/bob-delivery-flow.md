@@ -556,13 +556,29 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Byggt 2026-10-30, inte installerat — pilot: Bob som samordnare med en arbetare, Mattias (material) ([kontrakt](ask-bob-tools.md#materials-worker)):**
-Bob lämnar materialjobb till Mattias, som har egna fasta verktyg, samma samtal
-och sammanfattning som Bob, och Bobs uppdrag sist. Fler arbetare och
-fackspecialister (elektriker, rörmokare, takläggare, snickare och gipsare,
-plattsättare) är ett förslag som väntar på pilotens mätning. Nästa: ägarens OK
-att slå ihop, driftsätta, köra `20261030090000` och ett lådprov jämfört med
-lådprov 6.
+**Byggt 2026-10-31, inte installerat — byggteamet ([bevis](foundation-verification.md#build-team-2026-10-31)):**
+Bob samordnar och pratar med beställaren. Konrad (konstruktör) äger
+konstruktionen, Rita ritar den och Mattias sköter materialen. Bob ber om arbete med
+vanliga ord utan värden; varje kollega läser sin projektkunskap från databasen.
+Koden ensam kontrollerar ritningen. Den gamla genvägen för lådritningar är borttagen
+för nya jobb. Texterna är godkända av ägaren. Kvar: driftsättning, katalogen och ett betalt
+lådprov.
+
+**2026-10-31 — Bob på minimodellen provad och återställd; klartextstycket installerat ([bevis](foundation-verification.md#mini-trial-2026-10-31)):**
+lådprov 11 misslyckades med Bob på minimodellen: konceptturen avbröts efter 15
+minuter (standard: sparad på 5 minuter). Mini-Bob behövde 22 anrop i stället för
+10, fick 7 konstruktionssparningar avvisade och skickade Mattias fem gånger
+(31 anrop). Bob är tillbaka på standard. En samordnare på mini kräver att
+konstruktionsarbetet först flyttas till en arbetare på standard. `bob.persona`
+v3 har nu ett stycke om att skriva med enkla ord; det är inte mätt i ett betalt
+prov än.
+
+**Installerat 2026-10-30 — pilot: Bob som samordnare med en arbetare, Mattias (material) (`bob-worker` v160, `ask-bob` v192, [bevis](foundation-verification.md#materials-worker-install-2026-10-30)):**
+lådprov 9 klarades med alla tre turer sparade: 32 anrop, USD 1,02 (lådprov 6:
+29 anrop, USD 0,93). Bob gav Mattias ett materialjobb; Mattias gjorde det på 3
+anrop utan avvisade anrop. Lådprovet har bara ett materialjobb, så piloten
+behöver mätas där materialarbetet är större innan fler arbetare och
+fackspecialister byggs.
 
 **2026-10-30 — hjälparen ("wrench wench") provad och borttagen; verktygsordning gäller igen ([bevis](foundation-verification.md#box-paid-run7-2026-10-30)):**
 lådprov 7 klarades men Bob behövde 40 anrop i stället för 20 och kostnaden blev

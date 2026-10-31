@@ -22,7 +22,7 @@ import { humanTextIssues } from './human-text.ts'
 import { answerTextFragments, type AnswerTextOutcome } from './answer-text.ts'
 import { toolRejection } from './tool-rejection.ts'
 import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
-import { catalogWorkers, workerOwnedTools, parseWorkerJob, runWorker } from './bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, workerOwnedTools, parseWorkerJob, runWorker } from './bob-workers.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
@@ -389,24 +389,39 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // The hand-over is loaded from the first step like a permanent tool; the
   // catalog's six permanent tools stay unchanged for runtimes without workers.
   const workerHandOverNames = Object.values(workers ?? {}).map(worker => worker.tool)
-  const workerOwned = workerOwnedTools(workers)
+  // Retired tools are hidden from Bob the same way (new manifests only).
+  const workerOwned = new Set([...workerOwnedTools(workers), ...catalogRetiredTools(opts.aiCatalog)])
   // Never picker candidates: the workers' own tools, and the hand-overs Bob always has.
   const workerTools = new Set([...workerOwned, ...workerHandOverNames])
   const bobPolicy: ToolPolicyReader = workerOwned.size ? async () => {
     const policy = await basePolicy()
     return { ...policy, tools: policy.tools.map(row => workerOwned.has(row.name) ? { ...row, active: false } : row) }
   } : basePolicy
+  const withoutDiagnostics = (result: any) => { if (result && typeof result === 'object' && 'diagnostics' in result) { const { diagnostics: _d, ...rest } = result; return rest } return result }
   const workerSessions = new Map<string, ReturnType<typeof createBobToolSession>>()
   let currentStep = restored?.step ?? 0
   let workerToolEvents = 0
-  const workerHandOvers = Object.entries(workers ?? {}).map(([key, worker]) => ({ spec: opts.aiCatalog.tool(worker.tool), version: 1,
+  // The project's name for the workers' personas: the locked snapshot, else one read.
+  let projectName: string | undefined
+  const readProjectName = async () => {
+    if (projectName !== undefined) return projectName
+    const fromSnapshot = (opts.context?.stair?.snapshot as { project?: { name?: unknown } } | undefined)?.project?.name
+    if (typeof fromSnapshot === 'string' && fromSnapshot.trim()) return projectName = fromSnapshot.trim()
+    const found = await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null }) as { records?: { name?: unknown }[] }
+    const name = found?.records?.[0]?.name
+    return projectName = typeof name === 'string' && name.trim() ? name.trim() : 'utan namn'
+  }
+  const workerHandOvers = Object.entries(workers ?? {}).map(([key, worker]) => ({ spec: opts.aiCatalog.tool(worker.tool),
+    // The hand-over's schema version is the pinned catalog's (Mattias's request-only hand-over is v2).
+    version: Number((opts.aiCatalog.definition('tools.' + worker.tool, 'tool_contract').definition.envelope as { schema_version?: unknown } | undefined)?.schema_version ?? 1),
     gate: (): ToolGate => 'available',
     execute: async (raw: unknown) => {
-      const job = parseWorkerJob(raw)
-      if (!job) return { status: 'invalid', issues: [{ path: '$', expected: 'job (text) and findings (text or null)' }] }
+      const plain = !!worker.knowledge
+      const job = parseWorkerJob(raw, plain)
+      if (!job) return { status: 'invalid', issues: [{ path: '$', expected: plain ? 'request (text)' : 'job (text) and findings (text or null)' }] }
       let session = workerSessions.get(key)
       if (!session) {
-        session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: () => [...worker.tools, ...worker.reads], readPolicy: basePolicy })
+        session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: () => [...worker.tools, ...worker.reads], offerWaiting: true, readPolicy: basePolicy })
         workerSessions.set(key, session)
       }
       const stair = opts.context?.stair
@@ -414,8 +429,17 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const workerStep = currentStep
       return runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
         session, hasAccess: opts.hasAccess, deadline, ...(opts.modelTimeoutMs ? { modelTimeoutMs: opts.modelTimeoutMs } : {}),
-        readCurrent: async () => key === 'materials'
-          ? opts.lookup.search({ dataset: 'materials', query: null, status: null, area_id: null, record_id: null }) : null,
+        readCurrent: async () => key === 'materials' ? opts.lookup.search({ dataset: 'materials', query: null, status: null, area_id: null, record_id: null }) : null,
+        // In order, one at a time: the journal replays reads by position.
+        ...(worker.knowledge && opts.projectContext ? { images: { carrier: () => opts.projectContext!.carrier() as NonNullable<OpenAIServiceOptions['messages']>, confirmDelivery: () => opts.projectContext!.confirmDelivery() } } : {}),
+        ...(worker.knowledge ? { variables: { project_name: await readProjectName() }, readKnowledge: async () => {
+          const knowledge: Record<string, unknown> = {}
+          for (const read of worker.knowledge!) {
+            try { knowledge[read.label] = withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments))) }
+            catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; knowledge[read.label] = { status: 'unavailable' } }
+          }
+          return knowledge
+        } } : {}),
         onTool: ({ name, status, ms }) => {
           if (completionAware && writeTools.has(name)) workResults.push({ tool: name, status })
           // Distinct event keys: Bob's own calls use index 0..n of the step.
