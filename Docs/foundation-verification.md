@@ -1,5 +1,44 @@
 # Foundation verification and rollout
 
+<a id="build-team-cost-2026-10-31"></a>
+## Cheaper build team installed; paid box run 13 passed — 2026-10-31
+
+Owner decisions after run 12, keeping Konrad on high reasoning
+([PR #387](https://github.com/EmelieHagander/Bob-the-builder/pull/387), merged as
+`b0e6ac5f1cba5d217e72afcfe07efb4f5c9af1c5`): a per-project cache key for each
+worker, Bob's checking reads from the first step (`bob.tools.check_reads`), and the
+reason of every rejected call in the run's event log. Zero active Bob jobs before
+every step.
+
+1. **Functions:** `bob-worker` v162 and `ask-bob` v194. 129 of 130 and 131 of 132
+   files equal the repository (the established empty `cad-intake.ts`); both
+   return **401** without login.
+2. **Catalog:** recorded as `20261031124512_bob_check_reads_catalog`; `bob.tools`
+   v34. All 362 active Bob definitions equal the fixture.
+
+**[Run 41202509508](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41202509508)
+passed.** Evidence: `Docs/archive/form-box-paid-2026-10-31-run13.json`.
+
+| | Run 12 | Run 13 |
+|---|---|---|
+| Deliveries | saved, asked (saved), saved | saved, saved, saved |
+| Calls | 52 | 37 |
+| Bob | 24 calls, USD 0.52 | 17 calls, USD 0.31 |
+| Konrad | 17 calls, USD 0.74 | 9 calls, USD 0.42 |
+| Rita | 5 calls, USD 0.12 | 5 calls, USD 0.10 |
+| Total | USD 1.41 | USD 0.86 |
+| Read from cache | 72% | 75% |
+| describe_tool rounds | 4 | 0 |
+| Plain-words rewrites | 0 of 3 | 0 of 3 |
+
+- The cheapest box run so far (run 9: USD 1.02, run 10: 1.13). Konrad needed one
+  hand-over and five calls for the construction (run 12: nine).
+- One rejected save (Konrad's first try) logged `unspecified`: some construction
+  rejections carry only a message, no code. Giving them codes is a follow-up.
+- Bob still reads the construction after each report (one step with parallel
+  reads); a code readback in the report would remove it (proposal, needs the
+  owner's approval of one line).
+
 <a id="build-team-install-2026-10-31"></a>
 ## Build team installed; paid box run 12 passed — 2026-10-31
 

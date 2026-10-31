@@ -125,6 +125,8 @@ export async function runWorker(opts: {
   readKnowledge?: () => Promise<Record<string, unknown>>; variables?: Record<string, string>
   /** Pixels the worker opened go with the worker's own next call (not Bob's), and are confirmed after it. */
   images?: { carrier: () => Messages; confirmDelivery: () => void }
+  /** Reads what the worker saved, by code, after the job (see readbackReads). */
+  readback?: (receipts: Record<string, unknown>[]) => Promise<unknown[]>
   onTool?: (value: { name: string; status: string; ms: number; rejection?: ToolRejection }) => void
 }): Promise<Record<string, unknown>> {
   const roleKey = opts.worker.role.replace(/^role\./, '')
@@ -149,26 +151,31 @@ export async function runWorker(opts: {
   const params = { server_quote: true, include_manual: true }
   const toolParams = () => Object.fromEntries(specs.map(spec => [spec.function.name, { card: false, include_manual: true }]))
   const calls: { tool: string; status: string }[] = []
-  // Workers with knowledge: what they saved travels to Bob as receipts, in code (no AI restates ids).
+  // Workers with knowledge: what they saved travels to Bob as receipts, in code (no AI restates ids),
+  // and with the readback switch the saved records themselves, read after the job.
   const receipts: Record<string, unknown>[] = []
+  const finish = async (result: Record<string, unknown>) => {
+    if (!opts.readKnowledge) return result
+    const readback = opts.readback && receipts.length ? await opts.readback(receipts) : undefined
+    return { ...result, receipts, ...(readback?.length ? { readback } : {}) }
+  }
   let previous: string | undefined
   for (let step = 0; step < opts.worker.max_steps; step++) {
     if (!await opts.hasAccess()) throw new Error('project_denied')
-    if (Date.now() + 15_000 >= opts.deadline) return opts.readKnowledge ? { status: 'time_budget', worker: roleKey, calls, receipts } : { status: 'time_budget', worker: roleKey, calls }
+    if (Date.now() + 15_000 >= opts.deadline) return finish({ status: 'time_budget', worker: roleKey, calls })
     if (step) specs = await offer()
     const images = opts.images?.carrier() ?? []
     const response = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: roleKey, aiFunction: roleKey, module: 'global', userId: opts.userId,
       catalogRoleKey: roleKey, ...(opts.variables ? { catalogVariables: opts.variables } : {}), messages: [...messages, ...images], tools: specs, catalogSchemaParameters: params, catalogToolParameters: toolParams(),
       ...(previous ? { previousResponseId: previous } : {}), maxOutputTokens: 8000,
       timeoutMs: Math.max(1000, Math.min(opts.modelTimeoutMs ?? 45_000, opts.deadline - Date.now())) })
-    const done = (result: Record<string, unknown>) => opts.readKnowledge ? { ...result, receipts } : result
     if (!response.success) {
       if (response.error === 'turn_budget_exhausted') throw new Error('turn_budget_exhausted')
-      return done({ status: 'unavailable', worker: roleKey, calls })
+      return finish({ status: 'unavailable', worker: roleKey, calls })
     }
     if (images.length) opts.images!.confirmDelivery()
-    if (!response.toolCalls?.length) return done({ status: 'ok', worker: roleKey, report: typeof response.data === 'string' ? response.data : '', calls })
-    if (!response.responseId) return done({ status: 'unavailable', worker: roleKey, calls })
+    if (!response.toolCalls?.length) return finish({ status: 'ok', worker: roleKey, report: typeof response.data === 'string' ? response.data : '', calls })
+    if (!response.responseId) return finish({ status: 'unavailable', worker: roleKey, calls })
     previous = response.responseId; messages = []
     for (const call of response.toolCalls.slice(0, 8)) {
       if (!await opts.hasAccess()) throw new Error('project_denied')
@@ -191,16 +198,47 @@ export async function runWorker(opts: {
     }
     for (const call of response.toolCalls.slice(8)) messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ status: 'deferred' }) })
   }
-  return opts.readKnowledge ? { status: 'step_budget', worker: roleKey, calls, receipts } : { status: 'step_budget', worker: roleKey, calls }
+  return finish({ status: 'step_budget', worker: roleKey, calls })
 }
 
 const RECEIPT_KEYS = ['artifact_id', 'record_id', 'id', 'revision', 'construction_revision', 'request_id', 'step_id']
-/** The ids and revisions a save returned, copied by code. */
+const plain = (value: unknown) => typeof value === 'string' && value.length <= 200 || typeof value === 'number' && Number.isFinite(value)
+/** The ids and revisions a save returned, copied by code. Writer saves nest them
+ * in receipt {dataset, recordId, revision, operation}; others return them flat. */
 export function saveReceipt(tool: string, result: unknown): Record<string, unknown> {
   const receipt: Record<string, unknown> = { tool }
-  if (result && typeof result === 'object') for (const key of RECEIPT_KEYS) {
+  if (!result || typeof result !== 'object') return receipt
+  const nested = (result as Record<string, unknown>).receipt
+  if (nested && typeof nested === 'object') {
+    const r = nested as Record<string, unknown>
+    for (const [from, to] of [['dataset', 'dataset'], ['recordId', 'record_id'], ['revision', 'revision'], ['operation', 'operation']] as const)
+      if (plain(r[from])) receipt[to] = r[from]
+  }
+  for (const key of RECEIPT_KEYS) {
     const value = (result as Record<string, unknown>)[key]
-    if (typeof value === 'string' && value.length <= 200 || typeof value === 'number' && Number.isFinite(value)) receipt[key] = value
+    if (!(key in receipt) && plain(value)) receipt[key] = value
   }
   return receipt
+}
+
+/** Owner decision 2026-10-31: what Konrad and Rita saved comes back with their
+ * report, read by code, so Bob checks the saved record instead of reading it
+ * again. One read per saved construction or drawing (its latest revision). */
+const CONSTRUCTION_SAVES = new Set(['save_construction_draft', 'edit_construction_parts', 'change_construction_parameters', 'change_construction_roles', 'continue_construction_change', 'transition_legacy_drawing'])
+export function readbackReads(receipts: Record<string, unknown>[]): { label: string; tool: string; arguments: Record<string, unknown> }[] {
+  const reads = new Map<string, { label: string; tool: string; arguments: Record<string, unknown> }>()
+  for (const r of receipts) {
+    const id = typeof r.artifact_id === 'string' ? r.artifact_id : typeof r.record_id === 'string' ? r.record_id : null
+    const revision = typeof r.revision === 'number' && Number.isSafeInteger(r.revision) && r.revision > 0 ? r.revision : null
+    if (!id || revision === null) continue
+    if (CONSTRUCTION_SAVES.has(String(r.tool))) reads.set('construction:' + id, { label: 'construction', tool: 'read_construction_draft',
+      arguments: { artifact_id: id, revision, after: null, view: 'overview', ids: [], result_id: null, section: null, step_id: null, work_kind: null } })
+    else if (r.tool === 'save_cad_design') reads.set('drawing:' + id, { label: 'drawing', tool: 'read_project_record_section',
+      arguments: { dataset: 'drawing', record_id: id, revision, path: [] } })
+  }
+  return [...reads.values()].slice(-4)
+}
+/** Box run 13: catalog switch for the readback (texts tell Bob it is there). */
+export function catalogReportReadback(catalog: AiCatalogSession): boolean {
+  return catalog.definition('bob.tools', 'tool_contract').definition.report_readback_version === 1
 }

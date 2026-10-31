@@ -35,12 +35,42 @@ export const EDIT_REJECTION_CODES: readonly (readonly [string, string])[] = [
   ['Invalid read selection', 'edit_read_selection'],
   ['Use the exact next_ref and filter', 'edit_read_cursor'],
 ]
-export const TOOL_REJECTION_CODES: readonly string[] = [...new Set([...EDIT_REJECTION_CODES.map(([, code]) => code), 'invalid_json', 'unspecified'])]
+// Fixed messages of the construction tools (construction-draft.ts) that carry no
+// typed code (2026-10-31: box run 13 logged Konrad's rejected save as unspecified).
+export const CONSTRUCTION_REJECTION_CODES: readonly (readonly [string, string])[] = [
+  ['A joint Solution/Construction change uses target_revision:null', 'construction_target_revision'],
+  ['Choose the selected Solution edit_ref', 'construction_solution_ref'],
+  ['Use an exact quote from the current request', 'request_quote'],
+  ['Name changed inputs or an explicit current target revision', 'construction_no_change'],
+  ['Use work_kind, step_id and no result reference', 'construction_view_arguments'],
+  ['work_kind and step_id apply only to view=work', 'construction_view_arguments'],
+  ['List drafts with view=overview', 'construction_list_arguments'],
+  ['Use the exact result_id and construction revision', 'construction_result_reference'],
+  ['List saved checks without IDs', 'construction_results_arguments'],
+  ['Use the current request and exact cut-plan revision', 'cut_plan_revision'],
+  ['Use the current request and exact expected revision', 'expected_revision'],
+  ['No construction changed. Correct only the named posts', 'construction_posts'],
+  ['Invalid CAD recipe or referenced part IDs', 'invalid_recipe'],
+  ['Image frames are not supported', 'unsupported_image_frame'],
+  ['Computed dimensions or placement are outside', 'computed_geometry_invalid'],
+  ['Bind every path in unbound', 'parameter_binding_gap'],
+  ['Use next_read from this exact revision', 'construction_view_cursor_invalid'],
+  ['Use fewer named IDs or one result section', 'construction_view_header_too_large'],
+]
+export const TOOL_REJECTION_CODES: readonly string[] = [...new Set([...EDIT_REJECTION_CODES.map(([, code]) => code), ...CONSTRUCTION_REJECTION_CODES.map(([, code]) => code), 'invalid_json', 'unspecified'])]
+
+/** A short, stable fingerprint of a fixed server message (FNV-1a): it tells two
+ * unmapped messages apart in the logs without carrying any of their text. */
+function messageId(message: string): string {
+  let hash = 0x811c9dc5
+  for (const char of message.slice(0, 160)) { hash ^= char.codePointAt(0)!; hash = Math.imul(hash, 0x01000193) >>> 0 }
+  return 'm' + hash.toString(16).padStart(8, '0')
+}
 
 const CODE = /^[a-z][a-z0-9_]{0,39}$/
 const PATH = /^[A-Za-z0-9_.\/\-*]{1,120}$/
 
-export interface ToolRejection { code: string; fields: string[] }
+export interface ToolRejection { code: string; fields: string[]; message_id?: string }
 
 export function toolRejection(result: unknown): ToolRejection {
   const r = result && typeof result === 'object' ? result as Record<string, any> : {}
@@ -50,9 +80,11 @@ export function toolRejection(result: unknown): ToolRejection {
   const typed = [r.validation?.code, r.reason, issues[0]?.code].find(c => typeof c === 'string' && CODE.test(c))
   if (typed) return { code: typed, fields }
   const message = typeof r.message === 'string' ? r.message.replace(/^No change made\.\s*/, '') : ''
-  const mapped = EDIT_REJECTION_CODES.find(([prefix]) => message.startsWith(prefix))?.[1]
+  const mapped = [...EDIT_REJECTION_CODES, ...CONSTRUCTION_REJECTION_CODES].find(([prefix]) => message.startsWith(prefix))?.[1]
   if (mapped) return { code: mapped, fields }
+  // Engine errors that are already codes (parameter_*, coordinate_*).
+  if (CODE.test(message)) return { code: message, fields }
   // A JSON value that does not parse surfaces the engine's own message.
   if (/JSON|Unexpected (token|end)/.test(message)) return { code: 'invalid_json', fields }
-  return { code: 'unspecified', fields }
+  return { code: 'unspecified', fields, ...(message ? { message_id: messageId(message) } : {}) }
 }

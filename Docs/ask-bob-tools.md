@@ -167,7 +167,11 @@ Pinned manifests keep their behaviour: before this publication Bob holds the
 construction and drawing tools, Mattias gets Bob's brief, and the AI reviewer
 checks drawings. Source: `bob-workers.ts`, the toolbox setup in
 `project-answer.ts`, `project-tools/session.ts` (`offerWaiting`). Measured once
-(run 12): Bob's own cost halved, Konrad is now the largest cost.
+(run 12): Bob's own cost halved, Konrad is now the largest cost. Since
+2026-10-31 each worker has its own per-project cache key, and Bob's checking reads
+(`bob.tools.check_reads`: the construction, a drawing delivery, a record section)
+load from his first step and are never picker candidates; box run 13 cost USD 0.86
+([record](foundation-verification.md#build-team-cost-2026-10-31)).
 
 <a id="materials-worker"></a>
 **Superseded for new manifests by [the build team](#build-team) (built
