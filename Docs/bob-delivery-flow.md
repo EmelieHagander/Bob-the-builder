@@ -556,6 +556,13 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
+**Installerat 2026-10-31 — billigare byggteam; lådprov 13 godkänt (`bob-worker` v162, `ask-bob` v194, [bevis](foundation-verification.md#build-team-cost-2026-10-31)):**
+egna cachenycklar för kollegorna, Bobs kontrolläsningar från första steget och
+skälet till varje avvisat anrop i körloggen. Lådprovet kostade USD 0,86 (prov 12:
+1,41) med 37 anrop (52); Konrad USD 0,42 (0,74), Bob USD 0,31 (0,52). Nästa: koder
+för de avvisningar som bara har ett meddelande, och en kodläsning av det sparade i
+kollegornas rapport.
+
 **Installerat 2026-10-31 — byggteamet; lådprov 12 godkänt (`bob-worker` v161, `ask-bob` v193, [bevis](foundation-verification.md#build-team-install-2026-10-31)):**
 Bob lämnade konstruktionen till Konrad och ritningen till Rita; koden godkände
 ritningen utan granskningsanrop. Bobs egen kostnad halverades (USD 0,52 mot 0,96),
