@@ -81,9 +81,10 @@ export async function runWorker(opts: {
 }): Promise<Record<string, unknown>> {
   const roleKey = opts.worker.role.replace(/^role\./, '')
   const allowed = new Set([...opts.worker.tools, ...opts.worker.reads])
-  // Prepared each step: a tool can become callable during the job (saving a
-  // reviewed drawing). Its first tools keep their order and a later one is added
-  // at the end, so the list only grows and the cached prompt start holds.
+  // The worker's session also offers tools that wait for a prerequisite (saving a
+  // reviewed drawing), so the list is the same in every step and the prompt start
+  // stays cached; calling one too early answers "not available yet". Prepared each
+  // step so a disabled tool still disappears; the order never changes.
   const order: string[] = []
   const offer = async () => {
     const offered = (await opts.session.prepare()).filter(spec => allowed.has(spec.function.name))

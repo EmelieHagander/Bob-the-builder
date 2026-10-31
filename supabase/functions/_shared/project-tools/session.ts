@@ -112,6 +112,8 @@ export interface ToolSessionState {
 
 export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; selectiveTools?: boolean;
   autoLoadReady?:boolean; followups?:ToolFollowup[];
+  /** Workers (2026-10-31): offer a loaded tool that waits for a prerequisite too, so the
+   * tool list stays fixed for the whole job; execution still answers "not available yet". */ offerWaiting?: boolean;
   /** Tools of work already in progress, loaded without a describe_tool round (lazy loading only). */ preloadTools?: (phase: string | null) => string[]; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; catalogWorkflows?: () => WorkflowCard[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
   const lazy = opts.toolInstructions === 'lazy'
   const selective = lazy && opts.selectiveTools === true
@@ -240,6 +242,9 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
         if (state === 'available') {
           if (!lazy || loaded.has(row.name)) { specs.push(surfaceSpec(row, def)); offered.set(row.name, def.version) }
           shelf.push({ name: row.name, group, state: 'offered', ...card })
+        } else if (opts.offerWaiting && state === 'missing_context' && (!lazy || loaded.has(row.name))) {
+          specs.push(surfaceSpec(row, def)); offered.set(row.name, def.version)
+          shelf.push({ name: row.name, group, state: 'waiting', ...card, ...(def.waitingFor ? { waitingFor: def.waitingFor } : {}) })
         } else shelf.push({ name: row.name, group, state: state === 'budget_exhausted' ? 'budget_exhausted' : 'waiting', ...card, ...(state === 'write_uncertain' ? { waitingFor: WRITE_UNCERTAIN } : state === 'missing_context' && def.waitingFor ? { waitingFor: def.waitingFor } : {}) })
       }
       if (onDemand && visible.size) {

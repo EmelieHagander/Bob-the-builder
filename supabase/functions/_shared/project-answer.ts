@@ -407,7 +407,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       if (!job) return { status: 'invalid', issues: [{ path: '$', expected: 'job (text) and findings (text or null)' }] }
       let session = workerSessions.get(key)
       if (!session) {
-        session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: () => [...worker.tools, ...worker.reads], readPolicy: basePolicy })
+        session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: () => [...worker.tools, ...worker.reads], offerWaiting: true, readPolicy: basePolicy })
         workerSessions.set(key, session)
       }
       const stair = opts.context?.stair

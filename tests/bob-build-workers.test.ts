@@ -95,17 +95,21 @@ test('Bob hands the construction to the structural designer; the designer has hi
   assert.deepEqual(report.calls.map((c: any) => c.tool), ['check_construction_draft'])
 })
 
-test('Rita draws: saving the reviewed drawing becomes callable during her job and is added at the end of her tools', async () => {
+test('Rita draws with a fixed tool list: the save is offered from the start and refused until a reviewed drawing exists', async () => {
   const catalog = catalogFixture()
   const { workers, ran } = await turn(catalog,
     [() => ({ success: true, model: 'fixture', usage, responseId: 'b1', toolCalls: [call('c1', 'ask_drawing_worker', { job: 'Rita lådan från den kontrollerade konstruktionen och spara ritningen.', findings: 'Konstruktion c1, revision 3, kontrollerad.' })] })],
-    { 'drawing-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'r1', toolCalls: [call('r1c', 'design_project_cad', {})] })] })
-  const [first, second] = workers['drawing-worker']
+    { 'drawing-worker': [
+      () => ({ success: true, model: 'fixture', usage, responseId: 'r1', toolCalls: [call('r1c', 'save_cad_design', {})] }),
+      () => ({ success: true, model: 'fixture', usage, responseId: 'r2', toolCalls: [call('r2c', 'design_project_cad', {})] })] })
+  const [first, second, third] = workers['drawing-worker']
   assert.equal(first.catalogRoleKey, 'drawing-worker')
-  assert(names(first).includes('design_project_cad') && !names(first).includes('save_cad_design'), 'no candidate yet')
+  assert(names(first).includes('design_project_cad') && names(first).includes('save_cad_design'), 'the save is offered before a candidate exists')
+  // Too early: the server answers that it waits for a reviewed drawing; nothing is saved.
+  const early = JSON.parse(String(second.messages!.find(m => m.role === 'tool')!.content))
+  assert.equal(early.status, 'missing_context')
   assert(ran.some(r => r.name === 'design_project_cad'))
-  assert.equal(names(second).at(-1), 'save_cad_design', 'the save is offered once a reviewed candidate exists')
-  assert.deepEqual(names(second).slice(0, -1), names(first), 'the earlier tools keep their order')
+  assert.deepEqual(names(second), names(first)); assert.deepEqual(names(third), names(first), 'the same tools in the same order in every step')
   assert.match(brief(first).label, /\S/)
 })
 
