@@ -49,6 +49,15 @@ export function workerOwnedTools(workers: Record<string, WorkerDefinition> | nul
   return new Set(Object.values(workers ?? {}).flatMap(worker => worker.tools))
 }
 
+/** Tools retired for new jobs with the build workers (owner decision 2026-10-31:
+ * the legacy box drawing skipped both the construction and the review). Pinned
+ * manifests keep them. */
+export function catalogRetiredTools(catalog: AiCatalogSession): Set<string> {
+  const box = catalog.definition('bob.tools', 'tool_contract').definition
+  if (box.build_workers_version !== 1 || !Array.isArray(box.retired_tools)) return new Set()
+  return new Set((box.retired_tools as unknown[]).filter((name): name is string => typeof name === 'string' && NAME.test(name)))
+}
+
 export function parseWorkerJob(value: unknown): { job: string; findings: string | null } | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const v = value as Record<string, unknown>

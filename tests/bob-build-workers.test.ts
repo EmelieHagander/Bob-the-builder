@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { catalogFixture, catalogCall, preBuildWorkersCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { catalogCoreTools } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { runProjectAnswer, seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
-import { catalogWorkers } from '../supabase/functions/_shared/bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools } from '../supabase/functions/_shared/bob-workers.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createConstructionTools } from '../supabase/functions/_shared/construction-draft.ts'
@@ -78,6 +78,9 @@ test('Bob hands the construction to the structural designer; the designer has hi
   assert(!names(bob[0]).some(n => STRUCTURE.includes(n) || DRAWING.includes(n)), JSON.stringify(names(bob[0])))
   assert(!pickerInputs[0].candidates.some((c: any) => STRUCTURE.includes(c.name) || DRAWING.includes(c.name) || c.name.startsWith('ask_')))
   assert(names(bob[0]).includes('read_construction_draft'), 'Bob still reads the construction')
+  // The legacy box drawing skipped the construction and the review: retired for new jobs.
+  assert(!names(bob[0]).includes('save_project_drawing') && !pickerInputs[0].candidates.some((c: any) => c.name === 'save_project_drawing'))
+  assert.deepEqual([...catalogRetiredTools(catalog)], ['save_project_drawing'])
   // The structural designer: his tools and reads only, the drafts overview with Bob's brief.
   const [first] = workers['structure-worker']
   assert.equal(first.catalogRoleKey, 'structure-worker')
@@ -132,4 +135,5 @@ test('manifests before the publication keep construction and drawing with Bob', 
   const { bob, pickerInputs } = await turn(pinned, [], {})
   assert(!names(bob[0]).includes('ask_structure_worker') && !names(bob[0]).includes('ask_drawing_worker'))
   assert(pickerInputs[0].candidates.some((c: any) => c.name === 'save_construction_draft'))
+  assert.equal(catalogRetiredTools(pinned).size, 0)
 })

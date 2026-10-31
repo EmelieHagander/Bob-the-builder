@@ -7,6 +7,8 @@
 -- and report to Bob; they never answer the owner. Bob no longer offers their
 -- tools; he hands jobs over through ask_structure_worker and ask_drawing_worker.
 -- The independent drawing review gets its own identity, since Rita now draws.
+-- The legacy box drawing (save_project_drawing), which skipped both the
+-- construction and the review, is retired for new jobs (retired_tools).
 -- Prompt texts drafted by Saoirse and approved by the owner (OLD -> NEW).
 -- bob.tools: build_workers_version 1 and build_workers. Runtimes that read only
 -- workers (materials) ignore them and keep these tools with Bob. Deploy both Bob
@@ -265,7 +267,10 @@ declare additions jsonb:=$build_workers_additions$[
    "search_project_data",
    "open_project_item",
    "read_work_context",
-   "calculate_project"
+   "calculate_project",
+   "list_project_category",
+   "read_plan_link_context",
+   "read_project_record_section"
   ],
   "max_steps": 10,
   "current": {
@@ -299,7 +304,8 @@ declare additions jsonb:=$build_workers_additions$[
    "search_material_catalog",
    "read_material_catalog",
    "calculate_project",
-   "search_building_knowledge"
+   "search_building_knowledge",
+   "list_project_category"
   ],
   "max_steps": 16,
   "current": {
@@ -318,6 +324,9 @@ declare additions jsonb:=$build_workers_additions$[
   }
  }
 }$build_workers_definition$::jsonb;
+ retired jsonb:=$build_workers_retired$[
+ "save_project_drawing"
+]$build_workers_retired$::jsonb;
  fn text; patch jsonb; policies jsonb:='[]'; prompt_uuid uuid; version_uuid uuid; activation jsonb:='{}'; prior shared.ai_prompt_versions; next_version integer; definition jsonb;
 begin
  perform pg_advisory_xact_lock(hashtextextended('ai_catalog:bob',0));
@@ -363,7 +372,7 @@ begin
   where p.app='bob' and p.prompt_key='bob.tools' and p.definition_kind='tool_contract' for update of p;
  if not found then raise exception 'build_workers_toolbox_missing'; end if;
  if prior.definition->>'materials_worker_version' is distinct from '1' then raise exception 'build_workers_require_materials_worker'; end if;
- definition:=prior.definition||jsonb_build_object('build_workers_version',1,'build_workers',workers,
+ definition:=prior.definition||jsonb_build_object('build_workers_version',1,'build_workers',workers,'retired_tools',retired,
   'contract_keys',(prior.definition->'contract_keys')||(select jsonb_agg('tools.'||(p->>'name')) from jsonb_array_elements(policies) p),
   'catalog',(prior.definition->'catalog')||policies);
  definition:=jsonb_set(definition,'{shelves}',(select jsonb_agg(case when shelf->>'label'='Drawings and CAD'

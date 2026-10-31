@@ -434,7 +434,8 @@ for(const migration of migrations){
   const policies=Object.values(workers).map((worker:any)=>{const tool=additions.find((a:any)=>a.key==='tools.'+worker.tool).definition
    return {name:worker.tool,description:tool.description,how_to:tool.additional_description,schema_version:1,always_load:false,preload_phases:[],active:true}})
   const box=seed.find(row=>row.key==='bob.tools')
-  box.definition={...box.definition,build_workers_version:1,build_workers:workers,
+  const retired=JSON.parse(source.match(/\$build_workers_retired\$([\s\S]+?)\$build_workers_retired\$/)![1])
+  box.definition={...box.definition,build_workers_version:1,build_workers:workers,retired_tools:retired,
    contract_keys:[...box.definition.contract_keys,...policies.map(p=>'tools.'+p.name)],catalog:[...box.definition.catalog,...policies],
    shelves:box.definition.shelves.map((shelf:any)=>shelf.label==='Drawings and CAD'?{...shelf,tools:[...policies.map(p=>p.name),...shelf.tools]}:shelf)}
   publishAs(box,publication);box.metadata.build_workers_version=1;versions.set(box.key,versions.get(box.key)!+1)

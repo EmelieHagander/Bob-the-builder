@@ -22,7 +22,7 @@ import { humanTextIssues } from './human-text.ts'
 import { answerTextFragments, type AnswerTextOutcome } from './answer-text.ts'
 import { toolRejection } from './tool-rejection.ts'
 import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
-import { catalogWorkers, workerOwnedTools, parseWorkerJob, runWorker } from './bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, workerOwnedTools, parseWorkerJob, runWorker } from './bob-workers.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
@@ -389,7 +389,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // The hand-over is loaded from the first step like a permanent tool; the
   // catalog's six permanent tools stay unchanged for runtimes without workers.
   const workerHandOverNames = Object.values(workers ?? {}).map(worker => worker.tool)
-  const workerOwned = workerOwnedTools(workers)
+  // Retired tools are hidden from Bob the same way (new manifests only).
+  const workerOwned = new Set([...workerOwnedTools(workers), ...catalogRetiredTools(opts.aiCatalog)])
   // Never picker candidates: the workers' own tools, and the hand-overs Bob always has.
   const workerTools = new Set([...workerOwned, ...workerHandOverNames])
   const bobPolicy: ToolPolicyReader = workerOwned.size ? async () => {
