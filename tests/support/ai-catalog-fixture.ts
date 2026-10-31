@@ -389,6 +389,11 @@ for(const migration of migrations){
   const routing=seed.find(row=>row.key==='routing.ask-bob')
   routing.definition={...routing.definition,default_profile_key:profile};publishAs(routing,publication);versions.set(routing.key,versions.get(routing.key)!+1)
  }
+ const plainWords=source.match(/\$plain_words_paragraph\$([\s\S]+?)\$plain_words_paragraph\$/)
+ if(plainWords&&/\$bob_plain_words_persona\$/.test(source)){
+  const persona=seed.find(row=>row.key==='bob.persona')
+  persona.content=persona.content+'\n\n'+plainWords[1];publishAs(persona,'bob-plain-words-v1');persona.metadata.plain_words_version=1;versions.set(persona.key,versions.get(persona.key)!+1)
+ }
  if(/\$bob_mini_trial\$/.test(source)){
   const base=seed.find(row=>row.key==='profile.ask-bob')
   seed.push({key:'profile.ask-bob-mini',kind:'execution_profile',content:'',definition:{...base.definition,tier:'mini'},variables:[],metadata:{publication:'bob-mini-trial-v1'}});versions.set('profile.ask-bob-mini',1)
