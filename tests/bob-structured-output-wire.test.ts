@@ -7,14 +7,15 @@ import {createCadAssistant} from './support/colleague-catalog-fixture.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createDeliveryLanguage, DELIVERY_MEANINGS } from './support/colleague-catalog-fixture.ts'
 import { shapeId, handoff } from './support/cad-review-fixture.ts'
-import {catalogFixture} from './support/ai-catalog-fixture.ts'
+import {preBuildWorkersCatalogFixture} from './support/ai-catalog-fixture.ts'
 
 // Real Bob call sites through the unchanged shared adapter. Only database and
 // HTTP I/O are mocked; inspecting call-site options alone missed this regression.
 test('CAD review and recovery language send strict response schemas and no tools to the provider', async () => {
   const g = globalThis as any, oldFetch = g.fetch, oldDeno = g.Deno
   const requests: any[] = []
-  const catalog=catalogFixture(snapshot=>{for(const [key,limit] of [['profile.cad-reviewer',12000],['profile.work-router',2000]] as const){snapshot.definitions.find(row=>row.prompt_key===key)!.definition.max_output_tokens=limit}})
+  // The AI CAD review runs only for manifests before the code-only drawing check (2026-10-31).
+  const catalog=preBuildWorkersCatalogFixture(snapshot=>{for(const [key,limit] of [['profile.cad-reviewer',12000],['profile.work-router',2000]] as const){snapshot.definitions.find(row=>row.prompt_key===key)!.definition.max_output_tokens=limit}})
   const model = { model_name: 'wire-fixture', supports_images: true, supports_reasoning: true,
     supports_image_output: false, is_default: true, max_output_tokens: 16000,
     input_cost_per_1m_tokens: 1, output_cost_per_1m_tokens: 1, cached_input_cost_per_1m_tokens: null }
