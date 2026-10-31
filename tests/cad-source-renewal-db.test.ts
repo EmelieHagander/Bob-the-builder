@@ -6,13 +6,13 @@ import {createCadAssistant} from './support/colleague-catalog-fixture.ts'
 import {createDrawingRequestStore} from '../supabase/functions/_shared/drawing-request-store.ts'
 import {checkedConstructionForDrawing} from '../supabase/functions/_shared/construction-draft.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
-import {catalogFixture} from './support/ai-catalog-fixture.ts'
+import {preBuildWorkersCatalogFixture} from './support/ai-catalog-fixture.ts'
 import {handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {assertSourceAssessmentEquivalent} from './support/source-assessment-equivalence.ts'
 
 test('stalled request renews the same source identity through caller reads, checked CAD, atomic save and exact readback',async t=>{
  const f=await cutPlanFixture(t),id=randomUUID(),binding={p_project:f.project,p_thread:f.claim.thread_id,p_turn:f.turn,p_generation:f.claim.generation}
- const scope={area_id:null,component_id:null,step_id:null,artifact_id:f.construction.recordId},aiCatalog=catalogFixture()
+ const scope={area_id:null,component_id:null,step_id:null,artifact_id:f.construction.recordId},aiCatalog=preBuildWorkersCatalogFixture() // pinned before the code-only drawing check (2026-10-31)
  const privateCall=(args:any)=>f.rpc('bob.bob_drawing_request',[f.project,f.user,f.claim.thread_id,f.turn,f.claim.generation,args.p_operation,args.p_id??null,args.p_expected??0,args.p_status??null,args.p_payload?JSON.stringify(args.p_payload):null,args.p_write_key??randomUUID()],null,'service_role')
  await f.rpc('bob.create_drawing_request',[f.project,f.claim.thread_id,f.turn,f.claim.generation,id,JSON.stringify(scope)])
  const old=await privateCall({p_operation:'save',p_id:id,p_expected:0,p_status:'needs_data',p_payload:{brief:{...scope,brief:'Draw the exact saved concept',handoff,construction_revision:1},owner_request:f.message,reference_refs:[]}})
