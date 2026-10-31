@@ -36,6 +36,7 @@ let preToolOrderRows:any[]|undefined,preToolOrderVersions:Map<string,number>|und
 let preToolRepairRows:any[]|undefined,preToolRepairVersions:Map<string,number>|undefined
 let preToolOrderRestoreRows:any[]|undefined,preToolOrderRestoreVersions:Map<string,number>|undefined
 let preMaterialsWorkerRows:any[]|undefined,preMaterialsWorkerVersions:Map<string,number>|undefined
+let preBuildWorkersRows:any[]|undefined,preBuildWorkersVersions:Map<string,number>|undefined
 let preMemoryStairRows:any[]|undefined,preMemoryStairVersions:Map<string,number>|undefined
 // SQL publications drop the seed markers and name themselves, as `(prior.metadata-'seed_version'-'source_revision')||publication`.
 const publishAs=(row:any,publication:string)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication}}
@@ -417,6 +418,26 @@ for(const migration of migrations){
    contract_keys:[...box.definition.contract_keys,'tools.ask_materials_worker'],catalog:[...box.definition.catalog,policy],
    shelves:box.definition.shelves.map((shelf:any)=>shelf.label==='Materials, stock and Shopping'?{...shelf,tools:['ask_materials_worker',...shelf.tools]}:shelf)}
   publishAs(box,'bob-materials-worker-v1');box.metadata.materials_worker_version=1;versions.set(box.key,versions.get(box.key)!+1)
+ }
+ const buildWorkers=source.match(/\$build_workers_additions\$([\s\S]+?)\$build_workers_additions\$/)
+ if(buildWorkers){
+  preBuildWorkersRows=structuredClone(seed);preBuildWorkersVersions=new Map(versions)
+  const additions=JSON.parse(buildWorkers[1]),publication='bob-build-workers-v1'
+  for(const addition of additions){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication}});versions.set(addition.key,1)}
+  for(const edit of JSON.parse(source.match(/\$build_workers_edits\$([\s\S]+?)\$build_workers_edits\$/)![1])){
+   const row=seed.find(row=>row.key===edit.key)
+   if(edit.content!==undefined)row.content=edit.content
+   if(edit.definition)row.definition={...row.definition,...edit.definition}
+   publishAs(row,publication);row.metadata.build_workers_version=1;versions.set(row.key,versions.get(row.key)!+1)
+  }
+  const workers=JSON.parse(source.match(/\$build_workers_definition\$([\s\S]+?)\$build_workers_definition\$/)![1])
+  const policies=Object.values(workers).map((worker:any)=>{const tool=additions.find((a:any)=>a.key==='tools.'+worker.tool).definition
+   return {name:worker.tool,description:tool.description,how_to:tool.additional_description,schema_version:1,always_load:false,preload_phases:[],active:true}})
+  const box=seed.find(row=>row.key==='bob.tools')
+  box.definition={...box.definition,build_workers_version:1,build_workers:workers,
+   contract_keys:[...box.definition.contract_keys,...policies.map(p=>'tools.'+p.name)],catalog:[...box.definition.catalog,...policies],
+   shelves:box.definition.shelves.map((shelf:any)=>shelf.label==='Drawings and CAD'?{...shelf,tools:[...policies.map(p=>p.name),...shelf.tools]}:shelf)}
+  publishAs(box,publication);box.metadata.build_workers_version=1;versions.set(box.key,versions.get(box.key)!+1)
  }
  if(/\$bob_tool_order_restore\$/.test(source)){
   preToolOrderRestoreRows=structuredClone(seed);preToolOrderRestoreVersions=new Map(versions)
@@ -849,6 +870,10 @@ for(const row of preMaterialsWorkerRows??[])if(row.kind==='tier_binding'&&row.de
 const preMaterialsWorkerManifest=fixtureManifest(preMaterialsWorkerRows??seed,preMaterialsWorkerVersions??versions,'fixture-pre-materials-worker-manifest')
 /** The manifest before the materials worker pilot: Bob offers the materials tools himself. */
 export function preMaterialsWorkerCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preMaterialsWorkerManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
+for(const row of preBuildWorkersRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preBuildWorkersManifest=fixtureManifest(preBuildWorkersRows??seed,preBuildWorkersVersions??versions,'fixture-pre-build-workers-manifest')
+/** Manifests pinned before the 2026-10-31 structural designer and Rita (drawing) workers. */
+export function preBuildWorkersCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preBuildWorkersManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 for(const row of preToolOrderRestoreRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preToolOrderRestoreManifest=fixtureManifest(preToolOrderRestoreRows??seed,preToolOrderRestoreVersions??versions,'fixture-pre-tool-order-restore-manifest')
 /** The manifest with tool sheets and the repair helper (tool_repair_version 1), before tool order was restored. */

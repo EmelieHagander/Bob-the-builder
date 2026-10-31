@@ -11,25 +11,37 @@ import { rethrowContinuation } from './bob-job-journal.ts'
  * worker's prompt start is cached. The worker reads and saves through a tool
  * session with the same gates, receipts and turn budgets as Bob's, and reports
  * back to Bob; it never answers the owner. */
-export interface WorkerDefinition { role: string; tool: string; tools: string[]; reads: string[]; max_steps: number }
+/** current: the read that gives the worker its area's present records with the brief. */
+export interface WorkerDefinition { role: string; tool: string; tools: string[]; reads: string[]; max_steps: number; current?: { tool: string; arguments: Record<string, unknown> } }
 type Messages = NonNullable<OpenAIServiceOptions['messages']>
 type ModelCall = (options: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<string>>
 const NAME = /^[a-z][a-z0-9_]{0,63}$/
 
-/** Workers published by the pinned manifest, or null for manifests before the pilot. */
+/** Workers published by the pinned manifest, or null for manifests before the pilot.
+ * Owner decision 2026-10-31: the structural designer and Rita (drawing) join
+ * Mattias under build_workers; runtimes that read only workers keep those tools
+ * with Bob. A tool belongs to one worker. */
 export function catalogWorkers(catalog: AiCatalogSession): Record<string, WorkerDefinition> | null {
   const box = catalog.definition('bob.tools', 'tool_contract').definition
-  if (box.materials_worker_version !== 1) return null
-  const value = box.workers as Record<string, WorkerDefinition> | undefined
+  const groups = [...(box.materials_worker_version === 1 ? [box.workers] : []), ...(box.build_workers_version === 1 ? [box.build_workers] : [])]
+  if (!groups.length) return null
   const known = (name: unknown) => typeof name === 'string' && NAME.test(name) && catalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + name && row.definition_kind === 'tool_contract')
-  if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.keys(value).length) throw new Error('worker_catalog_invalid')
-  for (const worker of Object.values(value)) {
-    if (!worker || typeof worker.role !== 'string' || !catalog.manifest().definitions.some(row => row.prompt_key === worker.role && row.definition_kind === 'role')
-      || !known(worker.tool) || !Array.isArray(worker.tools) || !worker.tools.length || !worker.tools.every(known)
-      || !Array.isArray(worker.reads) || !worker.reads.every(known) || !Number.isSafeInteger(worker.max_steps) || worker.max_steps < 1 || worker.max_steps > 40)
-      throw new Error('worker_catalog_invalid')
+  const workers: Record<string, WorkerDefinition> = {}
+  for (const value of groups) {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.keys(value).length) throw new Error('worker_catalog_invalid')
+    for (const [key, worker] of Object.entries(value as Record<string, WorkerDefinition>)) {
+      if (key in workers || !NAME.test(key) || !worker || typeof worker.role !== 'string' || !catalog.manifest().definitions.some(row => row.prompt_key === worker.role && row.definition_kind === 'role')
+        || !known(worker.tool) || !Array.isArray(worker.tools) || !worker.tools.length || !worker.tools.every(known)
+        || !Array.isArray(worker.reads) || !worker.reads.every(known) || !Number.isSafeInteger(worker.max_steps) || worker.max_steps < 1 || worker.max_steps > 40
+        || worker.current !== undefined && (!worker.current || typeof worker.current !== 'object' || ![...worker.tools, ...worker.reads].includes(worker.current.tool)
+          || !worker.current.arguments || typeof worker.current.arguments !== 'object' || Array.isArray(worker.current.arguments)))
+        throw new Error('worker_catalog_invalid')
+      workers[key] = worker
+    }
   }
-  return structuredClone(value)
+  const owned = Object.values(workers).flatMap(worker => worker.tools)
+  if (new Set(owned).size !== owned.length) throw new Error('worker_catalog_invalid')
+  return structuredClone(workers)
 }
 
 /** Tools that belong to a worker are not offered to Bob himself. */
@@ -69,21 +81,31 @@ export async function runWorker(opts: {
 }): Promise<Record<string, unknown>> {
   const roleKey = opts.worker.role.replace(/^role\./, '')
   const allowed = new Set([...opts.worker.tools, ...opts.worker.reads])
-  const specs = (await opts.session.prepare()).filter(spec => allowed.has(spec.function.name))
+  // Prepared each step: a tool can become callable during the job (saving a
+  // reviewed drawing). Its first tools keep their order and a later one is added
+  // at the end, so the list only grows and the cached prompt start holds.
+  const order: string[] = []
+  const offer = async () => {
+    const offered = (await opts.session.prepare()).filter(spec => allowed.has(spec.function.name))
+    for (const spec of offered) if (!order.includes(spec.function.name)) order.push(spec.function.name)
+    return order.flatMap(name => offered.filter(spec => spec.function.name === name))
+  }
+  let specs = await offer()
   if (!specs.length) return { status: 'unavailable', worker: roleKey }
   let current: unknown
   try { current = await opts.readCurrent() } catch (error) { rethrowContinuation(error); current = { status: 'unavailable' } }
   let messages: Messages = buildWorkerMessages(opts.aiCatalog, { prefix: roleKey, context: opts.context, history: opts.history, brief: { ...opts.job, current } })
   // The worker sees full manuals: it has few tools and they are fixed for the job.
   const params = { server_quote: true, include_manual: true }
-  const toolParams = Object.fromEntries(specs.map(spec => [spec.function.name, { card: false, include_manual: true }]))
+  const toolParams = () => Object.fromEntries(specs.map(spec => [spec.function.name, { card: false, include_manual: true }]))
   const calls: { tool: string; status: string }[] = []
   let previous: string | undefined
   for (let step = 0; step < opts.worker.max_steps; step++) {
     if (!await opts.hasAccess()) throw new Error('project_denied')
     if (Date.now() + 15_000 >= opts.deadline) return { status: 'time_budget', worker: roleKey, calls }
+    if (step) specs = await offer()
     const response = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: roleKey, aiFunction: roleKey, module: 'global', userId: opts.userId,
-      catalogRoleKey: roleKey, messages, tools: specs, catalogSchemaParameters: params, catalogToolParameters: toolParams,
+      catalogRoleKey: roleKey, messages, tools: specs, catalogSchemaParameters: params, catalogToolParameters: toolParams(),
       ...(previous ? { previousResponseId: previous } : {}), maxOutputTokens: 8000,
       timeoutMs: Math.max(1000, Math.min(opts.modelTimeoutMs ?? 45_000, opts.deadline - Date.now())) })
     if (!response.success) {

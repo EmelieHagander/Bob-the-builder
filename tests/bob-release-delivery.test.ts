@@ -1,4 +1,4 @@
-import {catalogFixture,catalogCall} from './support/ai-catalog-fixture.ts'
+import {catalogCall,preBuildWorkersCatalogFixture} from './support/ai-catalog-fixture.ts'
 import {createBobContextContinuation,estimateBobRequestInput} from '../supabase/functions/_shared/bob-context-continuation.ts'
 import {BobContinuation} from '../supabase/functions/_shared/bob-job-journal.ts'
 import {createProjectContext} from '../supabase/functions/_shared/project-context/dispatcher.ts'
@@ -47,7 +47,8 @@ test('release integration resumes selective construction editing, checking and d
   const reply = (data: string | null, name?: string, args: unknown = {}) => ({ success: true, data, responseId: randomUUID(), model: 'fixture', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
     ...(name ? { toolCalls: [{ id: randomUUID(), type: 'function' as const, function: { name, arguments: JSON.stringify(args) } }] } : {}) })
 
-  const aiCatalog=catalogFixture(), turn=randomUUID()
+  // Bob edits and draws himself here: pinned before the structural designer and Rita took that work (2026-10-31).
+  const aiCatalog=preBuildWorkersCatalogFixture(), turn=randomUUID()
   const claim=await call(null,'bob.bob_claim_turn',[project,owner,turn,message],'service_role')
   const binding=[project,claim.thread_id,turn,claim.generation]
   const receipts:any[]=[],errors:string[]=[],requests:any[]=[]

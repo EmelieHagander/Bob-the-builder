@@ -396,6 +396,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     const policy = await basePolicy()
     return { ...policy, tools: policy.tools.map(row => workerOwned.has(row.name) ? { ...row, active: false } : row) }
   } : basePolicy
+  const withoutDiagnostics = (result: any) => { if (result && typeof result === 'object' && 'diagnostics' in result) { const { diagnostics: _d, ...rest } = result; return rest } return result }
   const workerSessions = new Map<string, ReturnType<typeof createBobToolSession>>()
   let currentStep = restored?.step ?? 0
   let workerToolEvents = 0
@@ -414,8 +415,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const workerStep = currentStep
       return runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
         session, hasAccess: opts.hasAccess, deadline, ...(opts.modelTimeoutMs ? { modelTimeoutMs: opts.modelTimeoutMs } : {}),
-        readCurrent: async () => key === 'materials'
-          ? opts.lookup.search({ dataset: 'materials', query: null, status: null, area_id: null, record_id: null }) : null,
+        readCurrent: async () => worker.current ? withoutDiagnostics(await session!.execute(worker.current.tool, structuredClone(worker.current.arguments)))
+          : key === 'materials' ? opts.lookup.search({ dataset: 'materials', query: null, status: null, area_id: null, record_id: null }) : null,
         onTool: ({ name, status, ms }) => {
           if (completionAware && writeTools.has(name)) workResults.push({ tool: name, status })
           // Distinct event keys: Bob's own calls use index 0..n of the step.
