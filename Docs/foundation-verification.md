@@ -1,7 +1,47 @@
 # Foundation verification and rollout
 
+<a id="build-team-install-2026-10-31"></a>
+## Build team installed; paid box run 12 passed — 2026-10-31
+
+With the owner's OK, [PR #386](https://github.com/EmelieHagander/Bob-the-builder/pull/386)
+merged as `3ff1ddd5a0a3f11dc8aac39db1ed2862b7cd2819` (tree equal to the tested
+head). Zero active Bob jobs before every step.
+
+1. **Functions:** `bob-worker` v161 and `ask-bob` v193. 129 of 130 and 131 of 132
+   files equal the repository (the established empty `cad-intake.ts`); both
+   return **401** without login.
+2. **Catalog:** recorded as `20261031084743_bob_build_workers_catalog`. 30
+   definitions active from `bob-build-workers-v1` (`bob.tools` v33,
+   `cad.drawing-check`, the three hand-overs, `worker.team`, personas, labels,
+   `tools.design_project_cad` v19); `ask_materials_worker` policy schema 2; settings
+   for `structure-worker` and `drawing-worker` (gpt-5.4, high). All 362 active Bob
+   definitions equal the fixture.
+
+**[Run 41186062907](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41186062907)
+passed.** Evidence: `Docs/archive/form-box-paid-2026-10-31-run12.json`.
+
+| | Run 10 (Bob does it) | Run 12 (build team) |
+|---|---|---|
+| Deliveries | saved, saved, saved | saved, asked (saved), saved |
+| Calls | 38 (Bob 25, Mattias 4) | 52 (Bob 24, Konrad 17, Rita 5) |
+| Bob's cost | USD 0.96 | USD 0.52 |
+| Total cost | USD 1.13 | USD 1.41 |
+| Read from cache | 58% | 72% |
+| Plain-words rewrites | 3 of 3 turns | 0 of 3 |
+| AI drawing reviews | 1 | 0 (code check passed) |
+| Rejected calls | 1 | 2 (Konrad's, both corrected) |
+
+- Bob handed the construction to Konrad in plain words; Konrad saved, refined and
+  later checked it, and changed the width parameters in turn 2. Rita rendered
+  once, the code check passed without a model call, and she saved the drawing.
+  Mattias was not needed: Konrad read the catalog himself.
+- Konrad is the cost: 17 calls for USD 0.74 (USD 0.044 per call against Bob's
+  0.022), with his full manuals and project knowledge in every call.
+- Turn 2 waited 9 minutes between two Bob calls (background AI scheduling),
+  before any worker ran.
+
 <a id="build-team-2026-10-31"></a>
-## Build team: Konrad and Rita, code-only drawing check — built 2026-10-31, not installed
+## Build team: Konrad and Rita, code-only drawing check — built 2026-10-31 (installed, see above)
 
 Owner decisions after run 11: Bob coordinates; Konrad (structural designer) owns
 the construction, Rita draws it, Mattias does materials; Bob hands over a plain
