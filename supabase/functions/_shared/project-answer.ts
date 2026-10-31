@@ -253,7 +253,7 @@ export type ProjectAnswerOptions = {
   hasAccess: () => Promise<boolean>; previousResponseId?: string;
   writer?: ProjectWriter; context?: WorkingContext; deadline?: number; modelTimeoutMs?: number; unlimitedWork?: boolean;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;
-  onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string; diagnostics?:import('./execution-metrics.ts').WorkDiagnostics; rejection?: { code: string; fields: string[] } }) => void;
+  onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string; diagnostics?:import('./execution-metrics.ts').WorkDiagnostics; rejection?: { code: string; fields: string[]; message_id?: string } }) => void;
   /** Names of the calls this model step will execute, before the first runs.
    * Called again with the same names when a checkpointed step resumes. */
   onToolBatch?: (names: string[]) => void;
