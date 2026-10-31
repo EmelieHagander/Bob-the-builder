@@ -17,7 +17,8 @@ Owner decision after run 13 ("do both now"):
   code reads each saved or checked construction (overview with its check) and each
   saved drawing (record) at its revision and attaches it to the report. Saoirse's
   lines change with it: Bob's principle (go by the record; role message 692 tokens),
-  the two hand-over manuals and their returns, and the policy copies.
+  the two hand-over manuals and their returns, and the policy copies. The owner approved
+  the exact lines on 2026-10-31.
 - **Tests:** `bob-build-workers` (9), `answer-text` (rejection codes), the fixture
   replay.
 - **Release order:** owner approval of the texts, merge, deploy both functions,
