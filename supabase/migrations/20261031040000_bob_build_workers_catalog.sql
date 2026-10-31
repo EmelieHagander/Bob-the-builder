@@ -124,7 +124,7 @@ declare additions jsonb:=$build_workers_additions$[
    },
    "expected_return": {
     "format": "json",
-    "contract": "Konrad's report: status, his answer to Bob (what he constructed and checked, what he saved, what is open and for whom), and the tool calls he made with their status."
+    "contract": "Konrad's report: status, his answer to Bob (what he constructed and checked, what he saved, what is open and for whom), the tool calls he made with their status, and the receipts of what he saved."
    },
    "card_description": "Use when a selected solution needs its construction, or a construction needs changing. Gives Konrad's report: what he constructed, checked and saved, and what is still open, and for whom."
   }
@@ -229,7 +229,7 @@ declare additions jsonb:=$build_workers_additions$[
    },
    "expected_return": {
     "format": "json",
-    "contract": "Rita's report: status, her answer to Bob (what she drew, saved and linked, what is open and for whom), and the tool calls she made with their status."
+    "contract": "Rita's report: status, her answer to Bob (what she drew, saved and linked, what is open and for whom), the tool calls she made with their status, and the receipts of what she saved."
    },
    "card_description": "Use when a checked construction needs its drawing, or drawings need composing or linking to plan Steps. Gives Rita's report: what she drew, saved and linked, and what is still open, and for whom."
   }
@@ -312,7 +312,7 @@ declare additions jsonb:=$build_workers_additions$[
    },
    "expected_return": {
     "format": "json",
-    "contract": "Mattias's report: status, his answer to Bob (what he did, what he saved, what is open and for whom), and the tool calls he made with their status."
+    "contract": "Mattias's report: status, his answer to Bob (what he did, what he saved, what is open and for whom), the tool calls he made with their status, and the receipts of what he saved."
    },
    "card_description": "Use when the work needs materials, the catalog, stock, cut plans or Shopping. Gives Mattias's report: what he did and saved, and what is still open, and for whom."
   }
@@ -366,6 +366,51 @@ declare additions jsonb:=$build_workers_additions$[
   }
  },
  {
+  "key": "tools.design_project_cad",
+  "kind": "tool_contract",
+  "replace": [
+   {
+    "field": "description",
+    "old": "Render a requested drawing of one exact saved, checked construction revision. Every project drawing needs its own construction source with stable part IDs, dimensions, placements, pinned catalog materials and declared joints before CAD. Read or save the construction, compare it with the owner requirements and original reference images, run check_construction_draft and correct that same construction before calling this tool. For an older drawing, use transition_legacy_drawing to retain its geometry and identities and establish the missing material/joint evidence. Pass the saved construction Artifact ID, or its already linked drawing ID, and the exact receipt revision. CAD reuses the saved geometry; it cannot design a replacement assembly. Reference pixels and the original requirements accompany independent candidate review. Reuse the same request_id on retry. Returns a checked candidate that still needs save_cad_design.",
+    "new": "Draw one exact saved and checked construction revision, as it is. Its parts, materials, joints and check are settled before this tool is called, and nothing here can design, repair or replace them. Pass the construction Artifact ID, or a drawing already linked to it, with the exact receipt revision. The server checks readiness and sources, renders the geometry verbatim and lets code check the result: the right revision, every requested view, no failed stored check. A pass returns a candidate that still needs save_cad_design; a failure returns it unsaved for correction. Reuse the same request_id on retry."
+   },
+   {
+    "field": "additional_description",
+    "old": "Read the selected Solution and its visible design_intent, linked original images and prior choices. The server assesses readiness for this output before design: construction geometry needs supported, settled controlling choices; a form-only exploratory sketch may defer explicit issues outside its purpose. An unavailable source or missing required feature is not waived by a simplified concept. Reuse prior choices and delegation. Read current construction drafts and check their exact revision. Pass that construction Artifact ID as artifact_id to draw its exact geometry. The same pinned intent, required features, materials, checks and original pixels reach the independent reviewer. Only save_cad_design persists the approved candidate; verify the saved receipt, exact revision, work link and readback. Correct construction issues in the checkpoint. Concept review never certifies strength or site fit. For a changed construction, use change_construction_parameters, check its receipt revision and pass that exact construction_revision. Rendering cannot substitute a newer design. For a legacy drawing first use transition_legacy_drawing. After its construction receipt/readback, pass the original drawing Artifact ID with exact construction_revision. The server renders its checked checkpoint and advances the same drawing history. A pending transition cannot substitute a changed drawing head or switch construction identity. A changed construction records affected drawing work. Use continue_construction_change to read the original drawing/step and exact construction pins, then render with those pins. All reference geometry/bounds and kernel diagnostics remain visible. Reference overlaps are contextual; physical overlaps still stop publication and reference clearances remain unverified. Successful typed publication completes that same saved consequence. Pending/failed rendering remains pending; it cannot prove delivery.\n\n\n\nEvery project CAD drawing requires a saved construction and its exact revision. This policy supersedes older free-design intake guidance. Prepare the parts, dimensions, placements, pinned catalog materials and declared joints through the construction tools; compare with the current owner requirements and selected reference images, check and correct that same construction, then render it verbatim. Existing legacy drawings use transition_legacy_drawing; never invent missing material or joint evidence. A failed check returns to construction correction; CAD cannot replace or repair the construction. Text-only work still finishes through its own writer without CAD.\n\nA checked construction drawing supports up to 512 placed instances. The renderer automatically presents that SAME exact construction and revision on numbered sheets, with at most 32 part callouts per sheet. All parts, shared coordinates, source pins, joints and overall dimensions are retained. Every sheet goes to independent review. Do not split a construction merely to fit a 24-part layout; that older presentation limit is superseded. Normal geometry, source, collision, file-size and review checks still apply.\n\nKeep the same drawing request_id and all saved requirements when its construction is corrected. If the pinned construction revision is older than its current saved version, read and check that SAME construction, then explicitly pass the new exact receipt construction_revision with handoff:null and requirement_changes:[]. This renews the existing request after source/readiness checks and discards obsolete candidates, approvals and retries. Do not create a duplicate request or construction to escape a revision conflict. Omitted revisions never select a new head, and rendering never invents missing construction data. Recheck the independent review, saved receipt and readback before claiming delivery.",
+    "new": "Read the drawing requests and the construction you are drawing, with its exact revision, first. For a new request, pass request_id null and a handoff: the deliverable; each owner requirement as what the drawing must show, with its basis and source_ref; the coordinate mapping with unknown directions left null; views that show every requirement where it is; and what is still unresolved. Values stay at their source. To continue a saved request, reuse its request_id with handoff:null and requirement_changes:[], and put only explicit corrections in requirement_changes.\n\nThe server first checks that the selected Solution and its design intent are settled for this kind of drawing and that every source is current; a gap it reports is not waived by a simpler drawing. It then renders the construction verbatim, up to 512 placed instances on numbered sheets. Code decides the rest. A missing requested view or a failed stored check of that exact revision returns the candidate unsaved, with the failed checks listed; a failed check is corrected in the construction, not in the drawing. Physical overlaps stop publication; overlaps with reference geometry are context. Otherwise the candidate is accepted without any model call. Its requirements stay unresolved in the record and reference images are not compared with the sheets: a code pass means the drawing is exactly the construction, not that anyone looked at the pictures. Only save_cad_design persists it; check the saved receipt, exact revision, work link and readback before calling the drawing delivered.\n\nWhen the construction is revised and checked again, keep the same request_id and its requirements: pass the new exact construction_revision with handoff:null and requirement_changes:[]. This renews the request and discards obsolete candidates. An older drawing whose construction has been prepared, or a drawing left behind by a construction change, is redrawn from its own drawing Artifact ID with the exact construction_revision; this advances the same drawing history, a successful save completes the recorded change, and a failed render leaves it pending. An omitted revision never selects a newer one, and a second request or construction does not escape a revision conflict; it only adds one. A drawing never certifies strength or site fit."
+   },
+   {
+    "field": "card_description",
+    "old": "Use when the owner wants a drawing of one saved, checked Construction revision, or an existing drawing request should continue or be renewed after a correction. Gives an independently reviewed render candidate that still needs save_cad_design; it cannot design a replacement assembly.",
+    "new": "Use when a saved, checked construction revision needs its drawing, or an existing drawing request should continue or be renewed after a correction. Gives a code-checked render candidate that still needs save_cad_design; it cannot design a replacement assembly."
+   },
+   {
+    "path": [
+     "parameters",
+     "properties",
+     "handoff",
+     "anyOf",
+     "0",
+     "properties",
+     "views",
+     "description"
+    ],
+    "old": "a feature on one side (for example a left gable, a back panel or an underside) needs that side's view.",
+    "new": "a feature on one side needs that side's view."
+   },
+   {
+    "path": [
+     "parameters",
+     "properties",
+     "request_id",
+     "description"
+    ],
+    "old": "Use the saved request ID only when the current owner message requests or continues a drawing deliverable. A message about the same object, a correction, an image description, or a project-text update does not by itself request CAD. Complete a text-only request through its own read/write tools and finish the reply without resuming the drawing. When a drawing is requested, reuse this ID, its saved requirements and a source-current draft; no extra confirmation is needed. Null only for a new drawing request. With an ID, pass handoff:null and requirement_changes:[] to preserve ALL requirements; put explicit requirement corrections in requirement_changes.",
+    "new": "Use the saved request ID when the job continues or renews an existing drawing request; reuse it, its saved requirements and a source-current draft. Null only for a new drawing request. With an ID, pass handoff:null and requirement_changes:[] to preserve every requirement; put explicit requirement corrections in requirement_changes."
+   }
+  ]
+ },
+ {
   "key": "tools.link_cad_shell_steps",
   "kind": "tool_contract",
   "replace": [
@@ -404,7 +449,8 @@ declare additions jsonb:=$build_workers_additions$[
    "calculate_project",
    "list_project_category",
    "read_plan_link_context",
-   "read_project_record_section"
+   "read_project_record_section",
+   "read_construction_changes"
   ],
   "max_steps": 10,
   "knowledge": [
@@ -598,11 +644,11 @@ begin
   if patch ? 'old_content' and prior.content is distinct from patch->>'old_content' then raise exception 'build_workers_edit_unexpected: %',patch->>'key'; end if;
   new_content:=coalesce(patch->>'content',prior.content);definition:=prior.definition||coalesce(patch->'definition','{}'::jsonb);
   for change in select value from jsonb_array_elements(coalesce(patch->'replace','[]'::jsonb)) loop
-   field:=change->>'field';old_text:=change->>'old';
-   source:=case when field='content' then new_content else definition->>field end;
-   if source is null or (length(source)-length(replace(source,old_text,'')))/length(old_text)<>1 then raise exception 'build_workers_replace_unexpected: % %',patch->>'key',field; end if;
+   field:=coalesce(change->>'field','');old_text:=change->>'old';
+   source:=case when field='content' then new_content when change ? 'path' then definition#>>(select array_agg(x) from jsonb_array_elements_text(change->'path') x) else definition->>field end;
+   if source is null or (length(source)-length(replace(source,old_text,'')))/length(old_text)<>1 then raise exception 'build_workers_replace_unexpected: % %',patch->>'key',coalesce(change->>'path',field); end if;
    if field='content' then new_content:=replace(source,old_text,change->>'new');
-   else definition:=jsonb_set(definition,array[field],to_jsonb(replace(source,old_text,change->>'new'))); end if;
+   else definition:=jsonb_set(definition,case when change ? 'path' then (select array_agg(x) from jsonb_array_elements_text(change->'path') x) else array[field] end,to_jsonb(replace(source,old_text,change->>'new'))); end if;
   end loop;
   select coalesce(max(version),0)+1 into next_version from shared.ai_prompt_versions where prompt_id=prior.prompt_id;
   insert into shared.ai_prompt_versions(prompt_id,version,definition_kind,definition_format_version,metadata,content,definition,flow,available_variables)

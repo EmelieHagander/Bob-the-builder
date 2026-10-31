@@ -430,10 +430,13 @@ for(const migration of migrations){
    if(edit.content!==undefined)row.content=edit.content
    if(edit.variables)row.variables=edit.variables
    if(edit.definition)row.definition={...row.definition,...edit.definition}
-   for(const {field,old,new:next} of edit.replace??[]){
-    const text=field==='content'?row.content:row.definition[field]
-    if(typeof text!=='string'||text.split(old).length!==2)throw new Error('build_workers_replace_unexpected: '+edit.key+' '+field)
-    if(field==='content')row.content=text.replace(old,()=>next);else row.definition={...row.definition,[field]:text.replace(old,()=>next)}
+   for(const {field,path,old,new:next} of edit.replace??[]){
+    const keys:(string|number)[]=path?path.map((k:string)=>/^\d+$/.test(k)?Number(k):k):[field]
+    if(field!=='content')row.definition=structuredClone(row.definition)
+    const parent=field==='content'?null:keys.slice(0,-1).reduce((o:any,k)=>o?.[k],row.definition)
+    const text=field==='content'?row.content:parent?.[keys.at(-1)!]
+    if(typeof text!=='string'||text.split(old).length!==2)throw new Error('build_workers_replace_unexpected: '+edit.key+' '+(path??[field]).join('.'))
+    if(field==='content')row.content=text.replace(old,()=>next);else parent[keys.at(-1)!]=text.replace(old,()=>next)
    }
    publishAs(row,publication);row.metadata.build_workers_version=1;versions.set(row.key,versions.get(row.key)!+1)
   }
