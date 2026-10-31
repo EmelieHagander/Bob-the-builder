@@ -77,10 +77,12 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
           step:label(call.step),attempt:number(call.attempt)}})
     },
     /** One row per executed tool call: which tool, its status and the step. */
-    tool(input:{name:string;status:string;step:number;index:number;ms:number;validation_code?:string;diagnostics?:WorkDiagnostics}){
+    tool(input:{name:string;status:string;step:number;index:number;ms:number;validation_code?:string;diagnostics?:WorkDiagnostics;rejection?:{code:string;fields:string[]}}){
       void write({...base(),event_key:`tool:${input.step}:${input.index}`.slice(0,80),kind:'tool',role:'tool',status:code(input.status,'returned'),
         duration_ms:Math.round(number(input.ms)),input_tokens:null,output_tokens:null,cost_usd:null,
-        counts:{tool:code(input.name,'invalid_name'),step:number(input.step),...validationCounts(input.validation_code),...workCounts(input.diagnostics)}})
+        counts:{tool:code(input.name,'invalid_name'),step:number(input.step),...validationCounts(input.validation_code),...workCounts(input.diagnostics),
+          // Why a call was rejected (2026-10-31): a code and field paths only, never content.
+          ...(input.rejection?{rejection_code:code(input.rejection.code,'unspecified'),rejection_fields:input.rejection.fields.filter(f=>typeof f==='string'&&f.length<=120).slice(0,8)}:{})}})
     },
     async finish(input:{ok:boolean;partial?:boolean;uncertain?:boolean;recovered?:boolean;writes:number;error?:string;uncertainResends?:number;reusedModelCalls?:number;cad?:{consultations:number;renders:number;input_corrections:number;reviews:number;review_rejections:number;review_unavailable:number;review_passed:boolean}}){
       const end=turn?.end

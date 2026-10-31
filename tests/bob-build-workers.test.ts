@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { catalogFixture, catalogCall, preBuildWorkersCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { catalogCoreTools } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { runProjectAnswer, seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
-import { catalogWorkers, catalogRetiredTools } from '../supabase/functions/_shared/bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, catalogCheckReads } from '../supabase/functions/_shared/bob-workers.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createConstructionTools } from '../supabase/functions/_shared/construction-draft.ts'
@@ -38,12 +38,14 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
   const projectId = 'p', message = 'Rita lådan', hasAccess = async () => true
   const lookup = createProjectLookup(projectId, async (_project, input) => ({ data: { records: input.dataset === 'project' ? [{ id: projectId, name: 'Lådan', description: 'Saved project' }] : [], related: [], truncated: false }, error: null }) as any, undefined, undefined, undefined, { unlimitedWork: true })
   const writer = createProjectWriter(projectId, message, async () => { throw Error('No write requested') }, async () => ({ data: [], error: null }), async () => ({ data: [], error: null }))
-  const real = createConstructionTools({ projectId, message, writer, constructionSourceRefresh: true, hasAccess, read: async () => ({}), readSources: async () => ({ project: new Map(), physical: new Map() }) })
+  const real = createConstructionTools({ projectId, message, writer, constructionSourceRefresh: true, hasAccess, read: async () => ({}), readSources: async () => ({ project: new Map(), physical: new Map() }),
+    readDelivery: async () => ({ status: 'ok', records: [] }) })
   const constructionCalls: { name: string; args: any }[] = []
   const constructionTools = { ...real, tools: real.tools, get remaining() { return real.remaining }, execute: async (name: string, args: any) => {
     constructionCalls.push({ name, args })
     if (name === 'check_construction_draft') pendingImage = true // stands in for a worker opening an image
     if (name === 'read_construction_draft') return { status: 'ok', drafts: [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }] }
+    if (name === 'edit_construction_parts') return { status: 'invalid', validation: { code: 'unknown_part', fields: ['changes.0.part_id'] } }
     return { status: 'saved', artifact_id: 'c1', revision: 3 }
   } }
   const solutionActions = createSolutionActions({ projectId, writer, hasAccess, read: async () => ({ data: [], error: null }) })
@@ -65,10 +67,10 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
   const cadAssistant: any = { pending: async () => [], tools: [DESIGN_CAD_TOOL], lifecycleTools: [], remaining: 4, lifecycleRemaining: 0,
     candidate: null, partial: false, failure: null, sources: [], lifecycle: async () => ({ status: 'invalid' }),
     consult: async () => { cadAssistant.candidate = { id: 'cand-1' }; return { status: 'ready', review: 'approved' } } }
-  const bob: OpenAIServiceOptions[] = [], pickerInputs: any[] = [], ran: { name: string; status: string }[] = []
+  const bob: OpenAIServiceOptions[] = [], pickerInputs: any[] = [], ran: { name: string; status: string; rejection?: unknown }[] = []
   const workers: Record<string, OpenAIServiceOptions[]> = { 'structure-worker': [], 'drawing-worker': [], 'materials-worker': [] }
   const result = await runProjectAnswer({ projectId, userId: 'owner', message, lookup, writer, hasAccess, constructionTools, solutionActions, projectContext, cadAssistant,
-    aiCatalog: catalog, corePreload: true, readToolPolicy, toolPicker: true, completeRequest: true, onTool: v => ran.push({ name: v.name, status: v.status }),
+    aiCatalog: catalog, corePreload: true, readToolPolicy, toolPicker: true, completeRequest: true, onTool: v => ran.push({ name: v.name, status: v.status, ...(v.rejection ? { rejection: v.rejection } : {}) }),
     callModel: catalogCall(async options => {
       if (options.functionName === 'completion-gate') return { success: true, model: 'fixture', usage, data: JSON.stringify({ work_remaining: false, reason: '' }) }
       if (options.functionName === 'tool-picker') { pickerInputs.push(JSON.parse(String(options.messages![0].content))); return { success: true, model: 'fixture', usage, data: JSON.stringify({ tools: [], reason: '' }) } }
@@ -92,6 +94,12 @@ test('Bob asks Konrad in plain words; Konrad has his own tools, the project in h
   assert(!names(bob[0]).some(n => STRUCTURE.includes(n) || DRAWING.includes(n)), JSON.stringify(names(bob[0])))
   assert(!pickerInputs[0].candidates.some((c: any) => STRUCTURE.includes(c.name) || DRAWING.includes(c.name) || c.name.startsWith('ask_')))
   assert(names(bob[0]).includes('read_construction_draft'), 'Bob still reads the construction')
+  // The reads Bob checks a report with are in his list from the first step, never picker candidates.
+  assert.deepEqual(catalogCheckReads(catalog), ['read_construction_draft', 'read_construction_delivery', 'read_project_record_section'])
+  // The record-section reader is not part of this harness; the two construction reads are.
+  for (const read of ['read_construction_draft', 'read_construction_delivery']) {
+    assert(names(bob[0]).includes(read), read); assert(!pickerInputs[0].candidates.some((c: any) => c.name === read), read)
+  }
   // The legacy box drawing skipped the construction and the review: retired for new jobs.
   assert(!names(bob[0]).includes('save_project_drawing') && !pickerInputs[0].candidates.some((c: any) => c.name === 'save_project_drawing'))
   assert.deepEqual([...catalogRetiredTools(catalog)], ['save_project_drawing'])
@@ -121,6 +129,15 @@ test('Bob asks Konrad in plain words; Konrad has his own tools, the project in h
   const [, second] = workers['structure-worker']
   assert(texts(second).some(t => t.includes('IMAGE-PIXELS'))); assert.equal(delivered(), 1)
   assert(!texts(bob[1]).some(t => t.includes('IMAGE-PIXELS')))
+})
+
+test('a rejected worker call records why, as a code and field paths only', async () => {
+  const catalog = catalogFixture()
+  const { ran } = await turn(catalog, [ask('ask_structure_worker', { request: 'Konrad, byt ut sidan.' })],
+    { 'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'w1', toolCalls: [call('w1c', 'edit_construction_parts', { artifact_id: 'c1' })] })] })
+  const rejected = ran.find(r => r.name === 'edit_construction_parts')!
+  assert.equal(rejected.status, 'invalid')
+  assert.deepEqual(rejected.rejection, { code: 'unknown_part', fields: ['changes.0.part_id'] })
 })
 
 test('a hand-over with values is refused before any worker call', async () => {
@@ -180,5 +197,5 @@ test('manifests before the publication keep construction and drawing with Bob, a
   const { bob, pickerInputs } = await turn(pinned, [], {})
   assert(!names(bob[0]).includes('ask_structure_worker') && !names(bob[0]).includes('ask_drawing_worker'))
   assert(pickerInputs[0].candidates.some((c: any) => c.name === 'save_construction_draft'))
-  assert.equal(catalogRetiredTools(pinned).size, 0)
+  assert.equal(catalogRetiredTools(pinned).size, 0); assert.deepEqual(catalogCheckReads(pinned), [])
 })

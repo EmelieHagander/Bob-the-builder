@@ -2,6 +2,7 @@ import type { AiCatalogSession } from './ai-catalog.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
+import { toolRejection, type ToolRejection } from './tool-rejection.ts'
 
 /** Owner decision 2026-10-30: pilot of Bob as coordinator with workers, Mattias
  * (materials) first. A worker has its own fixed native tools and instructions
@@ -72,6 +73,16 @@ export function catalogRetiredTools(catalog: AiCatalogSession): Set<string> {
   return new Set((box.retired_tools as unknown[]).filter((name): name is string => typeof name === 'string' && NAME.test(name)))
 }
 
+/** Reads Bob uses to check a colleague's report, loaded from his first step like
+ * the hand-overs (box run 12: four describe_tool rounds, each changing his tool
+ * list mid-turn). Manifests before keep loading them on demand. */
+export function catalogCheckReads(catalog: AiCatalogSession): string[] {
+  const box = catalog.definition('bob.tools', 'tool_contract').definition
+  if (box.build_workers_version !== 1 || !Array.isArray(box.check_reads)) return []
+  return (box.check_reads as unknown[]).filter((name): name is string => typeof name === 'string' && NAME.test(name)
+    && catalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + name && row.definition_kind === 'tool_contract'))
+}
+
 /** plain: the worker reads its own project knowledge, so Bob sends only a request. */
 export function parseWorkerJob(value: unknown, plain = false): { job: string; findings: string | null } | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
@@ -114,7 +125,7 @@ export async function runWorker(opts: {
   readKnowledge?: () => Promise<Record<string, unknown>>; variables?: Record<string, string>
   /** Pixels the worker opened go with the worker's own next call (not Bob's), and are confirmed after it. */
   images?: { carrier: () => Messages; confirmDelivery: () => void }
-  onTool?: (value: { name: string; status: string; ms: number }) => void
+  onTool?: (value: { name: string; status: string; ms: number; rejection?: ToolRejection }) => void
 }): Promise<Record<string, unknown>> {
   const roleKey = opts.worker.role.replace(/^role\./, '')
   const allowed = new Set([...opts.worker.tools, ...opts.worker.reads])
@@ -174,7 +185,8 @@ export async function runWorker(opts: {
       const status = String(result?.status ?? 'returned')
       calls.push({ tool: NAME.test(name) ? name : 'invalid_name', status })
       if (status === 'saved') receipts.push(saveReceipt(name, result))
-      try { opts.onTool?.({ name: NAME.test(name) ? name : 'invalid_name', status, ms: Date.now() - began }) } catch { /* diagnostics only */ }
+      const rejection = ['invalid', 'conflict'].includes(status) ? toolRejection(result) : undefined
+      try { opts.onTool?.({ name: NAME.test(name) ? name : 'invalid_name', status, ms: Date.now() - began, ...(rejection ? { rejection } : {}) }) } catch { /* diagnostics only */ }
       messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) })
     }
     for (const call of response.toolCalls.slice(8)) messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ status: 'deferred' }) })
