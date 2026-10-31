@@ -54,7 +54,7 @@ released. This documentation does not bypass it or publish a new catalog/runtime
 [State](bob-delivery-flow.md#form-next) owns that implementation and acceptance.
 
 <a id="code-drawing-check"></a>
-## Code-only drawing check — built 2026-10-31, not installed
+## Code-only drawing check — installed 2026-10-31 ([run 12](foundation-verification.md#build-team-install-2026-10-31))
 
 **Owner decision: no AI reviews a drawing.** Rita now draws
 ([build team](ask-bob-tools.md#build-team)). The drawing is generated exactly from

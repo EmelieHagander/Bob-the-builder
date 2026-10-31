@@ -120,8 +120,8 @@ price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
 
 <a id="build-team"></a>
 **Bob's build team: Konrad (construction), Rita (drawing) and Mattias
-(materials) — built 2026-10-31, not installed (owner decisions; [build
-record](foundation-verification.md#build-team-2026-10-31)).** Bob coordinates and
+(materials) — installed 2026-10-31, box run 12 passed (owner decisions;
+[installation and run 12](foundation-verification.md#build-team-install-2026-10-31)).** Bob coordinates and
 is the owner's contact; the work goes to colleagues with their own tools. In paid
 box run 11 Bob on the small model failed because he still built the construction
 himself. Manifests with `bob.tools` `build_workers_version` 1
@@ -166,8 +166,8 @@ himself. Manifests with `bob.tools` `build_workers_version` 1
 Pinned manifests keep their behaviour: before this publication Bob holds the
 construction and drawing tools, Mattias gets Bob's brief, and the AI reviewer
 checks drawings. Source: `bob-workers.ts`, the toolbox setup in
-`project-answer.ts`, `project-tools/session.ts` (`offerWaiting`). Not yet
-measured; the next paid box run includes it.
+`project-answer.ts`, `project-tools/session.ts` (`offerWaiting`). Measured once
+(run 12): Bob's own cost halved, Konrad is now the largest cost.
 
 <a id="materials-worker"></a>
 **Superseded for new manifests by [the build team](#build-team) (built

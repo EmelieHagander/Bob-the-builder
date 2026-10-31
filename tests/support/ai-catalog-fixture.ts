@@ -453,6 +453,11 @@ for(const migration of migrations){
    shelves:box.definition.shelves.map((shelf:any)=>shelf.label==='Drawings and CAD'?{...shelf,tools:[...policies.map(p=>p.name),...shelf.tools]}:shelf)}
   publishAs(box,publication);box.metadata.build_workers_version=1;versions.set(box.key,versions.get(box.key)!+1)
  }
+ const checkReads=source.match(/\$bob_check_reads_list\$([\s\S]+?)\$bob_check_reads_list\$/)
+ if(checkReads){
+  const box=seed.find(row=>row.key==='bob.tools')
+  box.definition={...box.definition,check_reads:JSON.parse(checkReads[1])};publishAs(box,'bob-check-reads-v1');versions.set(box.key,versions.get(box.key)!+1)
+ }
  if(/\$bob_tool_order_restore\$/.test(source)){
   preToolOrderRestoreRows=structuredClone(seed);preToolOrderRestoreVersions=new Map(versions)
   const box=seed.find(row=>row.key==='bob.tools')

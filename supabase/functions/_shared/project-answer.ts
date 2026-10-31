@@ -22,7 +22,7 @@ import { humanTextIssues } from './human-text.ts'
 import { answerTextFragments, type AnswerTextOutcome } from './answer-text.ts'
 import { toolRejection } from './tool-rejection.ts'
 import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
-import { catalogWorkers, catalogRetiredTools, workerOwnedTools, parseWorkerJob, runWorker } from './bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, catalogCheckReads, workerOwnedTools, parseWorkerJob, runWorker } from './bob-workers.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
@@ -253,7 +253,7 @@ export type ProjectAnswerOptions = {
   hasAccess: () => Promise<boolean>; previousResponseId?: string;
   writer?: ProjectWriter; context?: WorkingContext; deadline?: number; modelTimeoutMs?: number; unlimitedWork?: boolean;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;
-  onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string; diagnostics?:import('./execution-metrics.ts').WorkDiagnostics }) => void;
+  onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string; diagnostics?:import('./execution-metrics.ts').WorkDiagnostics; rejection?: { code: string; fields: string[] } }) => void;
   /** Names of the calls this model step will execute, before the first runs.
    * Called again with the same names when a checkpointed step resumes. */
   onToolBatch?: (names: string[]) => void;
@@ -365,7 +365,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     return { native: [...specs.filter(spec => coreTools!.includes(spec.function.name)), opts.aiCatalog.tool(USE_TOOL, { include_manual: true })],
       sheets: specs.map(spec => spec.function.name).filter(name => !coreTools!.includes(name)) }
   }
-  const turnPreload = (phase: string | null) => [...turnTools(phase), ...workerHandOverNames]
+  const turnPreload = (phase: string | null) => [...turnTools(phase), ...workerHandOverNames, ...checkReads]
   const turnTools = (phase: string | null) => {
     if (!phaseTools) return preloadTools
     if (toolPick) return [...preloadTools, ...toolPick]
@@ -389,10 +389,12 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // The hand-over is loaded from the first step like a permanent tool; the
   // catalog's six permanent tools stay unchanged for runtimes without workers.
   const workerHandOverNames = Object.values(workers ?? {}).map(worker => worker.tool)
+  // The reads Bob checks a report with are loaded from the first step too.
+  const checkReads = workers ? catalogCheckReads(opts.aiCatalog) : []
   // Retired tools are hidden from Bob the same way (new manifests only).
   const workerOwned = new Set([...workerOwnedTools(workers), ...catalogRetiredTools(opts.aiCatalog)])
   // Never picker candidates: the workers' own tools, and the hand-overs Bob always has.
-  const workerTools = new Set([...workerOwned, ...workerHandOverNames])
+  const workerTools = new Set([...workerOwned, ...workerHandOverNames, ...checkReads])
   const bobPolicy: ToolPolicyReader = workerOwned.size ? async () => {
     const policy = await basePolicy()
     return { ...policy, tools: policy.tools.map(row => workerOwned.has(row.name) ? { ...row, active: false } : row) }
@@ -440,10 +442,10 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           }
           return knowledge
         } } : {}),
-        onTool: ({ name, status, ms }) => {
+        onTool: ({ name, status, ms, rejection }) => {
           if (completionAware && writeTools.has(name)) workResults.push({ tool: name, status })
           // Distinct event keys: Bob's own calls use index 0..n of the step.
-          opts.onTool?.({ name, status, step: workerStep + 1, index: 100 + workerToolEvents++, ms })
+          opts.onTool?.({ name, status, step: workerStep + 1, index: 100 + workerToolEvents++, ms, ...(rejection ? { rejection } : {}) })
         } })
     } }))
   const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: turnPreload,
@@ -742,7 +744,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           : completionAware && typeof result?.validation?.code === 'string' ? result.validation.code : undefined
         try { opts.onTool?.({ name: toolName, status: String(result?.status ?? 'returned'), step: step + 1, index, ms: Date.now() - began,
           ...(result?.diagnostics?{diagnostics:result.diagnostics}:{}),
-          ...(validationCode !== undefined ? { validation_code: validationCode } : {}) }) } catch { /* diagnostics only */ }
+          ...(validationCode !== undefined ? { validation_code: validationCode } : {}), ...(rejection ? { rejection } : {}) }) } catch { /* diagnostics only */ }
         // Cache hits are worker-local telemetry. Their loss on resume must not
         // change model/journal bytes for the same exact source result.
         if (['work_read','work_change','work_check'].includes(result?.diagnostics?.operation)) {

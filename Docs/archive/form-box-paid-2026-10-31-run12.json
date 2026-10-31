@@ -1,0 +1,93 @@
+{
+ "run": "https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41186062907",
+ "workflow": "live-form-acceptance.yml",
+ "scenario": "box",
+ "config": "baseline",
+ "head": "3ff1ddd5a0a3f11dc8aac39db1ed2862b7cd2819",
+ "functions": {
+  "bob-worker": 161,
+  "ask-bob": 193
+ },
+ "catalog": {
+  "migration": "20261031040000_bob_build_workers_catalog (recorded 20261031084743)",
+  "bob.tools": "v33, build_workers_version 1",
+  "cad.drawing-check": "mode code"
+ },
+ "passed": true,
+ "turns": [
+  {
+   "step": "concept",
+   "turn": "f9f4b85a-9032-4fdb-a28a-aecbfd49c002",
+   "delivery": "saved",
+   "wall": "6.7 min",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 6,
+    "structure-worker": 9,
+    "completion-gate": 1
+   },
+   "usd": 0.736,
+   "rejected": 2,
+   "answer_text": "clean",
+   "notes": "Bob created the solution, then one hand-over to Konrad; Konrad saved and refined the construction (two first tries rejected, both corrected). Mattias not called; Konrad read the catalog himself."
+  },
+  {
+   "step": "width_change",
+   "turn": "ac72a3e6-39b0-4f51-8570-ed97a9aa5f4c",
+   "delivery": "asked",
+   "wall": "12.9 min",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 10,
+    "structure-worker": 5,
+    "completion-gate": 1
+   },
+   "usd": 0.327,
+   "rejected": 0,
+   "answer_text": "clean",
+   "notes": "Bob recorded the owner's new width; Konrad changed the construction parameters. A 9-minute wait between two Bob calls (background AI scheduling), before Konrad was involved."
+  },
+  {
+   "step": "final_drawing",
+   "turn": "5d87dd71-1710-4677-bd88-27005e56b9fa",
+   "delivery": "saved",
+   "wall": "5 min",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 8,
+    "structure-worker": 3,
+    "drawing-worker": 5,
+    "completion-gate": 1
+   },
+   "usd": 0.347,
+   "rejected": 0,
+   "answer_text": "clean",
+   "notes": "Konrad checked the construction; Rita rendered once, the code check passed with no review model call, and she saved the drawing."
+  }
+ ],
+ "total": {
+  "calls": 52,
+  "bob_calls": 24,
+  "konrad_calls": 17,
+  "rita_calls": 5,
+  "mattias_calls": 0,
+  "usd": 1.41,
+  "cached_share": 0.72,
+  "rejected": 2,
+  "answer_text": "clean in 3 of 3 turns"
+ },
+ "by_role_usd": {
+  "structure-worker": 0.744,
+  "ask-bob": 0.524,
+  "drawing-worker": 0.12,
+  "tool-picker": 0.019,
+  "completion-gate": 0.004
+ },
+ "compared_with_run10": {
+  "usd": "1.41 vs 1.13",
+  "bob_usd": "0.52 vs 0.96",
+  "cache": "72% vs 58%",
+  "rewrites": "0 vs 3",
+  "ai_drawing_reviews": "0 vs 1"
+ }
+}

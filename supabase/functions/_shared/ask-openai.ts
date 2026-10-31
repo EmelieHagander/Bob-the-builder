@@ -193,6 +193,9 @@ export async function answerWithOpenAi(opts: {
   // full timeout, so several calls share one segment; a call cut off at the segment
   // wall yields into a fresh segment, consuming the same bounded retry budget
   // as other dispatched failures. Durable AI waiting does not consume retries.
+  const WORKER_ROLES = new Set(['materials-worker', 'structure-worker', 'drawing-worker'])
+  // 'bob-ask-<32 hex>' becomes 'bob-<role>-<32 hex>': one route per worker and project.
+  const workerCacheKey = (key: string, role: string) => 'bob-' + role + '-' + key.slice('bob-ask-'.length)
   const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'completion-gate': 15000, 'tool-picker': 15000, 'tool-repair': 15000, 'materials-worker': 60000, 'structure-worker': 75000, 'drawing-worker': 60000, 'memory-stair': 30000, 'bob-delivery-language': 15000 }
   let drawingRequestId:string|null=null
   let drawingBudget:ReturnType<typeof createDrawingBudget>|undefined
@@ -229,6 +232,10 @@ export async function answerWithOpenAi(opts: {
         // Routing hint only, added after the journal, job and drawing-budget
         // fingerprints so recorded steps of in-flight jobs still match.
         ...(promptCacheKey && (options.catalogRoleKey ?? options.functionName) === 'ask-bob' ? { promptCacheKey } : {}),
+        // Build-team workers (2026-10-31, box run 12): each worker's fixed start
+        // (persona, tools, snapshot) gets its own per-project key; without one their
+        // calls often missed the cache (Konrad's second call read nothing from it).
+        ...(promptCacheKey && WORKER_ROLES.has(options.catalogRoleKey ?? options.functionName) ? { promptCacheKey: workerCacheKey(promptCacheKey, options.catalogRoleKey ?? options.functionName) } : {}),
         ...(asyncModels && identity ? { background: {
           key: opts.background!.jobId + '/' + identity.key, fingerprint: identity.fingerprint, receiver: 'bob',
           context: { jobId: opts.background!.jobId, role: options.aiFunction },

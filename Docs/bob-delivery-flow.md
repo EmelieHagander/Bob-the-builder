@@ -556,13 +556,18 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Byggt 2026-10-31, inte installerat — byggteamet ([bevis](foundation-verification.md#build-team-2026-10-31)):**
+**Installerat 2026-10-31 — byggteamet; lådprov 12 godkänt (`bob-worker` v161, `ask-bob` v193, [bevis](foundation-verification.md#build-team-install-2026-10-31)):**
+Bob lämnade konstruktionen till Konrad och ritningen till Rita; koden godkände
+ritningen utan granskningsanrop. Bobs egen kostnad halverades (USD 0,52 mot 0,96),
+men totalen blev USD 1,41 mot 1,13 eftersom Konrad står för USD 0,74. Inga
+klartextomskrivningar (0 av 3 turer). Nästa: göra Konrads anrop billigare.
+
+**Byggt 2026-10-31 — byggteamet:**
 Bob samordnar och pratar med beställaren. Konrad (konstruktör) äger
 konstruktionen, Rita ritar den och Mattias sköter materialen. Bob ber om arbete med
 vanliga ord utan värden; varje kollega läser sin projektkunskap från databasen.
 Koden ensam kontrollerar ritningen. Den gamla genvägen för lådritningar är borttagen
-för nya jobb. Texterna är godkända av ägaren. Kvar: driftsättning, katalogen och ett betalt
-lådprov.
+för nya jobb. Texterna är godkända av ägaren.
 
 **2026-10-31 — Bob på minimodellen provad och återställd; klartextstycket installerat ([bevis](foundation-verification.md#mini-trial-2026-10-31)):**
 lådprov 11 misslyckades med Bob på minimodellen: konceptturen avbröts efter 15
