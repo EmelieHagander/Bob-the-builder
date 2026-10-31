@@ -409,7 +409,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (typeof fromSnapshot === 'string' && fromSnapshot.trim()) return projectName = fromSnapshot.trim()
     const found = await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null }) as { records?: { name?: unknown }[] }
     const name = found?.records?.[0]?.name
-    return projectName = typeof name === 'string' && name.trim() ? name.trim() : 'projektet'
+    return projectName = typeof name === 'string' && name.trim() ? name.trim() : 'utan namn'
   }
   const workerHandOvers = Object.entries(workers ?? {}).map(([key, worker]) => ({ spec: opts.aiCatalog.tool(worker.tool),
     // The hand-over's schema version is the pinned catalog's (Mattias's request-only hand-over is v2).
@@ -431,6 +431,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         session, hasAccess: opts.hasAccess, deadline, ...(opts.modelTimeoutMs ? { modelTimeoutMs: opts.modelTimeoutMs } : {}),
         readCurrent: async () => key === 'materials' ? opts.lookup.search({ dataset: 'materials', query: null, status: null, area_id: null, record_id: null }) : null,
         // In order, one at a time: the journal replays reads by position.
+        ...(worker.knowledge && opts.projectContext ? { images: { carrier: () => opts.projectContext!.carrier() as NonNullable<OpenAIServiceOptions['messages']>, confirmDelivery: () => opts.projectContext!.confirmDelivery() } } : {}),
         ...(worker.knowledge ? { variables: { project_name: await readProjectName() }, readKnowledge: async () => {
           const knowledge: Record<string, unknown> = {}
           for (const read of worker.knowledge!) {

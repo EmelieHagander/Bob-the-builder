@@ -42,12 +42,18 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
   const constructionCalls: { name: string; args: any }[] = []
   const constructionTools = { ...real, tools: real.tools, get remaining() { return real.remaining }, execute: async (name: string, args: any) => {
     constructionCalls.push({ name, args })
+    if (name === 'check_construction_draft') pendingImage = true // stands in for a worker opening an image
     if (name === 'read_construction_draft') return { status: 'ok', drafts: [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }] }
     return { status: 'saved', artifact_id: 'c1', revision: 3 }
   } }
   const solutionActions = createSolutionActions({ projectId, writer, hasAccess, read: async () => ({ data: [], error: null }) })
-  const projectContext = createProjectContext({ hasAccess, sources: lookup.sources, adapters: [createMediaAdapter(projectId, {
+  const realContext = createProjectContext({ hasAccess, sources: lookup.sources, adapters: [createMediaAdapter(projectId, {
     count: async () => 0, list: async () => [], read: async () => null, download: async () => new Uint8Array() })] })
+  // Pixels opened during the turn wait in the shared carrier until a model call confirms delivery.
+  let pendingImage = false, delivered = 0
+  const projectContext = Object.assign(Object.create(realContext), {
+    carrier: () => pendingImage ? [{ role: 'user', content: [{ type: 'text', text: 'IMAGE-PIXELS' }] }] : [],
+    confirmDelivery: () => { if (pendingImage) delivered++; pendingImage = false } })
   const readToolPolicy = async () => {
     const policy = await seedToolPolicy(), definitions = catalog.manifest().definitions
     return { ...policy, phase: 'design', tools: policy.tools.map(row => {
@@ -72,14 +78,14 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
       return (step ? step(options) : { success: true, model: 'fixture', usage, responseId: 'b-done', data: 'Klart.' }) as any
     }, catalog) } as any)
   assert.equal(result.ok, true, JSON.stringify(result))
-  return { bob, workers, pickerInputs, ran, constructionCalls, cadAssistant }
+  return { bob, workers, pickerInputs, ran, constructionCalls, cadAssistant, delivered: () => delivered }
 }
 
 test('Bob asks Konrad in plain words; Konrad has his own tools, the project in his persona and his project knowledge', async () => {
   const catalog = catalogFixture(), core = catalogCoreTools(catalog)!
   assert.equal(core.length, 6)
   const request = 'Hej Konrad, kan du sätta ihop konstruktionen för projektet? Lådorna väntar vi med.'
-  const { bob, workers, pickerInputs, constructionCalls, ran } = await turn(catalog, [ask('ask_structure_worker', { request })],
+  const { bob, workers, pickerInputs, constructionCalls, ran, delivered } = await turn(catalog, [ask('ask_structure_worker', { request })],
     { 'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'w1', toolCalls: [call('w1c', 'check_construction_draft', { artifact_id: 'c1', revision: 2 })] })] })
   // Bob: all three hand-overs, none of the construction or drawing tools, and none of them for the picker.
   for (const tool of ['ask_structure_worker', 'ask_drawing_worker', 'ask_materials_worker']) assert(names(bob[0]).includes(tool), tool)
@@ -109,6 +115,12 @@ test('Bob asks Konrad in plain words; Konrad has his own tools, the project in h
   const report = toolOutput(bob[1])
   assert.equal(report.status, 'ok'); assert.equal(report.worker, 'structure-worker')
   assert.deepEqual(report.calls.map((c: any) => c.tool), ['check_construction_draft'])
+  // What he saved comes back as receipts copied by code, not restated by a model.
+  assert.deepEqual(report.receipts, [{ tool: 'check_construction_draft', artifact_id: 'c1', revision: 3 }])
+  // An image he opened goes with his own next call and is confirmed there; Bob's next call does not carry it.
+  const [, second] = workers['structure-worker']
+  assert(texts(second).some(t => t.includes('IMAGE-PIXELS'))); assert.equal(delivered(), 1)
+  assert(!texts(bob[1]).some(t => t.includes('IMAGE-PIXELS')))
 })
 
 test('a hand-over with values is refused before any worker call', async () => {

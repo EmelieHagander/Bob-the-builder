@@ -112,6 +112,8 @@ export async function runWorker(opts: {
   readCurrent: () => Promise<unknown>; hasAccess: () => Promise<boolean>; deadline: number; modelTimeoutMs?: number
   /** Workers with knowledge reads: their fresh results, and the persona's variables (the project's name). */
   readKnowledge?: () => Promise<Record<string, unknown>>; variables?: Record<string, string>
+  /** Pixels the worker opened go with the worker's own next call (not Bob's), and are confirmed after it. */
+  images?: { carrier: () => Messages; confirmDelivery: () => void }
   onTool?: (value: { name: string; status: string; ms: number }) => void
 }): Promise<Record<string, unknown>> {
   const roleKey = opts.worker.role.replace(/^role\./, '')
@@ -136,21 +138,26 @@ export async function runWorker(opts: {
   const params = { server_quote: true, include_manual: true }
   const toolParams = () => Object.fromEntries(specs.map(spec => [spec.function.name, { card: false, include_manual: true }]))
   const calls: { tool: string; status: string }[] = []
+  // Workers with knowledge: what they saved travels to Bob as receipts, in code (no AI restates ids).
+  const receipts: Record<string, unknown>[] = []
   let previous: string | undefined
   for (let step = 0; step < opts.worker.max_steps; step++) {
     if (!await opts.hasAccess()) throw new Error('project_denied')
-    if (Date.now() + 15_000 >= opts.deadline) return { status: 'time_budget', worker: roleKey, calls }
+    if (Date.now() + 15_000 >= opts.deadline) return opts.readKnowledge ? { status: 'time_budget', worker: roleKey, calls, receipts } : { status: 'time_budget', worker: roleKey, calls }
     if (step) specs = await offer()
+    const images = opts.images?.carrier() ?? []
     const response = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: roleKey, aiFunction: roleKey, module: 'global', userId: opts.userId,
-      catalogRoleKey: roleKey, ...(opts.variables ? { catalogVariables: opts.variables } : {}), messages, tools: specs, catalogSchemaParameters: params, catalogToolParameters: toolParams(),
+      catalogRoleKey: roleKey, ...(opts.variables ? { catalogVariables: opts.variables } : {}), messages: [...messages, ...images], tools: specs, catalogSchemaParameters: params, catalogToolParameters: toolParams(),
       ...(previous ? { previousResponseId: previous } : {}), maxOutputTokens: 8000,
       timeoutMs: Math.max(1000, Math.min(opts.modelTimeoutMs ?? 45_000, opts.deadline - Date.now())) })
+    const done = (result: Record<string, unknown>) => opts.readKnowledge ? { ...result, receipts } : result
     if (!response.success) {
       if (response.error === 'turn_budget_exhausted') throw new Error('turn_budget_exhausted')
-      return { status: 'unavailable', worker: roleKey, calls }
+      return done({ status: 'unavailable', worker: roleKey, calls })
     }
-    if (!response.toolCalls?.length) return { status: 'ok', worker: roleKey, report: typeof response.data === 'string' ? response.data : '', calls }
-    if (!response.responseId) return { status: 'unavailable', worker: roleKey, calls }
+    if (images.length) opts.images!.confirmDelivery()
+    if (!response.toolCalls?.length) return done({ status: 'ok', worker: roleKey, report: typeof response.data === 'string' ? response.data : '', calls })
+    if (!response.responseId) return done({ status: 'unavailable', worker: roleKey, calls })
     previous = response.responseId; messages = []
     for (const call of response.toolCalls.slice(0, 8)) {
       if (!await opts.hasAccess()) throw new Error('project_denied')
@@ -166,10 +173,22 @@ export async function runWorker(opts: {
       if (result && typeof result === 'object' && 'diagnostics' in result) { const { diagnostics: _d, ...content } = result; result = content }
       const status = String(result?.status ?? 'returned')
       calls.push({ tool: NAME.test(name) ? name : 'invalid_name', status })
+      if (status === 'saved') receipts.push(saveReceipt(name, result))
       try { opts.onTool?.({ name: NAME.test(name) ? name : 'invalid_name', status, ms: Date.now() - began }) } catch { /* diagnostics only */ }
       messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) })
     }
     for (const call of response.toolCalls.slice(8)) messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ status: 'deferred' }) })
   }
-  return { status: 'step_budget', worker: roleKey, calls }
+  return opts.readKnowledge ? { status: 'step_budget', worker: roleKey, calls, receipts } : { status: 'step_budget', worker: roleKey, calls }
+}
+
+const RECEIPT_KEYS = ['artifact_id', 'record_id', 'id', 'revision', 'construction_revision', 'request_id', 'step_id']
+/** The ids and revisions a save returned, copied by code. */
+export function saveReceipt(tool: string, result: unknown): Record<string, unknown> {
+  const receipt: Record<string, unknown> = { tool }
+  if (result && typeof result === 'object') for (const key of RECEIPT_KEYS) {
+    const value = (result as Record<string, unknown>)[key]
+    if (typeof value === 'string' && value.length <= 200 || typeof value === 'number' && Number.isFinite(value)) receipt[key] = value
+  }
+  return receipt
 }
