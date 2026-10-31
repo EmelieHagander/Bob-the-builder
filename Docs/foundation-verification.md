@@ -1,5 +1,31 @@
 # Foundation verification and rollout
 
+<a id="build-team-2026-10-31"></a>
+## Build team: Konrad and Rita, code-only drawing check — built 2026-10-31, not installed
+
+Owner decisions after run 11: Bob coordinates; Konrad (structural designer) owns
+the construction, Rita draws it, Mattias does materials; Bob hands over a plain
+request and no values; each worker reads its project knowledge from the
+database; code alone checks a drawing; the legacy box drawing is retired
+([contract](ask-bob-tools.md#build-team), [drawing check](cad-adapter.md#code-drawing-check)).
+
+- **Source:** `bob-workers.ts` (workers from `workers` and `build_workers`,
+  knowledge reads, request-only hand-over, persona variables, retired tools),
+  `project-answer.ts`, `project-tools/session.ts` (`offerWaiting`),
+  `cad-assistant.ts` and `cad-targeted-review.ts` (code-only check),
+  `ask-openai.ts` (time reserves for both new roles).
+- **Catalog:** `20261031040000_bob_build_workers_catalog.sql`. Prompt texts by
+  Saoirse, pending the owner's OLD→NEW approval.
+- **Tests:** `bob-build-workers` (Konrad, Rita's fixed tool list, Mattias's
+  request-only form, refused values, pinned manifests), `cad-targeted-review`
+  (code-only pass and fail without a model call), the fixture replay. Tests that
+  cover Bob building and drawing himself, Mattias's first form and the AI review
+  are pinned to the manifest before this publication.
+- **Release order, with the owner's OK and no Bob job running:** merge, deploy
+  `bob-worker` and `ask-bob`, then apply the catalog (the `ask_materials_worker`
+  policy moves to schema 2). Then one paid box run, which also measures the
+  plain-words paragraph.
+
 <a id="mini-trial-2026-10-31"></a>
 ## Bob on the mini model: box run 11 failed, trial ended; plain-words paragraph installed — 2026-10-31
 

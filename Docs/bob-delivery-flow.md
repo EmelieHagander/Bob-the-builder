@@ -556,6 +556,14 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
+**Byggt 2026-10-31, inte installerat — byggteamet ([bevis](foundation-verification.md#build-team-2026-10-31)):**
+Bob samordnar och pratar med beställaren. Konrad (konstruktör) äger
+konstruktionen, Rita ritar den och Mattias sköter materialen. Bob ber om arbete med
+vanliga ord utan värden; varje kollega läser sin projektkunskap från databasen.
+Koden ensam kontrollerar ritningen. Den gamla genvägen för lådritningar är borttagen
+för nya jobb. Kvar: ägarens godkännande av texterna, driftsättning, katalogen och
+ett betalt lådprov.
+
 **2026-10-31 — Bob på minimodellen provad och återställd; klartextstycket installerat ([bevis](foundation-verification.md#mini-trial-2026-10-31)):**
 lådprov 11 misslyckades med Bob på minimodellen: konceptturen avbröts efter 15
 minuter (standard: sparad på 5 minuter). Mini-Bob behövde 22 anrop i stället för
