@@ -401,11 +401,24 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const workerSessions = new Map<string, ReturnType<typeof createBobToolSession>>()
   let currentStep = restored?.step ?? 0
   let workerToolEvents = 0
-  const workerHandOvers = Object.entries(workers ?? {}).map(([key, worker]) => ({ spec: opts.aiCatalog.tool(worker.tool), version: 1,
+  // The project's name for the workers' personas: the locked snapshot, else one read.
+  let projectName: string | undefined
+  const readProjectName = async () => {
+    if (projectName !== undefined) return projectName
+    const fromSnapshot = (opts.context?.stair?.snapshot as { project?: { name?: unknown } } | undefined)?.project?.name
+    if (typeof fromSnapshot === 'string' && fromSnapshot.trim()) return projectName = fromSnapshot.trim()
+    const found = await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null }) as { records?: { name?: unknown }[] }
+    const name = found?.records?.[0]?.name
+    return projectName = typeof name === 'string' && name.trim() ? name.trim() : 'projektet'
+  }
+  const workerHandOvers = Object.entries(workers ?? {}).map(([key, worker]) => ({ spec: opts.aiCatalog.tool(worker.tool),
+    // The hand-over's schema version is the pinned catalog's (Mattias's request-only hand-over is v2).
+    version: Number((opts.aiCatalog.definition('tools.' + worker.tool, 'tool_contract').definition.envelope as { schema_version?: unknown } | undefined)?.schema_version ?? 1),
     gate: (): ToolGate => 'available',
     execute: async (raw: unknown) => {
-      const job = parseWorkerJob(raw)
-      if (!job) return { status: 'invalid', issues: [{ path: '$', expected: 'job (text) and findings (text or null)' }] }
+      const plain = !!worker.knowledge
+      const job = parseWorkerJob(raw, plain)
+      if (!job) return { status: 'invalid', issues: [{ path: '$', expected: plain ? 'request (text)' : 'job (text) and findings (text or null)' }] }
       let session = workerSessions.get(key)
       if (!session) {
         session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: () => [...worker.tools, ...worker.reads], offerWaiting: true, readPolicy: basePolicy })
@@ -416,8 +429,16 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const workerStep = currentStep
       return runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
         session, hasAccess: opts.hasAccess, deadline, ...(opts.modelTimeoutMs ? { modelTimeoutMs: opts.modelTimeoutMs } : {}),
-        readCurrent: async () => worker.current ? withoutDiagnostics(await session!.execute(worker.current.tool, structuredClone(worker.current.arguments)))
-          : key === 'materials' ? opts.lookup.search({ dataset: 'materials', query: null, status: null, area_id: null, record_id: null }) : null,
+        readCurrent: async () => key === 'materials' ? opts.lookup.search({ dataset: 'materials', query: null, status: null, area_id: null, record_id: null }) : null,
+        // In order, one at a time: the journal replays reads by position.
+        ...(worker.knowledge ? { variables: { project_name: await readProjectName() }, readKnowledge: async () => {
+          const knowledge: Record<string, unknown> = {}
+          for (const read of worker.knowledge!) {
+            try { knowledge[read.label] = withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments))) }
+            catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; knowledge[read.label] = { status: 'unavailable' } }
+          }
+          return knowledge
+        } } : {}),
         onTool: ({ name, status, ms }) => {
           if (completionAware && writeTools.has(name)) workResults.push({ tool: name, status })
           // Distinct event keys: Bob's own calls use index 0..n of the step.

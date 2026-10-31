@@ -19,8 +19,8 @@
   },
   {
     "name": "ask_drawing_worker",
-    "description": "DRAFT",
-    "how_to": "DRAFT",
+    "description": "DRAFT give a job to Rita.",
+    "how_to": "DRAFT how to.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],
@@ -28,17 +28,17 @@
   },
   {
     "name": "ask_materials_worker",
-    "description": "Give a materials job to Mattias, your materials worker: catalog search and definitions, project materials, stock, requirements from a construction, cut fit and cut plans, and Shopping. He sees the conversation and the project and works with his own tools; you get his report.",
-    "how_to": "Write the job as one clear assignment with the owner's words. Put what you found in this turn (construction id, parts, measurements) in findings; the conversation itself he already sees. Mattias reads and saves through the same checks as you. Check his report before you tell the owner.",
-    "schema_version": 1,
+    "description": "DRAFT give a job to Mattias.",
+    "how_to": "DRAFT how to.",
+    "schema_version": 2,
     "always_load": false,
     "preload_phases": [],
     "active": true
   },
   {
     "name": "ask_structure_worker",
-    "description": "DRAFT",
-    "how_to": "DRAFT",
+    "description": "DRAFT give a job to Konrad.",
+    "how_to": "DRAFT how to.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],

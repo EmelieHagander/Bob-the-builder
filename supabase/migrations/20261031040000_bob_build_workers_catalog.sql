@@ -1,20 +1,18 @@
--- Owner decision 2026-10-31: Bob coordinates; the structural designer owns the
--- construction and Rita makes the drawing, like Mattias does materials. Each has
--- its own fixed native tools and instructions, the same input Bob has (locked
--- project snapshot, conversation summaries and history) and Bob's brief last,
--- with the present records of its area (construction drafts; drawing requests).
--- They read and save through the same session gates, receipts and turn budgets
--- and report to Bob; they never answer the owner. Bob no longer offers their
--- tools; he hands jobs over through ask_structure_worker and ask_drawing_worker.
--- No AI reviews the drawing any more: cad.drawing-check mode code lets the
--- code findings decide (the drawing is generated exactly from the checked
--- construction; Konrad checks the construction against the owner's intent).
--- The legacy box drawing (save_project_drawing), which skipped both the
--- construction and the review, is retired for new jobs (retired_tools).
--- Prompt texts drafted by Saoirse and approved by the owner (OLD -> NEW).
--- bob.tools: build_workers_version 1 and build_workers. Runtimes that read only
--- workers (materials) ignore them and keep these tools with Bob. Deploy both Bob
--- runtimes with the build_workers consumer before activation. Pinned manifests
+-- Owner decision 2026-10-31: Bob coordinates the build team. Konrad (structural
+-- designer) owns the construction and Rita draws it, as Mattias does materials.
+-- Each has fixed native tools, a persona cast in the project and one shared team
+-- text, the same input Bob has (locked project snapshot, conversation summaries
+-- and history), then project knowledge read fresh from the database and Bob's
+-- plain request last. Bob hands over no values (ask_structure_worker,
+-- ask_drawing_worker, ask_materials_worker v2: one request parameter); the
+-- workers read and save through the same session gates and report to Bob.
+-- No AI reviews the drawing: cad.drawing-check mode code lets the code findings
+-- decide (the drawing is generated exactly from the checked construction; Konrad
+-- checks the construction against the owner's intent). The legacy box drawing
+-- (save_project_drawing) is retired for new jobs. Prompt texts by Saoirse,
+-- approved by the owner (OLD -> NEW). bob.tools: build_workers_version 1.
+-- Deploy both Bob runtimes with the consumer first and apply with no Bob job
+-- running (the ask_materials_worker policy moves to schema 2). Pinned manifests
 -- keep their behaviour.
 begin;
 set local lock_timeout='5s';
@@ -22,36 +20,44 @@ set local statement_timeout='60s';
 do $bob_build_workers$
 declare additions jsonb:=$build_workers_additions$[
  {
-  "key": "structure-worker.persona",
-  "kind": "prompt",
-  "content": "DRAFT persona"
+  "key": "worker.team",
+  "kind": "instruction_fragment",
+  "content": "DRAFT team text."
  },
  {
-  "key": "structure-worker.contract",
-  "kind": "instruction_fragment",
-  "content": "DRAFT contract"
+  "key": "structure-worker.persona",
+  "kind": "prompt",
+  "content": "DRAFT Du är Konrad i bygget {{project_name}}.",
+  "variables": [
+   "project_name"
+  ]
  },
  {
   "key": "structure-worker.project",
   "kind": "instruction_fragment",
-  "content": "DRAFT project:"
+  "content": "DRAFT projekt:"
  },
  {
   "key": "structure-worker.conversation",
   "kind": "instruction_fragment",
-  "content": "DRAFT conversation"
+  "content": "DRAFT samtalet."
  },
  {
-  "key": "structure-worker.brief",
+  "key": "structure-worker.knowledge",
   "kind": "instruction_fragment",
-  "content": "DRAFT brief:"
+  "content": "DRAFT projektkunskap:"
+ },
+ {
+  "key": "structure-worker.request",
+  "kind": "instruction_fragment",
+  "content": "DRAFT Bob skriver:"
  },
  {
   "key": "agent-contract.structure-worker",
   "kind": "agent_contract",
   "definition": {
    "mode": "worker_with_tools",
-   "instructions_key": "structure-worker.contract",
+   "instructions_key": "worker.team",
    "source_scope": "current_authorized_work",
    "writes": "through_bob_session"
   }
@@ -60,8 +66,8 @@ declare additions jsonb:=$build_workers_additions$[
   "key": "role.structure-worker",
   "kind": "role",
   "definition": {
-   "name": "DRAFT",
-   "title": "DRAFT",
+   "name": "Konrad",
+   "title": "Konstruktör",
    "purpose": "DRAFT purpose",
    "function_name": "structure-worker",
    "module": "global",
@@ -69,7 +75,7 @@ declare additions jsonb:=$build_workers_additions$[
    "enabled": true,
    "prompt_keys": [
     "structure-worker.persona",
-    "structure-worker.contract"
+    "worker.team"
    ],
    "profile_key": "profile.ask-bob",
    "contract_key": "agent-contract.structure-worker",
@@ -91,33 +97,24 @@ declare additions jsonb:=$build_workers_additions$[
   "kind": "tool_contract",
   "definition": {
    "name": "ask_structure_worker",
-   "description": "DRAFT",
+   "description": "DRAFT give a job to Konrad.",
    "parameters": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
-     "job": {
+     "request": {
       "type": "string",
       "maxLength": 2000
-     },
-     "findings": {
-      "type": [
-       "string",
-       "null"
-      ],
-      "maxLength": 6000
      }
     },
     "required": [
-     "job",
-     "findings"
+     "request"
     ]
    },
    "handler": "ask_structure_worker",
-   "additional_description": "DRAFT",
+   "additional_description": "DRAFT how to.",
    "required_parameters": [
-    "job",
-    "findings"
+    "request"
    ],
    "optional_parameters": [],
    "envelope": {
@@ -127,42 +124,45 @@ declare additions jsonb:=$build_workers_additions$[
    },
    "expected_return": {
     "format": "json",
-    "contract": "DRAFT"
+    "contract": "DRAFT report."
    },
-   "card_description": "DRAFT"
+   "card_description": "Use when DRAFT. Gives Konrad's report."
   }
  },
  {
   "key": "drawing-worker.persona",
   "kind": "prompt",
-  "content": "DRAFT persona"
- },
- {
-  "key": "drawing-worker.contract",
-  "kind": "instruction_fragment",
-  "content": "DRAFT contract"
+  "content": "DRAFT Du är Rita i bygget {{project_name}}.",
+  "variables": [
+   "project_name"
+  ]
  },
  {
   "key": "drawing-worker.project",
   "kind": "instruction_fragment",
-  "content": "DRAFT project:"
+  "content": "DRAFT projekt:"
  },
  {
   "key": "drawing-worker.conversation",
   "kind": "instruction_fragment",
-  "content": "DRAFT conversation"
+  "content": "DRAFT samtalet."
  },
  {
-  "key": "drawing-worker.brief",
+  "key": "drawing-worker.knowledge",
   "kind": "instruction_fragment",
-  "content": "DRAFT brief:"
+  "content": "DRAFT projektkunskap:"
+ },
+ {
+  "key": "drawing-worker.request",
+  "kind": "instruction_fragment",
+  "content": "DRAFT Bob skriver:"
  },
  {
   "key": "agent-contract.drawing-worker",
   "kind": "agent_contract",
   "definition": {
    "mode": "worker_with_tools",
-   "instructions_key": "drawing-worker.contract",
+   "instructions_key": "worker.team",
    "source_scope": "current_authorized_work",
    "writes": "through_bob_session"
   }
@@ -172,7 +172,7 @@ declare additions jsonb:=$build_workers_additions$[
   "kind": "role",
   "definition": {
    "name": "Rita",
-   "title": "DRAFT",
+   "title": "Ritare",
    "purpose": "DRAFT purpose",
    "function_name": "drawing-worker",
    "module": "global",
@@ -180,7 +180,7 @@ declare additions jsonb:=$build_workers_additions$[
    "enabled": true,
    "prompt_keys": [
     "drawing-worker.persona",
-    "drawing-worker.contract"
+    "worker.team"
    ],
    "profile_key": "profile.ask-bob",
    "contract_key": "agent-contract.drawing-worker",
@@ -202,33 +202,24 @@ declare additions jsonb:=$build_workers_additions$[
   "kind": "tool_contract",
   "definition": {
    "name": "ask_drawing_worker",
-   "description": "DRAFT",
+   "description": "DRAFT give a job to Rita.",
    "parameters": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
-     "job": {
+     "request": {
       "type": "string",
       "maxLength": 2000
-     },
-     "findings": {
-      "type": [
-       "string",
-       "null"
-      ],
-      "maxLength": 6000
      }
     },
     "required": [
-     "job",
-     "findings"
+     "request"
     ]
    },
    "handler": "ask_drawing_worker",
-   "additional_description": "DRAFT",
+   "additional_description": "DRAFT how to.",
    "required_parameters": [
-    "job",
-    "findings"
+    "request"
    ],
    "optional_parameters": [],
    "envelope": {
@@ -238,10 +229,20 @@ declare additions jsonb:=$build_workers_additions$[
    },
    "expected_return": {
     "format": "json",
-    "contract": "DRAFT"
+    "contract": "DRAFT report."
    },
-   "card_description": "DRAFT"
+   "card_description": "Use when DRAFT. Gives Rita's report."
   }
+ },
+ {
+  "key": "materials-worker.knowledge",
+  "kind": "instruction_fragment",
+  "content": "DRAFT projektkunskap:"
+ },
+ {
+  "key": "materials-worker.request",
+  "kind": "instruction_fragment",
+  "content": "DRAFT Bob skriver:"
  },
  {
   "key": "cad.drawing-check",
@@ -252,7 +253,101 @@ declare additions jsonb:=$build_workers_additions$[
   }
  }
 ]$build_workers_additions$::jsonb;
- edits jsonb:=$build_workers_edits$[]$build_workers_edits$::jsonb;
+ edits jsonb:=$build_workers_edits$[
+ {
+  "key": "materials-worker.persona",
+  "kind": "prompt",
+  "old_content": "Du är Mattias, Bobs materialansvarige i byggprojektet. Du kan material, dimensioner, lager, kapning och inköp. Bob leder arbetet och pratar med beställaren; du gör materialarbetet han ger dig, noggrant och med rätt verktyg.",
+  "content": "DRAFT Du är Mattias i bygget {{project_name}}.",
+  "variables": [
+   "project_name"
+  ]
+ },
+ {
+  "key": "role.materials-worker",
+  "kind": "role",
+  "definition": {
+   "prompt_keys": [
+    "materials-worker.persona",
+    "worker.team"
+   ]
+  }
+ },
+ {
+  "key": "agent-contract.materials-worker",
+  "kind": "agent_contract",
+  "definition": {
+   "instructions_key": "worker.team"
+  }
+ },
+ {
+  "key": "tools.ask_materials_worker",
+  "kind": "tool_contract",
+  "definition": {
+   "name": "ask_materials_worker",
+   "description": "DRAFT give a job to Mattias.",
+   "parameters": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "request": {
+      "type": "string",
+      "maxLength": 2000
+     }
+    },
+    "required": [
+     "request"
+    ]
+   },
+   "handler": "ask_materials_worker",
+   "additional_description": "DRAFT how to.",
+   "required_parameters": [
+    "request"
+   ],
+   "optional_parameters": [],
+   "envelope": {
+    "type": "function",
+    "schema_version": 2,
+    "arguments": "JSON object validated against parameters; project binding and write provenance remain server-owned."
+   },
+   "expected_return": {
+    "format": "json",
+    "contract": "DRAFT report."
+   },
+   "card_description": "Use when DRAFT. Gives Mattias's report."
+  }
+ },
+ {
+  "key": "materials-worker.project",
+  "kind": "instruction_fragment",
+  "old_content": "Projektet på huvudnivå, samma låsta bild som Bob har:",
+  "content": "DRAFT projekt:"
+ },
+ {
+  "key": "materials-worker.conversation",
+  "kind": "instruction_fragment",
+  "old_content": "Här följer samtalet mellan Bob och beställaren hittills. Det är bakgrund, inte ditt uppdrag.",
+  "content": "DRAFT samtalet."
+ },
+ {
+  "key": "bob.context-principles",
+  "kind": "instruction_fragment",
+  "replace": {
+   "field": "content",
+   "old": "Before saving a construction or plan,",
+   "new": "DRAFT Before you save a plan,"
+  }
+ },
+ {
+  "key": "tools.link_cad_shell_steps",
+  "kind": "tool_contract",
+  "replace": {
+   "field": "additional_description",
+   "old": "in build order (for example walls before the bed that stands against them).",
+   "new": "in build order, supporting pieces before what stands on or against them."
+  }
+ }
+]$build_workers_edits$::jsonb;
  workers jsonb:=$build_workers_definition${
  "drawing": {
   "role": "role.drawing-worker",
@@ -283,13 +378,52 @@ declare additions jsonb:=$build_workers_additions$[
    "read_project_record_section"
   ],
   "max_steps": 10,
-  "current": {
-   "tool": "read_drawing_requests",
-   "arguments": {
-    "request_id": null,
-    "after_id": null
+  "knowledge": [
+   {
+    "label": "constructions",
+    "tool": "read_construction_draft",
+    "arguments": {
+     "artifact_id": null,
+     "revision": null,
+     "after": null,
+     "view": "overview",
+     "ids": [],
+     "result_id": null,
+     "section": null,
+     "step_id": null,
+     "work_kind": null
+    }
+   },
+   {
+    "label": "drawing_requests",
+    "tool": "read_drawing_requests",
+    "arguments": {
+     "request_id": null,
+     "after_id": null
+    }
+   },
+   {
+    "label": "plan",
+    "tool": "search_project_data",
+    "arguments": {
+     "dataset": "plan",
+     "query": null,
+     "status": null,
+     "area_id": null,
+     "record_id": null,
+     "after_id": null
+    }
+   },
+   {
+    "label": "selected_solutions",
+    "tool": "read_solution_context",
+    "arguments": {
+     "resource": "selected_solutions",
+     "query": null,
+     "next_ref": null
+    }
    }
-  }
+  ]
  },
  "structure": {
   "role": "role.structure-worker",
@@ -318,7 +452,68 @@ declare additions jsonb:=$build_workers_additions$[
    "list_project_category"
   ],
   "max_steps": 16,
-  "current": {
+  "knowledge": [
+   {
+    "label": "selected_solutions",
+    "tool": "read_solution_context",
+    "arguments": {
+     "resource": "selected_solutions",
+     "query": null,
+     "next_ref": null
+    }
+   },
+   {
+    "label": "measurements",
+    "tool": "read_solution_context",
+    "arguments": {
+     "resource": "measurements",
+     "query": null,
+     "next_ref": null
+    }
+   },
+   {
+    "label": "images",
+    "tool": "read_solution_context",
+    "arguments": {
+     "resource": "images",
+     "query": null,
+     "next_ref": null
+    }
+   },
+   {
+    "label": "constructions",
+    "tool": "read_construction_draft",
+    "arguments": {
+     "artifact_id": null,
+     "revision": null,
+     "after": null,
+     "view": "overview",
+     "ids": [],
+     "result_id": null,
+     "section": null,
+     "step_id": null,
+     "work_kind": null
+    }
+   }
+  ]
+ }
+}$build_workers_definition$::jsonb;
+ materials jsonb:=$build_workers_materials${
+ "knowledge": [
+  {
+   "label": "materials",
+   "tool": "search_project_data",
+   "arguments": {
+    "dataset": "materials",
+    "query": null,
+    "status": null,
+    "area_id": null,
+    "record_id": null,
+    "after_id": null
+   }
+  },
+  {
+   "label": "constructions",
    "tool": "read_construction_draft",
    "arguments": {
     "artifact_id": null,
@@ -332,12 +527,22 @@ declare additions jsonb:=$build_workers_additions$[
     "work_kind": null
    }
   }
+ ],
+ "policy": {
+  "name": "ask_materials_worker",
+  "description": "DRAFT give a job to Mattias.",
+  "how_to": "DRAFT how to.",
+  "schema_version": 2,
+  "always_load": false,
+  "preload_phases": [],
+  "active": true
  }
-}$build_workers_definition$::jsonb;
+}$build_workers_materials$::jsonb;
  retired jsonb:=$build_workers_retired$[
  "save_project_drawing"
 ]$build_workers_retired$::jsonb;
  fn text; patch jsonb; policies jsonb:='[]'; prompt_uuid uuid; version_uuid uuid; activation jsonb:='{}'; prior shared.ai_prompt_versions; next_version integer; definition jsonb;
+ new_content text; field text; old_text text; source text;
 begin
  perform pg_advisory_xact_lock(hashtextextended('ai_catalog:bob',0));
  foreach fn in array array['structure-worker','drawing-worker'] loop
@@ -353,23 +558,31 @@ begin
   insert into shared.ai_prompts(app,prompt_key,label,description,content,flow,definition_kind)
    values('bob',patch->>'key',patch->>'key','Build workers v1',coalesce(patch->>'content',''),'',patch->>'kind') returning id into prompt_uuid;
   insert into shared.ai_prompt_versions(prompt_id,version,definition_kind,definition_format_version,metadata,content,definition,flow,available_variables)
-   values(prompt_uuid,1,patch->>'kind',1,jsonb_build_object('publication','bob-build-workers-v1'),coalesce(patch->>'content',''),coalesce(patch->'definition','{}'::jsonb),'','[]'::jsonb) returning id into version_uuid;
+   values(prompt_uuid,1,patch->>'kind',1,jsonb_build_object('publication','bob-build-workers-v1'),coalesce(patch->>'content',''),coalesce(patch->'definition','{}'::jsonb),'',coalesce(patch->'variables','[]'::jsonb)) returning id into version_uuid;
   activation:=activation||jsonb_build_object(patch->>'key',version_uuid);
  end loop;
- -- New versions of existing rows: the review's own identity and the colleague directory.
+ -- New versions of existing rows: Mattias, Bob's principle and one manual.
  for patch in select value from jsonb_array_elements(edits) loop
   select v.* into prior from shared.ai_prompts p join shared.ai_prompt_versions v on v.id=p.active_version_id
    where p.app='bob' and p.prompt_key=patch->>'key' and p.definition_kind=patch->>'kind' and p.retired_at is null for update of p;
   if not found then raise exception 'build_workers_edit_missing: %',patch->>'key'; end if;
   if patch ? 'old_content' and prior.content is distinct from patch->>'old_content' then raise exception 'build_workers_edit_unexpected: %',patch->>'key'; end if;
+  new_content:=coalesce(patch->>'content',prior.content);definition:=prior.definition||coalesce(patch->'definition','{}'::jsonb);
+  if patch ? 'replace' then
+   field:=patch#>>'{replace,field}';old_text:=patch#>>'{replace,old}';
+   source:=case when field='content' then prior.content else prior.definition->>field end;
+   if source is null or (length(source)-length(replace(source,old_text,'')))/length(old_text)<>1 then raise exception 'build_workers_replace_unexpected: %',patch->>'key'; end if;
+   if field='content' then new_content:=replace(source,old_text,patch#>>'{replace,new}');
+   else definition:=jsonb_set(definition,array[field],to_jsonb(replace(source,old_text,patch#>>'{replace,new}'))); end if;
+  end if;
   select coalesce(max(version),0)+1 into next_version from shared.ai_prompt_versions where prompt_id=prior.prompt_id;
   insert into shared.ai_prompt_versions(prompt_id,version,definition_kind,definition_format_version,metadata,content,definition,flow,available_variables)
    values(prior.prompt_id,next_version,prior.definition_kind,prior.definition_format_version,
     (prior.metadata-'seed_version'-'source_revision')||jsonb_build_object('publication','bob-build-workers-v1','build_workers_version',1),
-    coalesce(patch->>'content',prior.content),prior.definition||coalesce(patch->'definition','{}'::jsonb),prior.flow,prior.available_variables) returning id into version_uuid;
+    new_content,definition,prior.flow,coalesce(patch->'variables',prior.available_variables)) returning id into version_uuid;
   activation:=activation||jsonb_build_object(patch->>'key',version_uuid);
  end loop;
- -- Tool policy rows: Bob may hand work to either worker in every phase.
+ -- Tool policy rows: Bob may hand work to any worker in every phase.
  for patch in select value from jsonb_each(workers) loop
   select value->'definition' into definition from jsonb_array_elements(additions) where value->>'key'='tools.'||(patch->>'tool');
   policies:=policies||jsonb_build_array(jsonb_build_object('name',patch->>'tool','description',definition->>'description','how_to',definition->>'additional_description',
@@ -378,13 +591,18 @@ begin
    values(patch->>'tool',definition->>'description',definition->>'additional_description',1,false,array[]::text[],true)
    on conflict(name) do nothing;
  end loop;
+ update bob.tool_catalog set description=materials#>>'{policy,description}',how_to=materials#>>'{policy,how_to}',schema_version=2
+  where name='ask_materials_worker';
+ if not found then raise exception 'build_workers_materials_policy_missing'; end if;
  select v.* into prior from shared.ai_prompts p join shared.ai_prompt_versions v on v.id=p.active_version_id
   where p.app='bob' and p.prompt_key='bob.tools' and p.definition_kind='tool_contract' for update of p;
  if not found then raise exception 'build_workers_toolbox_missing'; end if;
  if prior.definition->>'materials_worker_version' is distinct from '1' then raise exception 'build_workers_require_materials_worker'; end if;
  definition:=prior.definition||jsonb_build_object('build_workers_version',1,'build_workers',workers,'retired_tools',retired,
+  'workers',jsonb_set(prior.definition->'workers','{materials,knowledge}',materials->'knowledge'),
   'contract_keys',(prior.definition->'contract_keys')||(select jsonb_agg('tools.'||(p->>'name')) from jsonb_array_elements(policies) p),
-  'catalog',(prior.definition->'catalog')||policies);
+  'catalog',(select jsonb_agg(case when c->>'name'='ask_materials_worker' then materials->'policy' else c end order by ord)
+   from jsonb_array_elements(prior.definition->'catalog') with ordinality x(c,ord))||policies);
  definition:=jsonb_set(definition,'{shelves}',(select jsonb_agg(case when shelf->>'label'='Drawings and CAD'
    then jsonb_set(shelf,'{tools}',(select jsonb_agg(p->'name') from jsonb_array_elements(policies) p)||(shelf->'tools')) else shelf end order by ord)
   from jsonb_array_elements(prior.definition->'shelves') with ordinality s(shelf,ord)));

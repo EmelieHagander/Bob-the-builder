@@ -14,16 +14,24 @@ import { DESIGN_CAD_TOOL } from '../supabase/functions/_shared/cad-assistant.ts'
 import type { AiCatalogSession } from '../supabase/functions/_shared/ai-catalog.ts'
 import type { OpenAIServiceOptions } from '../supabase/functions/_shared/openai-service.ts'
 
-// Owner decision 2026-10-31: Bob coordinates; the structural designer owns the
-// construction and Rita makes the drawing. Like Mattias, each worker has its own
-// fixed tools, the same input Bob has and Bob's brief last, with the present
-// records of its area read for the brief.
+// Owner decision 2026-10-31: Bob coordinates the build team. Konrad (structural
+// designer) owns the construction and Rita draws it; Mattias does materials. Each
+// has its own fixed tools and the same input Bob has; Bob sends a plain request
+// with no values, and each worker gets project knowledge read from the database.
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
 const call = (id: string, name: string, args: unknown) => ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } })
 const STRUCTURE = ['save_construction_draft', 'check_construction_draft', 'change_construction_parameters', 'edit_construction_parts', 'change_construction_roles', 'continue_construction_change', 'derive_construction_lists', 'transition_legacy_drawing']
 const DRAWING = ['design_project_cad', 'save_cad_design', 'plan_cad_pieces', 'compose_cad_shell', 'link_cad_shell_steps', 'link_project_drawing', 'link_drawing_gap', 'ensure_drawing_gap_task']
 const names = (o: OpenAIServiceOptions) => (o.tools ?? []).map(t => t.function.name)
-const brief = (o: OpenAIServiceOptions) => { const last = String(o.messages!.at(-1)!.content); return { label: last.slice(0, last.indexOf('\n')), ...JSON.parse(last.slice(last.indexOf('\n') + 1)) } }
+const texts = (o: OpenAIServiceOptions) => (o.messages ?? []).map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content))
+const after = (text: string) => text.slice(text.indexOf('\n') + 1)
+/** The last two inputs: project knowledge (JSON) and Bob's request (plain text). */
+const tail = (catalog: AiCatalogSession, o: OpenAIServiceOptions, prefix: string) => {
+  const all = texts(o), knowledge = all.at(-2)!, request = all.at(-1)!
+  assert(knowledge.startsWith(catalog.text(prefix + '.knowledge')), knowledge.slice(0, 80)); assert(request.startsWith(catalog.text(prefix + '.request')))
+  return { knowledge: JSON.parse(after(knowledge)), request: after(request) }
+}
+const ask = (tool: string, request: unknown) => () => ({ success: true, model: 'fixture', usage, responseId: 'b1', toolCalls: [call('c1', tool, request)] })
 const toolOutput = (o: OpenAIServiceOptions) => JSON.parse(String(o.messages!.find(m => m.role === 'tool')!.content))
 
 async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>) {
@@ -67,11 +75,11 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
   return { bob, workers, pickerInputs, ran, constructionCalls, cadAssistant }
 }
 
-test('Bob hands the construction to the structural designer; the designer has his own tools and the drafts with the brief', async () => {
+test('Bob asks Konrad in plain words; Konrad has his own tools, the project in his persona and his project knowledge', async () => {
   const catalog = catalogFixture(), core = catalogCoreTools(catalog)!
   assert.equal(core.length, 6)
-  const { bob, workers, pickerInputs, constructionCalls, ran } = await turn(catalog,
-    [() => ({ success: true, model: 'fixture', usage, responseId: 'b1', toolCalls: [call('c1', 'ask_structure_worker', { job: 'Spara och kontrollera lådans konstruktion.', findings: 'Vald lösning: lådan 40 cm.' })] })],
+  const request = 'Hej Konrad, kan du sätta ihop konstruktionen för projektet? Lådorna väntar vi med.'
+  const { bob, workers, pickerInputs, constructionCalls, ran } = await turn(catalog, [ask('ask_structure_worker', { request })],
     { 'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'w1', toolCalls: [call('w1c', 'check_construction_draft', { artifact_id: 'c1', revision: 2 })] })] })
   // Bob: all three hand-overs, none of the construction or drawing tools, and none of them for the picker.
   for (const tool of ['ask_structure_worker', 'ask_drawing_worker', 'ask_materials_worker']) assert(names(bob[0]).includes(tool), tool)
@@ -81,15 +89,20 @@ test('Bob hands the construction to the structural designer; the designer has hi
   // The legacy box drawing skipped the construction and the review: retired for new jobs.
   assert(!names(bob[0]).includes('save_project_drawing') && !pickerInputs[0].candidates.some((c: any) => c.name === 'save_project_drawing'))
   assert.deepEqual([...catalogRetiredTools(catalog)], ['save_project_drawing'])
-  // The structural designer: his tools and reads only, the drafts overview with Bob's brief.
+  // Bob's hand-over takes a request only: no ids or values.
+  assert.deepEqual(Object.keys((bob[0].tools!.find(t => t.function.name === 'ask_structure_worker')!.function.parameters as any).properties), ['request'])
+  // Konrad: his tools and reads only; the project's name in his persona; knowledge, then Bob's words.
   const [first] = workers['structure-worker']
   assert.equal(first.catalogRoleKey, 'structure-worker')
   const own = catalogWorkers(catalog)!.structure
   assert(names(first).every(n => own.tools.includes(n) || own.reads.includes(n)), JSON.stringify(names(first)))
   assert(names(first).includes('save_construction_draft') && !names(first).includes('design_project_cad'))
-  const b = brief(first)
-  assert.equal(b.job, 'Spara och kontrollera lådans konstruktion.'); assert.equal(b.findings, 'Vald lösning: lådan 40 cm.')
-  assert.deepEqual(b.current.drafts, [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }])
+  assert.match(String(first.systemMessage), /Lådan/, 'the persona names the project')
+  assert(String(first.systemMessage).includes(catalog.text('worker.team')))
+  const { knowledge, request: sent } = tail(catalog, first, 'structure-worker')
+  assert.equal(sent, request)
+  assert.deepEqual(Object.keys(knowledge), ['selected_solutions', 'measurements', 'images', 'constructions'])
+  assert.deepEqual(knowledge.constructions.drafts, [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }])
   assert.equal(constructionCalls[0].name, 'read_construction_draft'); assert.equal(constructionCalls[0].args.view, 'overview')
   // His check ran through the same session and Bob got the report.
   assert(ran.some(r => r.name === 'check_construction_draft'))
@@ -98,40 +111,60 @@ test('Bob hands the construction to the structural designer; the designer has hi
   assert.deepEqual(report.calls.map((c: any) => c.tool), ['check_construction_draft'])
 })
 
-test('Rita draws with a fixed tool list: the save is offered from the start and refused until a reviewed drawing exists', async () => {
+test('a hand-over with values is refused before any worker call', async () => {
   const catalog = catalogFixture()
-  const { workers, ran } = await turn(catalog,
-    [() => ({ success: true, model: 'fixture', usage, responseId: 'b1', toolCalls: [call('c1', 'ask_drawing_worker', { job: 'Rita lådan från den kontrollerade konstruktionen och spara ritningen.', findings: 'Konstruktion c1, revision 3, kontrollerad.' })] })],
+  const { bob, workers } = await turn(catalog, [ask('ask_structure_worker', { job: 'Spara lådan', findings: 'Bredd 400 mm' })], {})
+  assert.equal(workers['structure-worker'].length, 0)
+  assert.equal(toolOutput(bob[1]).status, 'invalid')
+})
+
+test('Rita draws with a fixed tool list: the save is offered from the start and refused until a checked drawing exists', async () => {
+  const catalog = catalogFixture()
+  const { workers, ran } = await turn(catalog, [ask('ask_drawing_worker', { request: 'Rita, kan du rita lådan nu när Konrad är klar?' })],
     { 'drawing-worker': [
       () => ({ success: true, model: 'fixture', usage, responseId: 'r1', toolCalls: [call('r1c', 'save_cad_design', {})] }),
       () => ({ success: true, model: 'fixture', usage, responseId: 'r2', toolCalls: [call('r2c', 'design_project_cad', {})] })] })
   const [first, second, third] = workers['drawing-worker']
   assert.equal(first.catalogRoleKey, 'drawing-worker')
   assert(names(first).includes('design_project_cad') && names(first).includes('save_cad_design'), 'the save is offered before a candidate exists')
-  // Too early: the server answers that it waits for a reviewed drawing; nothing is saved.
+  // Too early: the server answers that it waits for a checked drawing; nothing is saved.
   const early = JSON.parse(String(second.messages!.find(m => m.role === 'tool')!.content))
   assert.equal(early.status, 'missing_context')
   assert(ran.some(r => r.name === 'design_project_cad'))
   assert.deepEqual(names(second), names(first)); assert.deepEqual(names(third), names(first), 'the same tools in the same order in every step')
-  assert.match(brief(first).label, /\S/)
+  assert.deepEqual(Object.keys(tail(catalog, first, 'drawing-worker').knowledge), ['constructions', 'drawing_requests', 'plan', 'selected_solutions'])
+})
+
+test('Mattias works the same way: a plain request and his project knowledge', async () => {
+  const catalog = catalogFixture()
+  const request = 'Mattias, kan du se vilket material lådan behöver?'
+  const { bob, workers } = await turn(catalog, [ask('ask_materials_worker', { request })], {})
+  const [first] = workers['materials-worker']
+  assert.equal(first.catalogRoleKey, 'materials-worker')
+  assert.match(String(first.systemMessage), /Lådan/); assert(String(first.systemMessage).includes(catalog.text('worker.team')))
+  const { knowledge, request: sent } = tail(catalog, first, 'materials-worker')
+  assert.equal(sent, request); assert.deepEqual(Object.keys(knowledge), ['materials', 'constructions'])
+  assert.equal(catalog.definition('tools.ask_materials_worker', 'tool_contract').definition.envelope.schema_version, 2)
+  assert.equal(toolOutput(bob[1]).status, 'ok')
 })
 
 test('the workers come from the catalog; a tool belongs to one worker', () => {
-  const workers = catalogWorkers(catalogFixture())!
+  const catalog = catalogFixture(), workers = catalogWorkers(catalog)!
   assert.deepEqual(Object.keys(workers).sort(), ['drawing', 'materials', 'structure'])
   assert.deepEqual(workers.structure.tools, STRUCTURE); assert.deepEqual(workers.drawing.tools, DRAWING)
   const owned = Object.values(workers).flatMap(w => w.tools)
   assert.equal(new Set(owned).size, owned.length)
-  assert.equal(workers.structure.current!.tool, 'read_construction_draft'); assert.equal(workers.drawing.current!.tool, 'read_drawing_requests')
-  for (const key of ['structure', 'drawing']) {
-    const role = catalogFixture().definition(workers[key].role, 'role').definition
+  for (const key of ['structure', 'drawing', 'materials']) {
+    const role = catalog.definition(workers[key].role, 'role').definition
     assert.equal(role.profile_key, 'profile.ask-bob'); assert.equal(role.enabled, true)
+    assert.deepEqual(role.prompt_keys.slice(-1), ['worker.team'])
   }
 })
 
-test('manifests before the publication keep construction and drawing with Bob', async () => {
+test('manifests before the publication keep construction and drawing with Bob, and Mattias\'s first form', async () => {
   const pinned = preBuildWorkersCatalogFixture()
   assert.deepEqual(Object.keys(catalogWorkers(pinned)!), ['materials'])
+  assert.equal(catalogWorkers(pinned)!.materials.knowledge, undefined)
   const { bob, pickerInputs } = await turn(pinned, [], {})
   assert(!names(bob[0]).includes('ask_structure_worker') && !names(bob[0]).includes('ask_drawing_worker'))
   assert(pickerInputs[0].candidates.some((c: any) => c.name === 'save_construction_draft'))

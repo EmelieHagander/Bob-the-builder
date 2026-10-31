@@ -11,8 +11,11 @@ import { rethrowContinuation } from './bob-job-journal.ts'
  * worker's prompt start is cached. The worker reads and saves through a tool
  * session with the same gates, receipts and turn budgets as Bob's, and reports
  * back to Bob; it never answers the owner. */
-/** current: the read that gives the worker its area's present records with the brief. */
-export interface WorkerDefinition { role: string; tool: string; tools: string[]; reads: string[]; max_steps: number; current?: { tool: string; arguments: Record<string, unknown> } }
+/** Owner decision 2026-10-31: Bob hands over a plain request and no values; the
+ * worker's project knowledge comes from these fixed reads, fresh at the start of
+ * the job. Workers without knowledge (manifests before) get Bob's brief instead. */
+export interface WorkerKnowledge { label: string; tool: string; arguments: Record<string, unknown> }
+export interface WorkerDefinition { role: string; tool: string; tools: string[]; reads: string[]; max_steps: number; knowledge?: WorkerKnowledge[] }
 type Messages = NonNullable<OpenAIServiceOptions['messages']>
 type ModelCall = (options: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<string>>
 const NAME = /^[a-z][a-z0-9_]{0,63}$/
@@ -33,8 +36,7 @@ export function catalogWorkers(catalog: AiCatalogSession): Record<string, Worker
       if (key in workers || !NAME.test(key) || !worker || typeof worker.role !== 'string' || !catalog.manifest().definitions.some(row => row.prompt_key === worker.role && row.definition_kind === 'role')
         || !known(worker.tool) || !Array.isArray(worker.tools) || !worker.tools.length || !worker.tools.every(known)
         || !Array.isArray(worker.reads) || !worker.reads.every(known) || !Number.isSafeInteger(worker.max_steps) || worker.max_steps < 1 || worker.max_steps > 40
-        || worker.current !== undefined && (!worker.current || typeof worker.current !== 'object' || ![...worker.tools, ...worker.reads].includes(worker.current.tool)
-          || !worker.current.arguments || typeof worker.current.arguments !== 'object' || Array.isArray(worker.current.arguments)))
+        || worker.knowledge !== undefined && !validKnowledge(worker))
         throw new Error('worker_catalog_invalid')
       workers[key] = worker
     }
@@ -42,6 +44,18 @@ export function catalogWorkers(catalog: AiCatalogSession): Record<string, Worker
   const owned = Object.values(workers).flatMap(worker => worker.tools)
   if (new Set(owned).size !== owned.length) throw new Error('worker_catalog_invalid')
   return structuredClone(workers)
+}
+
+function validKnowledge(worker: WorkerDefinition): boolean {
+  const reads = worker.knowledge
+  if (!Array.isArray(reads) || !reads.length || reads.length > 8) return false
+  const labels = new Set<string>()
+  for (const read of reads) {
+    if (!read || typeof read !== 'object' || !NAME.test(read.label) || labels.has(read.label) || ![...worker.tools, ...worker.reads].includes(read.tool)
+      || !read.arguments || typeof read.arguments !== 'object' || Array.isArray(read.arguments)) return false
+    labels.add(read.label)
+  }
+  return true
 }
 
 /** Tools that belong to a worker are not offered to Bob himself. */
@@ -58,9 +72,14 @@ export function catalogRetiredTools(catalog: AiCatalogSession): Set<string> {
   return new Set((box.retired_tools as unknown[]).filter((name): name is string => typeof name === 'string' && NAME.test(name)))
 }
 
-export function parseWorkerJob(value: unknown): { job: string; findings: string | null } | null {
+/** plain: the worker reads its own project knowledge, so Bob sends only a request. */
+export function parseWorkerJob(value: unknown, plain = false): { job: string; findings: string | null } | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const v = value as Record<string, unknown>
+  if (plain) {
+    if (Object.keys(v).some(key => key !== 'request') || typeof v.request !== 'string' || !v.request.trim() || v.request.length > 2000) return null
+    return { job: v.request.trim(), findings: null }
+  }
   if (Object.keys(v).some(key => key !== 'job' && key !== 'findings')) return null
   if (typeof v.job !== 'string' || !v.job.trim() || v.job.length > 2000) return null
   if (!(v.findings === null || v.findings === undefined || typeof v.findings === 'string' && v.findings.length <= 6000)) return null
@@ -68,16 +87,21 @@ export function parseWorkerJob(value: unknown): { job: string; findings: string 
 }
 
 /** The worker's input, fixed first: project snapshot, the conversation (summaries
- * and history exactly as Bob reads them), then Bob's brief last. */
+ * and history exactly as Bob reads them), then the changing part last: project
+ * knowledge and Bob's request, or (manifests before) Bob's brief. */
 export function buildWorkerMessages(aiCatalog: AiCatalogSession, opts: {
   prefix: string; context?: WorkingContext; history: Messages; brief: { job: string; findings: string | null; current: unknown };
+  knowledge?: Record<string, unknown>;
 }): Messages {
   const stair = opts.context?.stair
   return [
     ...(stair ? [{ role: 'user' as const, content: aiCatalog.text(opts.prefix + '.project') + '\n' + JSON.stringify({ locked_at: stair.snapshotLockedAt, ...stair.snapshot }) }] : []),
     { role: 'user', content: aiCatalog.text(opts.prefix + '.conversation') },
     ...opts.history,
-    { role: 'user', content: aiCatalog.text(opts.prefix + '.brief') + '\n' + JSON.stringify(opts.brief) },
+    ...(opts.knowledge ? [
+      { role: 'user' as const, content: aiCatalog.text(opts.prefix + '.knowledge') + '\n' + JSON.stringify(opts.knowledge) },
+      { role: 'user' as const, content: aiCatalog.text(opts.prefix + '.request') + '\n' + opts.brief.job },
+    ] : [{ role: 'user' as const, content: aiCatalog.text(opts.prefix + '.brief') + '\n' + JSON.stringify(opts.brief) }]),
   ]
 }
 
@@ -86,6 +110,8 @@ export async function runWorker(opts: {
   job: { job: string; findings: string | null }; context?: WorkingContext; history: Messages
   session: { prepare(): Promise<NonNullable<OpenAIServiceOptions['tools']>>; execute(name: string, args: unknown): Promise<any> }
   readCurrent: () => Promise<unknown>; hasAccess: () => Promise<boolean>; deadline: number; modelTimeoutMs?: number
+  /** Workers with knowledge reads: their fresh results, and the persona's variables (the project's name). */
+  readKnowledge?: () => Promise<Record<string, unknown>>; variables?: Record<string, string>
   onTool?: (value: { name: string; status: string; ms: number }) => void
 }): Promise<Record<string, unknown>> {
   const roleKey = opts.worker.role.replace(/^role\./, '')
@@ -102,9 +128,10 @@ export async function runWorker(opts: {
   }
   let specs = await offer()
   if (!specs.length) return { status: 'unavailable', worker: roleKey }
-  let current: unknown
-  try { current = await opts.readCurrent() } catch (error) { rethrowContinuation(error); current = { status: 'unavailable' } }
-  let messages: Messages = buildWorkerMessages(opts.aiCatalog, { prefix: roleKey, context: opts.context, history: opts.history, brief: { ...opts.job, current } })
+  let current: unknown, knowledge: Record<string, unknown> | undefined
+  if (opts.readKnowledge) knowledge = await opts.readKnowledge()
+  else try { current = await opts.readCurrent() } catch (error) { rethrowContinuation(error); current = { status: 'unavailable' } }
+  let messages: Messages = buildWorkerMessages(opts.aiCatalog, { prefix: roleKey, context: opts.context, history: opts.history, brief: { ...opts.job, current }, ...(knowledge ? { knowledge } : {}) })
   // The worker sees full manuals: it has few tools and they are fixed for the job.
   const params = { server_quote: true, include_manual: true }
   const toolParams = () => Object.fromEntries(specs.map(spec => [spec.function.name, { card: false, include_manual: true }]))
@@ -115,7 +142,7 @@ export async function runWorker(opts: {
     if (Date.now() + 15_000 >= opts.deadline) return { status: 'time_budget', worker: roleKey, calls }
     if (step) specs = await offer()
     const response = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: roleKey, aiFunction: roleKey, module: 'global', userId: opts.userId,
-      catalogRoleKey: roleKey, messages, tools: specs, catalogSchemaParameters: params, catalogToolParameters: toolParams(),
+      catalogRoleKey: roleKey, ...(opts.variables ? { catalogVariables: opts.variables } : {}), messages, tools: specs, catalogSchemaParameters: params, catalogToolParameters: toolParams(),
       ...(previous ? { previousResponseId: previous } : {}), maxOutputTokens: 8000,
       timeoutMs: Math.max(1000, Math.min(opts.modelTimeoutMs ?? 45_000, opts.deadline - Date.now())) })
     if (!response.success) {

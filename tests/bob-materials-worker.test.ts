@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { catalogFixture, catalogCall, preMaterialsWorkerCatalogFixture } from './support/ai-catalog-fixture.ts'
+import { catalogCall, preMaterialsWorkerCatalogFixture, preBuildWorkersCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { catalogCoreTools } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { runProjectAnswer, seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
 import { catalogWorkers, parseWorkerJob } from '../supabase/functions/_shared/bob-workers.ts'
@@ -20,6 +20,10 @@ import type { OpenAIServiceOptions } from '../supabase/functions/_shared/openai-
 // Mattias (materials). Bob no longer offers the materials tools; he hands the job
 // to Mattias, who has his own fixed native tools and the same input Bob has:
 // project snapshot, conversation summaries and history, then Bob's brief last.
+// These tests cover that first form, which pinned jobs keep; since 2026-10-31
+// Bob sends a plain request and Mattias reads his project knowledge
+// (bob-build-workers.test.ts).
+const catalogFixture = preBuildWorkersCatalogFixture
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
 const call = (id: string, name: string, args: unknown) => ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } })
 const at = (n: number) => new Date(Date.UTC(2026, 9, 30, 8, n)).toISOString()

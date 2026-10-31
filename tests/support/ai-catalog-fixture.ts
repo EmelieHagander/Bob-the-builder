@@ -423,20 +423,30 @@ for(const migration of migrations){
  if(buildWorkers){
   preBuildWorkersRows=structuredClone(seed);preBuildWorkersVersions=new Map(versions)
   const additions=JSON.parse(buildWorkers[1]),publication='bob-build-workers-v1'
-  for(const addition of additions){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication}});versions.set(addition.key,1)}
+  for(const {variables,...addition} of additions){seed.push({content:'',definition:{},...addition,variables:variables??[],metadata:{publication}});versions.set(addition.key,1)}
   for(const edit of JSON.parse(source.match(/\$build_workers_edits\$([\s\S]+?)\$build_workers_edits\$/)![1])){
    const row=seed.find(row=>row.key===edit.key)
+   if(edit.old_content!==undefined&&row.content!==edit.old_content)throw new Error('build_workers_edit_unexpected: '+edit.key)
    if(edit.content!==undefined)row.content=edit.content
+   if(edit.variables)row.variables=edit.variables
    if(edit.definition)row.definition={...row.definition,...edit.definition}
+   if(edit.replace){
+    const {field,old,new:next}=edit.replace,text=field==='content'?row.content:row.definition[field]
+    if(typeof text!=='string'||text.split(old).length!==2)throw new Error('build_workers_replace_unexpected: '+edit.key)
+    if(field==='content')row.content=text.replace(old,next);else row.definition={...row.definition,[field]:text.replace(old,next)}
+   }
    publishAs(row,publication);row.metadata.build_workers_version=1;versions.set(row.key,versions.get(row.key)!+1)
   }
   const workers=JSON.parse(source.match(/\$build_workers_definition\$([\s\S]+?)\$build_workers_definition\$/)![1])
+  const materials=JSON.parse(source.match(/\$build_workers_materials\$([\s\S]+?)\$build_workers_materials\$/)![1])
+  const retired=JSON.parse(source.match(/\$build_workers_retired\$([\s\S]+?)\$build_workers_retired\$/)![1])
   const policies=Object.values(workers).map((worker:any)=>{const tool=additions.find((a:any)=>a.key==='tools.'+worker.tool).definition
    return {name:worker.tool,description:tool.description,how_to:tool.additional_description,schema_version:1,always_load:false,preload_phases:[],active:true}})
   const box=seed.find(row=>row.key==='bob.tools')
-  const retired=JSON.parse(source.match(/\$build_workers_retired\$([\s\S]+?)\$build_workers_retired\$/)![1])
   box.definition={...box.definition,build_workers_version:1,build_workers:workers,retired_tools:retired,
-   contract_keys:[...box.definition.contract_keys,...policies.map(p=>'tools.'+p.name)],catalog:[...box.definition.catalog,...policies],
+   workers:{...box.definition.workers,materials:{...box.definition.workers.materials,knowledge:materials.knowledge}},
+   contract_keys:[...box.definition.contract_keys,...policies.map(p=>'tools.'+p.name)],
+   catalog:[...box.definition.catalog.map((c:any)=>c.name==='ask_materials_worker'?materials.policy:c),...policies],
    shelves:box.definition.shelves.map((shelf:any)=>shelf.label==='Drawings and CAD'?{...shelf,tools:[...policies.map(p=>p.name),...shelf.tools]}:shelf)}
   publishAs(box,publication);box.metadata.build_workers_version=1;versions.set(box.key,versions.get(box.key)!+1)
  }
