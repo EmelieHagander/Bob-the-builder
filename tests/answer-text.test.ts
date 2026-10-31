@@ -89,6 +89,17 @@ test('rejected calls log and record a content-free reason; every fixed edit mess
   assert.deepEqual(toolRejection({ status: 'invalid', issues: [{ code: 'request_quote', path: 'request_quote' }] }), { code: 'request_quote', fields: ['request_quote'] })
   assert.equal(toolRejection({ status: 'invalid', message: 'No change made. Unexpected token } in JSON at position 4' }).code, 'invalid_json')
   assert.equal(toolRejection({ status: 'invalid', message: 'Something new happened with "Bob\'s words".' }).code, 'unspecified')
+  // An unmapped message gets a fingerprint that tells messages apart and carries none of their text (2026-10-31).
+  const unmapped = toolRejection({ status: 'invalid', message: 'Something new happened with "Bob\'s words".' })
+  assert.match(unmapped.message_id!, /^m[0-9a-f]{8}$/); assert(!JSON.stringify(unmapped).includes('Bob'))
+  assert.equal(toolRejection({ status: 'invalid', message: 'Something new happened with "Bob\'s words".' }).message_id, unmapped.message_id)
+  assert.notEqual(toolRejection({ status: 'invalid', message: 'Another fixed message.' }).message_id, unmapped.message_id)
+  // Construction tools' fixed messages and engine codes are readable codes.
+  assert.equal(toolRejection({ status: 'invalid', message: 'Invalid CAD recipe or referenced part IDs.' }).code, 'invalid_recipe')
+  assert.equal(toolRejection({ status: 'invalid', message: 'parameter_cycle' }).code, 'parameter_cycle')
+  const construction = readFileSync(new URL('../supabase/functions/_shared/construction-draft.ts', import.meta.url), 'utf8')
+  for (const [, message] of construction.matchAll(/status:'invalid',message:'([^']+)'/g))
+    assert.notEqual(toolRejection({ status: 'invalid', message }).code, 'unspecified', message)
   assert.deepEqual(toolRejection({ status: 'invalid', validation: { code: 'x', fields: ['ok.path', 'has spaces and prose'] } }).fields, ['ok.path'])
   // Messages are fixed server strings in project-edits.ts; a new one must get a code.
   const source = readFileSync(new URL('../supabase/functions/_shared/project-edits.ts', import.meta.url), 'utf8')

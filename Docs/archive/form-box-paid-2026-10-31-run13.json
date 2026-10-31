@@ -1,0 +1,92 @@
+{
+ "run": "https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41202509508",
+ "workflow": "live-form-acceptance.yml",
+ "scenario": "box",
+ "config": "baseline",
+ "head": "b0e6ac5f1cba5d217e72afcfe07efb4f5c9af1c5",
+ "functions": {
+  "bob-worker": 162,
+  "ask-bob": 194
+ },
+ "catalog": {
+  "bob.tools": "v34, check_reads (20261031124512)"
+ },
+ "passed": true,
+ "turns": [
+  {
+   "step": "concept",
+   "turn": "d2ad0d19-7171-41c6-85c4-dbacf3892660",
+   "delivery": "saved",
+   "wall": "7.2 min",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 6,
+    "structure-worker": 5,
+    "completion-gate": 1
+   },
+   "usd": 0.45,
+   "rejected": 1,
+   "rejection_codes": [
+    "unspecified (save_construction_draft; message-only rejection)"
+   ],
+   "answer_text": "clean"
+  },
+  {
+   "step": "width_change",
+   "turn": "2393979f-8ffb-449b-8506-993b24f9a0b4",
+   "delivery": "saved",
+   "wall": "3.6 min",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 6,
+    "structure-worker": 4,
+    "completion-gate": 1
+   },
+   "usd": 0.217,
+   "rejected": 0,
+   "answer_text": "clean"
+  },
+  {
+   "step": "final_drawing",
+   "turn": "c9502275-9700-422a-936f-ea18633dbfeb",
+   "delivery": "saved",
+   "wall": "4.6 min",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 5,
+    "drawing-worker": 5,
+    "completion-gate": 1
+   },
+   "usd": 0.191,
+   "rejected": 0,
+   "answer_text": "clean"
+  }
+ ],
+ "total": {
+  "calls": 37,
+  "bob_calls": 17,
+  "konrad_calls": 9,
+  "rita_calls": 5,
+  "mattias_calls": 0,
+  "usd": 0.858,
+  "cached_share": 0.75,
+  "rejected": 1,
+  "describe_tool_calls": 0,
+  "answer_text": "clean in 3 of 3 turns"
+ },
+ "by_role_usd": {
+  "structure-worker": 0.424,
+  "ask-bob": 0.309,
+  "drawing-worker": 0.102,
+  "tool-picker": 0.019,
+  "completion-gate": 0.004
+ },
+ "compared_with_run12": {
+  "usd": "0.86 vs 1.41",
+  "calls": "37 vs 52",
+  "bob": "17 calls USD 0.31 vs 24 calls USD 0.52",
+  "konrad": "9 calls USD 0.42 vs 17 calls USD 0.74",
+  "cache": "75% vs 72%",
+  "describe_tool": "0 vs 4"
+ }
+}

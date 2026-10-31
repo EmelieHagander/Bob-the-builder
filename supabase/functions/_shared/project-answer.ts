@@ -22,7 +22,7 @@ import { humanTextIssues } from './human-text.ts'
 import { answerTextFragments, type AnswerTextOutcome } from './answer-text.ts'
 import { toolRejection } from './tool-rejection.ts'
 import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
-import { catalogWorkers, catalogRetiredTools, catalogCheckReads, workerOwnedTools, parseWorkerJob, runWorker } from './bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogReportReadback, readbackReads, workerOwnedTools, parseWorkerJob, runWorker } from './bob-workers.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
@@ -253,7 +253,7 @@ export type ProjectAnswerOptions = {
   hasAccess: () => Promise<boolean>; previousResponseId?: string;
   writer?: ProjectWriter; context?: WorkingContext; deadline?: number; modelTimeoutMs?: number; unlimitedWork?: boolean;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;
-  onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string; diagnostics?:import('./execution-metrics.ts').WorkDiagnostics; rejection?: { code: string; fields: string[] } }) => void;
+  onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string; diagnostics?:import('./execution-metrics.ts').WorkDiagnostics; rejection?: { code: string; fields: string[]; message_id?: string } }) => void;
   /** Names of the calls this model step will execute, before the first runs.
    * Called again with the same names when a checkpointed step resumes. */
   onToolBatch?: (names: string[]) => void;
@@ -391,6 +391,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const workerHandOverNames = Object.values(workers ?? {}).map(worker => worker.tool)
   // The reads Bob checks a report with are loaded from the first step too.
   const checkReads = workers ? catalogCheckReads(opts.aiCatalog) : []
+  const reportReadback = !!workers && catalogReportReadback(opts.aiCatalog)
   // Retired tools are hidden from Bob the same way (new manifests only).
   const workerOwned = new Set([...workerOwnedTools(workers), ...catalogRetiredTools(opts.aiCatalog)])
   // Never picker candidates: the workers' own tools, and the hand-overs Bob always has.
@@ -433,6 +434,19 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         session, hasAccess: opts.hasAccess, deadline, ...(opts.modelTimeoutMs ? { modelTimeoutMs: opts.modelTimeoutMs } : {}),
         readCurrent: async () => key === 'materials' ? opts.lookup.search({ dataset: 'materials', query: null, status: null, area_id: null, record_id: null }) : null,
         // In order, one at a time: the journal replays reads by position.
+        // Readback (2026-10-31): the saved records, read in order through the worker's own session.
+        ...(worker.knowledge && reportReadback ? { readback: async (receipts: Record<string, unknown>[]) => {
+          const records: unknown[] = []
+          for (const read of readbackReads(receipts)) {
+            if (!('tool' in read)) { records.push({ [read.label]: { status: 'not_read', reason: read.not_read } }); continue }
+            let record: unknown
+            try { record = withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments))) }
+            catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; record = { status: 'unavailable' } }
+            const text = JSON.stringify(record) ?? ''
+            records.push({ [read.label]: text.length <= 8000 ? record : { status: 'too_large', note: 'Read it with your own tools.' } })
+          }
+          return records
+        } } : {}),
         ...(worker.knowledge && opts.projectContext ? { images: { carrier: () => opts.projectContext!.carrier() as NonNullable<OpenAIServiceOptions['messages']>, confirmDelivery: () => opts.projectContext!.confirmDelivery() } } : {}),
         ...(worker.knowledge ? { variables: { project_name: await readProjectName() }, readKnowledge: async () => {
           const knowledge: Record<string, unknown> = {}

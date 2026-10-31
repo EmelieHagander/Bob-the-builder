@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { catalogFixture, catalogCall, preBuildWorkersCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { catalogCoreTools } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { runProjectAnswer, seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
-import { catalogWorkers, catalogRetiredTools, catalogCheckReads } from '../supabase/functions/_shared/bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, catalogCheckReads, saveReceipt, readbackReads } from '../supabase/functions/_shared/bob-workers.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createConstructionTools } from '../supabase/functions/_shared/construction-draft.ts'
@@ -43,10 +43,12 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
   const constructionCalls: { name: string; args: any }[] = []
   const constructionTools = { ...real, tools: real.tools, get remaining() { return real.remaining }, execute: async (name: string, args: any) => {
     constructionCalls.push({ name, args })
-    if (name === 'check_construction_draft') pendingImage = true // stands in for a worker opening an image
+    if (name === 'save_construction_draft') pendingImage = true // stands in for a worker opening an image
     if (name === 'read_construction_draft') return { status: 'ok', drafts: [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }] }
     if (name === 'edit_construction_parts') return { status: 'invalid', validation: { code: 'unknown_part', fields: ['changes.0.part_id'] } }
-    return { status: 'saved', artifact_id: 'c1', revision: 3 }
+    if (name === 'check_construction_draft') return { status: 'checked', artifact_id: 'c1', revision: 3 }
+    // A writer save, as production returns it: the receipt is nested.
+    return { status: 'saved', receipt: { projectId, dataset: 'artifacts', recordId: 'c1', label: 'Lådan', operation: 'updated', savedAt: '2026-10-31T00:00:00Z', revision: 3, record: { title: 'Lådan' } } }
   } }
   const solutionActions = createSolutionActions({ projectId, writer, hasAccess, read: async () => ({ data: [], error: null }) })
   const realContext = createProjectContext({ hasAccess, sources: lookup.sources, adapters: [createMediaAdapter(projectId, {
@@ -88,7 +90,7 @@ test('Bob asks Konrad in plain words; Konrad has his own tools, the project in h
   assert.equal(core.length, 6)
   const request = 'Hej Konrad, kan du sätta ihop konstruktionen för projektet? Lådorna väntar vi med.'
   const { bob, workers, pickerInputs, constructionCalls, ran, delivered } = await turn(catalog, [ask('ask_structure_worker', { request })],
-    { 'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'w1', toolCalls: [call('w1c', 'check_construction_draft', { artifact_id: 'c1', revision: 2 })] })] })
+    { 'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'w1', toolCalls: [call('w1c', 'save_construction_draft', {})] })] })
   // Bob: all three hand-overs, none of the construction or drawing tools, and none of them for the picker.
   for (const tool of ['ask_structure_worker', 'ask_drawing_worker', 'ask_materials_worker']) assert(names(bob[0]).includes(tool), tool)
   assert(!names(bob[0]).some(n => STRUCTURE.includes(n) || DRAWING.includes(n)), JSON.stringify(names(bob[0])))
@@ -118,17 +120,47 @@ test('Bob asks Konrad in plain words; Konrad has his own tools, the project in h
   assert.deepEqual(Object.keys(knowledge), ['selected_solutions', 'measurements', 'images', 'constructions'])
   assert.deepEqual(knowledge.constructions.drafts, [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }])
   assert.equal(constructionCalls[0].name, 'read_construction_draft'); assert.equal(constructionCalls[0].args.view, 'overview')
-  // His check ran through the same session and Bob got the report.
-  assert(ran.some(r => r.name === 'check_construction_draft'))
+  // His save ran through the same session and Bob got the report.
+  assert(ran.some(r => r.name === 'save_construction_draft' && r.status === 'saved'))
   const report = toolOutput(bob[1])
   assert.equal(report.status, 'ok'); assert.equal(report.worker, 'structure-worker')
-  assert.deepEqual(report.calls.map((c: any) => c.tool), ['check_construction_draft'])
+  assert.deepEqual(report.calls.map((c: any) => c.tool), ['save_construction_draft'])
   // What he saved comes back as receipts copied by code, not restated by a model.
-  assert.deepEqual(report.receipts, [{ tool: 'check_construction_draft', artifact_id: 'c1', revision: 3 }])
+  assert.deepEqual(report.receipts, [{ tool: 'save_construction_draft', dataset: 'artifacts', record_id: 'c1', revision: 3, operation: 'updated' }])
+  // The saved construction comes back with the report, read by code (report_readback_version 1).
+  assert.deepEqual(report.readback, [{ construction: { status: 'ok', drafts: [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }] } }])
   // An image he opened goes with his own next call and is confirmed there; Bob's next call does not carry it.
   const [, second] = workers['structure-worker']
   assert(texts(second).some(t => t.includes('IMAGE-PIXELS'))); assert.equal(delivered(), 1)
   assert(!texts(bob[1]).some(t => t.includes('IMAGE-PIXELS')))
+})
+
+test('the readback reads the saved construction at its saved revision; without the switch there is none', async () => {
+  const off = catalogFixture(m => { const box = m.definitions.find(d => d.prompt_key === 'bob.tools')!; const { report_readback_version: _r, ...rest } = box.definition; box.definition = rest })
+  const without = await turn(off, [ask('ask_structure_worker', { request: 'Konrad, sätt ihop lådan.' })],
+    { 'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'w1', toolCalls: [call('w1c', 'save_construction_draft', {})] })] })
+  assert.equal(toolOutput(without.bob[1]).readback, undefined)
+  const catalog = catalogFixture()
+  const { bob, constructionCalls } = await turn(catalog, [ask('ask_structure_worker', { request: 'Konrad, sätt ihop lådan.' })],
+    { 'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'w1', toolCalls: [call('w1c', 'save_construction_draft', {})] })] })
+  const report = toolOutput(bob[1])
+  assert.deepEqual(report.readback, [{ construction: { status: 'ok', drafts: [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }] } }])
+  const read = constructionCalls.at(-1)!
+  assert.equal(read.name, 'read_construction_draft'); assert.equal(read.args.artifact_id, 'c1'); assert.equal(read.args.revision, 3); assert.equal(read.args.view, 'overview')
+})
+
+test('receipts are copied by code from nested and flat results; the readback reads each saved record once', () => {
+  assert.deepEqual(saveReceipt('save_cad_design', { status: 'saved', receipt: { dataset: 'artifacts', recordId: 'd1', revision: 2, operation: 'created', label: 'x', record: {} } }),
+    { tool: 'save_cad_design', dataset: 'artifacts', record_id: 'd1', revision: 2, operation: 'created' })
+  assert.deepEqual(saveReceipt('continue_construction_change', { status: 'saved', artifact_id: 'c1', revision: 4 }), { tool: 'continue_construction_change', artifact_id: 'c1', revision: 4 })
+  const reads = readbackReads([{ tool: 'save_construction_draft', record_id: 'c1', revision: 2 }, { tool: 'edit_construction_parts', record_id: 'c1', revision: 3 },
+    { tool: 'save_cad_design', record_id: 'd1', revision: 1 }, { tool: 'manage_project_material', record_id: 'm1', revision: 1 },
+    { tool: 'check_construction_draft', artifact_id: 'c2', revision: 1 }, { tool: 'save_cad_design' }])
+  assert.deepEqual(reads.map(r => 'tool' in r ? [r.label, r.tool, r.arguments.revision] : [r.label, r.not_read]),
+    [['construction', 'read_construction_draft', 3], ['drawing', 'read_project_record_section', 1], ['construction', 'read_construction_draft', 1], ['drawing', 'no_saved_revision']])
+  // Every saved construction is read back, up to the limit; the rest say so.
+  const many = readbackReads(Array.from({ length: 10 }, (_, i) => ({ tool: 'save_construction_draft', record_id: 'c' + i, revision: 1 })))
+  assert.equal(many.filter(r => 'tool' in r).length, 8); assert.deepEqual(many.slice(8).map(r => 'not_read' in r && r.not_read), ['limit', 'limit'])
 })
 
 test('a rejected worker call records why, as a code and field paths only', async () => {

@@ -458,6 +458,25 @@ for(const migration of migrations){
   const box=seed.find(row=>row.key==='bob.tools')
   box.definition={...box.definition,check_reads:JSON.parse(checkReads[1])};publishAs(box,'bob-check-reads-v1');versions.set(box.key,versions.get(box.key)!+1)
  }
+ const readbackEdits=source.match(/\$bob_report_readback_edits\$([\s\S]+?)\$bob_report_readback_edits\$/)
+ if(readbackEdits){
+  const publication='bob-report-readback-v1'
+  for(const edit of JSON.parse(readbackEdits[1])){
+   const row=seed.find(row=>row.key===edit.key)
+   for(const {field,path,old,new:next} of edit.replace??[]){
+    const keys:(string|number)[]=path?path.map((k:string)=>/^\d+$/.test(k)?Number(k):k):[field]
+    if(field!=='content')row.definition=structuredClone(row.definition)
+    const parent=field==='content'?null:keys.slice(0,-1).reduce((o:any,k)=>o?.[k],row.definition)
+    const text=field==='content'?row.content:parent?.[keys.at(-1)!]
+    if(typeof text!=='string'||text.split(old).length!==2)throw new Error('report_readback_replace_unexpected: '+edit.key+' '+(path??[field]).join('.'))
+    if(field==='content')row.content=text.replace(old,()=>next);else parent[keys.at(-1)!]=text.replace(old,()=>next)
+   }
+   publishAs(row,publication);versions.set(row.key,versions.get(row.key)!+1)
+  }
+  const howTo=JSON.parse(source.match(/\$bob_report_readback_how_to\$([\s\S]+?)\$bob_report_readback_how_to\$/)![1])
+  const box=seed.find(row=>row.key==='bob.tools')
+  box.definition={...box.definition,report_readback_version:1,catalog:box.definition.catalog.map((c:any)=>c.name in howTo?{...c,how_to:howTo[c.name]}:c)};publishAs(box,publication);versions.set(box.key,versions.get(box.key)!+1)
+ }
  if(/\$bob_tool_order_restore\$/.test(source)){
   preToolOrderRestoreRows=structuredClone(seed);preToolOrderRestoreVersions=new Map(versions)
   const box=seed.find(row=>row.key==='bob.tools')
