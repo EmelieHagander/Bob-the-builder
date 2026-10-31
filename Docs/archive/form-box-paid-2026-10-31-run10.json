@@ -1,0 +1,72 @@
+{
+ "run": "https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41171145463",
+ "workflow": "live-form-acceptance.yml",
+ "scenario": "box",
+ "config": "baseline",
+ "head": "918f7cd7df332085237a9417f9c9b1cbc8aa4687",
+ "functions": {
+  "bob-worker": 160,
+  "ask-bob": 192
+ },
+ "catalog": {
+  "role.ask-bob": "profile.ask-bob-mini (20261031050458), no effect: routing.ask-bob v1 default_profile_key profile.ask-bob overrides the role",
+  "bob_model": "gpt-5.4 on every ask-bob call"
+ },
+ "passed": true,
+ "turns": [
+  {
+   "step": "concept",
+   "turn": "fb50bdbd-148b-4201-8634-1e7645cbba3b",
+   "delivery": "saved",
+   "wall": "5 min",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 10,
+    "materials-worker": 4,
+    "completion-gate": 1
+   },
+   "usd": 0.4725,
+   "rejected": 0
+  },
+  {
+   "step": "width_change",
+   "turn": "2a36dc6d-d649-44e2-8abb-b919a1551bf5",
+   "delivery": "saved",
+   "wall": "2 min",
+   "calls": {
+    "memory-embedding": 1,
+    "tool-picker": 1,
+    "ask-bob": 7,
+    "completion-gate": 1
+   },
+   "usd": 0.2863,
+   "rejected": 1
+  },
+  {
+   "step": "final_drawing",
+   "turn": "e48f6ad5-4821-4108-bb5d-6318e78bb9a3",
+   "delivery": "saved",
+   "wall": "4.3 min",
+   "calls": {
+    "memory-embedding": 1,
+    "tool-picker": 1,
+    "ask-bob": 8,
+    "cad-reviewer": 1,
+    "completion-gate": 1
+   },
+   "usd": 0.3729,
+   "rejected": 0
+  }
+ ],
+ "total": {
+  "calls": 38,
+  "bob_calls": 25,
+  "mattias_calls": 4,
+  "usd": 1.1317,
+  "input_tokens": 608791,
+  "cached_input_tokens": 353792,
+  "cached_share": 0.581,
+  "rejected": 1,
+  "answer_text": "rewritten in 3 of 3 turns"
+ }
+}

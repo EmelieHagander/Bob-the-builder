@@ -556,6 +556,15 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
+**2026-10-31 — Bob på minimodellen provad och återställd; klartextstycket installerat ([bevis](foundation-verification.md#mini-trial-2026-10-31)):**
+lådprov 11 misslyckades med Bob på minimodellen: konceptturen avbröts efter 15
+minuter (standard: sparad på 5 minuter). Mini-Bob behövde 22 anrop i stället för
+10, fick 7 konstruktionssparningar avvisade och skickade Mattias fem gånger
+(31 anrop). Bob är tillbaka på standard. En samordnare på mini kräver att
+konstruktionsarbetet först flyttas till en arbetare på standard. `bob.persona`
+v3 har nu ett stycke om att skriva med enkla ord; det är inte mätt i ett betalt
+prov än.
+
 **Installerat 2026-10-30 — pilot: Bob som samordnare med en arbetare, Mattias (material) (`bob-worker` v160, `ask-bob` v192, [bevis](foundation-verification.md#materials-worker-install-2026-10-30)):**
 lådprov 9 klarades med alla tre turer sparade: 32 anrop, USD 1,02 (lådprov 6:
 29 anrop, USD 0,93). Bob gav Mattias ett materialjobb; Mattias gjorde det på 3

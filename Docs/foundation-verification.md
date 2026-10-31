@@ -1,5 +1,53 @@
 # Foundation verification and rollout
 
+<a id="mini-trial-2026-10-31"></a>
+## Bob on the mini model: box run 11 failed, trial ended; plain-words paragraph installed — 2026-10-31
+
+Owner decision: try Bob as coordinator on the mini model while Mattias stays on
+standard, measured on one paid box run. Catalog only; zero active Bob jobs
+before every apply. Live catalog equals the fixture afterwards (342 rows).
+
+1. **First try did nothing.** `20261031010000` (recorded `20261031050458`) set
+   `role.ask-bob` to a new `profile.ask-bob-mini`, but `routing.ask-bob`
+   `default_profile_key` overrides the role's own profile. [Run 10](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41171145463)
+   therefore ran Bob on standard: passed, all three turns saved, 38 calls (25
+   Bob, 4 Mattias), USD 1.13, 58% from cache, 1 rejected call; all three answers
+   needed the plain-words rewrite. `20261031010100` (`20261031053121`) put the
+   role back. Evidence: `Docs/archive/form-box-paid-2026-10-31-run10.json`.
+2. **Mini trial.** `20261031020000` (`20261031053231`) pointed
+   `routing.ask-bob` at the mini profile. [Run 11](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41173010760)
+   **failed**: every Bob call ran on the mini model, and the scenario cancelled
+   the concept turn at its 15-minute limit. `20261031020100` (`20261031055104`)
+   restored `profile.ask-bob` right after; `routing.ask-bob` is v3. Evidence:
+   `Docs/archive/form-box-paid-2026-10-31-run11.json`.
+
+| Concept turn | Run 10 (standard Bob) | Run 11 (mini Bob) |
+|---|---|---|
+| Result | saved in 5 min | cancelled at 15 min |
+| Bob calls | 10 | 22 |
+| Mattias | 1 job, 4 calls | 5 jobs, 31 calls (one hit his step limit) |
+| Rejected calls | 0 | 16 (Bob 9: 7 construction saves; Mattias 7) |
+| Read from cache | 68% | 86% |
+| Cost | USD 0.47 | USD 0.89, unfinished |
+
+- A mini call is cheaper, but mini Bob needed twice the calls, could not save
+  the construction (7 rejected saves) and re-briefed Mattias five times. Most
+  of the cost moved to Mattias.
+- Bob still does the construction work himself. A mini coordinator only makes
+  sense once that work belongs to a worker on standard.
+
+3. **Plain-words paragraph.** `20261031030000_bob_plain_words_persona_catalog.sql`
+   (recorded `20261031055202`) published `bob.persona` v3
+   (`plain_words_version` 1): Saoirse's owner-approved paragraph at the end of
+   the persona ([answer text](ask-bob-writes.md#answer-text)). Bob's role
+   message is 631 tokens (cap 700), the persona 157 words (cap 250). No paid run
+   has used it yet.
+
+Validation: catalog fixture replay, `ai-catalog`, `ai-readiness-catalog`,
+`bob-context-strategy-catalog` and `bob-materials-worker` pass, except two
+builder-reproducibility checks (readiness and context-strategy builders) that
+fail on main too.
+
 <a id="materials-worker-install-2026-10-30"></a>
 ## Materials worker installed; paid box run 9 passed — 2026-10-30
 
