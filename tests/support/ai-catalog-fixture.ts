@@ -430,10 +430,10 @@ for(const migration of migrations){
    if(edit.content!==undefined)row.content=edit.content
    if(edit.variables)row.variables=edit.variables
    if(edit.definition)row.definition={...row.definition,...edit.definition}
-   if(edit.replace){
-    const {field,old,new:next}=edit.replace,text=field==='content'?row.content:row.definition[field]
-    if(typeof text!=='string'||text.split(old).length!==2)throw new Error('build_workers_replace_unexpected: '+edit.key)
-    if(field==='content')row.content=text.replace(old,next);else row.definition={...row.definition,[field]:text.replace(old,next)}
+   for(const {field,old,new:next} of edit.replace??[]){
+    const text=field==='content'?row.content:row.definition[field]
+    if(typeof text!=='string'||text.split(old).length!==2)throw new Error('build_workers_replace_unexpected: '+edit.key+' '+field)
+    if(field==='content')row.content=text.replace(old,()=>next);else row.definition={...row.definition,[field]:text.replace(old,()=>next)}
    }
    publishAs(row,publication);row.metadata.build_workers_version=1;versions.set(row.key,versions.get(row.key)!+1)
   }
