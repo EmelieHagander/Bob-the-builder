@@ -15,7 +15,13 @@ database; code alone checks a drawing; the legacy box drawing is retired
   `cad-assistant.ts` and `cad-targeted-review.ts` (code-only check),
   `ask-openai.ts` (time reserves for both new roles).
 - **Catalog:** `20261031040000_bob_build_workers_catalog.sql`. Prompt texts by
-  Saoirse, pending the owner's OLD→NEW approval.
+  Saoirse (storybook personas in Swedish, one shared team text `worker.team`, the
+  request-only hand-overs, Bob's principle, the `design_project_cad` manual for
+  the code check); the owner approved the exact texts on 2026-10-31. Bob's role
+  message is 695 tokens (cap 700).
+- **Runtime fixes from the contract check:** pixels a worker opens go with that
+  worker's own next call; a worker's saves reach Bob as receipts copied by code;
+  Rita reads construction changes (saving a drawing completes its pending item).
 - **Tests:** `bob-build-workers` (Konrad, Rita's fixed tool list, Mattias's
   request-only form, refused values, pinned manifests), `cad-targeted-review`
   (code-only pass and fail without a model call), the fixture replay. Tests that

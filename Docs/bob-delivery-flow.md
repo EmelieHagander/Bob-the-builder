@@ -561,8 +561,8 @@ Bob samordnar och pratar med beställaren. Konrad (konstruktör) äger
 konstruktionen, Rita ritar den och Mattias sköter materialen. Bob ber om arbete med
 vanliga ord utan värden; varje kollega läser sin projektkunskap från databasen.
 Koden ensam kontrollerar ritningen. Den gamla genvägen för lådritningar är borttagen
-för nya jobb. Kvar: ägarens godkännande av texterna, driftsättning, katalogen och
-ett betalt lådprov.
+för nya jobb. Texterna är godkända av ägaren. Kvar: driftsättning, katalogen och ett betalt
+lådprov.
 
 **2026-10-31 — Bob på minimodellen provad och återställd; klartextstycket installerat ([bevis](foundation-verification.md#mini-trial-2026-10-31)):**
 lådprov 11 misslyckades med Bob på minimodellen: konceptturen avbröts efter 15
