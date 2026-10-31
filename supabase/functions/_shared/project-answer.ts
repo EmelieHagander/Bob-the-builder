@@ -438,6 +438,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         ...(worker.knowledge && reportReadback ? { readback: async (receipts: Record<string, unknown>[]) => {
           const records: unknown[] = []
           for (const read of readbackReads(receipts)) {
+            if (!('tool' in read)) { records.push({ [read.label]: { status: 'not_read', reason: read.not_read } }); continue }
             let record: unknown
             try { record = withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments))) }
             catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; record = { status: 'unavailable' } }

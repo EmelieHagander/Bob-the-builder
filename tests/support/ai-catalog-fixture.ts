@@ -473,8 +473,9 @@ for(const migration of migrations){
    }
    publishAs(row,publication);versions.set(row.key,versions.get(row.key)!+1)
   }
+  const howTo=JSON.parse(source.match(/\$bob_report_readback_how_to\$([\s\S]+?)\$bob_report_readback_how_to\$/)![1])
   const box=seed.find(row=>row.key==='bob.tools')
-  box.definition={...box.definition,report_readback_version:1};publishAs(box,publication);versions.set(box.key,versions.get(box.key)!+1)
+  box.definition={...box.definition,report_readback_version:1,catalog:box.definition.catalog.map((c:any)=>c.name in howTo?{...c,how_to:howTo[c.name]}:c)};publishAs(box,publication);versions.set(box.key,versions.get(box.key)!+1)
  }
  if(/\$bob_tool_order_restore\$/.test(source)){
   preToolOrderRestoreRows=structuredClone(seed);preToolOrderRestoreVersions=new Map(versions)

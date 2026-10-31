@@ -20,7 +20,7 @@
   {
     "name": "ask_drawing_worker",
     "description": "Give a drawing job to Rita, the draughtsperson: drawing a checked construction and saving it, composing drawn pieces into one shell drawing, linking drawings and shell pieces to plan Steps, and handling drawing gaps. She draws the construction exactly as it is, code checks the drawing against it, and you get her report.",
-    "how_to": "Rita draws what Konrad has saved and checked; a change to the construction goes to Konrad, not into the drawing. Floor plans, room layouts and stair studies stay with you. Write to her as you would to a colleague on site: what to draw and what it is for. She reads the constructions, the plan and the drawing requests herself, so leave ids, measurements and other values out. Read what she saved before you tell the owner.",
+    "how_to": "Rita draws what Konrad has saved and checked; a change to the construction goes to Konrad, not into the drawing. Floor plans, room layouts and stair studies stay with you. Write to her as you would to a colleague on site: what to draw and what it is for. She reads the constructions, the plan and the drawing requests herself, so leave ids, measurements and other values out. The drawing she saved comes with her report, read back by code after the job; go by that before you tell the owner.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],
@@ -38,7 +38,7 @@
   {
     "name": "ask_structure_worker",
     "description": "Give a construction job to Konrad, the structural designer: the construction of the selected solution with its parts, exact materials, joints and governing dimensions, the construction check, construction lists and part roles. He reads the project and the conversation himself, checks his construction against what the owner wanted, and works with his own tools; you get his report.",
-    "how_to": "Have the solution selected first; Konrad constructs what is selected. Write to him as you would to a colleague on site: what to construct, and what is left out for now. He reads the solution, the measurements, the images and the existing constructions himself, so leave ids, measurements and other values out. A large build may come back as several constructions in one coordinate system; where to split is his call. Read the saved construction and its check before you send Rita to draw it or tell the owner.",
+    "how_to": "Have the solution selected first; Konrad constructs what is selected. Write to him as you would to a colleague on site: what to construct, and what is left out for now. He reads the solution, the measurements, the images and the existing constructions himself, so leave ids, measurements and other values out. A large build may come back as several constructions in one coordinate system; where to split is his call. The construction he saved or checked comes with his report, read back by code after the job; go by that and its check before you send Rita to draw it or tell the owner.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],

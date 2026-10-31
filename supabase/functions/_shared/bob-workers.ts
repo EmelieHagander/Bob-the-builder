@@ -191,7 +191,8 @@ export async function runWorker(opts: {
       if (result && typeof result === 'object' && 'diagnostics' in result) { const { diagnostics: _d, ...content } = result; result = content }
       const status = String(result?.status ?? 'returned')
       calls.push({ tool: NAME.test(name) ? name : 'invalid_name', status })
-      if (status === 'saved') receipts.push(saveReceipt(name, result))
+      // A check stores its result too, so it is reported (and read back) like a save.
+      if (status === 'saved' || status === 'checked') receipts.push(saveReceipt(name, result))
       const rejection = ['invalid', 'conflict'].includes(status) ? toolRejection(result) : undefined
       try { opts.onTool?.({ name: NAME.test(name) ? name : 'invalid_name', status, ms: Date.now() - began, ...(rejection ? { rejection } : {}) }) } catch { /* diagnostics only */ }
       messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) })
@@ -224,19 +225,26 @@ export function saveReceipt(tool: string, result: unknown): Record<string, unkno
 /** Owner decision 2026-10-31: what Konrad and Rita saved comes back with their
  * report, read by code, so Bob checks the saved record instead of reading it
  * again. One read per saved construction or drawing (its latest revision). */
-const CONSTRUCTION_SAVES = new Set(['save_construction_draft', 'edit_construction_parts', 'change_construction_parameters', 'change_construction_roles', 'continue_construction_change', 'transition_legacy_drawing'])
-export function readbackReads(receipts: Record<string, unknown>[]): { label: string; tool: string; arguments: Record<string, unknown> }[] {
-  const reads = new Map<string, { label: string; tool: string; arguments: Record<string, unknown> }>()
+const CONSTRUCTION_READBACK = new Set(['save_construction_draft', 'edit_construction_parts', 'change_construction_parameters', 'change_construction_roles', 'continue_construction_change', 'transition_legacy_drawing', 'check_construction_draft'])
+const READBACK_LIMIT = 8
+export type ReadbackEntry = { label: string; tool: string; arguments: Record<string, unknown> } | { label: string; not_read: 'no_saved_revision' | 'limit' }
+/** Every saved or checked construction and every saved drawing, once, at its
+ * latest revision. A save whose receipt names no revision, or one past the
+ * limit, is listed as not read, so Bob never takes a missing record for "nothing saved". */
+export function readbackReads(receipts: Record<string, unknown>[]): ReadbackEntry[] {
+  const reads = new Map<string, ReadbackEntry>()
   for (const r of receipts) {
+    const label = CONSTRUCTION_READBACK.has(String(r.tool)) ? 'construction' : r.tool === 'save_cad_design' ? 'drawing' : null
+    if (!label) continue
     const id = typeof r.artifact_id === 'string' ? r.artifact_id : typeof r.record_id === 'string' ? r.record_id : null
     const revision = typeof r.revision === 'number' && Number.isSafeInteger(r.revision) && r.revision > 0 ? r.revision : null
-    if (!id || revision === null) continue
-    if (CONSTRUCTION_SAVES.has(String(r.tool))) reads.set('construction:' + id, { label: 'construction', tool: 'read_construction_draft',
-      arguments: { artifact_id: id, revision, after: null, view: 'overview', ids: [], result_id: null, section: null, step_id: null, work_kind: null } })
-    else if (r.tool === 'save_cad_design') reads.set('drawing:' + id, { label: 'drawing', tool: 'read_project_record_section',
-      arguments: { dataset: 'drawing', record_id: id, revision, path: [] } })
+    if (!id || revision === null) { reads.set(label + ':unknown:' + reads.size, { label, not_read: 'no_saved_revision' }); continue }
+    reads.set(label + ':' + id, label === 'construction'
+      ? { label, tool: 'read_construction_draft', arguments: { artifact_id: id, revision, after: null, view: 'overview', ids: [], result_id: null, section: null, step_id: null, work_kind: null } }
+      : { label, tool: 'read_project_record_section', arguments: { dataset: 'drawing', record_id: id, revision, path: [] } })
   }
-  return [...reads.values()].slice(-4)
+  const all = [...reads.values()]
+  return all.map((entry, i) => i < READBACK_LIMIT || !('tool' in entry) ? entry : { label: entry.label, not_read: 'limit' as const })
 }
 /** Box run 13: catalog switch for the readback (texts tell Bob it is there). */
 export function catalogReportReadback(catalog: AiCatalogSession): boolean {
