@@ -385,6 +385,16 @@ for(const migration of migrations){
   const contract=seed.find(row=>row.key==='agent-contract.ask-bob')
   publishAs(contract,'bob-memory-stair-v1');contract.metadata.memory_stair_version=1;contract.metadata.prompt_tiers_version=1;versions.set(contract.key,versions.get(contract.key)!+1)
  }
+ if(/\$bob_mini_trial\$/.test(source)){
+  const base=seed.find(row=>row.key==='profile.ask-bob')
+  seed.push({key:'profile.ask-bob-mini',kind:'execution_profile',content:'',definition:{...base.definition,tier:'mini'},variables:[],metadata:{publication:'bob-mini-trial-v1'}});versions.set('profile.ask-bob-mini',1)
+  const role=seed.find(row=>row.key==='role.ask-bob')
+  role.definition={...role.definition,profile_key:'profile.ask-bob-mini'};publishAs(role,'bob-mini-trial-v1');versions.set(role.key,versions.get(role.key)!+1)
+ }
+ if(/\$bob_mini_trial_end\$/.test(source)){
+  const role=seed.find(row=>row.key==='role.ask-bob')
+  role.definition={...role.definition,profile_key:'profile.ask-bob'};publishAs(role,'bob-mini-trial-end-v1');versions.set(role.key,versions.get(role.key)!+1)
+ }
  const materialsWorker=source.match(/\$materials_worker_additions\$([\s\S]+?)\$materials_worker_additions\$/)
  if(materialsWorker){
   preMaterialsWorkerRows=structuredClone(seed);preMaterialsWorkerVersions=new Map(versions)
