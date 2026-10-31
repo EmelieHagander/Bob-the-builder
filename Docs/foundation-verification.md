@@ -1,5 +1,28 @@
 # Foundation verification and rollout
 
+<a id="report-readback-2026-10-31"></a>
+## Report readback and rejection codes — built 2026-10-31, not installed
+
+Owner decision after run 13 ("do both now"):
+
+- **Rejection codes:** the construction tools' message-only rejections map to
+  codes (a test fails when a new message has none); engine errors that are codes
+  keep them; any other message gets a content-free fingerprint
+  (`rejection_message`). Tool output is unchanged.
+- **Receipts fixed:** writer saves nest their ids (`receipt {dataset, recordId,
+  revision}`); the copier read only flat fields, so in runs 12 and 13 the receipts
+  held tool names only.
+- **Readback:** `bob.tools` `report_readback_version` 1
+  (`20261031060000_bob_report_readback_catalog.sql`): after Konrad's or Rita's job
+  code reads each saved or checked construction (overview with its check) and each
+  saved drawing (record) at its revision and attaches it to the report. Saoirse's
+  lines change with it: Bob's principle (go by the record; role message 692 tokens),
+  the two hand-over manuals and their returns, and the policy copies.
+- **Tests:** `bob-build-workers` (9), `answer-text` (rejection codes), the fixture
+  replay.
+- **Release order:** owner approval of the texts, merge, deploy both functions,
+  apply the catalog with no Bob job running, one paid box run.
+
 <a id="build-team-cost-2026-10-31"></a>
 ## Cheaper build team installed; paid box run 13 passed — 2026-10-31
 

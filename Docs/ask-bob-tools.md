@@ -161,7 +161,17 @@ himself. Manifests with `bob.tools` `build_workers_version` 1
   the check) is retired for new jobs (`retired_tools`). Floor plans, room layouts
   and stair studies stay with Bob.
 - Bob keeps the reads (`read_construction_draft`, drawing requests and their
-  controls) to check a report before he answers.
+  controls). With `bob.tools` `report_readback_version` 1 (built 2026-10-31, not
+  installed), the hand-over result is `{status, worker, report, calls, receipts,
+  readback}`: `receipts` are the ids, dataset, revision and operation of each save
+  or check, copied by code; `readback` is, after Konrad's or Rita's job, each saved
+  or checked construction's overview (with its check results) and each saved
+  drawing's record (source state, linked Steps) at that revision, read by code
+  through the worker's session, up to eight; a save without a revision or past the
+  limit is listed as not read. Bob goes by that record; he reads Mattias's saves
+  himself (no readback for materials yet). Every rejected tool call records its
+  code, field paths and, for an unmapped message, a content-free fingerprint in
+  the run's event log.
 
 Pinned manifests keep their behaviour: before this publication Bob holds the
 construction and drawing tools, Mattias gets Bob's brief, and the AI reviewer
