@@ -161,9 +161,12 @@ keep it.
   `short_contact`, `narrow_contact`, `count_unknown`, `fastener_unknown`,
   `no_fastener_chosen`. Glue gives the one package per construction. Totals and
   material needs group by kind and size as before.
-- **Open:** the shared catalog has no glue yet (owner decision pending), and
-  other joint shapes (rebate, groove, finger joint) need cut boards in the 3D
-  model.
+- **Glue in the shared catalog** (owner decision 2026-11-01,
+  `20261101103000_shared_wood_glue.sql`, not applied): *Trälim, inomhus* (D2)
+  and *Trälim, utomhus (D3)*, generic liquids in the new material category
+  `adhesive`, counted in packages, tagged `glue`.
+- **Open:** other joint shapes (rebate, groove, finger joint) need cut boards
+  in the 3D model.
 
 ### Joint fasteners — owner decisions 2026-10-26
 

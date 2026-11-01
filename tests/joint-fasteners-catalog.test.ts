@@ -21,26 +21,24 @@ async function build(){
  const item=async(name:string)=>(await pg.query(`select i.id,r.revision from bob.catalog_items i join bob.catalog_item_revisions r on r.item_id=i.id
   where i.project_id is null and r.name=$1 order by r.revision desc limit 1`,[name])).rows[0]
  const pick=(row:{id:string;revision:number},count:number|null=null,spacing_mm:number|null=null)=>({material_id:row.id,material_revision:row.revision,count,spacing_mm})
- // Test-only glue: the shared catalog has none until the owner adds it.
- const glueType=(await pg.query(`insert into bob.material_types(name,category_code,review_status,seed_key,fastener_kind) values('Fixture wood glue','wood','reviewed','fixture_glue','glue') returning id`)).rows[0].id
- const glueItem=randomUUID()
- // The current-revision key is checked at commit, as in the seed.
- await pg.query('begin')
- await pg.query(`insert into bob.catalog_items(id,project_id,kind,current_revision,identity_hash,material_type_id,material_size_id,unit_code,review_status)
-  values($1,null,'material',1,null,$2,null,'pcs','reviewed')`,[glueItem,glueType])
- await pg.query(`insert into bob.catalog_item_revisions(item_id,revision,name,aliases,profile_code,profile_revision,properties,material_id,material_revision,notes,has_unknown,parameter_keys,identity_document,source_kind)
-  values($1,1,'Fixture wood glue','{}','liquid',1,'{}',null,null,'Fixture only',false,'{}',jsonb_build_object('version',1,'kind','material','profile_code','liquid','profile_revision',1,'categories','["liquid","wood"]'::jsonb,'properties','{}'::jsonb,'material_id',null,'material_revision',null,'notes','Fixture only'),'seed')`,[glueItem])
- await pg.query('commit')
- return {pg,item,pick,glue:{id:glueItem,revision:1}}
+ const glue=await item('Trälim, inomhus')
+ return {pg,item,pick,glue:{id:glue.id as string,revision:glue.revision as number}}
 }
 const schedule=async(pg:any,joints:unknown)=>(await pg.query('select bob_private.construction_fastener_schedule($1::jsonb,$2::jsonb) s',[JSON.stringify(recipe),JSON.stringify(joints)])).rows[0].s
 const valid=async(pg:any,list:unknown,project:string|null=null)=>(await pg.query('select bob_private.valid_joint_fasteners($1,$2::jsonb) v',[project,JSON.stringify(list)])).rows[0].v
 
-test('the seeded screw and nail types are tagged; other materials are not fasteners',async t=>{
+test('the seeded screw, nail and glue types are tagged; other materials are not fasteners',async t=>{
  const {pg,item}=await setup();
- const kinds=(await pg.query(`select seed_key,fastener_kind from bob.material_types where fastener_kind is not null and seed_key<>'fixture_glue' order by seed_key`)).rows
+ const kinds=(await pg.query(`select seed_key,fastener_kind from bob.material_types where fastener_kind is not null order by seed_key`)).rows
  assert.deepEqual(kinds.map((r:any)=>[r.seed_key,r.fastener_kind]),[['anchor_nail','nail'],['drywall_screw','screw'],['outdoor_screw','screw'],
-  ['stainless_screw','screw'],['wire_nail_zinc','nail'],['wood_screw_zinc','screw']])
+  ['stainless_screw','screw'],['wire_nail_zinc','nail'],['wood_glue_indoor','glue'],['wood_glue_outdoor','glue'],['wood_screw_zinc','screw']])
+ // 2026-11-01: generic wood glue, one package per item, class D2 or D3; no product or volume.
+ const glues=(await pg.query(`select r.name,r.profile_code,r.properties->'grade'->>'value' grade,i.unit_code,i.identity_hash is not null hashed,
+   (select array_agg(category_code order by category_code) from bob.catalog_item_categories c where c.item_id=i.id) cats
+  from bob.catalog_items i join bob.catalog_item_revisions r on r.item_id=i.id join bob.material_types t on t.id=i.material_type_id
+  where i.project_id is null and t.fastener_kind='glue' order by r.name`)).rows
+ assert.deepEqual(glues.map((g:any)=>[g.name,g.profile_code,g.grade,g.unit_code,g.hashed,g.cats]),[
+  ['Trälim, inomhus','liquid','D2','pcs',true,['adhesive','liquid']],['Trälim, utomhus (D3)','liquid','D3','pcs',true,['adhesive','liquid']]])
  const screw=await item('Träskruv, förzinkad (inomhus) 3,5 × 30')
  assert.deepEqual((await pg.query('select bob_private.joint_fastener_item($1,$2) f',[screw.id,screw.revision])).rows[0].f,{kind:'screw',project_id:null,diameter_mm:3.5,length_mm:30})
  const plywood=await item('Plywood, björk 12 × 1220 × 2440')
