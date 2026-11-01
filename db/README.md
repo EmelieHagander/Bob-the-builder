@@ -1853,7 +1853,7 @@ applied; [hosted verification](../Docs/foundation-verification.md#form-delivery-
 records its managed version, exact function readback and rollback-only caller
 probe. This does not close browser or ordinary model/CAD acceptance.
 
-## Build guides with the drawing revision — source only, 2026-10-30
+## Build guides with the drawing revision — applied 2026-10-30
 
 Migration `20261030170000_cad_build_guide.sql`
 ([contract](../Docs/cad-adapter.md#build-guides-ikea-style--slice-1-2026-10-30)):
@@ -1879,5 +1879,5 @@ Migration `20261030170000_cad_build_guide.sql`
 
 Tests: `tests/cad-build-guide-sql.test.ts` (switch off; ten refused guide shapes on
 a copy of the table; volunteer reader passes the guide only on a readable drawing
-and hides it when the construction cannot be checked). Not applied to the hosted
-database.
+and hides it when the construction cannot be checked). Applied 2026-10-30 as hosted
+`20261030212645` / `cad_build_guide`; the switch stays off outside owner-approved runs.
