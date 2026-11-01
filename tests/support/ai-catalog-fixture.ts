@@ -34,6 +34,9 @@ let preToolPickerRows:any[]|undefined,preToolPickerVersions:Map<string,number>|u
 let preToolSheetsRows:any[]|undefined,preToolSheetsVersions:Map<string,number>|undefined
 let preToolOrderRows:any[]|undefined,preToolOrderVersions:Map<string,number>|undefined
 let preToolRepairRows:any[]|undefined,preToolRepairVersions:Map<string,number>|undefined
+let preToolOrderRestoreRows:any[]|undefined,preToolOrderRestoreVersions:Map<string,number>|undefined
+let preMaterialsWorkerRows:any[]|undefined,preMaterialsWorkerVersions:Map<string,number>|undefined
+let preBuildWorkersRows:any[]|undefined,preBuildWorkersVersions:Map<string,number>|undefined
 let preMemoryStairRows:any[]|undefined,preMemoryStairVersions:Map<string,number>|undefined
 // SQL publications drop the seed markers and name themselves, as `(prior.metadata-'seed_version'-'source_revision')||publication`.
 const publishAs=(row:any,publication:string)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication}}
@@ -382,6 +385,103 @@ for(const migration of migrations){
   for(const addition of JSON.parse(memoryStair[1])){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-memory-stair-v1'}});versions.set(addition.key,1)}
   const contract=seed.find(row=>row.key==='agent-contract.ask-bob')
   publishAs(contract,'bob-memory-stair-v1');contract.metadata.memory_stair_version=1;contract.metadata.prompt_tiers_version=1;versions.set(contract.key,versions.get(contract.key)!+1)
+ }
+ for(const [tag,profile,publication] of [['bob_mini_routing_trial','profile.ask-bob-mini','bob-mini-routing-trial-v1'],['bob_mini_routing_trial_end','profile.ask-bob','bob-mini-routing-trial-end-v1']] as const)if(new RegExp('\\$'+tag+'\\$').test(source)){
+  const routing=seed.find(row=>row.key==='routing.ask-bob')
+  routing.definition={...routing.definition,default_profile_key:profile};publishAs(routing,publication);versions.set(routing.key,versions.get(routing.key)!+1)
+ }
+ const plainWords=source.match(/\$plain_words_paragraph\$([\s\S]+?)\$plain_words_paragraph\$/)
+ if(plainWords&&/\$bob_plain_words_persona\$/.test(source)){
+  const persona=seed.find(row=>row.key==='bob.persona')
+  persona.content=persona.content+'\n\n'+plainWords[1];publishAs(persona,'bob-plain-words-v1');persona.metadata.plain_words_version=1;versions.set(persona.key,versions.get(persona.key)!+1)
+ }
+ if(/\$bob_mini_trial\$/.test(source)){
+  const base=seed.find(row=>row.key==='profile.ask-bob')
+  seed.push({key:'profile.ask-bob-mini',kind:'execution_profile',content:'',definition:{...base.definition,tier:'mini'},variables:[],metadata:{publication:'bob-mini-trial-v1'}});versions.set('profile.ask-bob-mini',1)
+  const role=seed.find(row=>row.key==='role.ask-bob')
+  role.definition={...role.definition,profile_key:'profile.ask-bob-mini'};publishAs(role,'bob-mini-trial-v1');versions.set(role.key,versions.get(role.key)!+1)
+ }
+ if(/\$bob_mini_trial_end\$/.test(source)){
+  const role=seed.find(row=>row.key==='role.ask-bob')
+  role.definition={...role.definition,profile_key:'profile.ask-bob'};publishAs(role,'bob-mini-trial-end-v1');versions.set(role.key,versions.get(role.key)!+1)
+ }
+ const materialsWorker=source.match(/\$materials_worker_additions\$([\s\S]+?)\$materials_worker_additions\$/)
+ if(materialsWorker){
+  preMaterialsWorkerRows=structuredClone(seed);preMaterialsWorkerVersions=new Map(versions)
+  const additions=JSON.parse(materialsWorker[1])
+  for(const addition of additions){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-materials-worker-v1'}});versions.set(addition.key,1)}
+  const worker=JSON.parse(source.match(/\$materials_worker_definition\$([\s\S]+?)\$materials_worker_definition\$/)![1])
+  const tool=additions.find((a:any)=>a.key==='tools.ask_materials_worker').definition
+  const policy={name:'ask_materials_worker',description:tool.description,how_to:tool.additional_description,schema_version:1,always_load:false,preload_phases:[],active:true}
+  const box=seed.find(row=>row.key==='bob.tools')
+  box.definition={...box.definition,materials_worker_version:1,workers:{materials:worker},
+   contract_keys:[...box.definition.contract_keys,'tools.ask_materials_worker'],catalog:[...box.definition.catalog,policy],
+   shelves:box.definition.shelves.map((shelf:any)=>shelf.label==='Materials, stock and Shopping'?{...shelf,tools:['ask_materials_worker',...shelf.tools]}:shelf)}
+  publishAs(box,'bob-materials-worker-v1');box.metadata.materials_worker_version=1;versions.set(box.key,versions.get(box.key)!+1)
+ }
+ const buildWorkers=source.match(/\$build_workers_additions\$([\s\S]+?)\$build_workers_additions\$/)
+ if(buildWorkers){
+  preBuildWorkersRows=structuredClone(seed);preBuildWorkersVersions=new Map(versions)
+  const additions=JSON.parse(buildWorkers[1]),publication='bob-build-workers-v1'
+  for(const {variables,...addition} of additions){seed.push({content:'',definition:{},...addition,variables:variables??[],metadata:{publication}});versions.set(addition.key,1)}
+  for(const edit of JSON.parse(source.match(/\$build_workers_edits\$([\s\S]+?)\$build_workers_edits\$/)![1])){
+   const row=seed.find(row=>row.key===edit.key)
+   if(edit.old_content!==undefined&&row.content!==edit.old_content)throw new Error('build_workers_edit_unexpected: '+edit.key)
+   if(edit.content!==undefined)row.content=edit.content
+   if(edit.variables)row.variables=edit.variables
+   if(edit.definition)row.definition={...row.definition,...edit.definition}
+   for(const {field,path,old,new:next} of edit.replace??[]){
+    const keys:(string|number)[]=path?path.map((k:string)=>/^\d+$/.test(k)?Number(k):k):[field]
+    if(field!=='content')row.definition=structuredClone(row.definition)
+    const parent=field==='content'?null:keys.slice(0,-1).reduce((o:any,k)=>o?.[k],row.definition)
+    const text=field==='content'?row.content:parent?.[keys.at(-1)!]
+    if(typeof text!=='string'||text.split(old).length!==2)throw new Error('build_workers_replace_unexpected: '+edit.key+' '+(path??[field]).join('.'))
+    if(field==='content')row.content=text.replace(old,()=>next);else parent[keys.at(-1)!]=text.replace(old,()=>next)
+   }
+   publishAs(row,publication);row.metadata.build_workers_version=1;versions.set(row.key,versions.get(row.key)!+1)
+  }
+  const workers=JSON.parse(source.match(/\$build_workers_definition\$([\s\S]+?)\$build_workers_definition\$/)![1])
+  const materials=JSON.parse(source.match(/\$build_workers_materials\$([\s\S]+?)\$build_workers_materials\$/)![1])
+  const retired=JSON.parse(source.match(/\$build_workers_retired\$([\s\S]+?)\$build_workers_retired\$/)![1])
+  const policies=Object.values(workers).map((worker:any)=>{const tool=additions.find((a:any)=>a.key==='tools.'+worker.tool).definition
+   return {name:worker.tool,description:tool.description,how_to:tool.additional_description,schema_version:1,always_load:false,preload_phases:[],active:true}})
+  const box=seed.find(row=>row.key==='bob.tools')
+  box.definition={...box.definition,build_workers_version:1,build_workers:workers,retired_tools:retired,
+   workers:{...box.definition.workers,materials:{...box.definition.workers.materials,knowledge:materials.knowledge}},
+   contract_keys:[...box.definition.contract_keys,...policies.map(p=>'tools.'+p.name)],
+   catalog:[...box.definition.catalog.map((c:any)=>c.name==='ask_materials_worker'?materials.policy:c),...policies],
+   shelves:box.definition.shelves.map((shelf:any)=>shelf.label==='Drawings and CAD'?{...shelf,tools:[...policies.map(p=>p.name),...shelf.tools]}:shelf)}
+  publishAs(box,publication);box.metadata.build_workers_version=1;versions.set(box.key,versions.get(box.key)!+1)
+ }
+ const checkReads=source.match(/\$bob_check_reads_list\$([\s\S]+?)\$bob_check_reads_list\$/)
+ if(checkReads){
+  const box=seed.find(row=>row.key==='bob.tools')
+  box.definition={...box.definition,check_reads:JSON.parse(checkReads[1])};publishAs(box,'bob-check-reads-v1');versions.set(box.key,versions.get(box.key)!+1)
+ }
+ const readbackEdits=source.match(/\$bob_report_readback_edits\$([\s\S]+?)\$bob_report_readback_edits\$/)
+ if(readbackEdits){
+  const publication='bob-report-readback-v1'
+  for(const edit of JSON.parse(readbackEdits[1])){
+   const row=seed.find(row=>row.key===edit.key)
+   for(const {field,path,old,new:next} of edit.replace??[]){
+    const keys:(string|number)[]=path?path.map((k:string)=>/^\d+$/.test(k)?Number(k):k):[field]
+    if(field!=='content')row.definition=structuredClone(row.definition)
+    const parent=field==='content'?null:keys.slice(0,-1).reduce((o:any,k)=>o?.[k],row.definition)
+    const text=field==='content'?row.content:parent?.[keys.at(-1)!]
+    if(typeof text!=='string'||text.split(old).length!==2)throw new Error('report_readback_replace_unexpected: '+edit.key+' '+(path??[field]).join('.'))
+    if(field==='content')row.content=text.replace(old,()=>next);else parent[keys.at(-1)!]=text.replace(old,()=>next)
+   }
+   publishAs(row,publication);versions.set(row.key,versions.get(row.key)!+1)
+  }
+  const howTo=JSON.parse(source.match(/\$bob_report_readback_how_to\$([\s\S]+?)\$bob_report_readback_how_to\$/)![1])
+  const box=seed.find(row=>row.key==='bob.tools')
+  box.definition={...box.definition,report_readback_version:1,catalog:box.definition.catalog.map((c:any)=>c.name in howTo?{...c,how_to:howTo[c.name]}:c)};publishAs(box,publication);versions.set(box.key,versions.get(box.key)!+1)
+ }
+ if(/\$bob_tool_order_restore\$/.test(source)){
+  preToolOrderRestoreRows=structuredClone(seed);preToolOrderRestoreVersions=new Map(versions)
+  const box=seed.find(row=>row.key==='bob.tools')
+  const{tool_sheets_version:_s,tool_repair_version:_r,...definition}=box.definition;box.definition={...definition,tool_order_version:1}
+  publishAs(box,'tool-order-restore-v1');delete box.metadata.tool_sheets_version;delete box.metadata.tool_repair_version;box.metadata.tool_order_version=1;versions.set(box.key,versions.get(box.key)!+1)
  }
  const toolRepair=source.match(/\$tool_repair_additions\$([\s\S]+?)\$tool_repair_additions\$/)
  if(toolRepair){
@@ -804,6 +904,18 @@ for(const row of preMemoryStairRows??[])if(row.kind==='tier_binding'&&row.defini
 const preMemoryStairManifest=fixtureManifest(preMemoryStairRows??seed,preMemoryStairVersions??versions,'fixture-pre-memory-stair-manifest')
 /** Manifests pinned before the 2026-10-30 memory stair: one rewritten summary and the per-turn briefing order. */
 export function preMemoryStairCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preMemoryStairManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
+for(const row of preMaterialsWorkerRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preMaterialsWorkerManifest=fixtureManifest(preMaterialsWorkerRows??seed,preMaterialsWorkerVersions??versions,'fixture-pre-materials-worker-manifest')
+/** The manifest before the materials worker pilot: Bob offers the materials tools himself. */
+export function preMaterialsWorkerCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preMaterialsWorkerManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
+for(const row of preBuildWorkersRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preBuildWorkersManifest=fixtureManifest(preBuildWorkersRows??seed,preBuildWorkersVersions??versions,'fixture-pre-build-workers-manifest')
+/** Manifests pinned before the 2026-10-31 structural designer and Rita (drawing) workers. */
+export function preBuildWorkersCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preBuildWorkersManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
+for(const row of preToolOrderRestoreRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preToolOrderRestoreManifest=fixtureManifest(preToolOrderRestoreRows??seed,preToolOrderRestoreVersions??versions,'fixture-pre-tool-order-restore-manifest')
+/** The manifest with tool sheets and the repair helper (tool_repair_version 1), before tool order was restored. */
+export function preToolOrderRestoreCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preToolOrderRestoreManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 for(const row of preToolRepairRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preToolRepairManifest=fixtureManifest(preToolRepairRows??seed,preToolRepairVersions??versions,'fixture-pre-tool-repair-manifest')
 /** The manifest with tool_order_version 1 (every tool native, mid-turn loads appended), before the tool-repair publication. */

@@ -22,6 +22,7 @@ import { humanTextIssues } from './human-text.ts'
 import { answerTextFragments, type AnswerTextOutcome } from './answer-text.ts'
 import { toolRejection } from './tool-rejection.ts'
 import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
+import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogReportReadback, readbackReads, workerOwnedTools, parseWorkerJob, runWorker } from './bob-workers.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
@@ -35,7 +36,7 @@ import { BUILDING_SCOPE_PRELOAD, createBobToolSession, catalogCoreTools, catalog
 import type { BuildingLinks } from './project-building-scope.ts'
 import type { ProjectFacts } from './project-facts.ts'
 import type { ProjectCalculator } from './project-calculator.ts'
-import { type ToolPolicyReader, type ToolboxEntry, type ToolInstructions, checkedToolSnapshot } from './project-tools/session.ts'
+import { type ToolPolicyReader, type ToolboxEntry, type ToolInstructions, type ToolGate, checkedToolSnapshot } from './project-tools/session.ts'
 import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' }
 
 /** Instruction content comes from the pinned database manifest; shelf state is data. */
@@ -82,6 +83,20 @@ function buildTurnFrame(aiCatalog: AiCatalogSession, projectId: string, briefing
  * (summaries written once, each with its source range, then the newer messages
  * with project events where they happened), then this turn: the request and
  * the fresh briefing, which change every turn. */
+/** The conversation part of the stair: summaries with their source, then the
+ * newer messages and project events by time. Bob and his workers read the same. */
+export function stairConversation(aiCatalog: AiCatalogSession, stair: NonNullable<WorkingContext['stair']>, withSummaries = true): NonNullable<OpenAIServiceOptions['messages']> {
+  type Item = { at: string; order: number; message: NonNullable<OpenAIServiceOptions['messages']>[number] }
+  const history: Item[] = [
+    ...stair.raw.map((m, i) => ({ at: m.createdAt, order: i, message: { role: m.role, content: m.text } })),
+    ...stair.events.map((e, i) => ({ at: e.at, order: stair.raw.length + i, message: { role: 'user' as const, content: aiCatalog.text('bob.memory.event') + ' ' + JSON.stringify(e) } })),
+  ].sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.order - b.order)
+  return [
+    ...(withSummaries ? stair.summaries.map(s => ({ role: 'user' as const, content: aiCatalog.text('bob.memory.summary') + '\n' + JSON.stringify({ source: { from_seq: s.seqFrom, to_seq: s.seqTo } }) + '\n' + s.text })) : []),
+    ...history.map(item => item.message),
+  ]
+}
+
 function buildTieredMessages(aiCatalog: AiCatalogSession, opts: {
   projectId: string; message: string; context: WorkingContext & { stair: NonNullable<WorkingContext['stair']> }; currentView?: CurrentView;
   orientation: ProjectOrientation; catalog: unknown; drawingRequests: unknown; projectFacts?: ProjectFacts;
@@ -89,17 +104,12 @@ function buildTieredMessages(aiCatalog: AiCatalogSession, opts: {
   const text = (key: string) => aiCatalog.text('bob.frame.' + key)
   const { footer: _footer, ...orientation } = opts.orientation
   const context = opts.context, stair = context.stair
-  type Item = { at: string; order: number; message: NonNullable<OpenAIServiceOptions['messages']>[number] }
-  const history: Item[] = [
-    ...stair.raw.map((m, i) => ({ at: m.createdAt, order: i, message: { role: m.role, content: m.text } })),
-    ...stair.events.map((e, i) => ({ at: e.at, order: stair.raw.length + i, message: { role: 'user' as const, content: aiCatalog.text('bob.memory.event') + ' ' + JSON.stringify(e) } })),
-  ].sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.order - b.order)
+  const history = stairConversation(aiCatalog, stair, false)
   const unfinished = stair.raw.filter(m => m.state !== 'completed').map(m => ({ seq: m.seq, state: m.state }))
   return [
     { role: 'user', content: aiCatalog.text('bob.memory.snapshot') + '\n' + JSON.stringify({ locked_at: stair.snapshotLockedAt, ...stair.snapshot }) },
     ...(stair.summaries.length || history.length ? [{ role: 'user' as const, content: text('prior-conversation') }] : []),
-    ...stair.summaries.map(s => ({ role: 'user' as const, content: aiCatalog.text('bob.memory.summary') + '\n' + JSON.stringify({ source: { from_seq: s.seqFrom, to_seq: s.seqTo } }) + '\n' + s.text })),
-    ...history.map(item => item.message),
+    ...stairConversation(aiCatalog, stair),
     { role: 'user', content: opts.message },
     { role: 'user', content: [text('current'), aiCatalog.text('bob.frame.binding', { project_id: opts.projectId }), text('briefing-trust'),
       ...(unfinished.length ? [aiCatalog.text('bob.memory.states'), JSON.stringify(unfinished)] : []),
@@ -153,11 +163,11 @@ export interface TurnProgress { stage: 'thinking' | 'tool' | 'finishing'; tool?:
  * reads the owner's latest instruction and the tool cards and names up to four
  * tools for the turn, so the offered list is right from the first step and
  * stays fixed. Any failure, invalid answer or empty choice keeps the phase set. */
-export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], drawingRequests: unknown, deadline: number): Promise<string[] | null> {
+export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], drawingRequests: unknown, deadline: number, exclude: Set<string> = new Set()): Promise<string[] | null> {
   const candidates = opts.aiCatalog.manifest().definitions.flatMap(row => {
     const name = row.prompt_key.startsWith('tools.') ? row.prompt_key.slice(6) : ''
     const card = row.definition.card_description
-    return row.definition_kind === 'tool_contract' && name && !core.includes(name) && typeof card === 'string' && card ? [{ name, card }] : []
+    return row.definition_kind === 'tool_contract' && name && !core.includes(name) && !exclude.has(name) && typeof card === 'string' && card ? [{ name, card }] : []
   })
   if (!candidates.length) return null
   const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'tool-picker', aiFunction: 'tool-picker', module: 'global',
@@ -243,7 +253,7 @@ export type ProjectAnswerOptions = {
   hasAccess: () => Promise<boolean>; previousResponseId?: string;
   writer?: ProjectWriter; context?: WorkingContext; deadline?: number; modelTimeoutMs?: number; unlimitedWork?: boolean;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;
-  onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string; diagnostics?:import('./execution-metrics.ts').WorkDiagnostics }) => void;
+  onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string; diagnostics?:import('./execution-metrics.ts').WorkDiagnostics; rejection?: { code: string; fields: string[]; message_id?: string } }) => void;
   /** Names of the calls this model step will execute, before the first runs.
    * Called again with the same names when a checkpointed step resumes. */
   onToolBatch?: (names: string[]) => void;
@@ -355,20 +365,14 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     return { native: [...specs.filter(spec => coreTools!.includes(spec.function.name)), opts.aiCatalog.tool(USE_TOOL, { include_manual: true })],
       sheets: specs.map(spec => spec.function.name).filter(name => !coreTools!.includes(name)) }
   }
-  const turnPreload = (phase: string | null) => {
+  const turnPreload = (phase: string | null) => [...turnTools(phase), ...workerHandOverNames, ...checkReads]
+  const turnTools = (phase: string | null) => {
     if (!phaseTools) return preloadTools
     if (toolPick) return [...preloadTools, ...toolPick]
     if (flexiblePhase === undefined) flexiblePhase = drawingWork ? 'design' : phase
     return [...preloadTools, ...(flexiblePhase ? phaseTools[flexiblePhase] ?? [] : [])]
   }
-  const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: turnPreload,
-    ...(boundedOrientation ? { orientationReader: { tools: [ORIENTATION_DIRECTORY_TOOL], execute: (raw: unknown) => {
-      if (!orientationReader) throw new Error('context_unavailable')
-      return orientationReader.execute(raw)
-    }, exportState: () => {
-      if (!orientationReader) throw new Error('context_unavailable')
-      return orientationReader.exportState()
-    } } } : {}), readPolicy: opts.readToolPolicy ?? (async () => {
+  const basePolicy: ToolPolicyReader = opts.readToolPolicy ?? (async () => {
     const policy = await seedToolPolicy()
     // Offline/injected callers use the pinned catalog's advertised versions.
     // Production always supplies the live caller-authorized policy reader.
@@ -378,7 +382,94 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const version = (definition?.definition.envelope as { schema_version?: number } | undefined)?.schema_version
       return version ? { ...row, schema_version: version } : row
     }) }
-  }) })
+  })
+  // Worker pilot (2026-10-30): a worker's tools are offered to the worker, not to Bob;
+  // Bob hands the job over through the worker's tool. See bob-workers.ts.
+  const workers = phaseTools && coreTools ? catalogWorkers(opts.aiCatalog) : null
+  // The hand-over is loaded from the first step like a permanent tool; the
+  // catalog's six permanent tools stay unchanged for runtimes without workers.
+  const workerHandOverNames = Object.values(workers ?? {}).map(worker => worker.tool)
+  // The reads Bob checks a report with are loaded from the first step too.
+  const checkReads = workers ? catalogCheckReads(opts.aiCatalog) : []
+  const reportReadback = !!workers && catalogReportReadback(opts.aiCatalog)
+  // Retired tools are hidden from Bob the same way (new manifests only).
+  const workerOwned = new Set([...workerOwnedTools(workers), ...catalogRetiredTools(opts.aiCatalog)])
+  // Never picker candidates: the workers' own tools, and the hand-overs Bob always has.
+  const workerTools = new Set([...workerOwned, ...workerHandOverNames, ...checkReads])
+  const bobPolicy: ToolPolicyReader = workerOwned.size ? async () => {
+    const policy = await basePolicy()
+    return { ...policy, tools: policy.tools.map(row => workerOwned.has(row.name) ? { ...row, active: false } : row) }
+  } : basePolicy
+  const withoutDiagnostics = (result: any) => { if (result && typeof result === 'object' && 'diagnostics' in result) { const { diagnostics: _d, ...rest } = result; return rest } return result }
+  const workerSessions = new Map<string, ReturnType<typeof createBobToolSession>>()
+  let currentStep = restored?.step ?? 0
+  let workerToolEvents = 0
+  // The project's name for the workers' personas: the locked snapshot, else one read.
+  let projectName: string | undefined
+  const readProjectName = async () => {
+    if (projectName !== undefined) return projectName
+    const fromSnapshot = (opts.context?.stair?.snapshot as { project?: { name?: unknown } } | undefined)?.project?.name
+    if (typeof fromSnapshot === 'string' && fromSnapshot.trim()) return projectName = fromSnapshot.trim()
+    const found = await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null }) as { records?: { name?: unknown }[] }
+    const name = found?.records?.[0]?.name
+    return projectName = typeof name === 'string' && name.trim() ? name.trim() : 'utan namn'
+  }
+  const workerHandOvers = Object.entries(workers ?? {}).map(([key, worker]) => ({ spec: opts.aiCatalog.tool(worker.tool),
+    // The hand-over's schema version is the pinned catalog's (Mattias's request-only hand-over is v2).
+    version: Number((opts.aiCatalog.definition('tools.' + worker.tool, 'tool_contract').definition.envelope as { schema_version?: unknown } | undefined)?.schema_version ?? 1),
+    gate: (): ToolGate => 'available',
+    execute: async (raw: unknown) => {
+      const plain = !!worker.knowledge
+      const job = parseWorkerJob(raw, plain)
+      if (!job) return { status: 'invalid', issues: [{ path: '$', expected: plain ? 'request (text)' : 'job (text) and findings (text or null)' }] }
+      let session = workerSessions.get(key)
+      if (!session) {
+        session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: () => [...worker.tools, ...worker.reads], offerWaiting: true, readPolicy: basePolicy })
+        workerSessions.set(key, session)
+      }
+      const stair = opts.context?.stair
+      const history = stair ? stairConversation(opts.aiCatalog, stair) : (opts.context?.recent.slice(0, -1) ?? []).map(m => ({ role: m.role, content: m.text }))
+      const workerStep = currentStep
+      return runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
+        session, hasAccess: opts.hasAccess, deadline, ...(opts.modelTimeoutMs ? { modelTimeoutMs: opts.modelTimeoutMs } : {}),
+        readCurrent: async () => key === 'materials' ? opts.lookup.search({ dataset: 'materials', query: null, status: null, area_id: null, record_id: null }) : null,
+        // In order, one at a time: the journal replays reads by position.
+        // Readback (2026-10-31): the saved records, read in order through the worker's own session.
+        ...(worker.knowledge && reportReadback ? { readback: async (receipts: Record<string, unknown>[]) => {
+          const records: unknown[] = []
+          for (const read of readbackReads(receipts)) {
+            if (!('tool' in read)) { records.push({ [read.label]: { status: 'not_read', reason: read.not_read } }); continue }
+            let record: unknown
+            try { record = withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments))) }
+            catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; record = { status: 'unavailable' } }
+            const text = JSON.stringify(record) ?? ''
+            records.push({ [read.label]: text.length <= 8000 ? record : { status: 'too_large', note: 'Read it with your own tools.' } })
+          }
+          return records
+        } } : {}),
+        ...(worker.knowledge && opts.projectContext ? { images: { carrier: () => opts.projectContext!.carrier() as NonNullable<OpenAIServiceOptions['messages']>, confirmDelivery: () => opts.projectContext!.confirmDelivery() } } : {}),
+        ...(worker.knowledge ? { variables: { project_name: await readProjectName() }, readKnowledge: async () => {
+          const knowledge: Record<string, unknown> = {}
+          for (const read of worker.knowledge!) {
+            try { knowledge[read.label] = withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments))) }
+            catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; knowledge[read.label] = { status: 'unavailable' } }
+          }
+          return knowledge
+        } } : {}),
+        onTool: ({ name, status, ms, rejection }) => {
+          if (completionAware && writeTools.has(name)) workResults.push({ tool: name, status })
+          // Distinct event keys: Bob's own calls use index 0..n of the step.
+          opts.onTool?.({ name, status, step: workerStep + 1, index: 100 + workerToolEvents++, ms, ...(rejection ? { rejection } : {}) })
+        } })
+    } }))
+  const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: turnPreload,
+    ...(boundedOrientation ? { orientationReader: { tools: [ORIENTATION_DIRECTORY_TOOL], execute: (raw: unknown) => {
+      if (!orientationReader) throw new Error('context_unavailable')
+      return orientationReader.execute(raw)
+    }, exportState: () => {
+      if (!orientationReader) throw new Error('context_unavailable')
+      return orientationReader.exportState()
+    } } } : {}), readPolicy: bobPolicy, ...(workerHandOvers.length ? { extraTools: workerHandOvers } : {}) })
   if (restored) toolbox.restoreState(restored.toolbox)
   // The manifest is pinned before any journal operation. Do not add even an
   // undefined option or change the call sequence of an older running turn.
@@ -440,7 +531,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   if (phaseTools && Array.isArray(drawingRequests) && drawingRequests.length) drawingWork = true
   const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
   if (!restored && opts.toolPicker === true && phaseTools && coreTools
-    && opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.tool-picker')) toolPick = await pickTurnTools(opts, coreTools, drawingRequests, deadline)
+    && opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.tool-picker')) toolPick = await pickTurnTools(opts, coreTools, drawingRequests, deadline, workerTools)
   if (restored?.initial.directory) {
     const directory = restoreOrientationDirectory(restored.initial.directory as Parameters<typeof restoreOrientationDirectory>[0], { projectId: opts.projectId, hasAccess: opts.hasAccess })
     orientationReader = directory.reader
@@ -495,6 +586,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const next = async (step: number) => { phase = 'ready'; request = undefined; pendingResponse = undefined; toolIndex = 0; await save(step + 1) }
   if (!restored) await save(0)
   for (let step = restored?.step ?? 0; unlimitedWork || step < steps; step++) {
+    currentStep = step
     if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
     if (opts.validateCurrentView && !await opts.validateCurrentView()) return { ok: false, error: 'context_unavailable' }
     if (Date.now() >= deadline) { observe('failed'); return { ok: false, error: 'turn_timeout' } }
@@ -666,7 +758,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           : completionAware && typeof result?.validation?.code === 'string' ? result.validation.code : undefined
         try { opts.onTool?.({ name: toolName, status: String(result?.status ?? 'returned'), step: step + 1, index, ms: Date.now() - began,
           ...(result?.diagnostics?{diagnostics:result.diagnostics}:{}),
-          ...(validationCode !== undefined ? { validation_code: validationCode } : {}) }) } catch { /* diagnostics only */ }
+          ...(validationCode !== undefined ? { validation_code: validationCode } : {}), ...(rejection ? { rejection } : {}) }) } catch { /* diagnostics only */ }
         // Cache hits are worker-local telemetry. Their loss on resume must not
         // change model/journal bytes for the same exact source result.
         if (['work_read','work_change','work_check'].includes(result?.diagnostics?.operation)) {

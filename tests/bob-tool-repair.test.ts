@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { catalogFixture, catalogCall, preToolRepairCatalogFixture } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, catalogCall, preToolRepairCatalogFixture, preToolOrderRestoreCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { catalogCoreTools } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { runProjectAnswer, seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
 import { repairPreservesValues, valuesNotUsed } from '../supabase/functions/_shared/bob-tool-repair.ts'
@@ -19,6 +19,9 @@ import type { OpenAIServiceOptions } from '../supabase/functions/_shared/openai-
 // wrote for a tool, a small read-only role gets that tool's real definition and
 // calls it once with the same values in the right shape; the server checks that
 // nothing was added or changed and runs the tool through the same gates.
+// Rolled back after paid box run 7 (tool order again); these tests read the
+// manifest that published it, which pinned jobs may still carry.
+const repairCatalog = () => preToolOrderRestoreCatalogFixture()
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
 const call = (id: string, name: string, args: unknown) => ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } })
 const READ_ALL_NULL = { artifact_id: null, revision: null, after: null, view: 'overview', ids: [], result_id: null, section: null, step_id: null, work_kind: null }
@@ -76,7 +79,7 @@ const toolOutput = (options: OpenAIServiceOptions) => JSON.parse(String(options.
 const bobCalls = [() => ({ success: true, model: 'fixture', usage, responseId: 'r1', toolCalls: [call('c1', 'use_tool', { name: 'read_construction_draft', arguments: { view: 'overview' } })] })]
 
 test('a rejected call goes once to the small role with the real definition; the reshaped call runs and Bob learns its shape', async () => {
-  const catalog = catalogFixture(), core = catalogCoreTools(catalog)!
+  const catalog = repairCatalog(), core = catalogCoreTools(catalog)!
   assert.equal(catalog.definition('bob.tools', 'tool_contract').definition.tool_repair_version, 1)
   const { requests, repairs, ran } = await turn(catalog, bobCalls, options => ({ success: true, model: 'fixture', usage,
     toolCalls: [call('r1', options.tools![0].function.name, READ_FIXED)] }))
@@ -96,7 +99,7 @@ test('a rejected call goes once to the small role with the real definition; the 
 })
 
 test('a repair that adds or changes a value, fails or is absent leaves Bob the original rejection', async () => {
-  const catalog = catalogFixture()
+  const catalog = repairCatalog()
   for (const repair of [
     (options: OpenAIServiceOptions) => ({ success: true, model: 'fixture', usage, toolCalls: [call('r1', options.tools![0].function.name, { ...READ_ALL_NULL, view: 'parts' })] }),
     () => ({ success: false, model: 'fixture', error: 'unavailable' }),
@@ -119,9 +122,15 @@ test('manifests before the publication never ask the small role', async () => {
 })
 
 test('the small role is read-only, mini tier and has no tools of its own', () => {
-  const catalog = catalogFixture(), role = catalog.definition('role.tool-repair', 'role').definition
+  const catalog = repairCatalog(), role = catalog.definition('role.tool-repair', 'role').definition
   assert.equal(role.function_name, 'tool-repair'); assert.deepEqual(role.tool_keys, [])
   assert.equal(catalog.definition('agent-contract.tool-repair').definition.writes, 'none')
   assert.equal(catalog.definition(String(role.profile_key)).definition.tier, 'mini')
   assert.match(catalog.text('tool-repair.contract'), /Never add, guess, compute, round or change a value/)
+})
+
+test('new jobs use tool order again: no use_tool, no repair', () => {
+  const box = catalogFixture().definition('bob.tools', 'tool_contract')
+  assert.equal(box.definition.tool_order_version, 1)
+  assert.equal(box.definition.tool_sheets_version, undefined); assert.equal(box.definition.tool_repair_version, undefined)
 })

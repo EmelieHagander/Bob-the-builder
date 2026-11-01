@@ -556,12 +556,48 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Byggt 2026-10-30, inte installerat — fast verktygslista och en hjälpare för avvisade anrop (ägarbeslut, ["wrench wench"](ask-bob-tools.md#tool-repair)):**
-Bobs verktygslista är alltid densamma (standardverktygen och `use_tool`), som
-först bestämt. När servern avvisar Bobs argument sätter en liten modell anropet
-i rätt form med bara Bobs egna värden; servern kontrollerar att inget lagts
-till eller ändrats. Nästa: ägarens OK att slå ihop, driftsätta `bob-worker` och
-`ask-bob`, köra `20261030070000` och sedan ett nytt lådprov.
+**Installerat 2026-10-31 — billigare byggteam; lådprov 13 godkänt (`bob-worker` v162, `ask-bob` v194, [bevis](foundation-verification.md#build-team-cost-2026-10-31)):**
+egna cachenycklar för kollegorna, Bobs kontrolläsningar från första steget och
+skälet till varje avvisat anrop i körloggen. Lådprovet kostade USD 0,86 (prov 12:
+1,41) med 37 anrop (52); Konrad USD 0,42 (0,74), Bob USD 0,31 (0,52). Nästa: koder
+för de avvisningar som bara har ett meddelande, och en kodläsning av det sparade i
+kollegornas rapport.
+
+**Installerat 2026-10-31 — byggteamet; lådprov 12 godkänt (`bob-worker` v161, `ask-bob` v193, [bevis](foundation-verification.md#build-team-install-2026-10-31)):**
+Bob lämnade konstruktionen till Konrad och ritningen till Rita; koden godkände
+ritningen utan granskningsanrop. Bobs egen kostnad halverades (USD 0,52 mot 0,96),
+men totalen blev USD 1,41 mot 1,13 eftersom Konrad står för USD 0,74. Inga
+klartextomskrivningar (0 av 3 turer). Nästa: göra Konrads anrop billigare.
+
+**Byggt 2026-10-31 — byggteamet:**
+Bob samordnar och pratar med beställaren. Konrad (konstruktör) äger
+konstruktionen, Rita ritar den och Mattias sköter materialen. Bob ber om arbete med
+vanliga ord utan värden; varje kollega läser sin projektkunskap från databasen.
+Koden ensam kontrollerar ritningen. Den gamla genvägen för lådritningar är borttagen
+för nya jobb. Texterna är godkända av ägaren.
+
+**2026-10-31 — Bob på minimodellen provad och återställd; klartextstycket installerat ([bevis](foundation-verification.md#mini-trial-2026-10-31)):**
+lådprov 11 misslyckades med Bob på minimodellen: konceptturen avbröts efter 15
+minuter (standard: sparad på 5 minuter). Mini-Bob behövde 22 anrop i stället för
+10, fick 7 konstruktionssparningar avvisade och skickade Mattias fem gånger
+(31 anrop). Bob är tillbaka på standard. En samordnare på mini kräver att
+konstruktionsarbetet först flyttas till en arbetare på standard. `bob.persona`
+v3 har nu ett stycke om att skriva med enkla ord; det är inte mätt i ett betalt
+prov än.
+
+**Installerat 2026-10-30 — pilot: Bob som samordnare med en arbetare, Mattias (material) (`bob-worker` v160, `ask-bob` v192, [bevis](foundation-verification.md#materials-worker-install-2026-10-30)):**
+lådprov 9 klarades med alla tre turer sparade: 32 anrop, USD 1,02 (lådprov 6:
+29 anrop, USD 0,93). Bob gav Mattias ett materialjobb; Mattias gjorde det på 3
+anrop utan avvisade anrop. Lådprovet har bara ett materialjobb, så piloten
+behöver mätas där materialarbetet är större innan fler arbetare och
+fackspecialister byggs.
+
+**2026-10-30 — hjälparen ("wrench wench") provad och borttagen; verktygsordning gäller igen ([bevis](foundation-verification.md#box-paid-run7-2026-10-30)):**
+lådprov 7 klarades men Bob behövde 40 anrop i stället för 20 och kostnaden blev
+USD 1,22 i stället för 0,93. Hjälparen rättade 1 av 10 avvisade anrop, eftersom
+de flesta gällde innehåll, inte form. Nya jobb använder alla verktyg som riktiga
+verktyg igen. Kvar: att hitta vad mer som ändras mellan turerna och kostar cache
+(cirka USD 0,06 per lådprov).
 
 **Installerat 2026-10-30 — alla verktyg tillbaka som riktiga verktyg; lådprov 6 godkänt (`bob-worker` v157, `ask-bob` v189, [bevis](foundation-verification.md#tool-order-install-2026-10-30)):**
 lådprov 5 misslyckades (USD 0,68) när verktygen gick via `use_tool`. Med

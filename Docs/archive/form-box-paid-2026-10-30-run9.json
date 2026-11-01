@@ -1,0 +1,176 @@
+{
+ "run": "https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41135551980",
+ "workflow": "live-form-acceptance.yml",
+ "scenario": "box",
+ "config": "baseline",
+ "head": "918f7cd7df332085237a9417f9c9b1cbc8aa4687",
+ "functions": {
+  "bob-worker": 160,
+  "ask-bob": 192
+ },
+ "catalog": {
+  "bob.tools": "v32, tool_order_version 1, materials_worker_version 1"
+ },
+ "passed": true,
+ "turns": [
+  {
+   "step": "concept",
+   "turn": "cb9bb55d-837d-46d8-84f5-a129b7a177ba",
+   "delivery": "saved",
+   "wall": "7.5 min",
+   "calls": {
+    "ask-bob": 8,
+    "materials-worker": 3,
+    "tool-picker": 1,
+    "completion-gate": 1
+   },
+   "usd": 0.4385
+  },
+  {
+   "step": "width_change",
+   "turn": "a3fcce96-6458-47fa-a46c-aa3f7463c640",
+   "delivery": "saved",
+   "wall": "2.5 min",
+   "calls": {
+    "ask-bob": 7,
+    "tool-picker": 1,
+    "completion-gate": 1
+   },
+   "usd": 0.2717
+  },
+  {
+   "step": "final_drawing",
+   "turn": "af882880-902c-41b9-a3a4-22093a76a165",
+   "delivery": "saved",
+   "wall": "3.5 min",
+   "calls": {
+    "ask-bob": 7,
+    "cad-reviewer": 1,
+    "tool-picker": 1,
+    "completion-gate": 1
+   },
+   "usd": 0.3062
+  }
+ ],
+ "total": {
+  "calls": 32,
+  "bob_calls": 22,
+  "mattias_calls": 3,
+  "usd": 1.0166,
+  "input_tokens": 567481,
+  "cached_input_tokens": 335360,
+  "cached_share": 0.591
+ },
+ "mattias": {
+  "hand_overs": 1,
+  "calls": 3,
+  "usd": 0.0757,
+  "input_tokens": 28159,
+  "cached_input_tokens": 16384,
+  "tools": [
+   "search_material_catalog ok",
+   "read_material_catalog ok",
+   "read_material_catalog ok"
+  ],
+  "rejected": 0
+ },
+ "tools": [
+  {
+   "tool": "ask_materials_worker",
+   "status": "ok",
+   "count": 1
+  },
+  {
+   "tool": "change_construction_parameters",
+   "status": "saved",
+   "count": 2
+  },
+  {
+   "tool": "check_construction_draft",
+   "status": "checked",
+   "count": 1
+  },
+  {
+   "tool": "create_solution_alternative",
+   "status": "saved",
+   "count": 1
+  },
+  {
+   "tool": "describe_tool",
+   "status": "ok",
+   "count": 3
+  },
+  {
+   "tool": "design_project_cad",
+   "status": "ready",
+   "count": 1
+  },
+  {
+   "tool": "read_construction_draft",
+   "status": "invalid",
+   "count": 1
+  },
+  {
+   "tool": "read_construction_draft",
+   "status": "ok",
+   "count": 11
+  },
+  {
+   "tool": "read_material_catalog",
+   "status": "ok",
+   "count": 2
+  },
+  {
+   "tool": "read_project_edit_context",
+   "status": "ok",
+   "count": 1
+  },
+  {
+   "tool": "read_solution_context",
+   "status": "ok",
+   "count": 2
+  },
+  {
+   "tool": "save_cad_design",
+   "status": "saved",
+   "count": 1
+  },
+  {
+   "tool": "save_construction_draft",
+   "status": "saved",
+   "count": 1
+  },
+  {
+   "tool": "search_material_catalog",
+   "status": "ok",
+   "count": 1
+  },
+  {
+   "tool": "search_project_data",
+   "status": "ok",
+   "count": 1
+  }
+ ],
+ "comparison": {
+  "run6": {
+   "calls": 29,
+   "bob_calls": 20,
+   "usd": 0.93,
+   "cached_share": 0.568,
+   "rejected": 1,
+   "deliveries": [
+    "asked",
+    "saved",
+    "saved"
+   ]
+  },
+  "run7": {
+   "calls": 57,
+   "bob_calls": 40,
+   "usd": 1.22,
+   "cached_share": 0.779,
+   "rejected": 9
+  }
+ },
+ "note": "The box scenario has one materials job, so this measures the hand-over, not a materials-heavy turn."
+}

@@ -1,7 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {createCadAssistant,fixtureDesignReadiness} from './support/colleague-catalog-fixture.ts'
-import {catalogFixture} from './support/ai-catalog-fixture.ts'
+import {catalogFixture,preBuildWorkersCatalogFixture} from './support/ai-catalog-fixture.ts'
 import {shapeId,handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {parameterPlan} from './support/cad-parameter-fixture.ts'
 import {checkConstruction} from '../supabase/functions/_shared/construction-checks.ts'
@@ -10,7 +10,7 @@ import {compileCadParameters} from '../supabase/functions/_shared/cad-parameters
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {constructionEvidenceBinding,constructionEvidenceContract} from '../supabase/functions/_shared/construction-evidence.ts'
 import {drawingCatalogConfiguration} from '../supabase/functions/_shared/drawing-runtime.ts'
-import {buildCadReviewPacket,codeFindingReview,formEvidenceCoverage,parseTargetedCadReview,CAD_TARGETED_REVIEW_ROLE,CAD_TARGETED_REVIEW_SCHEMA} from '../supabase/functions/_shared/cad-targeted-review.ts'
+import {CAD_DRAWING_CHECK,codeDrawingCheckEnabled,buildCadReviewPacket,codeFindingReview,formEvidenceCoverage,parseTargetedCadReview,CAD_TARGETED_REVIEW_ROLE,CAD_TARGETED_REVIEW_SCHEMA} from '../supabase/functions/_shared/cad-targeted-review.ts'
 import type {DesignHandoff} from '../supabase/functions/_shared/cad-review.ts'
 import {parseTargetedReviewRecord} from '../supabase/functions/_shared/cad-targeted-review.ts'
 import {isDrawingModelCall} from '../supabase/functions/_shared/bob-model-budget.ts'
@@ -23,7 +23,8 @@ const resultId='cs_'+'a'.repeat(64)
 /** The inert publication with its role enabled, as the later approved
  * enablement would publish it. The published role is disabled. */
 function targetedCatalog(){
- return catalogFixture(snapshot=>{
+ // Pinned before the code-only drawing check (2026-10-31), which otherwise takes precedence.
+ return preBuildWorkersCatalogFixture(snapshot=>{
   const role=snapshot.definitions.find(row=>row.prompt_key===CAD_TARGETED_REVIEW_ROLE)!
   role.definition={...role.definition,enabled:true};role.id+=':enabled';role.payload_hash+=':enabled'
  })
@@ -52,13 +53,13 @@ function observation(draft:any,status:'failed'|'properties_passed',binding=const
     requirements:[{feature_id:'f1',requirement:feature.description,property_check_ids:['p1'],status,functional_fidelity:'unverified'}],
     whole_delivery_ready:false,fabrication_ready:false}}}
 }
-function runtime(opts:{targeted:boolean;stored?:(draft:any)=>any;readerFails?:boolean;reply?:(o:any)=>any;store?:any;owner?:string;sheet?:string;runtime?:string}){
+function runtime(opts:{targeted:boolean;codeOnly?:boolean;stored?:(draft:any)=>any;readerFails?:boolean;reply?:(o:any)=>any;store?:any;owner?:string;sheet?:string;runtime?:string}){
  const {draft,catalog}=fixture(),calls:any[]=[],reads:any[]=[]
  const check=()=>checkedConstructionForDrawing({projectId:draft.projectId,message:'Draw this construction',hasAccess:async()=>true,read:async()=>structuredClone(draft),
   readCatalog:async(id,revision)=>({status:'ok',projectId:draft.projectId,record:catalog.get(id+'@'+revision)}),readSources:async()=>({project:new Map(),physical:new Map()})},artifact,1)
  const assistant=createCadAssistant({projectId:draft.projectId,userId:'owner',ownerRequest:opts.owner??'Draw this exact bracket',hasAccess:async()=>true,available:true,deadline:Date.now()+200000,
   ...(opts.store?{requestStore:opts.store}:{}),...(opts.runtime?{runtimeVersion:async()=>opts.runtime!}:{}),
-  ...(opts.targeted?{aiCatalog:targetedCatalog()}:{}),
+  ...(opts.codeOnly?{aiCatalog:catalogFixture()}:opts.targeted?{aiCatalog:targetedCatalog()}:{}),
   makeLookup:()=>createProjectLookup(draft.projectId,async(_p,i)=>({data:{records:i.dataset==='target'?[{id:'project',revision:1,solution_id:material}]:[],related:[],truncated:false},error:null}),1000,40),
   readDesignReadiness:async(targetRevision,purpose,areaId)=>{
    const readiness=fixtureDesignReadiness(draft.projectId,material,targetRevision,areaId??null,purpose??'concept')
@@ -172,7 +173,7 @@ test('packet keeps every requirement and the strict parser rejects omissions and
 })
 
 test('the inert publication changes no CAD runtime identity; only enabling the role adds it',()=>{
- const published=catalogFixture().manifest()
+ const published=preBuildWorkersCatalogFixture().manifest()
  const before=structuredClone(published);before.definitions=before.definitions.filter(row=>row.metadata.publication!=='targeted-cad-review-v1')
  assert.equal(published.definitions.filter(row=>row.metadata.publication==='targeted-cad-review-v1').length,5)
  assert.equal(published.definitions.find(row=>row.prompt_key===CAD_TARGETED_REVIEW_ROLE)!.definition.enabled,false)
@@ -249,4 +250,27 @@ test('the targeted reviewer shares the durable CAD review reservation; other rol
  assert.equal(isDrawingModelCall(authority('role.cad-targeted-reviewer'),'cad-reviewer'),true)
  assert.equal(isDrawingModelCall(authority('role.ask-bob'),'cad-reviewer'),false)
  assert.equal(isDrawingModelCall(authority('role.cad-targeted-reviewer','ask-bob'),'ask-bob'),false)
+})
+
+// Owner decision 2026-10-31: Rita draws and code alone checks the drawing.
+test('code-only check: a clean candidate is accepted without any model call and records the code basis',async()=>{
+ assert.equal(codeDrawingCheckEnabled(catalogFixture().manifest()),true)
+ assert(drawingCatalogConfiguration(catalogFixture().manifest()).definitions.some((row:any)=>row.key===CAD_DRAWING_CHECK),'the switch enters the drawing runtime fingerprint')
+ const f=runtime({targeted:false,codeOnly:true,stored:draft=>observation(draft,'properties_passed')})
+ const result=await f.assistant.consult(request)
+ assert.equal(result.status,'ready',JSON.stringify(result))
+ assert.equal(f.calls.length,0,'no reviewer model call')
+ assert.equal(result.quality.basis.mode,'code')
+ assert.equal(result.quality.review.verdict,'pass')
+ assert(result.quality.review.requirements.every((r:any)=>r.status==='unresolved'),'no model judged the pictures')
+ assert(f.assistant.candidate,'the candidate can be saved')
+})
+
+test('code-only check: a failed stored check sends the drawing back without any model call',async()=>{
+ const f=runtime({targeted:false,codeOnly:true,stored:draft=>observation(draft,'failed')})
+ const result=await f.assistant.consult(request)
+ assert.equal(result.status,'needs_data',JSON.stringify(result))
+ assert.equal(result.review.verdict,'revise'); assert.equal(result.saved,false)
+ assert.equal(f.calls.length,0)
+ assert.equal(f.assistant.candidate,null)
 })

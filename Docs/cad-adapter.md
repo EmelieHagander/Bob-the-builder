@@ -53,6 +53,33 @@ gate described below remains implemented until its replacement is verified and
 released. This documentation does not bypass it or publish a new catalog/runtime.
 [State](bob-delivery-flow.md#form-next) owns that implementation and acceptance.
 
+<a id="code-drawing-check"></a>
+## Code-only drawing check — installed 2026-10-31 ([run 12](foundation-verification.md#build-team-install-2026-10-31))
+
+**Owner decision: no AI reviews a drawing.** Rita now draws
+([build team](ask-bob-tools.md#build-team)). The drawing is generated exactly from
+Konrad's checked construction, and Konrad checks the construction against the
+owner's intent and images before it is drawn. With the catalog switch
+`cad.drawing-check` (`mode: code`, publication `bob-build-workers-v1`):
+
+- `design_project_cad` keeps every check that runs before review today and builds
+  the [targeted review packet](#targeted-cad-review). Its code findings decide: a
+  missing requested view or a failed stored FORM check sends the candidate back to
+  the K2 checkpoint, as in the targeted review.
+- Otherwise the candidate is accepted **without a model call**, with
+  `basis: {mode: code, version, packet}`. Every requirement stays `unresolved`
+  in the record: no model judged the pictures. No targeted reuse record is kept.
+- The save fences, `reviewed_candidate` commitment and Step-link receipts are
+  unchanged. The switch's key starts with `cad.`, so it enters the drawing runtime
+  fingerprint and in-flight requests never mix the two modes.
+- Pinned manifests keep the full AI review. Source: `cad-targeted-review.ts`
+  (`codeDrawingCheckEnabled`, `codePassReview`), the review gate in
+  `cad-assistant.ts`; tests in `cad-targeted-review.test.ts`.
+
+Not covered: a mirrored or wrong-side construction is caught only if Konrad
+catches it before drawing; reference images are no longer compared with the
+rendered sheets.
+
 <a id="targeted-cad-review"></a>
 ## Targeted CAD review — prepared, inactive, 2026-10-28
 

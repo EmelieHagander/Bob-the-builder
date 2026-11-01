@@ -1,0 +1,182 @@
+{
+ "run": "https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41113184182",
+ "workflow": "live-form-acceptance.yml",
+ "scenario": "box",
+ "config": "baseline",
+ "head": "d554caabf586de9d2bba4bb765230653213a94e7",
+ "functions": {
+  "bob-worker": 158,
+  "ask-bob": 190
+ },
+ "catalog": {
+  "bob.tools": "v30, tool_sheets_version 1, tool_repair_version 1"
+ },
+ "passed": true,
+ "turns": [
+  {
+   "step": "concept",
+   "turn": "a0ea2e74-066a-4747-866c-76b0fe075c88",
+   "delivery": "partial",
+   "bob_calls": 17,
+   "repairs": 6
+  },
+  {
+   "step": "width_change",
+   "turn": "57736e0a-f92d-4292-a2a7-898cd32d5a59",
+   "delivery": "saved",
+   "bob_calls": 8,
+   "repairs": 0
+  },
+  {
+   "step": "final_drawing",
+   "turn": "3bf88e19-0953-4267-a0a2-0363a40ce324",
+   "delivery": "saved",
+   "bob_calls": 15,
+   "repairs": 4
+  }
+ ],
+ "usage_note": "Another owner job ran in parallel; usage rows were matched to this run's model events by role, cached tokens and time.",
+ "total": {
+  "calls": 57,
+  "bob_calls": 40,
+  "tool_repair_calls": 10,
+  "usd": 1.2191,
+  "input_tokens": 896815,
+  "cached_input_tokens": 698880,
+  "cached_share": 0.779
+ },
+ "tools": [
+  {
+   "tool": "change_construction_parameters",
+   "status": "saved",
+   "count": 1
+  },
+  {
+   "tool": "check_construction_draft",
+   "status": "checked",
+   "count": 1
+  },
+  {
+   "tool": "create_solution_alternative",
+   "status": "saved",
+   "count": 1
+  },
+  {
+   "tool": "describe_tool",
+   "status": "ok",
+   "count": 11
+  },
+  {
+   "tool": "design_project_cad",
+   "status": "ready",
+   "count": 1
+  },
+  {
+   "tool": "read_construction_delivery",
+   "status": "invalid",
+   "count": 1
+  },
+  {
+   "tool": "read_construction_delivery",
+   "status": "ok",
+   "count": 1
+  },
+  {
+   "tool": "read_construction_draft",
+   "status": "invalid",
+   "count": 2
+  },
+  {
+   "tool": "read_construction_draft",
+   "status": "ok",
+   "count": 4
+  },
+  {
+   "tool": "read_material_catalog",
+   "status": "invalid",
+   "count": 2
+  },
+  {
+   "tool": "read_material_catalog",
+   "status": "ok",
+   "count": 1
+  },
+  {
+   "tool": "read_project_record_section",
+   "status": "ok",
+   "count": 1
+  },
+  {
+   "tool": "read_solution_context",
+   "status": "ok",
+   "count": 5
+  },
+  {
+   "tool": "read_work_context",
+   "status": "ok",
+   "count": 4
+  },
+  {
+   "tool": "save_cad_design",
+   "status": "saved",
+   "count": 1
+  },
+  {
+   "tool": "save_construction_draft",
+   "status": "denied",
+   "count": 1
+  },
+  {
+   "tool": "save_construction_draft",
+   "status": "invalid",
+   "count": 1
+  },
+  {
+   "tool": "save_construction_draft",
+   "status": "saved",
+   "count": 1
+  },
+  {
+   "tool": "search_material_catalog",
+   "status": "invalid",
+   "count": 3
+  },
+  {
+   "tool": "search_material_catalog",
+   "status": "ok",
+   "count": 1
+  },
+  {
+   "tool": "search_project_data",
+   "status": "ok",
+   "count": 2
+  }
+ ],
+ "rejected_after_repair": 9,
+ "repairs_that_fixed": 1,
+ "describe_tool_calls": 11,
+ "turn_start_cache": {
+  "width_change": [
+   11955,
+   4608
+  ],
+  "final_drawing": [
+   12083,
+   6656
+  ]
+ },
+ "comparison": {
+  "run4": {
+   "bob_calls": 24,
+   "usd": 1.17,
+   "cached_share": 0.544
+  },
+  "run6": {
+   "bob_calls": 20,
+   "usd": 0.93,
+   "cached_share": 0.568,
+   "rejected": 1
+  }
+ },
+ "finding": "The fixed list raised the cache share but doubled Bob's calls: 9 rejections (mostly about meaning, e.g. domain_fields) that the shape-only helper could not fix, and 11 describe_tool calls. Owner chose to restore tool order."
+}

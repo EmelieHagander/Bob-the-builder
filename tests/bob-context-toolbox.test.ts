@@ -2,7 +2,7 @@ import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {createToolSession,type ToolGate,type ToolPolicy} from '../supabase/functions/_shared/project-tools/session.ts'
 import {buildBobHands,bobColleagues} from '../supabase/functions/_shared/bob-prompt.ts'
-import {catalogFixture,preContextStrategyCatalogFixture} from './support/ai-catalog-fixture.ts'
+import {catalogFixture,preContextStrategyCatalogFixture,preBuildWorkersCatalogFixture} from './support/ai-catalog-fixture.ts'
 import {countContextTokens} from '../supabase/functions/_shared/bob-token-budget.ts'
 
 function fixture(){
@@ -63,17 +63,22 @@ test('colleague cards and their handoffs are limited to actual visible delegatio
  assert.deepEqual(bobColleagues(current,['edit_project_plan']),[],'focused plan edits use deterministic validation')
  for(const tool of ['compile_project_plan','audit_project_plan'])assert.deepEqual(bobColleagues(current,[tool]).map(c=>c.name),['Plantus','Vera'])
  assert(bobColleagues(current,['compile_project_plan','audit_project_plan','edit_project_plan','design_project_cad','generate_project_image']).every(c=>!['Daisy','Kjell'].includes(c.name)))
- assert.deepEqual(bobColleagues(current,['design_project_cad']).map(c=>c.name),['Rita'])
+ // No AI reviewer in new manifests (2026-10-31): code checks drawings; pinned manifests keep Rita's review card.
+ assert.deepEqual(bobColleagues(current,['design_project_cad']),[])
+ assert.deepEqual(bobColleagues(preBuildWorkersCatalogFixture(),['design_project_cad']).map(c=>c.name),['Rita'])
  for(const c of bobColleagues(current,['design_project_cad','compile_project_plan','generate_project_image'])){
   assert(countContextTokens(`${c.name} ${c.title} ${c.purpose}`)<=80,c.name)
   assert(c.instructions.length>0)
  }
- const hands=buildBobHands(current,[current.tool('describe_tool')],[{name:'design_project_cad',group:'Drawings',state:'offered',description:current.tool('design_project_cad',{card:true}).function.description,instructionLoaded:false}])
+ const pinned=preBuildWorkersCatalogFixture()
+ const hands=buildBobHands(pinned,[pinned.tool('describe_tool')],[{name:'design_project_cad',group:'Drawings',state:'offered',description:pinned.tool('design_project_cad',{card:true}).function.description,instructionLoaded:false}])
  assert.match(hands,/Rita/);assert.match(hands,/describe_tool/);assert.doesNotMatch(hands,/Daisy|Kjell|Plantus|Statusspråk|Samtalsminnet/)
+ const now=buildBobHands(current,[current.tool('describe_tool')],[{name:'design_project_cad',group:'Drawings',state:'offered',description:current.tool('design_project_cad',{card:true}).function.description,instructionLoaded:false}])
+ assert.doesNotMatch(now,/Rita|Daisy|Kjell/,'no reviewer card; the drawing is checked in code')
 })
 test('oversized catalog cards fail explicitly without truncating instructions',async()=>{
  const f=fixture();f.rows[0].description='detail '.repeat(90)
  await assert.rejects(f.session.prepare(),/tool_card_too_large/)
- const current=catalogFixture(m=>{m.definitions.find(d=>d.prompt_key==='role.cad-reviewer')!.definition.purpose='detail '.repeat(90)})
+ const current=preBuildWorkersCatalogFixture(m=>{m.definitions.find(d=>d.prompt_key==='role.cad-reviewer')!.definition.purpose='detail '.repeat(90)})
  assert.throws(()=>bobColleagues(current,['design_project_cad']),/colleague_card_too_large/)
 })

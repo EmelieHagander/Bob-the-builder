@@ -71,6 +71,14 @@ a rewrite that still contains references is delivered as written. The delivery
 metric records only `answer_text` (`clean`, `rewritten`, `rewrite_unchanged`,
 `delivered_with_issues`) and `answer_text_issues`.
 
+**Plain words from the start — installed 2026-10-31 (owner decision; [evidence](foundation-verification.md#mini-trial-2026-10-31)).**
+13 of 25 recent turns, and all three in box run 10, needed the rewrite round.
+`bob.persona` v3 (`plain_words_version` 1) ends with an owner-approved
+paragraph: when Bob writes for people he names things by what they are and
+leaves IDs, codes, tool names and revision numbers to the tools. The rewrite
+check above stays as the safety net. [Box run 12](foundation-verification.md#build-team-install-2026-10-31):
+all three answers `clean`, no rewrite round (run 10: 3 of 3 rewritten).
+
 <a id="rejection-reasons"></a>
 **Rejection reasons in logs — installed 2026-10-29.** Every
 `invalid` or `conflict` tool result logs `[Bob tool rejection]` with the tool,

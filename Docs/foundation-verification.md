@@ -1,7 +1,294 @@
 # Foundation verification and rollout
 
+<a id="report-readback-2026-10-31"></a>
+## Report readback and rejection codes — built 2026-10-31, not installed
+
+Owner decision after run 13 ("do both now"):
+
+- **Rejection codes:** the construction tools' message-only rejections map to
+  codes (a test fails when a new message has none); engine errors that are codes
+  keep them; any other message gets a content-free fingerprint
+  (`rejection_message`). Tool output is unchanged.
+- **Receipts fixed:** writer saves nest their ids (`receipt {dataset, recordId,
+  revision}`); the copier read only flat fields, so in runs 12 and 13 the receipts
+  held tool names only.
+- **Readback:** `bob.tools` `report_readback_version` 1
+  (`20261031060000_bob_report_readback_catalog.sql`): after Konrad's or Rita's job
+  code reads each saved or checked construction (overview with its check) and each
+  saved drawing (record) at its revision and attaches it to the report. Saoirse's
+  lines change with it: Bob's principle (go by the record; role message 692 tokens),
+  the two hand-over manuals and their returns, and the policy copies. The owner approved
+  the exact lines on 2026-10-31.
+- **Tests:** `bob-build-workers` (9), `answer-text` (rejection codes), the fixture
+  replay.
+- **Release order:** owner approval of the texts, merge, deploy both functions,
+  apply the catalog with no Bob job running, one paid box run.
+
+<a id="build-team-cost-2026-10-31"></a>
+## Cheaper build team installed; paid box run 13 passed — 2026-10-31
+
+Owner decisions after run 12, keeping Konrad on high reasoning
+([PR #387](https://github.com/EmelieHagander/Bob-the-builder/pull/387), merged as
+`b0e6ac5f1cba5d217e72afcfe07efb4f5c9af1c5`): a per-project cache key for each
+worker, Bob's checking reads from the first step (`bob.tools.check_reads`), and the
+reason of every rejected call in the run's event log. Zero active Bob jobs before
+every step.
+
+1. **Functions:** `bob-worker` v162 and `ask-bob` v194. 129 of 130 and 131 of 132
+   files equal the repository (the established empty `cad-intake.ts`); both
+   return **401** without login.
+2. **Catalog:** recorded as `20261031124512_bob_check_reads_catalog`; `bob.tools`
+   v34. All 362 active Bob definitions equal the fixture.
+
+**[Run 41202509508](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41202509508)
+passed.** Evidence: `Docs/archive/form-box-paid-2026-10-31-run13.json`.
+
+| | Run 12 | Run 13 |
+|---|---|---|
+| Deliveries | saved, asked (saved), saved | saved, saved, saved |
+| Calls | 52 | 37 |
+| Bob | 24 calls, USD 0.52 | 17 calls, USD 0.31 |
+| Konrad | 17 calls, USD 0.74 | 9 calls, USD 0.42 |
+| Rita | 5 calls, USD 0.12 | 5 calls, USD 0.10 |
+| Total | USD 1.41 | USD 0.86 |
+| Read from cache | 72% | 75% |
+| describe_tool rounds | 4 | 0 |
+| Plain-words rewrites | 0 of 3 | 0 of 3 |
+
+- The cheapest box run so far (run 9: USD 1.02, run 10: 1.13). Konrad needed one
+  hand-over and five calls for the construction (run 12: nine).
+- One rejected save (Konrad's first try) logged `unspecified`: some construction
+  rejections carry only a message, no code. Giving them codes is a follow-up.
+- Bob still reads the construction after each report (one step with parallel
+  reads); a code readback in the report would remove it (proposal, needs the
+  owner's approval of one line).
+
+<a id="build-team-install-2026-10-31"></a>
+## Build team installed; paid box run 12 passed — 2026-10-31
+
+With the owner's OK, [PR #386](https://github.com/EmelieHagander/Bob-the-builder/pull/386)
+merged as `3ff1ddd5a0a3f11dc8aac39db1ed2862b7cd2819` (tree equal to the tested
+head). Zero active Bob jobs before every step.
+
+1. **Functions:** `bob-worker` v161 and `ask-bob` v193. 129 of 130 and 131 of 132
+   files equal the repository (the established empty `cad-intake.ts`); both
+   return **401** without login.
+2. **Catalog:** recorded as `20261031084743_bob_build_workers_catalog`. 30
+   definitions active from `bob-build-workers-v1` (`bob.tools` v33,
+   `cad.drawing-check`, the three hand-overs, `worker.team`, personas, labels,
+   `tools.design_project_cad` v19); `ask_materials_worker` policy schema 2; settings
+   for `structure-worker` and `drawing-worker` (gpt-5.4, high). All 362 active Bob
+   definitions equal the fixture.
+
+**[Run 41186062907](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41186062907)
+passed.** Evidence: `Docs/archive/form-box-paid-2026-10-31-run12.json`.
+
+| | Run 10 (Bob does it) | Run 12 (build team) |
+|---|---|---|
+| Deliveries | saved, saved, saved | saved, asked (saved), saved |
+| Calls | 38 (Bob 25, Mattias 4) | 52 (Bob 24, Konrad 17, Rita 5) |
+| Bob's cost | USD 0.96 | USD 0.52 |
+| Total cost | USD 1.13 | USD 1.41 |
+| Read from cache | 58% | 72% |
+| Plain-words rewrites | 3 of 3 turns | 0 of 3 |
+| AI drawing reviews | 1 | 0 (code check passed) |
+| Rejected calls | 1 | 2 (Konrad's, both corrected) |
+
+- Bob handed the construction to Konrad in plain words; Konrad saved, refined and
+  later checked it, and changed the width parameters in turn 2. Rita rendered
+  once, the code check passed without a model call, and she saved the drawing.
+  Mattias was not needed: Konrad read the catalog himself.
+- Konrad is the cost: 17 calls for USD 0.74 (USD 0.044 per call against Bob's
+  0.022), with his full manuals and project knowledge in every call.
+- Turn 2 waited 9 minutes between two Bob calls (background AI scheduling),
+  before any worker ran.
+
+<a id="build-team-2026-10-31"></a>
+## Build team: Konrad and Rita, code-only drawing check — built 2026-10-31 (installed, see above)
+
+Owner decisions after run 11: Bob coordinates; Konrad (structural designer) owns
+the construction, Rita draws it, Mattias does materials; Bob hands over a plain
+request and no values; each worker reads its project knowledge from the
+database; code alone checks a drawing; the legacy box drawing is retired
+([contract](ask-bob-tools.md#build-team), [drawing check](cad-adapter.md#code-drawing-check)).
+
+- **Source:** `bob-workers.ts` (workers from `workers` and `build_workers`,
+  knowledge reads, request-only hand-over, persona variables, retired tools),
+  `project-answer.ts`, `project-tools/session.ts` (`offerWaiting`),
+  `cad-assistant.ts` and `cad-targeted-review.ts` (code-only check),
+  `ask-openai.ts` (time reserves for both new roles).
+- **Catalog:** `20261031040000_bob_build_workers_catalog.sql`. Prompt texts by
+  Saoirse (storybook personas in Swedish, one shared team text `worker.team`, the
+  request-only hand-overs, Bob's principle, the `design_project_cad` manual for
+  the code check); the owner approved the exact texts on 2026-10-31. Bob's role
+  message is 695 tokens (cap 700).
+- **Runtime fixes from the contract check:** pixels a worker opens go with that
+  worker's own next call; a worker's saves reach Bob as receipts copied by code;
+  Rita reads construction changes (saving a drawing completes its pending item).
+- **Tests:** `bob-build-workers` (Konrad, Rita's fixed tool list, Mattias's
+  request-only form, refused values, pinned manifests), `cad-targeted-review`
+  (code-only pass and fail without a model call), the fixture replay. Tests that
+  cover Bob building and drawing himself, Mattias's first form and the AI review
+  are pinned to the manifest before this publication.
+- **Release order, with the owner's OK and no Bob job running:** merge, deploy
+  `bob-worker` and `ask-bob`, then apply the catalog (the `ask_materials_worker`
+  policy moves to schema 2). Then one paid box run, which also measures the
+  plain-words paragraph.
+
+<a id="mini-trial-2026-10-31"></a>
+## Bob on the mini model: box run 11 failed, trial ended; plain-words paragraph installed — 2026-10-31
+
+Owner decision: try Bob as coordinator on the mini model while Mattias stays on
+standard, measured on one paid box run. Catalog only; zero active Bob jobs
+before every apply. Live catalog equals the fixture afterwards (342 rows).
+
+1. **First try did nothing.** `20261031010000` (recorded `20261031050458`) set
+   `role.ask-bob` to a new `profile.ask-bob-mini`, but `routing.ask-bob`
+   `default_profile_key` overrides the role's own profile. [Run 10](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41171145463)
+   therefore ran Bob on standard: passed, all three turns saved, 38 calls (25
+   Bob, 4 Mattias), USD 1.13, 58% from cache, 1 rejected call; all three answers
+   needed the plain-words rewrite. `20261031010100` (`20261031053121`) put the
+   role back. Evidence: `Docs/archive/form-box-paid-2026-10-31-run10.json`.
+2. **Mini trial.** `20261031020000` (`20261031053231`) pointed
+   `routing.ask-bob` at the mini profile. [Run 11](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41173010760)
+   **failed**: every Bob call ran on the mini model, and the scenario cancelled
+   the concept turn at its 15-minute limit. `20261031020100` (`20261031055104`)
+   restored `profile.ask-bob` right after; `routing.ask-bob` is v3. Evidence:
+   `Docs/archive/form-box-paid-2026-10-31-run11.json`.
+
+| Concept turn | Run 10 (standard Bob) | Run 11 (mini Bob) |
+|---|---|---|
+| Result | saved in 5 min | cancelled at 15 min |
+| Bob calls | 10 | 22 |
+| Mattias | 1 job, 4 calls | 5 jobs, 31 calls (one hit his step limit) |
+| Rejected calls | 0 | 16 (Bob 9: 7 construction saves; Mattias 7) |
+| Read from cache | 68% | 86% |
+| Cost | USD 0.47 | USD 0.89, unfinished |
+
+- A mini call is cheaper, but mini Bob needed twice the calls, could not save
+  the construction (7 rejected saves) and re-briefed Mattias five times. Most
+  of the cost moved to Mattias.
+- Bob still does the construction work himself. A mini coordinator only makes
+  sense once that work belongs to a worker on standard.
+
+3. **Plain-words paragraph.** `20261031030000_bob_plain_words_persona_catalog.sql`
+   (recorded `20261031055202`) published `bob.persona` v3
+   (`plain_words_version` 1): Saoirse's owner-approved paragraph at the end of
+   the persona ([answer text](ask-bob-writes.md#answer-text)). Bob's role
+   message is 631 tokens (cap 700), the persona 157 words (cap 250). No paid run
+   has used it yet.
+
+Validation: catalog fixture replay, `ai-catalog`, `ai-readiness-catalog`,
+`bob-context-strategy-catalog` and `bob-materials-worker` pass, except two
+builder-reproducibility checks (readiness and context-strategy builders) that
+fail on main too.
+
+<a id="materials-worker-install-2026-10-30"></a>
+## Materials worker installed; paid box run 9 passed — 2026-10-30
+
+The owner chose to install while another session was still working on #383
+(its run 8 had stopped on slow model steps, not on code).
+[PR #385](https://github.com/EmelieHagander/Bob-the-builder/pull/385) merged as
+`918f7cd7df332085237a9417f9c9b1cbc8aa4687` (tree equal to the tested head, which
+contains #383). Zero active Bob jobs before every step.
+
+1. **Functions:** `bob-worker` v160 and `ask-bob` v192. 129 of 130 and 131 of
+   132 files equal the repository (the established empty `cad-intake.ts`);
+   both return **401** without login.
+2. **Catalog:** recorded as `20261030220351_bob_materials_worker_catalog`.
+   `bob.tools` v32: `materials_worker_version` 1, tool order, six permanent
+   tools unchanged; the `ask_materials_worker` policy row is active; the
+   `materials-worker` setting is gpt-5.4, high. All 336 active Bob definitions
+   equal the fixture.
+
+**[Run 41135551980](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41135551980)
+passed;** all three turns saved. Evidence: `Docs/archive/form-box-paid-2026-10-30-run9.json`.
+
+| | Run 6 (tool order) | Run 9 (with Mattias) |
+|---|---|---|
+| Deliveries | question, saved, saved | saved, saved, saved |
+| Bob calls | 20 | 22 |
+| Mattias calls | — | 3 |
+| Rejected tool calls | 1 | 1 (Bob's own) |
+| Read from cache | 57% | 59% |
+| Cost | USD 0.93 | USD 1.02 |
+
+- Bob handed one materials job to Mattias in the concept turn. Mattias
+  searched the catalog, read two definitions and reported in 3 calls (about
+  40 seconds, USD 0.08), with no rejected call; his second and third calls read
+  7,680 and 8,704 tokens from the cache.
+- The box scenario has one materials job, so this run measures the hand-over,
+  not a turn with much materials work.
+
+<a id="materials-worker-2026-10-30"></a>
+## Materials worker pilot — built 2026-10-30 (installed, see above)
+
+Owner decision: try Bob as coordinator with one worker, Mattias (materials),
+and measure before settling ([contract](ask-bob-tools.md#materials-worker)).
+Release order with the owner's OK and no running Bob job: deploy `bob-worker`
+and `ask-bob`, then apply `20261030090000_bob_materials_worker_catalog.sql`
+(new role, setting, tool contract, a `bob.tool_catalog` policy row and
+`bob.tools` with the worker), then a box run compared with run 6.
+
+Validation: `bob-materials-worker` (4: Bob hands over and has no materials
+tools, Mattias's fixed tools and input order with Bob's brief last, refused
+hand-overs and out-of-set calls, pinned manifests unchanged), the bench test
+pinned to the manifest before the pilot, the catalog fixture replay and the
+related suites pass.
+
+<a id="box-paid-run7-2026-10-30"></a>
+## Repair helper installed; paid box run 7 passed but cost more; tool order restored — 2026-10-30
+
+With the owner's OK, [PR #384](https://github.com/EmelieHagander/Bob-the-builder/pull/384)
+merged as `d554caabf586de9d2bba4bb765230653213a94e7` (tree equal to the tested
+head). There were zero active Bob jobs before the deploy.
+
+1. **Functions:** `bob-worker` v158 and `ask-bob` v190. 128 of 129 and 130 of
+   131 files equal the repository byte for byte (the established empty
+   `cad-intake.ts`); both return **401** without login.
+2. **Catalog:** recorded as `20261030191105_bob_tool_repair_catalog`; `bob.tools`
+   v30 (`tool_sheets_version` 1, `tool_repair_version` 1); all 328 active Bob
+   definitions equal the fixture. One owner job had started on the previous
+   manifest a minute before; it keeps that manifest, which the new runtime
+   supports.
+
+**[Run 41113184182](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41113184182)
+passed** (concept partial, width change and final drawing saved). Evidence:
+`Docs/archive/form-box-paid-2026-10-30-run7.json`. Another owner job ran at the
+same time, so usage was matched to this run's model events.
+
+| | Run 4 | Run 6 (tool order) | Run 7 (repair helper) |
+|---|---|---|---|
+| Bob calls | 24 | 20 | 40 |
+| Rejected tool calls (final) | 0 | 1 | 9 |
+| Read from cache | 54% | 57% | 78% |
+| Cost | USD 1.17 | USD 0.93 | USD 1.22 |
+
+- The helper ran 10 times and fixed 1 call. Most rejections were about meaning
+  (`domain_fields`, an unknown construction), which reshaping Bob's own values
+  cannot fix; Bob fixed each himself one or two steps later.
+- Bob called `describe_tool` 11 times (3 in run 6).
+- The first call of turns 2 and 3 read 4,608 and 6,656 of about 12,000 tokens
+  from the cache. Rebuilt from the thread's stored messages and locked snapshot
+  (no project events, snapshot never re-locked): turn 3 matched the previous
+  turn as far as the design allows, through the previous request (tools, role
+  and directory, snapshot and earlier messages). The rest of a turn's first call
+  is new by design: the previous answer, the new message and the turn frame
+  (screen, briefing, facts, about 5,000 tokens). Turn 2 matched about three
+  quarters of that possible start, most likely because the first turn ran
+  8 minutes and its own start had left the provider cache; the history label
+  that appears from turn 2 onward is after the snapshot and costs nothing
+  measurable. No defect found.
+
+**Owner decision: tool order restored.** Applied with zero active Bob jobs and
+recorded as `20261030194112_bob_tool_order_restore_catalog`: `bob.tools` v31 has
+`tool_order_version` 1 and no sheets or repair version; all 328 active Bob
+definitions equal the fixture. Catalog only; `bob-worker` v158 and `ask-bob`
+v190 already carry the tool-order path. The repair role stays published, unused
+by new jobs.
+
 <a id="tool-repair-2026-10-30"></a>
-## Fixed tool list with a repair helper — built 2026-10-30, not installed
+## Fixed tool list with a repair helper — built 2026-10-30 (installed and rolled back, see above)
 
 Owner decision after [run 6](#tool-order-install-2026-10-30): keep the base
 prompt fixed as first decided, and put a small model between Bob and a tool

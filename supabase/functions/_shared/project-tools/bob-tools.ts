@@ -92,6 +92,8 @@ export function createBobToolSession(opts: {
   buildGuideTools?: boolean;
   /** Tools of work already in progress, loaded without a describe_tool round. */
   preloadTools?: (phase: string | null) => string[];
+  /** Workers: waiting tools are offered too, so a job's tool list is fixed. */
+  offerWaiting?: boolean;
   calculator?: ProjectCalculator;
   orientationReader?: OrientationDirectoryReader;
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter;
@@ -100,6 +102,8 @@ export function createBobToolSession(opts: {
   toolInstructions?: ToolInstructions;
   knowledgeReader?: KnowledgeReader;
   context?: WorkingContext; projectContext?: ProjectContext; readPolicy: ToolPolicyReader;
+  /** Worker pilot (2026-10-30): Bob's hand-over tools, registered by the turn that owns the workers. */
+  extraTools?: ToolDefinition[];
   /** FORM small source reader; offered only where a publication enables it. */
   sourceReader?: SourceReader;
   operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; workRecords?: WorkRecords; planLinks?: PlanLinks; buildingScope?: BuildingScope; planAssistant?: ReturnType<typeof createPlanAssistant>;
@@ -224,8 +228,9 @@ export function createBobToolSession(opts: {
         return opts.writer!.write('propose_project_plan',{...proposal,request_quote:(v as any).request_quote},{humanText:false})
       },
     }] : []),
+    ...(opts.extraTools ?? []),
   ]
-  return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions, ...(opts.preloadTools ? { preloadTools: opts.preloadTools } : {}),
+  return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions, ...(opts.preloadTools ? { preloadTools: opts.preloadTools } : {}), ...(opts.offerWaiting ? { offerWaiting: true } : {}),
     ...(opts.aiCatalog?.manifest().definitions.some(row=>row.prompt_key==='bob.tools'&&row.metadata?.construction_work_version===1)?{
       autoLoadReady:true,followups:opts.aiCatalog.definition('bob.tools','tool_contract').definition.operation_followups as import('./session.ts').ToolFollowup[],
     }:{}),

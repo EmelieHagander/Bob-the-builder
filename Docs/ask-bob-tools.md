@@ -118,10 +118,116 @@ price. New manifests (`bob.tools` with `tool_sheets_version` 1, publication
   conversation; a context rollover summarizes them away, so they are sent again
   on the next step.
 
+<a id="build-team"></a>
+**Bob's build team: Konrad (construction), Rita (drawing) and Mattias
+(materials) — installed 2026-10-31, box run 12 passed (owner decisions;
+[installation and run 12](foundation-verification.md#build-team-install-2026-10-31)).** Bob coordinates and
+is the owner's contact; the work goes to colleagues with their own tools. In paid
+box run 11 Bob on the small model failed because he still built the construction
+himself. Manifests with `bob.tools` `build_workers_version` 1
+(`20261031040000_bob_build_workers_catalog.sql`):
+
+- **Konrad** (`role.structure-worker`) owns the construction: save, check,
+  change parameters and parts, part roles, affected outputs, lists and older
+  drawings that need a construction. He checks the construction against the
+  owner's intent and images before he hands it on, and decides the pieces of a
+  large build.
+- **Rita** (`role.drawing-worker`) draws the checked construction
+  (`design_project_cad`), saves it (`save_cad_design`), links drawings to plan
+  Steps, composes shells from pieces and handles drawing gaps. She is no longer
+  the drawing reviewer: **code alone checks a drawing**
+  ([CAD adapter](cad-adapter.md#code-drawing-check)).
+- **Mattias** keeps the materials shelf and now works the same way.
+- **Bob hands over no values.** Each hand-over (`ask_structure_worker`,
+  `ask_drawing_worker`, `ask_materials_worker` v2) takes one `request`, written as
+  to a colleague; a call with other fields is refused. The worker reads the
+  project itself.
+- **Project knowledge.** Each worker's definition lists fixed reads (`knowledge`:
+  label, tool, arguments), run in order at the start of the job through the
+  worker's session. Konrad: selected solutions, measurements, image metadata and
+  the construction drafts. Rita: the construction drafts, drawing requests, the
+  approved plan and the selected solutions. Mattias: the project's materials and
+  the construction drafts.
+- **Input, fixed first:** the persona (with the project's name,
+  `{{project_name}}`) and the shared team text `worker.team`, the locked project
+  snapshot, the conversation summaries and history, then project knowledge and
+  Bob's request last.
+- **A fixed tool list per job.** A worker's session also offers tools that wait
+  for a prerequisite (saving a checked drawing), so the list is the same in every
+  step and the cached prompt start holds; calling one too early answers "not
+  available yet".
+- Bob does not offer the workers' tools, and the tool picker does not either.
+  The legacy box drawing `save_project_drawing` (it skipped the construction and
+  the check) is retired for new jobs (`retired_tools`). Floor plans, room layouts
+  and stair studies stay with Bob.
+- Bob keeps the reads (`read_construction_draft`, drawing requests and their
+  controls). With `bob.tools` `report_readback_version` 1 (built 2026-10-31, not
+  installed), the hand-over result is `{status, worker, report, calls, receipts,
+  readback}`: `receipts` are the ids, dataset, revision and operation of each save
+  or check, copied by code; `readback` is, after Konrad's or Rita's job, each saved
+  or checked construction's overview (with its check results) and each saved
+  drawing's record (source state, linked Steps) at that revision, read by code
+  through the worker's session, up to eight; a save without a revision or past the
+  limit is listed as not read. Bob goes by that record; he reads Mattias's saves
+  himself (no readback for materials yet). Every rejected tool call records its
+  code, field paths and, for an unmapped message, a content-free fingerprint in
+  the run's event log.
+
+Pinned manifests keep their behaviour: before this publication Bob holds the
+construction and drawing tools, Mattias gets Bob's brief, and the AI reviewer
+checks drawings. Source: `bob-workers.ts`, the toolbox setup in
+`project-answer.ts`, `project-tools/session.ts` (`offerWaiting`). Measured once
+(run 12): Bob's own cost halved, Konrad is now the largest cost. Since
+2026-10-31 each worker has its own per-project cache key, and Bob's checking reads
+(`bob.tools.check_reads`: the construction, a drawing delivery, a record section)
+load from his first step and are never picker candidates; box run 13 cost USD 0.86
+([record](foundation-verification.md#build-team-cost-2026-10-31)).
+
+<a id="materials-worker"></a>
+**Superseded for new manifests by [the build team](#build-team) (built
+2026-10-31): Mattias's first form, kept by pinned manifests.**
+**Bob with a worker: Mattias (materials) — pilot installed 2026-10-30
+(owner decision: one worker, measured before anything else moves;
+[installation and run 9](foundation-verification.md#materials-worker-install-2026-10-30)).**
+Bob carried 100 tools; most rejected calls in runs 5–7 were about meaning in a
+specialised area. The pilot moves one area to a worker with its own tools:
+
+- Bob no longer offers the Materials, stock and Shopping tools (the eight on
+  that shelf); the tool picker does not offer them either. He gets
+  `ask_materials_worker` (`job`, `findings`), loaded from the first step. The
+  catalog's six permanent tools are unchanged, so a runtime without the worker
+  code ignores the pilot and keeps the materials tools with Bob.
+- Mattias (`role.materials-worker`, same profile as Bob) has a fixed native
+  list: the eight materials tools and four reading tools
+  (`search_project_data`, `open_project_item`, `read_construction_draft`,
+  `read_solution_context`), with full manuals, at most 12 steps per job.
+- His input, fixed first: his tools and instructions, the locked project
+  snapshot, a line saying the conversation is background, the same summaries
+  and history Bob reads (`stairConversation`), then Bob's brief last: the job,
+  what Bob found this turn, and the project's current materials (read at the
+  start of the job). The material list changes as he works, so it sits with the
+  brief, not above the conversation.
+- He reads and saves through a tool session with the same gates, receipts and
+  turn budgets as Bob's; his saves count as the turn's work. He does only the
+  job, keeps unknown values unknown, and reports to Bob (what he found or saved,
+  with ids, and what is open). He never answers the owner.
+- Bob gets `{status, report, calls}` and checks it before he answers.
+
+The worker definition lives in `bob.tools` (`workers.materials`,
+`materials_worker_version` 1), so further workers are catalog data. Source:
+`20261030090000_bob_materials_worker_catalog.sql`, `bob-workers.ts` and the
+toolbox setup in `project-answer.ts`. Measured once (run 9); further workers and
+the trade specialists (electrician, plumber, roofer, carpenter and drywaller,
+tiler) are a proposal that waits for the pilot's numbers.
+
 <a id="tool-repair"></a>
-**A fixed tool list with a small helper for rejected calls ("wrench wench") —
-built 2026-10-30, not installed (owner decision after
-[run 6](foundation-verification.md#tool-order-install-2026-10-30)).**
+**Rolled back after [paid box run 7](foundation-verification.md#box-paid-run7-2026-10-30):
+new jobs use [tool order](#tool-order) again; manifests pinned in between keep
+this behaviour. A fixed tool list with a small helper for rejected calls
+("wrench wench") — installed and rolled back 2026-10-30 (owner decision after
+[run 6](foundation-verification.md#tool-order-install-2026-10-30)).** In run 7
+Bob needed 40 calls instead of 20 and 9 calls stayed rejected: most rejections
+were about meaning, which a shape-only helper cannot fix (it fixed 1 of 10).
 OpenAI places the tool list before the instructions and the conversation, so
 any change to the list makes the rest of that call full price. With
 [tool order](#tool-order) each turn started with a different list (the picker's
@@ -153,7 +259,7 @@ out of time. Source: `20261030070000_bob_tool_repair_catalog.sql`,
 `bob-tool-repair.ts` and the step loop in `project-answer.ts`.
 
 <a id="tool-order"></a>
-**Superseded by [tool repair](#tool-repair) for new jobs once installed. Tool order: every tool native again — installed 2026-10-30
+**Current for new jobs (restored after [run 7](foundation-verification.md#box-paid-run7-2026-10-30)). Tool order: every tool native again — installed 2026-10-30
 (owner decision after [paid box run 5](foundation-verification.md#box-paid-run5-2026-10-30);
 [installation and run 6](foundation-verification.md#tool-order-install-2026-10-30)).**
 Tool sheets put every tool except the permanent six behind `use_tool`. Bob
