@@ -52,7 +52,7 @@ const spec = {
     'bob-worker from the same source, then apply this with no Bob job running. Pinned manifests keep',
     'their behaviour.',
   ],
-  settings: [{ function_name: 'material-finder', copy_from: 'plan-reviewer', model: 'gpt-5.4-nano', model_type: 'nano', max_output_tokens: 2000, reasoning_effort: 'low',
+  settings: [{ function_name: 'material-finder', copy_from: 'ask-bob', model: 'gpt-5.4-nano', model_type: 'nano', max_output_tokens: 2000, reasoning_effort: 'low',
     metadata: { role: 'material_finder', authority: 'read_only' } }],
   additions: [
     { key: 'profile.material-finder', kind: 'execution_profile', definition: { tier: 'nano', timeout_ms: 60000, requirements: { images: false, functions: false, json_schema: true },

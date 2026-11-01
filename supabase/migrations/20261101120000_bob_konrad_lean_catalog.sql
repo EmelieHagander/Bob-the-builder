@@ -29,7 +29,7 @@ declare spec jsonb:=$bob_catalog_publication${
  "settings": [
   {
    "function_name": "material-finder",
-   "copy_from": "plan-reviewer",
+   "copy_from": "ask-bob",
    "model": "gpt-5.4-nano",
    "model_type": "nano",
    "max_output_tokens": 2000,
