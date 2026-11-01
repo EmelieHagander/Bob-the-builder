@@ -119,7 +119,7 @@ const BUILDING_SCOPE_REFUSAL = /\b(?:building_denied|site_denied|building_not_li
 export interface WriteResult {
   status: 'saved' | 'invalid' | 'conflict' | 'denied' | 'unknown' | 'budget_exhausted'
   /** access: the database refused this record for this caller; the turn re-checks project access. */
-  reason?: 'access'
+  reason?: 'access' | string
   receipt?: WriteReadback
   message?: string
   validation?: Pick<WriteValidationIssue, 'code' | 'fields'>
@@ -275,7 +275,15 @@ export interface ProjectWriterState {
   seenExecutedReceipts: string[]
   corrections: string[]
 }
-export function createProjectWriter(projectId: string, userMessage: string, transport: WriteTransport, read: ReceiptTransport, settle: ReceiptTransport, options: { taskWorkDiagnostics?: boolean; unlimitedWork?: boolean } = {}) {
+/** Box run 15 (2026-11-01): the catch-all rejection hid the database's reason. With
+ * rejectionReasons the result carries a short code: a coded exception name the
+ * database raised, else the SQLSTATE. Codes only, never message text. */
+export function databaseRejectionReason(error: { code?: string | null; message?: string | null }): string | undefined {
+  const named = /^([a-z][a-z0-9_]{2,39})(?::|$)/.exec((error.message ?? '').trim())?.[1]
+  if (named) return named
+  return typeof error.code === 'string' && /^[0-9A-Z]{5}$/.test(error.code) ? 'db_' + error.code.toLowerCase() : undefined
+}
+export function createProjectWriter(projectId: string, userMessage: string, transport: WriteTransport, read: ReceiptTransport, settle: ReceiptTransport, options: { taskWorkDiagnostics?: boolean; unlimitedWork?: boolean; rejectionReasons?: boolean } = {}) {
   let used = 0, invalidAttempts = 0
   let uncertain = false
   let settled = false
@@ -466,7 +474,8 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
             if (payload.kind === 'catalog') return { status: 'invalid', message: 'The catalog rejected this definition. No change made. Read the exact part/material profile and pinned material revision. Put required part dimensions in properties using the profile field keys; compatible material properties are inherited server-side, and notes are not dimension fields. If the current definition already matches, reuse it instead of revising metadata.' }
             if (payload.kind === 'lifecycle' || payload.kind === 'bound_work' && (payload.data.domain as WritePayload)?.kind === 'lifecycle') return { status: 'invalid', message: 'No change made. ' + (LIFECYCLE_REASON.exec(error.message ?? '')?.[0] ?? 'The project rejected this change; read the current record and check its state.') }
             if (payload.kind.startsWith('plan_')) return { status: 'invalid', message: 'The living plan rejected this command. No canonical plan was silently changed. Read the current plan, reuse only exact Step/Requirement IDs from it, keep completed history, and use current project evidence IDs/revisions.' }
-            return { status: 'invalid', message: 'The database rejected this command. No change made; check fields, source, current revision and record state.' }
+            const reason = options.rejectionReasons ? databaseRejectionReason(error) : undefined
+            return { status: 'invalid', message: 'The database rejected this command. No change made; check fields, source, current revision and record state.', ...(reason ? { reason } : {}) }
           }
           throw new Error('Unknown write result')
         }

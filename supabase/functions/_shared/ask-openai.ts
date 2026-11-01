@@ -475,7 +475,9 @@ export async function answerWithOpenAi(opts: {
     payload => writeRpc(payload.kind === 'construction_work' ? 'commit_construction_work' : payload.kind === 'form_feedback' ? 'record_model_feedback' : payload.kind === 'bound_building_scope' ? 'bob_project_write_v21' : payload.kind === 'bound_plan_link' ? 'bob_project_write_v20' : payload.kind === 'bound_work' ? 'bob_project_write_v19' : ['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'].includes(payload.kind) ? 'bob_project_write_v18' : ['bound_project', 'bound_solution'].includes(payload.kind) ? 'bob_project_write_v17' : 'bob_project_write_v16', { ...binding, p_payload: payload }),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
-    { unlimitedWork, taskWorkDiagnostics: [1, 2, 3].includes(contract.work_completion_version as number) },
+    { unlimitedWork, taskWorkDiagnostics: [1, 2, 3].includes(contract.work_completion_version as number),
+      // Catalog switch (2026-11-01): the database's coded reason on the catch-all rejection.
+      ...(aiCatalog.definition('bob.tools', 'tool_contract').definition.rejection_reason_version === 1 ? { rejectionReasons: true } : {}) },
   ) : undefined
   const planLinks = createPlanLinks({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
     read: input => rpc('read_bob_plan_link_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
