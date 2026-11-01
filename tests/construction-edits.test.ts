@@ -262,11 +262,13 @@ test('bounded construction edits preserve canonical data, receipts and authority
   const after=await read(),node=(path:string)=>after.parameters.bindings.find((b:any)=>b.path===path)?.node
   assert.equal(node('instances/shelf/placement/y'),'origin.zero_mm');assert.equal(node('instances/shelf/placement/ry'),'origin.zero_deg')
   assert.equal(node('instances/shelf/placement/z'),'shelfHeight')
+  // Konrad removes only the bindings he made; code removes its zero bindings of the gone part.
   const remove={...input,key:'zeroShelfGone',expected_revision:head+1,change_note:'Remove the shelf',changes:{instances:delta([],['shelf']),nodes:delta([],['shelfHeight']),
-   bindings:delta([],['x','y','z','rx','ry','rz'].map(k=>'instances/shelf/placement/'+k)),roles:delta([],['shelf'])}}
+   bindings:delta([],['x','z'].map(k=>'instances/shelf/placement/'+k)),roles:delta([],['shelf'])}}
   const gone=await zeroTools(true).execute('edit_construction_parts',remove)
   assert.equal(gone.status,'saved',JSON.stringify({gone,sqlErrors}))
   const last=await read()
   assert.equal(last.parameters.nodes.some((n:any)=>n.id.startsWith('origin.')),last.parameters.bindings.some((b:any)=>b.node.startsWith('origin.')))
+  assert(!last.parameters.bindings.some((b:any)=>b.path.startsWith('instances/shelf/')))
  })
 })

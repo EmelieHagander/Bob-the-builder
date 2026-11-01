@@ -132,8 +132,8 @@ const spec = {
   requires: { build_workers_version: 1, report_readback_version: 1 },
   flags: { rejection_reason_version: 1 },
   toolbox_set: [
-    { path: ['build_workers', 'structure', 'tools'], value: [...structure.tools, 'add_catalog_fastener'] },
-    { path: ['build_workers', 'structure', 'reads'], value: (structure.reads as string[]).filter(r => !['search_material_catalog', 'read_material_catalog'].includes(r)).concat('find_catalog_materials') },
+    { path: ['build_workers', 'structure', 'tools'], old: structure.tools, value: [...structure.tools, 'add_catalog_fastener'] },
+    { path: ['build_workers', 'structure', 'reads'], old: structure.reads, value: (structure.reads as string[]).filter(r => !['search_material_catalog', 'read_material_catalog'].includes(r)).concat('find_catalog_materials') },
   ],
   toolbox_append: [
     { path: ['contract_keys'], values: ['tools.find_catalog_materials', 'tools.add_catalog_fastener'] },
@@ -231,6 +231,8 @@ begin
  for change in select value from jsonb_array_elements(spec->'toolbox_set') loop
   path:=array(select jsonb_array_elements_text(change->'path'));
   if definition#>path is null then raise exception 'publication_toolbox_set_missing: %',change->>'path'; end if;
+  -- Only the exact value this publication was written against is replaced.
+  if definition#>path is distinct from change->'old' then raise exception 'publication_toolbox_set_changed: %',change->>'path'; end if;
   definition:=jsonb_set(definition,path,change->'value');
  end loop;
  for change in select value from jsonb_array_elements(spec->'toolbox_append') loop

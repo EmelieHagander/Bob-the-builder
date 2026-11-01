@@ -315,4 +315,15 @@ test('hardware the designer adds is saved like any definition, held in joints an
  assert.equal(Number(bracketNeed.required_quantity), 2); assert.match(bracketNeed.basis, /2 brackets over 1 joint/)
  assert.deepEqual((await f.sources(brackets.recordId)).map((s: any) => [s.kind, s.diameter_mm, s.length_mm]), [['bracket', null, null]])
  await assert.rejects(derive(f.fields({ ...base, name: 'Skruv', fastener_kind: 'screw', diameter_mm: null, length_mm: null })), /invalid_cad_requirement/, 'screws still need their size')
+ // The database keeps the material list's rules for hardware saved another way:
+ // screws, nails and bolts carry a size, glue is one package per construction.
+ const raw = async (name: string, kind: string, counting: string) => {
+  const built: any = catalogFastenerWrite({ key: kind + '_raw', name, kind: 'bracket', counting: 'per_joint', material_category: 'metal', diameter_mm: null, length_mm: null, request_quote: 'Put the screws, nails and glue' })
+  built.payload.data.properties.fastener_kind.value = kind; built.payload.data.properties.fastener_counting.value = counting
+  return f.write(built.payload)
+ }
+ for (const [kind, counting, code] of [['screw', 'per_joint', 'joint_fastener_size_unknown'], ['glue', 'per_joint', 'joint_fastener_glue_counted']]) {
+  const added = await raw('Odd ' + kind, kind, counting)
+  assert.equal(await f.pg.query('select bob_private.joint_fasteners_issue($1,$2::jsonb) v', [f.project, JSON.stringify([pick(added.recordId, 2)])]).then((r: any) => r.rows[0].v), code, kind)
+ }
 })

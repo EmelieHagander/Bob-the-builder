@@ -376,9 +376,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     const merged=opts.defaultZero&&change.prepared.status==='ready'&&change.prepared.next?parseCadAssemblyRequest(structuredClone(change.prepared.next.recipe)):null
     if(merged){
      const d=zeroDefaults(merged,parseParameterPlan(change.prepared.next.parameter_plan))
-     if(d.bindings.length||d.nodes.length||d.unused.length){
+     if(d.bindings.length||d.nodes.length||d.unused.length||d.stale.length){
       const c=structuredClone(v.changes) as Record<string,any>,list=(k:string)=>c[k]??={upsert:[],remove:[]}
       if(d.bindings.length)list('bindings').upsert.push(...d.bindings)
+      if(d.stale.length)list('bindings').remove.push(...d.stale.filter(path=>!c.bindings.remove.includes(path)))
       if(d.nodes.length)list('nodes').upsert.push(...d.nodes)
       if(d.unused.length)list('nodes').remove.push(...d.unused.filter(id=>!c.nodes.remove.includes(id)))
       change=await prepareChange(v,editPayload(c),opts.prepareEdit)

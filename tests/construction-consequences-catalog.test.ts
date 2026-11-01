@@ -11,7 +11,7 @@ import {createProjectWriter} from '../supabase/functions/_shared/project-write.t
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {createBobToolSession} from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import {seedToolPolicy} from '../supabase/functions/_shared/project-answer.ts'
-import {catalogFixture} from './support/ai-catalog-fixture.ts'
+import {catalogFixture,preKonradLeanCatalogFixture} from './support/ai-catalog-fixture.ts'
 
 test('D publishes only role/work and affected manuals; old catalogs and all model settings/prices remain immutable',async t=>{
  let previous!:AiCatalogManifest,current:AiCatalogManifest|undefined
@@ -36,7 +36,9 @@ test('D publishes only role/work and affected manuals; old catalogs and all mode
  // The pinned D release predates the 2026-10-21 view contract.
  assert.deepEqual(saveAtD,withLegacyCadViews(withoutJointFasteners(CONSTRUCTION_SAVE_TOOL.function.parameters)),'the pinned D release matches its pre-arrays save contract')
  assert(!Object.hasOwn(saveAtD.properties.recipe.properties,'arrays'),'D predates compact arrays')
- const saveLatest:any=catalogFixture().tool(CONSTRUCTION_SAVE_TOOL.function.name).function.parameters
+ // 2026-11-01 (bob-konrad-lean-v1) changes joints and binding wording on top; the
+ // release before it matches the canonical compiler without those pins.
+ const saveLatest:any=preKonradLeanCatalogFixture().tool(CONSTRUCTION_SAVE_TOOL.function.name).function.parameters
  assert.deepEqual(saveLatest,withFormRefinement(CONSTRUCTION_REPEAT_SAVE_TOOL).function.parameters,'the final catalog matches the current canonical compiler')
  assert(Object.hasOwn(saveLatest.properties.recipe.properties,'arrays'),'the later release adds compact arrays')
  for(const tool of tools){assert.throws(()=>before.tool(tool.function.name),/ai_contract_missing/);const parameters:any=now.tool(tool.function.name,{server_quote:true}).function.parameters;assert(!parameters.properties.request_quote);for(const field of ['recipe','dimensions','quantity','computed','layout'])assert(!parameters.properties[field])}

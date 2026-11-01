@@ -518,6 +518,16 @@ declare spec jsonb:=$bob_catalog_publication${
     "structure",
     "tools"
    ],
+   "old": [
+    "save_construction_draft",
+    "check_construction_draft",
+    "change_construction_parameters",
+    "edit_construction_parts",
+    "change_construction_roles",
+    "continue_construction_change",
+    "derive_construction_lists",
+    "transition_legacy_drawing"
+   ],
    "value": [
     "save_construction_draft",
     "check_construction_draft",
@@ -535,6 +545,19 @@ declare spec jsonb:=$bob_catalog_publication${
     "build_workers",
     "structure",
     "reads"
+   ],
+   "old": [
+    "read_construction_draft",
+    "read_construction_changes",
+    "read_construction_delivery",
+    "read_solution_context",
+    "search_project_data",
+    "open_project_item",
+    "search_material_catalog",
+    "read_material_catalog",
+    "calculate_project",
+    "search_building_knowledge",
+    "list_project_category"
    ],
    "value": [
     "read_construction_draft",
@@ -678,6 +701,8 @@ begin
  for change in select value from jsonb_array_elements(spec->'toolbox_set') loop
   path:=array(select jsonb_array_elements_text(change->'path'));
   if definition#>path is null then raise exception 'publication_toolbox_set_missing: %',change->>'path'; end if;
+  -- Only the exact value this publication was written against is replaced.
+  if definition#>path is distinct from change->'old' then raise exception 'publication_toolbox_set_changed: %',change->>'path'; end if;
   definition:=jsonb_set(definition,path,change->'value');
  end loop;
  for change in select value from jsonb_array_elements(spec->'toolbox_append') loop

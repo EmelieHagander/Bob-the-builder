@@ -521,10 +521,11 @@ for(const migration of migrations){
   }
   const box=seed.find(row=>row.key==='bob.tools')
   box.definition={...box.definition,...spec.flags,catalog:box.definition.catalog.map((c:any)=>c.name in spec.how_to?{...c,how_to:spec.how_to[c.name]}:c)}
-  for(const {path,value} of spec.toolbox_set??[]){
+  for(const {path,old,value} of spec.toolbox_set??[]){
    box.definition=structuredClone(box.definition)
    const parent=path.slice(0,-1).reduce((o:any,k:string)=>o?.[k],box.definition)
    if(!parent||!(path.at(-1) in parent))throw new Error('publication_toolbox_set_missing: '+path.join('.'))
+   if(JSON.stringify(parent[path.at(-1)])!==JSON.stringify(old))throw new Error('publication_toolbox_set_changed: '+path.join('.'))
    parent[path.at(-1)]=structuredClone(value)
   }
   for(const {path,values} of spec.toolbox_append??[]){

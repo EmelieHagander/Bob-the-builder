@@ -10,7 +10,7 @@ import {constructionLists} from '../supabase/functions/_shared/construction-list
 import {parseFastenerSchedule,storedJoints,withRuleFasteners,withoutJointFasteners} from '../supabase/functions/_shared/construction-fasteners.ts'
 import {CONSTRUCTION_EDIT_TOOL} from '../supabase/functions/_shared/construction-edits.ts'
 import {projectSchema} from './support/project-schema.ts'
-import {catalogFixture,prePhaseToolsCatalogFixture} from './support/ai-catalog-fixture.ts'
+import {catalogFixture,prePhaseToolsCatalogFixture,preKonradLeanCatalogFixture} from './support/ai-catalog-fixture.ts'
 import {listFixture} from './construction-lists.test.ts'
 
 const artifact='11111111-1111-4111-8111-111111111111'
@@ -120,7 +120,9 @@ test('fastener requirement refusals reach Bob as specific, answerable messages',
 
 test('the latest catalog says fastener and glue needs are exact; the publication touches only the derive tool and is reproducible',async t=>{
  // Owner decision 2026-10-26: show the exact count; Bob may recommend a spare in words.
- const latest=catalogFixture(),derive=latest.definition('tools.derive_cad_material_requirement')
+ // 2026-11-01 (bob-konrad-lean-v1) rewords this manual's fastener sentence; the
+ // release before it is the latest that carries this publication's row.
+ const latest=preKonradLeanCatalogFixture(),derive=latest.definition('tools.derive_cad_material_requirement')
  const note=' Fastener and glue needs are exact counts from the schedule, so omit waste_percent (or send 0); purchase_increment stays the pack size. If a spare is sensible, recommend it in the reply as a suggestion, separate from the need.'
  assert(derive.definition.additional_description.endsWith(note))
  assert.equal(derive.definition.additional_description.split(note).length,2)

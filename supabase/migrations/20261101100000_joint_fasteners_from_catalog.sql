@@ -24,7 +24,8 @@
 --    null. Codes: joint_fasteners_invalid, joint_fastener_repeated,
 --    joint_fastener_not_in_catalog, joint_fastener_other_project,
 --    joint_fastener_package_counted, joint_fastener_spaced_per_joint,
---    joint_fastener_size_unknown.
+--    joint_fastener_size_unknown (also any screw, nail or bolt without a size),
+--    joint_fastener_glue_counted (glue not counted per construction).
 -- 4. bob_private.check_construction accepts method 'butt' with a fasteners
 --    list, and only then (guarded replace of its installed body); a list that
 --    fails (3) raises the code (3) names. Earlier joints are unchanged.
@@ -77,9 +78,9 @@ update bob.catalog_profile_revisions set published=true where profile_code='join
 create function bob_private.joint_fastener_item(p_item uuid, p_revision integer) returns jsonb
 language sql stable security definer set search_path='' as $$
  select jsonb_build_object('kind',x.kind,'counting',x.counting,'project_id',x.project_id,
-  'diameter_mm',case when x.counting<>'per_construction' and x.p->'diameter'->>'unit'='mm' and x.p->'diameter'->>'value'~'^[0-9]{1,4}(\.[0-9]{1,3})?$'
+  'diameter_mm',case when x.counting<>'per_construction' and x.p->'diameter'->>'unit'='mm' and x.p->'diameter'->>'value'~'^[0-9]{1,7}(\.[0-9]{1,6})?$'
    then (x.p->'diameter'->>'value')::numeric end,
-  'length_mm',case when x.counting<>'per_construction' and x.p->'length'->>'unit'='mm' and x.p->'length'->>'value'~'^[0-9]{1,4}(\.[0-9]{1,3})?$'
+  'length_mm',case when x.counting<>'per_construction' and x.p->'length'->>'unit'='mm' and x.p->'length'->>'value'~'^[0-9]{1,7}(\.[0-9]{1,6})?$'
    then (x.p->'length'->>'value')::numeric end)
  from (select i.project_id, r.properties p,
    case when r.profile_code='joint_hardware' then r.properties->'fastener_kind'->>'value' else t.fastener_kind end kind,
@@ -115,7 +116,10 @@ begin
   if item->>'project_id' is not null and item->>'project_id'<>p_project then return 'joint_fastener_other_project'; end if;
   if item->>'counting'='per_construction' and (jsonb_typeof(e->'count')<>'null' or jsonb_typeof(e->'spacing_mm')<>'null') then return 'joint_fastener_package_counted'; end if;
   if item->>'counting'='per_joint' and jsonb_typeof(e->'spacing_mm')<>'null' then return 'joint_fastener_spaced_per_joint'; end if;
-  if item->>'counting'='along_contact' and (jsonb_typeof(item->'diameter_mm')<>'number' or jsonb_typeof(item->'length_mm')<>'number') then return 'joint_fastener_size_unknown'; end if;
+  -- The material list sizes screws, nails and bolts and counts glue once per construction.
+  if (item->>'counting'='along_contact' or item->>'kind' in ('screw','nail','bolt'))
+   and (jsonb_typeof(item->'diameter_mm')<>'number' or jsonb_typeof(item->'length_mm')<>'number') then return 'joint_fastener_size_unknown'; end if;
+  if item->>'kind'='glue' and item->>'counting'<>'per_construction' then return 'joint_fastener_glue_counted'; end if;
  end loop;
  return null;
 end $$;
@@ -216,7 +220,7 @@ begin
     rows:=rows||jsonb_build_array(jsonb_build_object('joint_id',j->>'id','method',method,'source',case when pair then 'existing' else 'none' end,'kind',null,
      'diameter_mm',null,'length_mm',null,'count',null,'spacing_mm',null,'through_instance_id',case when pair then null else through end,'through_mm',case when pair then null else t end,
      'embed_mm',case when pair then null else embed end,'contact_length_mm',lc,'contact_width_mm',wc,'proposal',null,
-     'gaps',case when pair then '[]'::jsonb else to_jsonb(gaps||'no_fastener_chosen'::text) end,'material_id',null,'material_revision',null));
+     'gaps',case when pair then '[]'::jsonb else to_jsonb(gaps||'no_fastener_chosen'::text) end,'counting',null,'material_id',null,'material_revision',null));
     continue;
    end if;
    for chosen in select value from jsonb_array_elements(j->'fasteners') loop

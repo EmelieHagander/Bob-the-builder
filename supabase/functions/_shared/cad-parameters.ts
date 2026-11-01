@@ -191,28 +191,32 @@ const PLACEMENT=/\/(placement|start)\/(x|y|z|rx|ry|rz)$/
 export class CadReservedParameter extends Error {
  constructor(readonly id:string){super('reserved_parameter_id:'+id)}
 }
-/** The zero bindings and nodes code adds to a plan, and the code zero nodes no
- * binding, formula or frame uses any more. A model node with a reserved ID
+/** The zero bindings and nodes code adds to a plan, the code zero bindings
+ * whose path is gone, and the code zero nodes no binding, formula or frame
+ * uses any more. A model node with a reserved ID
  * that is not the exact code node is rejected. */
 export function zeroDefaults(recipe:CadAssemblyRequest|null,plan:ParameterPlan,arrays:{id:string}[]=[]){
  const bound=new Set(plan.bindings.map(b=>b.path)),bindings:{path:string;node:string}[]=[]
- if(recipe)for(const [path,t] of cadParameterTargets(recipe))if(!bound.has(path)&&PLACEMENT.test(path)&&t.get()===0)bindings.push({path,node:ZERO_NODE_IDS[t.unit as 'mm'|'deg']})
+ const targets=recipe?cadParameterTargets(recipe):null
+ if(targets)for(const [path,t] of targets)if(!bound.has(path)&&PLACEMENT.test(path)&&t.get()===0)bindings.push({path,node:ZERO_NODE_IDS[t.unit as 'mm'|'deg']})
+ // Code's zero bindings of a part that is gone go with it.
+ const stale=targets?plan.bindings.filter(b=>ZERO_IDS.has(b.node)&&!targets.has(b.path)).map(b=>b.path):[]
  // Array starts have no recipe value; only their rotations default to none.
  for(const a of arrays)for(const k of ['rx','ry','rz']){const path=`arrays/${a.id}/start/${k}`;if(!bound.has(path))bindings.push({path,node:ZERO_NODE_IDS.deg})}
  const present=new Map(plan.nodes.filter(n=>ZERO_IDS.has(n.id)).map(n=>[n.id,n]))
  for(const [id,n] of present)if(!isZeroNode(n,id===ZERO_NODE_IDS.mm?'mm':'deg'))throw new CadReservedParameter(id)
- const used=new Set([...plan.bindings,...bindings].map(b=>b.node))
+ const used=new Set([...plan.bindings.filter(b=>!stale.includes(b.path)),...bindings].map(b=>b.node))
  for(const n of plan.nodes)if(n.role==='derived')n.operands.forEach(o=>used.add(o))
  frameParameterIds(plan.frames).forEach(id=>used.add(id))
  const nodes=(['mm','deg'] as const).filter(u=>used.has(ZERO_NODE_IDS[u])&&!present.has(ZERO_NODE_IDS[u])).map(zeroNode)
  const unused=[...present.keys()].filter(id=>!used.has(id))
- return {bindings,nodes,unused}
+ return {bindings,nodes,unused,stale}
 }
 /** recipe null: before array expansion, only the array start rotations. */
 export function withZeroDefaults(recipe:CadAssemblyRequest|null,plan:ParameterPlan,arrays:{id:string}[]=[]):ParameterPlan{
  const d=zeroDefaults(recipe,plan,arrays)
- if(!d.bindings.length&&!d.nodes.length&&!d.unused.length)return plan
- return {...plan,nodes:[...plan.nodes.filter(n=>!d.unused.includes(n.id)),...d.nodes],bindings:[...plan.bindings,...d.bindings]}
+ if(!d.bindings.length&&!d.nodes.length&&!d.unused.length&&!d.stale.length)return plan
+ return {...plan,nodes:[...plan.nodes.filter(n=>!d.unused.includes(n.id)),...d.nodes],bindings:[...plan.bindings.filter(b=>!d.stale.includes(b.path)),...d.bindings]}
 }
 
 /** The binding and repeat descriptions of the default-zero pin (owner-approved

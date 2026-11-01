@@ -100,3 +100,14 @@ test('a parameter change cannot move the shared code zero',async()=>{
  assert.equal(changed.recipe.instances.find(i=>i.id==='right')?.placement.x,488)
  assert.equal(changed.recipe.instances.find(i=>i.id==='left')?.placement.x,0)
 })
+
+test('code zero bindings of a part that is gone are dropped with it',()=>{
+ const {recipe,plan}=box(),filled=withZeroDefaults(recipe,plan)
+ const gone=structuredClone(recipe),id=gone.instances[0].id
+ gone.instances=gone.instances.slice(1)
+ const own=filled.bindings.filter(b=>b.path.startsWith(`instances/${id}/`)&&!b.node.startsWith('origin.'))
+ const left={...filled,bindings:filled.bindings.filter(b=>!own.includes(b))}
+ const d=zeroDefaults(gone,left)
+ assert(d.stale.length>0&&d.stale.every(p=>p.startsWith(`instances/${id}/`)))
+ assert(!withZeroDefaults(gone,left).bindings.some(b=>b.path.startsWith(`instances/${id}/`)))
+})
