@@ -49,6 +49,7 @@ export async function runClaimedProjectTurn(opts: {
   onToolBatch?: (names: string[]) => void;
   deadline?: number; resume?: boolean; beforeSettle?: () => void; modelTimeoutMs?: number; unlimitedWork?: boolean;
   finalAnswer?: boolean;
+  workerCheckpoint?: boolean;
   checkpoint?: BobAnswerCheckpoint;
   commit?: (result: Extract<ProjectAnswer, { ok: true }>, generation: number) => Promise<void>;
   fail: (generation: number) => Promise<void>;
