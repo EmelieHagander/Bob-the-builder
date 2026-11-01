@@ -178,7 +178,10 @@ himself. Manifests with `bob.tools` `build_workers_version` 1
   code, field paths and, for an unmapped message, a content-free fingerprint in
   the run's event log. Construction tools read a left-out field that accepts null
   as null before the schema check (`withOmittedNulls`, prepared 2026-11-01 after
-  Konrad's live read left out `result_id`); present values are checked unchanged. A job the spending stop ends reports `paused_at_limit`
+  Konrad's live read left out `result_id`); present values are checked unchanged. Workers and other specialists refresh their context at
+  `specialist_continuation_tokens` (150k, pinned per job; prepared 2026-11-01) instead of
+  Bob's 64k: at 64k Konrad's chain on a 70-part bunk bed was summarized almost every
+  step, and he re-read about 20 pages without saving (job da79a46e). A job the spending stop ends reports `paused_at_limit`
   with the same receipts and readback when the job is pinned to the
   [final answer](ask-bob-conversations.md#final-answer-past-stop) (installed 2026-11-01).
 

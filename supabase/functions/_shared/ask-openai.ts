@@ -342,7 +342,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -367,6 +367,8 @@ export async function answerWithOpenAi(opts: {
       ...(typeof contract.turn_usd_stop === 'number' && Number.isFinite(contract.turn_usd_stop) && contract.turn_usd_stop > 0 ? { turnUsdStop: contract.turn_usd_stop } : {}),
       // Bob's one final answer past that stop (2026-11-01). Jobs without this pin end at the stop.
       ...bobFinalAnswerVersion(contract),
+      // Specialists refresh later than Bob (2026-11-01). Jobs without this pin use Bob's limit for every role.
+      ...(Number.isInteger(contract.specialist_continuation_tokens) && contract.specialist_continuation_tokens >= 1000 ? { specialistContinuationTokens: contract.specialist_continuation_tokens } : {}),
       memoryManagementVersion: contract.context_strategy_version === 1 ? 2 as const : 1 as const,
       ...(contract.context_strategy_version === 1 ? { contextStrategyVersion: 1 as const } : {}),
       // Owner decision 2026-10-30: the memory stair and the prompt ordered by how often its parts change.
@@ -375,6 +377,7 @@ export async function answerWithOpenAi(opts: {
     }))
   if (execution.turnUsdStop !== undefined && !(typeof execution.turnUsdStop === 'number' && Number.isFinite(execution.turnUsdStop) && execution.turnUsdStop > 0)) throw new Error('turn_usd_stop_invalid')
   if (execution.finalAnswerVersion !== undefined && execution.finalAnswerVersion !== 1) throw new Error('final_answer_version_invalid')
+  if (execution.specialistContinuationTokens !== undefined && !(Number.isInteger(execution.specialistContinuationTokens) && execution.specialistContinuationTokens >= 1000)) throw new Error('specialist_continuation_invalid')
   const finalAnswer = execution.finalAnswerVersion === 1 && unlimitedWork && execution.turnUsdStop !== undefined
   modelBudget = createBobModelBudget(undefined, undefined, undefined, { unlimitedWork, ...(execution.turnUsdStop !== undefined ? { usdStop: execution.turnUsdStop } : {}), ...(finalAnswer ? { finalAnswer: true } : {}) })
   if (execution.lookupObservationVersion !== undefined && execution.lookupObservationVersion !== 1) throw new Error('lookup_observation_version_invalid')
@@ -414,6 +417,7 @@ export async function answerWithOpenAi(opts: {
     ...(execution.resultWindowVersion === 2 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS, resultWindowVersion: 2 as const } : {}),
     ...(execution.constructionPageVersion === 1 ? { literalResultTokens: { [CONSTRUCTION_VIEW_TOOL.function.name]: BOB_CONSTRUCTION_RESULT_TOKENS } } : {}),
     ...(execution.rolloverVersion === 1 ? { rolloverVersion: 1 as const } : {}),
+    ...(execution.specialistContinuationTokens !== undefined ? { specialistContinuationTokens: execution.specialistContinuationTokens } : {}),
     ...(execution.promptTiersVersion === 1 ? { compactionBatch: BOB_COMPACTION_BATCH } : {}),
     // Older in-flight journals keep their recorded call sequence and re-page.
     ...(execution.contextPagingVersion === 1 && journal ? { pageBoundaries: (source: string, compute: () => Promise<(number | null)[]>) =>
