@@ -1,5 +1,29 @@
 # Foundation verification and rollout
 
+<a id="entren-cleanup-2026-11-01"></a>
+## "Bygga in entrén" shopping list cleaned up — 2026-11-01
+
+Owner request ("clean up Bygga in entrén"), option B approved. The project's 71
+hand-added Shopping rows (`bob.materials`) predated material needs and the
+catalog: 33 tools, a duplicate of the two reused windows (already existing
+parts), 10 timber/subfloor/screw rows whose amounts the construction will
+produce, and 27 honest reminders. One guarded transaction
+(`Docs/archive/bygga-in-entren-cleanup-2026-11-01.sql`) after a full snapshot
+(`Docs/archive/bygga-in-entren-shopping-2026-11-01.json`):
+
+- the 33 tools became tool needs of task `t_entre_tools_check` (label = name,
+  note = quantity), so they show in its readiness panel;
+- the window duplicate and the 10 construction rows were removed; their choices
+  (C24 frame, treated sill, ~22 mm subfloor) remain in the snapshot for the
+  solution's next revision;
+- 27 rows remain (Grund 3, Golv 4, Stomme 1, Sidoväggar 4, Front 3, Tak 5,
+  Ytskikt 7). Read back: 27 rows, 33 tool needs.
+
+Open, for the owner: the width (plan 370 cm total; "+100 cm" gives 365; the
+house-side measurements add to 270, not 265), the project phase, and the
+existing roof tiles as an existing part. The solution (v1, September, no design
+intent) needs one Bob turn to update; the owner may restart the project instead.
+
 <a id="konrad-lean-install-2026-11-01"></a>
 ## Konrad's lean construction installed — 2026-11-01
 
