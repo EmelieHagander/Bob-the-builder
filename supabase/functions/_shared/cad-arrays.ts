@@ -23,7 +23,7 @@ export function withRepeatStart<T>(schema:T):T{
  s.items.required=[...s.items.required,'start']
  return s
 }
-// Draft wording, pending the owner's OLD -> NEW approval.
+// Owner-approved wording (2026-11-01).
 export const REPEAT_ARRAYS_TEXT='Repeat templates for evenly spaced identical parts. Each expands to instances <id>.1..<id>.<count>. Bind arrays/<id>/start/x|y|z and arrays/<id>/spacing_mm (centre-to-centre step along axis); a start value stated as 0 may stay unbound, and code binds it to zero; an unbound start rotation means none. Do not bind the expanded instances. Copy N sits at start + (N-1) x spacing along axis.'
 /** The repeat schema of the default-zero pin, with a stated start. */
 export function withRepeatStartSchema<T>(value:T):T{

@@ -30,7 +30,7 @@ const mattias = (def('bob.tools').workers as Record<string, any>).materials
 const findManual = def('tools.find_catalog_materials').additional_description as string
 if (!Array.isArray(mattias?.reads) || mattias.reads.includes('find_catalog_materials')) throw new Error('materials worker reads unexpected')
 
-// Owner-approved texts (OLD -> NEW), filled in after review.
+// Owner-approved texts (OLD -> NEW, 2026-11-01).
 export const TEXTS = {
   persona: { old: 'Konrad säger med ord vad han behöver, och du pekar', new: 'Någon i laget säger med ord vad som behövs, och du pekar' },
   contractNeed: { old: 'For each need Konrad names, find', new: 'For each need, find' },

@@ -141,7 +141,7 @@ const CONSTRUCTION_PROSE:Record<string,readonly string[]>={
 function arrayGaps(message:string):string[]{
  try{const v=JSON.parse(message.slice('parameter_gaps:'.length));return Array.isArray(v?.unbound)?v.unbound.filter((p:unknown)=>typeof p==='string').slice(0,256):[]}catch{return []}
 }
-// Draft wording, pending the owner's OLD -> NEW approval (repeat_start_version 1).
+// Owner-approved wording (2026-11-01, repeat_start_version 1).
 const REPEAT_GAP_MESSAGE='No construction saved. Bind every path in unbound.'
 /** The schedule rows of chosen items that carry a fact, compactly; null when
  * the schedule could not be read (never shown as "no facts"). */
