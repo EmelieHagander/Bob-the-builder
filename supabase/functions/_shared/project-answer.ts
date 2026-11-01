@@ -700,7 +700,10 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       // but no callable tools, and answers from what he already has.
       if (opts.finalAnswer && !finalCall && !reviewedAnswer && !pendingResponse.success && pendingResponse.error === 'turn_budget_exhausted') {
         finalCall = true; tools = []; toolbox.closeSurface()
-        request = { ...request, tool_choice: 'none' }
+        // He is told once that the tools are closed (the approved closed-bench note).
+        const note = closedNoteSent ? [] : [{ role: 'user' as const, content: opts.aiCatalog.text('bob.note.prefix') + opts.aiCatalog.text('bob.note.closed', { budget: 'spending' }) }]
+        closedNoteSent = true
+        request = { ...request, tool_choice: 'none', messages: [...request.messages, ...note] }
         pendingResponse = undefined
         await save(step)
         pendingResponse = await opts.callModel(request)

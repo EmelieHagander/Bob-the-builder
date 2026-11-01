@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { catalogFixture, catalogCall } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, catalogCall, preMaterialFinderTeamCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { createBobModelBudget, bobFinalAnswerVersion } from '../supabase/functions/_shared/bob-model-budget.ts'
 import { BobContinuation } from '../supabase/functions/_shared/bob-job-journal.ts'
 import { runProjectAnswer, seedToolPolicy, type BobAnswerState } from '../supabase/functions/_shared/project-answer.ts'
@@ -67,9 +67,9 @@ test('the grant survives checkpoints, and older checkpoints still restore', asyn
 
 test('the flag is pinned from the manifest: final_answer_version 1, otherwise nothing', () => {
   const contract = (catalog: AiCatalogSession) => catalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
-  assert.deepEqual(bobFinalAnswerVersion(contract(catalogFixture())), {})
-  const pinned = catalogFixture(m => { m.definitions.find(d => d.prompt_key === 'agent-contract.ask-bob')!.metadata.final_answer_version = 1 })
-  assert.deepEqual(bobFinalAnswerVersion(contract(pinned)), { finalAnswerVersion: 1 })
+  // Published by bob-finder-save-fixes-v1; manifests pinned before it have no flag.
+  assert.deepEqual(bobFinalAnswerVersion(contract(preMaterialFinderTeamCatalogFixture())), {})
+  assert.deepEqual(bobFinalAnswerVersion(contract(catalogFixture())), { finalAnswerVersion: 1 })
   assert.deepEqual(bobFinalAnswerVersion({ final_answer_version: 2 }), {})
 })
 
@@ -144,7 +144,10 @@ test('a worker stopped by the spending stop reports what it saved, and Bob answe
   // The final request is the refused one, with its tools kept but not callable.
   assert.equal(bob[1].tool_choice, undefined); assert.equal(bob[2].tool_choice, 'none')
   assert.deepEqual(bob[2].tools!.map(t => t.function.name), bob[1].tools!.map(t => t.function.name))
-  assert.deepEqual({ ...bob[2], tool_choice: undefined }, { ...bob[1], tool_choice: undefined })
+  // Same request, plus the approved closed-bench note once, naming the spending budget.
+  assert.deepEqual({ ...bob[2], tool_choice: undefined, messages: bob[2].messages.slice(0, -1) }, { ...bob[1], tool_choice: undefined })
+  const note = bob[2].messages.at(-1)!
+  assert.equal(note.role, 'user'); assert.match(String(note.content), /spending/)
   assert(constructionCalls.includes('check_construction_draft'))
 })
 

@@ -3,7 +3,8 @@
 --  * Mattias reads with find_catalog_materials and keeps catalog search and read;
 --  * the finder's persona, contract, card and manual no longer name Konrad as the only asker;
 --  * Konrad's saves round values to 6 decimals instead of refusing (decimal_rounding_version 1);
---  * a repeat states its start; a start of 0 binds to the code zero (repeat_start_version 1).
+--  * a repeat states its start; a start of 0 binds to the code zero (repeat_start_version 1);
+--  * at the spending stop Bob gets one final call without tools to answer (final_answer_version 1).
 -- Deploy ask-bob and bob-worker from the same source first, then apply with no Bob job running.
 -- Pinned manifests keep their behaviour.
 begin;
@@ -39,7 +40,8 @@ declare spec jsonb:=$bob_catalog_publication${
   " * Mattias reads with find_catalog_materials and keeps catalog search and read;",
   " * the finder's persona, contract, card and manual no longer name Konrad as the only asker;",
   " * Konrad's saves round values to 6 decimals instead of refusing (decimal_rounding_version 1);",
-  " * a repeat states its start; a start of 0 binds to the code zero (repeat_start_version 1).",
+  " * a repeat states its start; a start of 0 binds to the code zero (repeat_start_version 1);",
+  " * at the spending stop Bob gets one final call without tools to answer (final_answer_version 1).",
   "Deploy ask-bob and bob-worker from the same source first, then apply with no Bob job running.",
   "Pinned manifests keep their behaviour."
  ],
@@ -99,6 +101,13 @@ declare spec jsonb:=$bob_catalog_publication${
      "new": "det någon i laget beskriver med ord"
     }
    ]
+  },
+  {
+   "key": "agent-contract.ask-bob",
+   "kind": "agent_contract",
+   "metadata": {
+    "final_answer_version": 1
+   }
   },
   {
    "key": "tools.save_construction_draft",

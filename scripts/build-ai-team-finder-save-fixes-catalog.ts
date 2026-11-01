@@ -5,6 +5,7 @@
  * - Konrad's saves: values with more than 6 decimals are rounded and reported
  *   (decimal_rounding_version 1); a repeat states its start, and a start of 0
  *   binds to the code zero (repeat_start_version 1).
+ * - Bob's final answer past the spending stop (final_answer_version 1).
  * Only the exact live values are changed.
  * usage: node --import tsx scripts/build-ai-team-finder-save-fixes-catalog.ts [--check] */
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -49,7 +50,8 @@ const spec = {
     ' * Mattias reads with find_catalog_materials and keeps catalog search and read;',
     ' * the finder\'s persona, contract, card and manual no longer name Konrad as the only asker;',
     ' * Konrad\'s saves round values to 6 decimals instead of refusing (decimal_rounding_version 1);',
-    ' * a repeat states its start; a start of 0 binds to the code zero (repeat_start_version 1).',
+    ' * a repeat states its start; a start of 0 binds to the code zero (repeat_start_version 1);',
+    ' * at the spending stop Bob gets one final call without tools to answer (final_answer_version 1).',
     'Deploy ask-bob and bob-worker from the same source first, then apply with no Bob job running.',
     'Pinned manifests keep their behaviour.',
   ],
@@ -60,6 +62,8 @@ const spec = {
     { key: 'material-finder.contract', kind: 'instruction_fragment', replace: [{ field: 'content', ...TEXTS.contractNeed }, { field: 'content', ...TEXTS.contractPurpose }] },
     { key: 'tools.find_catalog_materials', kind: 'tool_contract', replace: [{ field: 'card_description', ...TEXTS.card }, { field: 'additional_description', ...TEXTS.manual }] },
     { key: 'role.material-finder', kind: 'role', replace: [{ field: 'purpose', ...TEXTS.purpose }] },
+    // Bob's final answer past the owner's spending stop (needs the runtime deployed first).
+    { key: 'agent-contract.ask-bob', kind: 'agent_contract', metadata: { final_answer_version: 1 } },
     { key: 'tools.save_construction_draft', kind: 'tool_contract', metadata: { decimal_rounding_version: 1, repeat_start_version: 1 },
       swap: packed([{ old: arraysOld, new: arraysNew, count: 1 }]) },
   ],

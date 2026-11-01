@@ -69,3 +69,9 @@ test('a value with too many decimals is rounded before the tool runs and named i
  assert.deepEqual(now.rounded_values,['third']);assert(!('rounded_values' in pinned))
  assert.equal(now.status,'unavailable');assert.equal(pinned.status,'unavailable')
 })
+
+test('Bob\'s final answer past the spending stop is switched on only for the new manifest',()=>{
+ const meta=(session:ReturnType<typeof catalogFixture>)=>session.manifest().definitions.find(row=>row.prompt_key==='agent-contract.ask-bob')!.metadata
+ assert.equal(meta(catalogFixture()).final_answer_version,1);assert.equal(meta(catalogFixture()).turn_usd_stop,2)
+ assert(!('final_answer_version' in meta(preMaterialFinderTeamCatalogFixture())))
+})
