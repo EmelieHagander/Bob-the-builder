@@ -71,21 +71,6 @@ class FastenerBandTest(unittest.TestCase):
         empty=annotations.fastener_lines({**schedule(joints=[],totals=[]),'glue_packages':0,'complete':True})
         self.assertEqual(empty[2:],[('note','No screws, nails or bolts in the saved joints.')])
 
-    def test_chosen_items_say_chosen_and_list_glue_once_per_joint(self):
-        # Owner decision 2026-11-01: the designer chooses catalog items, several per joint.
-        def row(jid,kind,d,length,n,source='chosen',gaps=()):
-            return {'joint_id':jid,'method':'butt','source':source,'kind':kind,'diameter_mm':d,'length_mm':length,'count':n,'spacing_mm':None,
-                    'through_instance_id':'front','through_mm':12,'embed_mm':276,'contact_length_mm':250,'contact_width_mm':12,'proposal':None,'gaps':list(gaps),
-                    'material_id':'00000000-0000-4000-8000-000000000001','material_revision':1}
-        joints=[row('a','screw',3.5,30,3,gaps=['narrow_contact']),row('a','glue',None,None,None),row('b','screw',3.5,30,3),row('b','glue',None,None,None),
-                row('c',None,None,None,None,'none',['no_fastener_chosen'])]
-        lines=annotations.fastener_lines({'rule_version':'fastener-rules-v1','complete':False,'glue_packages':1,'joints':joints,
-            'totals':[{'kind':'screw','diameter_mm':3.5,'length_mm':30,'count':6,'joint_ids':['a','b']}]})
-        self.assertEqual(lines,[('title','Fasteners - chosen items, counts by rule where not given, no strength calculation'),
-            ('header',('No.','Fastener','d x L (mm)','Qty','Basis')),('row',('F1','Screw','3.5 x 30','6','chosen')),
-            ('note','Glue: 1 package for 2 glued joints.'),('note','No fastener chosen yet for 1 joint.'),
-            ('note','Fastener warnings (too short, through the far face, short or narrow contact) on 1 joint - check before building.')])
-
     def test_band_is_on_sheet_one_only_inside_its_page_and_clear_of_geometry_and_footer(self):
         for count in (1,32,33):
             with self.subTest(count=count), tempfile.TemporaryDirectory() as tmp:

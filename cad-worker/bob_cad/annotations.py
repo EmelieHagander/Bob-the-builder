@@ -104,29 +104,20 @@ def fastener_lines(fasteners):
     """Sheet 1's compact band: grouped rows F1, F2... in the saved totals order,
     glue packages and what the rules could not size. The schedule is a
     rule-of-thumb proposal from the saved geometry, never a strength result."""
-    # 2026-11-01: a joint may hold several items the designer chose from the
-    # catalog (source 'chosen'); schedules without them keep the old wording.
-    chosen=any(j['source'] in ('chosen','none') for j in fasteners['joints'])
-    basis={}
-    for j in fasteners['joints']: basis.setdefault(j['joint_id'],set()).add(j['source'])
-    lines=[('title','Fasteners - chosen items, counts by rule where not given, no strength calculation' if chosen
-            else 'Fasteners - proposal from rules of thumb, no strength calculation'),
+    basis={j['joint_id']:j['source'] for j in fasteners['joints']}
+    lines=[('title','Fasteners - proposal from rules of thumb, no strength calculation'),
            ('header',('No.','Fastener','d x L (mm)','Qty','Basis'))]
     for index,total in enumerate(fasteners['totals'],1):
-        sources=set().union(*(basis.get(i,{None}) for i in total['joint_ids']))
-        label=(' and '.join(sorted(x for x in sources if x)) if 'chosen' in sources
-               else 'rule' if sources=={'rule'} else 'override' if sources=={'override'} else 'rule and override')
+        sources={basis.get(i) for i in total['joint_ids']}
         lines.append(('row',(f'F{index}',FASTENER_KINDS[total['kind']],f"{_diameter(total['diameter_mm'])} x {_number(total['length_mm'])}",
-                             str(total['count']),label)))
+                             str(total['count']),'rule' if sources=={'rule'} else 'override' if sources=={'override'} else 'rule and override')))
     if not fasteners['totals']: lines.append(('note','No screws, nails or bolts in the saved joints.'))
-    glued=len({j['joint_id'] for j in fasteners['joints'] if j['kind']=='glue'})
+    glued=sum(j['kind']=='glue' for j in fasteners['joints'])
     if fasteners['glue_packages']: lines.append(('note',f"Glue: {_plural(fasteners['glue_packages'],'package','packages')} for {_plural(glued,'glued joint','glued joints')}."))
-    open_choice={j['joint_id'] for j in fasteners['joints'] if j['source']=='none'}
-    if open_choice: lines.append(('note',f"No fastener chosen yet for {_plural(len(open_choice),'joint','joints')}."))
     unsized={j['joint_id'] for j in fasteners['joints'] if j['source']=='no_rule' or j['kind'] in MECHANICAL and None in (j['diameter_mm'],j['length_mm'],j['count'])}
     if unsized: lines.append(('note',f"No fastener rule or size yet for {_plural(len(unsized),'joint','joints')}."))
-    flagged=len({j['joint_id'] for j in fasteners['joints'] if j['gaps'] and j['joint_id'] not in unsized|open_choice})
-    if flagged: lines.append(('note',f"{'Fastener warnings (too short, through the far face, short or narrow contact)' if chosen else 'Rule warnings (short or narrow contact, short screw)'} on {_plural(flagged,'joint','joints')} - check before building."))
+    flagged=sum(1 for j in fasteners['joints'] if j['gaps'] and j['joint_id'] not in unsized)
+    if flagged: lines.append(('note',f"Rule warnings (short or narrow contact, short screw) on {_plural(flagged,'joint','joints')} - check before building."))
     return lines
 
 def annotate(path, req, rows, bounds, view, camera, up, center, source=None, fasteners=None):
