@@ -489,8 +489,20 @@ for(const migration of migrations){
    if(seed.some(row=>row.key===key))throw new Error('publication_already_published: '+key)
    seed.push({key,kind,content:content??'',definition:definition??{},variables:[],metadata:{...metadata,publication:spec.publication}});versions.set(key,1)
   }
+  // Swaps replace every equal subtree of the parameters, with an exact count.
+  const swapIn=(node:any,old:string,next:any,hits:{n:number}):any=>{
+   if(JSON.stringify(node)===old){hits.n++;return structuredClone(next)}
+   if(Array.isArray(node))return node.map(x=>swapIn(x,old,next,hits))
+   if(node&&typeof node==='object')return Object.fromEntries(Object.entries(node).map(([k,v])=>[k,swapIn(v,old,next,hits)]))
+   return node
+  }
   for(const edit of spec.edits){
    const row=seed.find(row=>row.key===edit.key)
+   for(const {old,new:next,count} of edit.swap??[]){
+    const hits={n:0},parameters=swapIn(row.definition.parameters,JSON.stringify(old),next,hits)
+    if(hits.n!==count)throw new Error('publication_swap_unexpected: '+edit.key)
+    row.definition={...row.definition,parameters}
+   }
    for(const {path,value} of edit.set??[]){
     row.definition=structuredClone(row.definition)
     const parent=path.slice(0,-1).reduce((o:any,k:string)=>o?.[k],row.definition)

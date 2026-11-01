@@ -16,7 +16,23 @@ const PUBLICATION = 'bob-konrad-lean-v1'
 const before = preKonradLeanCatalogFixture()
 const def = (key: string) => before.definition(key).definition as Record<string, any>
 const former = { path: (CAD_PARAMETERS_SCHEMA.properties.bindings as any).items.properties.path.description as string, arrays: CAD_ARRAYS_SCHEMA.description }
-const lean = <T,>(schema: T) => withDefaultZeroText(withChosenJointFasteners(schema), former)
+// Only the changed pieces travel (owner decision 2026-11-01: the usual small
+// publication): each swap replaces every equal subtree, with its exact count.
+const count = (node: unknown, target: string): number => JSON.stringify(node) === target ? 1
+  : Array.isArray(node) ? node.reduce((n: number, x) => n + count(x, target), 0)
+  : node && typeof node === 'object' ? Object.values(node).reduce((n: number, x) => n + count(x, target), 0) : 0
+const swaps = (schema: unknown) => {
+  const jointOld = (def('tools.save_construction_draft').parameters.properties.joints as { items: unknown }).items
+  const pairs: [unknown, unknown][] = [
+    [jointOld, (withChosenJointFasteners({ items: jointOld }) as { items: unknown }).items],
+    [former.path, (withDefaultZeroText({ description: former.path }, former) as { description: string }).description],
+    [former.arrays, (withDefaultZeroText({ description: former.arrays }, former) as { description: string }).description],
+  ]
+  return pairs.map(([old, next]) => ({ old, new: next, count: count(schema, JSON.stringify(old)) })).filter(s => s.count > 0)
+}
+// Schema subtrees print on one line each: they are code output, checked by tests.
+const compact: unknown[] = []
+const packed = <T,>(list: T[]) => list.map((sw: any) => ({ ...sw, old: (compact.push(sw.old), `§${compact.length - 1}§`), new: (compact.push(sw.new), `§${compact.length - 1}§`) }))
 
 const A3C_OLD = 'Joint fastener: null applies the fixed rule (a screw sized from the board thickness; glue for glued joints). Set a fastener only for an owner choice such as nails, with kind, diameter_mm and length_mm; leave count and spacing_mm null to spread them by rule. Sending null removes an earlier choice. A joint between two existing parts (both role existing_part) gets no new fastener unless you set one.'
 const A3C_NEW = 'What holds each joint is your choice: find_catalog_materials finds what the catalog has, and add_catalog_fastener adds the hardware it lacks. The database measures each chosen item against the joint it holds and shows the facts per item in the construction check; where a fact speaks against an item, choose again or keep the joint open. A joint between two existing parts needs nothing new.'
@@ -79,7 +95,7 @@ const spec = {
   ],
   edits: [
     { key: 'tools.save_construction_draft', kind: 'tool_contract', metadata: { default_zero_version: 1, joint_fastener_version: 2 },
-      set: [{ path: ['parameters'], value: lean(def('tools.save_construction_draft').parameters) }],
+      swap: packed(swaps(def('tools.save_construction_draft').parameters)),
       replace: [
         { field: 'description', old: 'You choose parts and typed joints and save this shared checkpoint;', new: 'You choose parts, joints and what holds them, and save this shared checkpoint;' },
         { field: 'description', old: 'Joints name box faces in LOCAL part coordinates; methods/reasons are unverified design choices.', new: 'Joints name box faces in LOCAL part coordinates.' },
@@ -89,7 +105,7 @@ const spec = {
         { field: 'card_description', old: 'parts, materials and typed joints', new: 'parts, materials, joints and what holds them' },
       ] },
     { key: 'tools.edit_construction_parts', kind: 'tool_contract',
-      set: [{ path: ['parameters'], value: lean(def('tools.edit_construction_parts').parameters) }],
+      swap: packed(swaps(def('tools.edit_construction_parts').parameters)),
       replace: [{ field: 'additional_description', old: ' ' + A3C_OLD, new: '' }] },
     { key: 'tools.check_construction_draft', kind: 'tool_contract',
       replace: [{ field: 'description', old: 'planar screwed/glued butt-joint concepts', new: 'planar butt joints' }] },
@@ -125,11 +141,32 @@ const spec = {
   tool_catalog: [policy(find), policy(add)],
 }
 
-const dump = (v: unknown) => JSON.stringify(v, null, 1)
+const dump = (v: unknown) => JSON.stringify(v, null, 1).replace(/"§(\d+)§"/g, (_m, i) => JSON.stringify(compact[Number(i)]))
 const sql = `${spec.header.map(line => '-- ' + line).join('\n')}
 begin;
 set local lock_timeout='5s';
 set local statement_timeout='60s';
+create or replace function pg_temp.publication_count(node jsonb,target jsonb) returns integer language plpgsql immutable as $count$
+declare n integer:=0; v jsonb;
+begin
+ if node=target then return 1; end if;
+ if jsonb_typeof(node)='object' then for v in select value from jsonb_each(node) loop n:=n+pg_temp.publication_count(v,target); end loop;
+ elsif jsonb_typeof(node)='array' then for v in select value from jsonb_array_elements(node) loop n:=n+pg_temp.publication_count(v,target); end loop; end if;
+ return n;
+end $count$;
+create or replace function pg_temp.publication_swap(node jsonb,old_value jsonb,new_value jsonb) returns jsonb language plpgsql immutable as $swap$
+declare result jsonb; k text; v jsonb;
+begin
+ if node=old_value then return new_value; end if;
+ if jsonb_typeof(node)='object' then
+  result:='{}';
+  for k,v in select key,value from jsonb_each(node) loop result:=result||jsonb_build_object(k,pg_temp.publication_swap(v,old_value,new_value)); end loop;
+  return result;
+ elsif jsonb_typeof(node)='array' then
+  return coalesce((select jsonb_agg(pg_temp.publication_swap(value,old_value,new_value) order by ord) from jsonb_array_elements(node) with ordinality x(value,ord)),'[]'::jsonb);
+ end if;
+ return node;
+end $swap$;
 do $bob_catalog_publication_do$
 declare spec jsonb:=$bob_catalog_publication$${dump(spec)}$bob_catalog_publication$::jsonb;
  patch jsonb; change jsonb; prior shared.ai_prompt_versions; prompt_uuid uuid; version_uuid uuid; next_version integer; activation jsonb:='{}';
@@ -158,6 +195,10 @@ begin
    where p.app='bob' and p.prompt_key=patch->>'key' and p.definition_kind=patch->>'kind' and p.retired_at is null for update of p;
   if not found then raise exception 'publication_edit_missing: %',patch->>'key'; end if;
   new_content:=prior.content;definition:=prior.definition;
+  for change in select value from jsonb_array_elements(coalesce(patch->'swap','[]'::jsonb)) loop
+   if pg_temp.publication_count(definition->'parameters',change->'old')<>(change->>'count')::integer then raise exception 'publication_swap_unexpected: %',patch->>'key'; end if;
+   definition:=jsonb_set(definition,'{parameters}',pg_temp.publication_swap(definition->'parameters',change->'old',change->'new'));
+  end loop;
   for change in select value from jsonb_array_elements(coalesce(patch->'set','[]'::jsonb)) loop
    path:=array(select jsonb_array_elements_text(change->'path'));
    if definition#>path is null then raise exception 'publication_set_missing: % %',patch->>'key',change->>'path'; end if;
