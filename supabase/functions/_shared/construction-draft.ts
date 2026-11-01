@@ -13,7 +13,7 @@ import { INSTANCE_POLICY_SCHEMA,constructionInstancePolicy } from './constructio
 import { CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL } from './construction-consequences.ts'
 import { humanTextRejection, proseFields } from './human-text.ts'
 import { JOINT_FASTENER_SCHEMA, parseFastenerSchedule, storedChosenJoints, storedJoints, withChosenJointFasteners, withRuleFasteners, type FastenerSchedule } from './construction-fasteners.ts'
-import { schemaIssues } from './schema-issues.ts'
+import { schemaIssues, withOmittedNulls } from './schema-issues.ts'
 import { fingerprint, rethrowContinuation, type BobJournal } from './bob-job-journal.ts'
 import type { ProjectWriter,WritePayload } from './project-write.ts'
 import { parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
@@ -317,6 +317,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if((name===CONSTRUCTION_SAVE_TOOL.function.name||name===CONSTRUCTION_LEGACY_TOOL.function.name)&&ruled(name)&&Array.isArray(r.joints))raw={...r,joints:withRuleFasteners(r.joints)}
    if(name===CONSTRUCTION_EDIT_TOOL.function.name&&ruled(name)&&Array.isArray(r.changes?.joints?.upsert))raw={...r,changes:{...r.changes,joints:{...r.changes.joints,upsert:withRuleFasteners(r.changes.joints.upsert)}}}
   }
+  raw=withOmittedNulls(spec.function.parameters,raw)
   const issues=schemaIssues(spec.function.parameters,raw)
   if(issues.length)return {status:'invalid',issues}
   const prose=humanTextRejection(proseFields(raw,CONSTRUCTION_PROSE[name]??[]))
