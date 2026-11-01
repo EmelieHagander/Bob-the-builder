@@ -923,7 +923,9 @@ is tool-free and elapsed-time fences reserve settlement time. Write limits belon
 to [bounded writes](ask-bob-writes.md). Pages and truncation remain explicit.
 
 <a id="final-answer-past-stop"></a>
-### Final answer past the spending stop — prepared 2026-11-01
+### Final answer past the spending stop — installed 2026-11-01
+
+**Installed** with `bob-finder-save-fixes-v1` ([record](foundation-verification.md#finder-save-fixes-install-2026-11-01)). The final call also carries the approved closed-bench note once (`bob.note.closed`, budget "spending"; the prompt steward's call: no new text).
 
 Owner decision 2026-11-01: "Bob's final answer always gets through." The
 temporary spending stop (`agent-contract.ask-bob` `turn_usd_stop`, USD 2) refuses

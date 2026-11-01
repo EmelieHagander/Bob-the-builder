@@ -1,5 +1,42 @@
 # Foundation verification and rollout
 
+<a id="finder-save-fixes-install-2026-11-01"></a>
+## Konrad's save fixes, Bob's final answer and the finder for the team installed — 2026-11-01
+
+Why: the owner's bunk-bed turn (Våningssäng2, 70 parts) saved Konrad's construction
+but cost USD 1.96. Two refused full saves cost USD 0.70: a value with more than 6
+decimals, and a repeat whose refusal named only its first missing link. The USD 2
+spending stop, which counts Bob and his workers together, then left Bob no call, so
+the owner got the recovery template instead of his answer.
+
+With the owner's OK ("Please install and apply"; texts approved; optional save-tool
+sentence not changed), [PR #395](https://github.com/EmelieHagander/Bob-the-builder/pull/395)
+merged as `70c4abd640ecd23c67f14555454395ee6382b2ac`. Zero open Bob jobs before
+each step.
+
+1. **Functions:** `bob-worker` v167 and `ask-bob` v199; 129 of 130 and 131 of 132
+   files equal main (the empty `cad-intake.ts`); 401 without login.
+2. **Catalog:** live equalled the pre-publication snapshot (370 rows, 0
+   differences). Recorded as `20261101160314_bob_finder_save_fixes_catalog`:
+   `bob.tools` v38 (Mattias reads `find_catalog_materials`),
+   `tools.save_construction_draft` v14 (`decimal_rounding_version` 1,
+   `repeat_start_version` 1, repeats with a stated start),
+   `agent-contract.ask-bob` v14 (`final_answer_version` 1), and the finder's
+   persona, contract, card, manual and role. All 370 active definitions equal the
+   fixture.
+
+What changes for new jobs:
+- A value with more than 6 decimals is rounded and listed in `rounded_values`
+  instead of refusing the save.
+- A repeat states its start; a start of 0 binds to the code zero. A refusal lists
+  every missing link, and the log records them.
+- At the spending stop Bob gets one final call without callable tools, with the
+  closed-bench note ("spending" budget); a worker stopped by it reports what it
+  saved (`paused_at_limit`).
+- Mattias can match needs in words with the finder; he keeps catalog search and read.
+
+Not yet measured in a paid run.
+
 <a id="entren-cleanup-2026-11-01"></a>
 ## "Bygga in entrén" shopping list cleaned up — 2026-11-01
 
