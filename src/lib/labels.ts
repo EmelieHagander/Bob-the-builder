@@ -135,10 +135,12 @@ function identifierWords(id: string, fallback: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase()
 }
 /** A part's Bob-authored id as plain words, as on the drawing sheets. Tokens
- * with digits are dropped: stable ids can keep sizes from an earlier revision. */
+ * with digits are dropped: stable ids can keep sizes from an earlier revision.
+ * Units and definition prefixes ("def_side") are not words a builder uses. */
+const ID_NOISE = new Set(['mm', 'def', 'defn', 'definition'])
 export function cadPartName(id: string): string {
   const words = id.replace(/([a-z])([A-Z])/g, '$1 $2').split(/[_.:\-\s]+/)
-    .filter(token => token && !/\d/.test(token) && token.toLowerCase() !== 'mm').join(' ').toLowerCase()
+    .filter(token => token && !/\d/.test(token) && !ID_NOISE.has(token.toLowerCase())).join(' ').toLowerCase()
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : 'Part'
 }
 /** A named parameter ("wall_height") or, for untracked drawings, its recipe path. */
