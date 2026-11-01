@@ -173,9 +173,26 @@ def _text(page, x, y, value, size=16, weight='400', anchor='start', fill=INK):
     el.text = value
 
 
-def _line(page, a, b, width=2, colour=INK):
-    ET.SubElement(page, f'{{{NS}}}line', {'x1': str(a[0]), 'y1': str(a[1]), 'x2': str(b[0]), 'y2': str(b[1]),
-                                          'stroke': colour, 'stroke-width': str(width), 'stroke-linecap': 'round'})
+def _line(page, a, b, width=2, colour=INK, dashed=False):
+    attrs = {'x1': str(a[0]), 'y1': str(a[1]), 'x2': str(b[0]), 'y2': str(b[1]),
+             'stroke': colour, 'stroke-width': str(width), 'stroke-linecap': 'round'}
+    if dashed: attrs['stroke-dasharray'] = '5 4'
+    ET.SubElement(page, f'{{{NS}}}line', attrs)
+
+
+def _head(page, kind, cx, cy, hidden=False):
+    """A fastener head seen from where it goes in: screw = cross head, nail = dot,
+    bolt = hexagon. Dashed when it goes in from the side facing away."""
+    g = ET.SubElement(page, f'{{{NS}}}g', {'fill': '#ffffff', 'stroke': INK, 'stroke-width': '2', 'data-head': kind + (' hidden' if hidden else '')})
+    if hidden: g.set('stroke-dasharray', '3 2')
+    if kind == 'bolt':
+        pts = ' '.join(f'{cx + 8 * math.cos(math.pi / 3 * k):.1f},{cy + 8 * math.sin(math.pi / 3 * k):.1f}' for k in range(6))
+        ET.SubElement(g, f'{{{NS}}}polygon', {'points': pts})
+    elif kind == 'nail':
+        ET.SubElement(g, f'{{{NS}}}circle', {'cx': str(cx), 'cy': str(cy), 'r': '5', 'fill': '#ffffff' if hidden else INK})
+    else:
+        ET.SubElement(g, f'{{{NS}}}circle', {'cx': str(cx), 'cy': str(cy), 'r': '7'})
+        ET.SubElement(g, f'{{{NS}}}path', {'d': f'M{cx - 4} {cy} L{cx + 4} {cy} M{cx} {cy - 4} L{cx} {cy + 4}', 'fill': 'none'})
 
 
 def _glyph(page, kind, x, y):
@@ -306,7 +323,7 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
             view = _View([solids[part_ids[0]]], (1, -1, 1), (52, y, 80, 72), scratch); view.layer(page, [solids[part_ids[0]]], INK, 1.6)
             _text(page, 146, y + 34, f'{count}×', 26, '700'); _text(page, 146, y + 58, f'{label(part_ids)} {part_name(defs_of[part_ids[0]])}', 13, fill='#333333'); y += 84
         for h in hardware:
-            _glyph(page, h['kind'], 60, y); _text(page, 146, y + 34, f'{h["count"]}×', 26, '700')
+            _glyph(page, h['kind'], 60, y); _head(page, h['kind'], 126, y + 22); _text(page, 146, y + 34, f'{h["count"]}×', 26, '700')
             _text(page, 146, y + 58, f'{KIND_NAMES[h["kind"]]} {_number(h["diameter_mm"])} × {_number(h["length_mm"])}', 13, fill='#333333'); y += 84
         if glue: _glyph(page, 'glue', 60, y); _text(page, 146, y + 34, 'Glue', 22, '700'); _text(page, 146, y + 58, 'on the joining faces', 13, fill='#333333'); y += 84
         if unsized: _text(page, 60, y + 34, '?', 30, '700'); _text(page, 146, y + 34, 'No rule yet', 16, '700'); _text(page, 146, y + 58, f'{len(unsized)} joint(s): ask Bob', 13, fill='#333333')
@@ -332,7 +349,9 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
         for n, (kind, count, words) in enumerate(tiles[:4]):
             x = 40 + n * 235
             ET.SubElement(page, f'{{{NS}}}rect', {'x': str(x), 'y': '400', 'width': '215', 'height': '110', 'rx': '12', 'fill': 'none', 'stroke': INK, 'stroke-width': '2'})
-            _glyph(page, kind, x + 8, 416); _text(page, x + 92, 450, count, 28, '700'); _text(page, x + 92, 478, words, 13, '400', 'start', '#333333')
+            _glyph(page, kind, x + 8, 416)
+            if kind in KIND_NAMES: _head(page, kind, x + 72, 438)
+            _text(page, x + 92, 450, count, 28, '700'); _text(page, x + 92, 478, words, 13, '400', 'start', '#333333')
     hw = ', '.join(f'{r["count"]}× {KIND_NAMES[r["kind"]].lower()} {_number(r["diameter_mm"])} × {_number(r["length_mm"])}' for r in all_rows)
     _text(page, 40, 700, 'Fasteners: ' + hardware_summary(hw, all_glue, all_unsized, fasteners is not None), 15, '600')
     _text(page, 40, 724, 'Fastener counts are rule-of-thumb proposals, not a strength check.', 12, fill='#333333')
@@ -389,10 +408,13 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
             view.layer(page, [solids[i] for i in sorted(placed)], CONTEXT, 1.6)
             view.layer(page, [solids[i] for i in bases if i not in placed], INK, 2.2)
             view.layer(page, lifted + arrows, INK, 2.6)
+            # Every scheduled fastener is drawn; one that goes in from a face turned away is dashed.
+            hidden_heads = 0
             for p, n, out_sign, kind in heads:
-                if cam[n] * out_sign <= 0: continue
+                hidden = cam[n] * out_sign <= 0; hidden_heads += hidden
                 tip = view.point(p); q = list(p); q[n] += out_sign * size_mm * 0.07; tail = view.point(q)
-                _line(page, tail, tip, 3); ET.SubElement(page, f'{{{NS}}}circle', {'cx': str(tail[0]), 'cy': str(tail[1]), 'r': '5', 'fill': '#ffffff', 'stroke': INK, 'stroke-width': '2'})
+                _line(page, tail, tip, 3, dashed=hidden); _head(page, kind, tail[0], tail[1], hidden)
+            if hidden_heads: _text(page, 40, 700, 'Dashed: put in from the other side.', 13, '400', 'start', '#333333')
             for m in movers:
                 b = boxes[m]; mid = [(b['min'][k] + b['max'][k]) / 2 + offsets[m][k] for k in range(3)]; at = view.point(mid)
                 _text(page, at[0], at[1] - 10, f'P{numbers[m]}', 15, '700', 'middle')
