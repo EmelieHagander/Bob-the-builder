@@ -5,7 +5,7 @@ from PIL import Image
 import hashlib, os
 from unittest.mock import patch
 from bob_cad import guide as guide_module
-from bob_cad.guide import fastener_rows, hardware_summary, render_guide, _clear_lift, _lift_direction, _move_arrows
+from bob_cad.guide import fastener_rows, hardware_summary, render_guide, _clear_lift, _head, _lift_direction, _move_arrows
 from bob_cad.worker import CadContractError
 
 FIXTURE = json.loads((Path(__file__).parent / 'fixtures/bench_guide.json').read_text())
@@ -36,6 +36,14 @@ class GuideTest(unittest.TestCase):
             svg = Path(tmp, 'guide-3.svg').read_text()
             self.assertIn('30×', svg); self.assertIn('Screw 4.5 × 60', svg); self.assertIn('Rule notes: short penetration', svg)
             self.assertIn('Fasteners: 30× screw 4.5 × 60, 8× screw 5 × 120', Path(tmp, 'guide-0.svg').read_text())
+            # Every fastener in a step's box is drawn on the page (one more head is the box's own symbol);
+            # one that goes in from a face turned away is dashed, with a note.
+            for page in (s1, s2, s3):
+                svg = Path(tmp, page['key'] + '.svg').read_text()
+                drawn = svg.count('data-head="screw') - len(page['fasteners'])
+                self.assertEqual(drawn, sum(h['count'] for h in page['fasteners']), page['key'])
+                self.assertEqual('data-head="screw hidden"' in svg, 'Dashed: put in from the other side.' in svg)
+            self.assertIn('data-head="screw hidden"', Path(tmp, 'guide-2.svg').read_text(), 'step 2: one screw from the far side')
 
     def test_new_parts_lift_away_from_what_they_join_never_into_it(self):
         boxes = {'leg_a': {'min': [0, 0, 0], 'max': [45, 45, 430]}, 'leg_b': {'min': [0, 315, 0], 'max': [45, 360, 430]},
@@ -62,6 +70,17 @@ class GuideTest(unittest.TestCase):
         for a in arrows:
             bb = a.bounding_box()
             self.assertTrue(12 < bb.min.Y < 288 and bb.max.Z <= lift, 'inside the footprint, between the lifted part and its place')
+
+    def test_each_fastener_kind_has_its_own_head_and_hidden_ones_are_dashed(self):
+        import xml.etree.ElementTree as ET
+        page = ET.Element('svg')
+        for kind, hidden in (('screw', False), ('nail', False), ('bolt', False), ('screw', True)): _head(page, kind, 10, 10, hidden)
+        screw, nail, bolt, back = list(page)
+        self.assertEqual([c.tag.split('}')[-1] for c in screw], ['circle', 'path'], 'screw: cross head')
+        self.assertNotEqual(nail[0].get('fill'), '#ffffff', 'nail: solid dot')
+        self.assertEqual(bolt[0].tag.split('}')[-1], 'polygon', 'bolt: hexagon')
+        self.assertEqual(len(bolt[0].get('points').split()), 6)
+        self.assertTrue(back.get('stroke-dasharray'), 'from the far side: dashed')
 
     def test_the_box_page_says_glue_only_instead_of_missing_screws(self):
         self.assertEqual(hardware_summary('', True, []), 'glue only')
