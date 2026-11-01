@@ -235,4 +235,31 @@ test('bounded construction edits preserve canonical data, receipts and authority
   assert.equal((await rpc(owner,'bob.read_construction_draft',[project,checkpoint.recordId,null,null])).revision,2)
   const calls=sourceReads;assert.deepEqual(await tools().execute('edit_construction_parts',edit),saved);assert.equal(sourceReads,calls)
  })
+ await t.test('default zero (2026-11-01): a new part binds only its non-zero values; removing it drops the unused code zero',async()=>{
+  // A fresh claimed turn: earlier cases spend this turn's write allowance.
+  await rpc(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')
+  const fresh=randomUUID(),next=await rpc(null,'bob.bob_claim_turn',[project,owner,fresh,message],'service_role'),bound=[project,next.thread_id,fresh,next.generation]
+  const zeroWriter=()=>createProjectWriter(project,message,async p=>{try{return {data:await rpc(owner,'bob.bob_project_write_v16',[...bound,JSON.stringify(p)]),error:null}}catch(e:any){sqlErrors.push(e.message);return {data:null,error:{code:e.code,message:e.message}}}},async()=>({data:[],error:null}),async()=>({data:[],error:null}))
+  const zeroTools=(defaultZero:boolean)=>createConstructionTools({projectId:project,message,writer:zeroWriter(),hasAccess:async()=>true,read:(_id,revision)=>read(revision),readSources,defaultZero,
+   prepareEdit:async p=>{try{return await rpc(owner,'bob.prepare_construction_edit',[...bound,JSON.stringify(p)])}catch(e:any){return {status:'invalid',reason:e.message}}}})
+  const head=(await read()).revision
+  const shelf={id:'shelf',definition_id:'board',placement:{x:18,y:0,z:100,rx:0,ry:0,rz:0}}
+  const changes:any={instances:delta([shelf]),nodes:delta([{id:'shelfHeight',role:'decision',value:100,unit:'mm',reason:'Synthetic shelf height'}]),
+   bindings:delta([{path:'instances/shelf/placement/x',node:'sideThickness'},{path:'instances/shelf/placement/z',node:'shelfHeight'}]),
+   roles:delta([{instance_id:'shelf',role:'build_part',quantity_policy:'manufacture',reason:'Synthetic shelf'}])}
+  const add={...input,key:'zeroShelf',expected_revision:head,change_note:'Add one shelf',changes}
+  const old=await zeroTools(false).execute('edit_construction_parts',add)
+  assert.equal(old.status,'invalid','pinned turns keep the old rule');assert.equal((await read()).revision,head)
+  const saved=await zeroTools(true).execute('edit_construction_parts',{...add,key:'zeroShelf2'})
+  assert.equal(saved.status,'saved',JSON.stringify({saved,sqlErrors}));assert.equal(saved.receipt.revision,head+1)
+  const after=await read(),node=(path:string)=>after.parameters.bindings.find((b:any)=>b.path===path)?.node
+  assert.equal(node('instances/shelf/placement/y'),'origin.zero_mm');assert.equal(node('instances/shelf/placement/ry'),'origin.zero_deg')
+  assert.equal(node('instances/shelf/placement/z'),'shelfHeight')
+  const remove={...input,key:'zeroShelfGone',expected_revision:head+1,change_note:'Remove the shelf',changes:{instances:delta([],['shelf']),nodes:delta([],['shelfHeight']),
+   bindings:delta([],['x','y','z','rx','ry','rz'].map(k=>'instances/shelf/placement/'+k)),roles:delta([],['shelf'])}}
+  const gone=await zeroTools(true).execute('edit_construction_parts',remove)
+  assert.equal(gone.status,'saved',JSON.stringify({gone,sqlErrors}))
+  const last=await read()
+  assert.equal(last.parameters.nodes.some((n:any)=>n.id.startsWith('origin.')),last.parameters.bindings.some((b:any)=>b.node.startsWith('origin.')))
+ })
 })

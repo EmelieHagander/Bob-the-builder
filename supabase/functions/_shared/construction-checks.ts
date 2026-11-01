@@ -127,7 +127,10 @@ export function checkConstruction(draft: RecordData, catalog: Map<string, Record
   const ids = [joint.id, joint.first.instance_id, joint.second.instance_id]
   const sourceId = joint.method === 'glued_butt' ? 'timber.adhesives' : 'timber.fasteners'
   const source = knowledge.find(c => c.id === sourceId)
-  if (!['screwed_butt', 'glued_butt'].includes(joint.method)) add('unsupported_joint_method', ids, 'Choose a supported butt-joint concept or retain this as an unresolved construction.')
+  // 2026-11-01: a butt joint names the catalog items that hold it; an empty list is unresolved.
+  const chosen = joint.method === 'butt'
+  if (chosen && !(Array.isArray(joint.fasteners) && joint.fasteners.length)) add('joint_fasteners_missing', ids, 'Choose the catalog items that hold this joint, or keep it as an open question.')
+  if (!chosen && !['screwed_butt', 'glued_butt'].includes(joint.method)) add('unsupported_joint_method', ids, 'Choose a supported butt-joint concept or retain this as an unresolved construction.')
   if (!source) add('joint_knowledge_unavailable', ids, 'The method reference is absent, withdrawn or due for review.')
   const wooden = [a,b].every(box => {
    const inst = recipe.instances.find(i => i.id === box?.id)
@@ -143,7 +146,9 @@ export function checkConstruction(draft: RecordData, catalog: Map<string, Record
    joined.add(key(a.id,b.id)); connected.get(a.id)!.add(b.id); connected.get(b.id)!.add(a.id)
   }
   jointChecks.push({ id:joint.id, fit:fits, method:joint.method, reference:source?{id:source.id,version:source.version,content_sha256:source.content_sha256}:null })
-  gap('joint_product_and_capacity_unverified', ids, joint.method === 'glued_butt'
+  gap('joint_product_and_capacity_unverified', ids, chosen
+   ? 'Verify the chosen items: quantity, size, penetration, spacing, edge distances, glue surface and cure, environment and load. A catalog choice proves no strength.'
+   : joint.method === 'glued_butt'
    ? 'Select compatible adhesive and verify surface preparation, grain, clamping, cure, environment and load. Face contact proves no adhesive strength.'
    : 'Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load.')
  }

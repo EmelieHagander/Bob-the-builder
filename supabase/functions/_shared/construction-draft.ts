@@ -7,12 +7,12 @@ import { constructionCutFit } from './construction-cut-fit.ts'
 import { CAD_RECIPE_SCHEMA } from './cad-schema.ts'
 import { CAD_ARRAYS_SCHEMA, expandCadArrays } from './cad-arrays.ts'
 import { parseCadAssemblyRequest } from './cad-adapter.ts'
-import { CAD_PARAMETERS_SCHEMA, CadParameterBindingGap, CadParameterGap, CadParameterUnusedNodes, compileCadParameters, parseParameterPlan, parameterSourcePins } from './cad-parameters.ts'
+import { CAD_PARAMETERS_SCHEMA, CadParameterBindingGap, CadParameterGap, CadParameterUnusedNodes, CadReservedParameter, compileCadParameters, parseParameterPlan, parameterSourcePins, withZeroDefaults, zeroDefaults } from './cad-parameters.ts'
 import {CONSTRUCTION_PARAMETER_CHANGES_SCHEMA,compileConstructionParameterChange} from './construction-parameters.ts'
 import { INSTANCE_POLICY_SCHEMA,constructionInstancePolicy } from './construction-instance-policy.ts'
 import { CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL } from './construction-consequences.ts'
 import { humanTextRejection, proseFields } from './human-text.ts'
-import { JOINT_FASTENER_SCHEMA, parseFastenerSchedule, storedJoints, withRuleFasteners, type FastenerSchedule } from './construction-fasteners.ts'
+import { JOINT_FASTENER_SCHEMA, parseFastenerSchedule, storedChosenJoints, storedJoints, withChosenJointFasteners, withRuleFasteners, type FastenerSchedule } from './construction-fasteners.ts'
 import { schemaIssues } from './schema-issues.ts'
 import { fingerprint, rethrowContinuation, type BobJournal } from './bob-job-journal.ts'
 import type { ProjectWriter,WritePayload } from './project-write.ts'
@@ -158,6 +158,13 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   * construction table with the server fastener schedule from readFasteners. */
  constructionTable?:boolean;
  constructionRepeats?:boolean;
+ /** Pinned per manifest (default_zero_version 1): positions and rotations the
+  * recipe states as 0 may stay unbound; code binds them to a fixed zero node. */
+ defaultZero?:boolean;
+ /** Pinned per manifest (joint_fastener_version 2, owner decision 2026-11-01):
+  * a joint names the catalog items that hold it, in any mix, instead of a
+  * method with a rule fastener. Saved as method 'butt' with that list. */
+ chosenJointFasteners?:boolean;
  formRefinement?:boolean;
  formEvidence?:boolean;
  constructionSourceRefresh?:boolean;
@@ -198,11 +205,14 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  const baseCheckTool=opts.formEvidence?CONSTRUCTION_EVIDENCE_CHECK_TOOL:CONSTRUCTION_CHECK_TOOL
  const checkTool=opts.coherentWork?withConstructionWorkCheck(baseCheckTool):baseCheckTool
  const baseSaveTool=opts.constructionRepeats?CONSTRUCTION_REPEAT_SAVE_TOOL:CONSTRUCTION_SAVE_TOOL
- const saveTool=opts.formRefinement?withFormRefinement(baseSaveTool):baseSaveTool
+ const formSaveTool=opts.formRefinement?withFormRefinement(baseSaveTool):baseSaveTool
+ const saveTool=opts.chosenJointFasteners?withChosenJointFasteners(formSaveTool):formSaveTool
+ const joints=(value:unknown)=>opts.chosenJointFasteners?storedChosenJoints(value):storedJoints(value)
  const baseParameterTool=opts.constructionSourceRefresh?CONSTRUCTION_PARAMETER_REFRESH_TOOL:CONSTRUCTION_PARAMETER_TOOL
  const withText=(tool:typeof CONSTRUCTION_EDIT_TOOL)=>opts.constructionText?withConstructionText(tool):tool
  const parameterTool=opts.coherentWork?withText(withConstructionWorkWrite(baseParameterTool)):baseParameterTool
- const editTool=opts.coherentWork?withText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL)):CONSTRUCTION_EDIT_TOOL
+ const workEditTool=opts.coherentWork?withText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL)):CONSTRUCTION_EDIT_TOOL
+ const editTool=opts.chosenJointFasteners?withChosenJointFasteners(workEditTool):workEditTool
  const prepareChange=async(v:Record<string,any>,domain:WritePayload,prepare:(p:WritePayload)=>Promise<Record<string,any>>)=>{
   let payload=domain
   if(opts.coherentWork&&v.solution_edit!==null){
@@ -271,8 +281,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   // Older pinned schemas have no joint fastener field: null means "use the rule".
   if(raw&&typeof raw==='object'&&!Array.isArray(raw)){
    const r=raw as Record<string,any>
-   if((name===CONSTRUCTION_SAVE_TOOL.function.name||name===CONSTRUCTION_LEGACY_TOOL.function.name)&&Array.isArray(r.joints))raw={...r,joints:withRuleFasteners(r.joints)}
-   if(name===CONSTRUCTION_EDIT_TOOL.function.name&&Array.isArray(r.changes?.joints?.upsert))raw={...r,changes:{...r.changes,joints:{...r.changes.joints,upsert:withRuleFasteners(r.changes.joints.upsert)}}}
+   // Chosen-fastener joints (2026-11-01) have no rule field to fill.
+   const ruled=(tool:string)=>!opts.chosenJointFasteners||tool===CONSTRUCTION_LEGACY_TOOL.function.name
+   if((name===CONSTRUCTION_SAVE_TOOL.function.name||name===CONSTRUCTION_LEGACY_TOOL.function.name)&&ruled(name)&&Array.isArray(r.joints))raw={...r,joints:withRuleFasteners(r.joints)}
+   if(name===CONSTRUCTION_EDIT_TOOL.function.name&&ruled(name)&&Array.isArray(r.changes?.joints?.upsert))raw={...r,changes:{...r.changes,joints:{...r.changes.joints,upsert:withRuleFasteners(r.changes.joints.upsert)}}}
   }
   const issues=schemaIssues(spec.function.parameters,raw)
   if(issues.length)return {status:'invalid',issues}
@@ -341,10 +353,25 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(name===CONSTRUCTION_EDIT_TOOL.function.name){
     if(!opts.writer||!opts.prepareEdit)return {status:'unavailable'}
     if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {status:'invalid',issues:[{code:'request_quote',path:'request_quote'}]}
-    const change=await prepareChange(v,{kind:'construction_edit',record_id:v.record_id,expected_revision:v.expected_revision,expected_updated_at:null,request_quote:v.request_quote,
-     data:{key:v.key,change_note:v.change_note,changes:v.changes?.joints?{...v.changes,joints:{...v.changes.joints,upsert:storedJoints(v.changes.joints.upsert)}}:v.changes,computed:null,
-      ...(opts.coherentWork?{target_revision:v.target_revision}:{}),...(opts.constructionText&&v.text?{text:v.text}:{})}},opts.prepareEdit)
+    const editPayload=(changes:Record<string,any>):WritePayload=>({kind:'construction_edit',record_id:v.record_id,expected_revision:v.expected_revision,expected_updated_at:null,request_quote:v.request_quote,
+     data:{key:v.key,change_note:v.change_note,changes:changes?.joints?{...changes,joints:{...changes.joints,upsert:joints(changes.joints.upsert)}}:changes,computed:null,
+      ...(opts.coherentWork?{target_revision:v.target_revision}:{}),...(opts.constructionText&&v.text?{text:v.text}:{})}})
+    let change=await prepareChange(v,editPayload(v.changes),opts.prepareEdit)
     if(change.error)return change.error
+    // The server merges the plan, so zero defaults are known only after a first
+    // prepare; they ride a second prepare as ordinary binding and node changes.
+    const merged=opts.defaultZero&&change.prepared.status==='ready'&&change.prepared.next?parseCadAssemblyRequest(structuredClone(change.prepared.next.recipe)):null
+    if(merged){
+     const d=zeroDefaults(merged,parseParameterPlan(change.prepared.next.parameter_plan))
+     if(d.bindings.length||d.nodes.length||d.unused.length){
+      const c=structuredClone(v.changes) as Record<string,any>,list=(k:string)=>c[k]??={upsert:[],remove:[]}
+      if(d.bindings.length)list('bindings').upsert.push(...d.bindings)
+      if(d.nodes.length)list('nodes').upsert.push(...d.nodes)
+      if(d.unused.length)list('nodes').remove.push(...d.unused.filter(id=>!c.nodes.remove.includes(id)))
+      change=await prepareChange(v,editPayload(c),opts.prepareEdit)
+      if(change.error)return change.error
+     }
+    }
     const {payload,domain,prepared}=change
     if(!await opts.hasAccess())return {status:'denied'}
     if(prepared.status!=='ready'&&prepared.status!=='saved')return prepared
@@ -565,7 +592,9 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(checkpoint.status!=='ready')return {status:checkpoint.status,readiness:checkpoint,issues:checkpoint.issues,
      message:'No construction saved. Resolve the listed evidence and design choices before fixing their geometry: investigate relevant sources, explain alternatives and recommend a supported direction. Reuse prior choices or decide within the existing mandate, then save and select that solution revision.'}
    if(readiness.target_revision!==v.target_revision)return {status:'conflict',message:'The selected target changed. Read its exact current revision and shared advice before fixing construction geometry.'}
-   const expanded=opts.constructionRepeats?expandCadArrays(v.recipe,parseParameterPlan(v.parameter_plan)):{recipe:v.recipe,plan:v.parameter_plan}
+   const arrays=opts.defaultZero&&opts.constructionRepeats&&Array.isArray(v.recipe?.arrays)?v.recipe.arrays.filter((a:any)=>typeof a?.id==='string'):[]
+   const authored=opts.defaultZero?withZeroDefaults(null,parseParameterPlan(v.parameter_plan),arrays):v.parameter_plan
+   const expanded=opts.constructionRepeats?expandCadArrays(v.recipe,parseParameterPlan(authored)):{recipe:v.recipe,plan:authored}
    if(opts.preciseEditDiagnostics){
     const issues=constructionEditIssues({...v,recipe:expanded.recipe,parameter_plan:expanded.plan,instance_policy:v.instance_policy??constructionInstancePolicy(expanded.recipe as any,null)})
     if(issues.length)return {status:'invalid',issues,message:'No construction changed. Correct only the named posts; for an existing construction use edit_construction_parts.'}
@@ -573,7 +602,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    const recipe=parseCadAssemblyRequest(structuredClone(expanded.recipe))
    if(!recipe)return {status:'invalid',message:'Invalid CAD recipe or referenced part IDs.'}
    constructionInstancePolicy(recipe,v.instance_policy)
-   const plan=parseParameterPlan(expanded.plan)
+   const parsedPlan=parseParameterPlan(expanded.plan),plan=opts.defaultZero?withZeroDefaults(recipe,parsedPlan):parsedPlan
    // Image-oriented construction checkpoints need a canonical image carrier;
    // never accept model-supplied image hashes as read evidence.
    if(plan.frames.some(f=>f.kind==='image'))return {status:'invalid',message:'Image frames are not supported by the construction checkpoint yet. Keep that orientation as an open question.'}
@@ -588,16 +617,17 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    }
    if(!await opts.hasAccess())return {status:'denied'}
    const {record_id,expected_revision,request_quote,parameter_plan,...data}=v
-   return await opts.writer.commit({kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,joints:storedJoints(data.joints),recipe,parameters}})
+   return await opts.writer.commit({kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,joints:joints(data.joints),recipe,parameters}})
   }catch(error){
    rethrowContinuation(error)
    if(error instanceof CadParameterGap)return {status:'needs_data',reason:'unknown_required_parameters',gaps:error.gaps,message:'No construction changed. Resolve these controlling values in the same request; no zero or invented value was saved.'}
    if(opts.writeState&&error instanceof CadParameterUnusedNodes&&error.unused.length)return {status:'invalid',reason:'parameter_unused_node',unused_nodes:error.unused,
     message:'No construction changed. These parameter nodes feed no binding, frame or other node: '+error.unused.join(', ')+'. Remove each orphaned node (and a formula that only fed it), or bind it to the path it was meant to control, then retry with a new key.'}
+   if(error instanceof CadReservedParameter)return {status:'invalid',reason:'reserved_parameter_id',message:'No construction changed. '+error.id+' is the code zero node; give your own node another ID.'}
    if(error instanceof CadParameterBindingGap)return {status:'invalid',message:'Bind every path in unbound to a parameter node using these exact slash-separated paths. Keep the same construction IDs and correct the parameter plan; no source lookup retry is needed.',unbound:error.unbound}
    const message=error instanceof Error?error.message:''
    if(opts.constructionRepeats&&/^(invalid_cad_array|cad_array_[a-z_]+)(:.*)?$/.test(message))return {status:'invalid',reason:message.split(':')[0],message:'No construction saved. Correct array IDs/counts and bindings; generated instance/node IDs must be unique and fit the existing canonical limits.'}
-   if(opts.constructionRepeats&&message.startsWith('parameter_gaps:'))return {status:'invalid',reason:'array_binding_missing',message:'Bind all six arrays/<id>/start placement paths and arrays/<id>/spacing_mm. No construction saved.'}
+   if(opts.constructionRepeats&&message.startsWith('parameter_gaps:'))return {status:'invalid',reason:'array_binding_missing',message:opts.defaultZero?'Bind arrays/<id>/start/x, y and z and arrays/<id>/spacing_mm; unbound start rotations are none. No construction saved.':'Bind all six arrays/<id>/start placement paths and arrays/<id>/spacing_mm. No construction saved.'}
    if(opts.constructionViews&&message==='construction_view_cursor_invalid')return {status:'invalid',message:'Use next_read from this exact revision, view and selection. A cursor cannot be reused for another selection.'}
    if(opts.constructionViews&&message==='construction_view_header_too_large')return {status:'invalid',message:'Use fewer named IDs or one result section to keep the page envelope small. No data was omitted as complete.'}
    const known=/^(invalid_requirement_probe|invalid_form_refinement|invalid_instance_policy|invalid_parameter_[a-z_]+|parameter_[a-z_]+|unknown_required_parameters|coordinate_[a-z_]+)$/

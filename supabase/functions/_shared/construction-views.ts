@@ -141,8 +141,11 @@ export type ConstructionTableOption={table:true;fasteners?:FastenerSchedule|null
 function tableRows(draft:Row,fasteners:FastenerSchedule|null):Item[]{
  const roles=new Map<unknown,unknown>(arr(draft.instance_policy?.instances).map(r=>[r?.instance_id,r?.role]))
  const role=(id:unknown)=>{const r=roles.get(id);return typeof r==='string'&&Object.hasOwn(INSTANCE_ROLE_POLICY,r)?r:'unknown'}
- const schedule=new Map<unknown,Row>(fasteners?arr(fasteners.joints).map(f=>[f?.joint_id,f]):[])
- const fastener=(id:unknown)=>{const f=schedule.get(id);return f?[f.source??null,f.kind??null,f.diameter_mm??null,f.length_mm??null,f.count??null,f.gaps??null]:null}
+ // A joint held by several chosen items (2026-11-01) has one schedule row each.
+ const schedule=new Map<unknown,Row[]>()
+ for(const f of fasteners?arr(fasteners.joints):[])schedule.set(f?.joint_id,[...(schedule.get(f?.joint_id)??[]),f])
+ const cell=(f:Row)=>[f.source??null,f.kind??null,f.diameter_mm??null,f.length_mm??null,f.count??null,f.gaps??null]
+ const fastener=(id:unknown)=>{const rows=schedule.get(id)??[];return !rows.length?null:rows.length===1?cell(rows[0]):rows.map(cell)}
  const end=(e:Row)=>`${e?.instance_id}.${e?.face}`
  const size=(d:Row)=>Object.hasOwn(TABLE_SIZES,d.primitive)?TABLE_SIZES[d.primitive].map(k=>d[k]??null):null
  return [

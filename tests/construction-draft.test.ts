@@ -193,5 +193,46 @@ test('K1 claimed tools create/read/revise the same construction; SQL authority, 
   const tampered=structuredClone(commits[0]);tampered.data.key='tamperedRepeat';tampered.data.recipe.instances[2].placement.x=1234
   await assert.rejects(save(tampered),/parameter|binding|result|recipe/,'SQL independently verifies expanded geometry against its graph')
  })
+ await t.test('default zero (2026-11-01): unbound zero rotations save through canonical SQL with code zero nodes',async()=>{
+  await call(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')
+  turn=randomUUID();claim=await call(null,'bob.bob_claim_turn',[project,owner,turn,message],'service_role')
+  const sqlErrors:string[]=[]
+  const zeroWriter=createProjectWriter(project,message,async p=>{try{return {data:await save(p),error:null}}catch(e:any){sqlErrors.push(e.message);return {data:null,error:{code:e.code,message:e.message}}}},async()=>({data:[],error:null}),async()=>({data:[],error:null}))
+  const make=(defaultZero:boolean)=>createConstructionTools({projectId:project,message,writer:zeroWriter,constructionRepeats:true,preciseEditDiagnostics:true,unlimitedWork:true,defaultZero,hasAccess:async()=>true,
+   read:(id,rev)=>read(id,rev),readSources:async()=>({project:new Map(),physical:new Map()}),
+   readDesignReadiness:(target,purpose,area)=>call(owner,'bob.read_design_readiness',[project,area??null,target,purpose])})
+  const {recipe,plan}=repeatedParts(3)
+  plan.nodes=plan.nodes.filter(n=>n.id!=='angle');plan.bindings=plan.bindings.filter(b=>!/start\/r[xyz]$/.test(b.path))
+  const v:any={...input,key:'zeroOne',title:'Zero slats',recipe,parameter_plan:plan,instance_policy:null,joints:[],materials:[{...input.materials[0],definition_id:'slat',material_revision:2}]}
+  assert.equal((await make(false).execute('save_construction_draft',v)).status,'invalid','pinned turns keep the old rule')
+  const result=await make(true).execute('save_construction_draft',{...v,key:'zeroTwo'})
+  assert.equal(result.status,'saved',JSON.stringify({result,sqlErrors}))
+  const saved=await read(result.receipt.recordId)
+  assert.deepEqual(saved.recipe.instances.map((i:any)=>i.placement.x),[0,100,200])
+  assert.equal(saved.parameters.bindings.find((b:any)=>b.path==='instances/slats.2/placement/rz').node,'origin.zero_deg')
+  assert.equal(saved.parameters.nodes.find((n:any)=>n.id==='origin.zero_deg').reason.startsWith('Code default'),true)
+ })
+ await t.test('chosen joint fasteners (2026-11-01): glue and screws save through canonical SQL; a non-fastener item is refused by code',async()=>{
+  await call(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')
+  turn=randomUUID();claim=await call(null,'bob.bob_claim_turn',[project,owner,turn,message],'service_role')
+  const sqlErrors:string[]=[]
+  const jointWriter=createProjectWriter(project,message,async p=>{try{return {data:await save(p),error:null}}catch(e:any){sqlErrors.push(e.message);return {data:null,error:{code:e.code,message:e.message}}}},async()=>({data:[],error:null}),async()=>({data:[],error:null}),{rejectionReasons:true})
+  const make=()=>createConstructionTools({projectId:project,message,writer:jointWriter,unlimitedWork:true,chosenJointFasteners:true,hasAccess:async()=>true,
+   read:(id,rev)=>read(id,rev),readSources:async()=>({project:new Map(),physical:new Map()}),
+   readDesignReadiness:(target,purpose,area)=>call(owner,'bob.read_design_readiness',[project,area??null,target,purpose])})
+  const screw=(await pg.query(`select i.id,r.revision from bob.catalog_items i join bob.catalog_item_revisions r on r.item_id=i.id where i.project_id is null and r.name like 'Träskruv%3,5 × 30' order by r.revision desc limit 1`)).rows[0]
+  const pick=(id:string,revision:number)=>({material_id:id,material_revision:revision,count:null,spacing_mm:null})
+  const joint={id:'jointLeft',first:{instance_id:'left',face:'x_max'},second:{instance_id:'board0',face:'x_min'},reason:'Screwed and glued, as for a box',fasteners:[pick(screw.id,screw.revision)]}
+  const materials=input.materials.map((m:any)=>({...m,material_revision:2}))
+  const result=await make().execute('save_construction_draft',{...input,key:'chosenOne',materials,joints:[joint]})
+  assert.equal(result.status,'saved',JSON.stringify({result,sqlErrors}))
+  const saved=await read(result.receipt.recordId)
+  assert.deepEqual(saved.joints,[{id:'jointLeft',method:'butt',first:joint.first,second:joint.second,reason:joint.reason,fasteners:joint.fasteners}])
+  const schedule=await call(owner,'bob.read_construction_fasteners',[project,result.receipt.recordId,saved.revision])
+  assert.deepEqual(schedule.joints.map((r:any)=>[r.source,r.kind,r.diameter_mm,r.length_mm,r.material_id]),[['chosen','screw',3.5,30,screw.id]])
+  const plywood=materials[0]
+  const refused=await make().execute('save_construction_draft',{...input,key:'chosenBad',materials,joints:[{...joint,fasteners:[pick(plywood.material_id,plywood.material_revision)]}]})
+  assert.equal(refused.status,'invalid');assert.equal(refused.reason,'joint_fasteners_not_in_catalog',JSON.stringify(refused))
+ })
  await call(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')
 })
