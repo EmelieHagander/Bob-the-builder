@@ -1,5 +1,64 @@
 # Foundation verification and rollout
 
+<a id="konrad-lean-install-2026-11-01"></a>
+## Konrad's lean construction installed — 2026-11-01
+
+With the owner's OK ("Okay go"; the CAD worker deploy confirmed separately),
+[PR #391](https://github.com/EmelieHagander/Bob-the-builder/pull/391) merged as
+`f21128cc67d1e0e21fbfc11f67ff725217ab5713`. Zero open Bob jobs before every step.
+
+1. **Database:** `20261101100000_joint_fasteners_from_catalog` (recorded
+   `20261101120022`), `20261101103000_shared_wood_glue` (`20261101120024`),
+   `20261101104000_fastener_needs_open_kinds` (`20261101120025`),
+   `20261101110000_material_shortlist` (`20261101120027`). Read back: eight
+   material types carry a fastener kind (four screws, two nails, two glues),
+   profile `joint_hardware` published, both glues in the shared catalog, the
+   three new functions present.
+2. **Functions:** `bob-worker` v165 and `ask-bob` v197. 129 of 130 and 131 of 132
+   files equal the repository (the established empty `cad-intake.ts`); both return
+   **401** without login.
+3. **CAD worker:** [run 41304535610](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41304535610)
+   deployed `f21128c` to Modal; engine tests and the live smoke check passed. The
+   build guide now accepts chosen-item schedule rows
+   ([format](cad-adapter.md#build-guides-ikea-style--slice-1-2026-10-30)).
+4. **Catalog:** live equalled the pre-publication snapshot (362 rows, 0
+   differences). Recorded as `20261101120439_bob_konrad_lean_catalog`: 18
+   definitions from `bob-konrad-lean-v1` (`bob.tools` v37 with
+   `rejection_reason_version` 1, `tools.save_construction_draft` v13,
+   `tools.edit_construction_parts` v7, the finder's role on `gpt-5.4-nano`, low
+   effort, Konrad's two new tools, the shorter report texts). All 370 active
+   definitions equal the fixture.
+
+**[Run 41306354208](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41306354208)
+passed** (run 17, owner OK), all three turns saved. Evidence: `Docs/archive/form-box-paid-2026-11-01-run17.json`.
+
+| | Run 16 | Run 17 (lean Konrad) |
+|---|---|---|
+| Concept turn | USD 0.38 | USD 0.77 |
+| Width change | USD 0.25 | USD 0.21 |
+| Final drawing | USD 0.21 | USD 0.21 |
+| Total | USD 0.84, 37 calls | **USD 1.20, 48 calls** |
+| Konrad | 11 calls | 16 calls |
+| Rejected calls | 0 | 2 |
+
+- **Joints:** Konrad chose real hardware: every joint is held by the shared
+  catalog's 3.5 × 30 wood screw (database counts; no glue). Bob told the owner
+  the screw joints are not verified for capacity. The material finder ran twice
+  for USD 0.002.
+- **Build guide:** generated from the new joints, 10 pages, fastener list
+  complete.
+- **Why the concept turn cost more (USD 0.48 of waste):** Bob's first saved
+  solution left out the owner's outer dimensions (the 6 box runs before all had
+  them), so Konrad searched, found none and handed back (USD 0.14); Bob added
+  them and sent him again (USD 0.07). Konrad's first save failed the tool's
+  schema check after 10,520 output tokens (USD 0.17), and he saved a second
+  revision with more code zeros and the same joints (USD 0.10). The width and
+  drawing turns cost the same as run 16 or less.
+- **Logging gap fixed in source:** schema-check failures logged as
+  `unspecified` because their field paths (`$.joints[0]…`) were filtered out.
+  They now log `schema_mismatch` with dotted field paths (`tool-rejection.ts`);
+  not deployed yet.
+
 <a id="solution-first-install-2026-11-01"></a>
 ## Code check and solution first installed; paid box run 16 passed at USD 0.84 — 2026-11-01
 

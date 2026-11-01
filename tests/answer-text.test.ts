@@ -87,6 +87,9 @@ test('the delivery metric records only the content-free outcome', async () => {
 test('rejected calls log and record a content-free reason; every fixed edit message has a code', async () => {
   assert.deepEqual(toolRejection({ status: 'invalid', validation: { code: 'human_text', fields: ['text.title'] }, message: 'contains "secret"' }), { code: 'human_text', fields: ['text.title'] })
   assert.deepEqual(toolRejection({ status: 'invalid', issues: [{ code: 'request_quote', path: 'request_quote' }] }), { code: 'request_quote', fields: ['request_quote'] })
+  // Arguments that fail the tool's schema name the failing fields, never the expectation text (box run 17).
+  assert.deepEqual(toolRejection({ status: 'invalid', issues: [{ path: '$.joints[0].fasteners[1].count', expected: 'integer | null' }, { path: '$', expected: 'object' }] }),
+    { code: 'schema_mismatch', fields: ['joints.0.fasteners.1.count'] })
   assert.equal(toolRejection({ status: 'invalid', message: 'No change made. Unexpected token } in JSON at position 4' }).code, 'invalid_json')
   assert.equal(toolRejection({ status: 'invalid', message: 'Something new happened with "Bob\'s words".' }).code, 'unspecified')
   // An unmapped message gets a fingerprint that tells messages apart and carries none of their text (2026-10-31).

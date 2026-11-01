@@ -1,0 +1,96 @@
+{
+ "run": "https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41306354208",
+ "workflow": "live-form-acceptance.yml",
+ "scenario": "box",
+ "config": "baseline",
+ "head": "f21128cc67d1e0e21fbfc11f67ff725217ab5713",
+ "functions": {
+  "bob-worker": 165,
+  "ask-bob": 197
+ },
+ "catalog": {
+  "publication": "bob-konrad-lean-v1 (20261101120439)",
+  "bob.tools": "v37, rejection_reason_version 1",
+  "tools.save_construction_draft": "v13, default_zero_version 1, joint_fastener_version 2"
+ },
+ "passed": true,
+ "turns": [
+  {
+   "step": "concept",
+   "turn": "aac77f34-bf86-42a1-851f-c61d63bdba52",
+   "delivery": "asked",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 10,
+    "structure-worker": 12,
+    "material-finder": 2,
+    "completion-gate": 1
+   },
+   "usd": 0.774,
+   "rejected": 2,
+   "answer_text": "clean",
+   "notes": "Bob's first saved solution left out the owner's outer dimensions (5 of the 6 box runs before included them). Konrad searched project data 5 times, used the finder once and handed back without saving (6 calls, USD 0.14); Bob added the dimensions to the solution and sent him again (4 calls, USD 0.07). Konrad's first save was rejected by the tool's schema check (10,520 output tokens, USD 0.17; logged as unspecified, the gap fixed since); the next save stored revision 1 and a further save revision 2 with more code zeros and the same joints (USD 0.10). Delivery 'asked': saved, then offered the next step."
+  },
+  {
+   "step": "width_change",
+   "turn": "fb2a1b60-9f1c-4d09-b1e4-22f51a931bb3",
+   "delivery": "saved",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 4,
+    "structure-worker": 4,
+    "completion-gate": 1
+   },
+   "usd": 0.207,
+   "rejected": 0,
+   "answer_text": "clean",
+   "notes": "Bob recorded the new width in the selected solution once, then one hand-over; Konrad changed and checked the construction."
+  },
+  {
+   "step": "final_drawing",
+   "turn": "ed0229e5-d4bb-4e2f-870a-816c891bbbf7",
+   "delivery": "saved",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 4,
+    "drawing-worker": 6,
+    "completion-gate": 1
+   },
+   "usd": 0.214,
+   "rejected": 0,
+   "answer_text": "clean",
+   "notes": "No Konrad job; Rita drew and saved. Build guide generated (10 pages, fastener list complete)."
+  }
+ ],
+ "total": {
+  "calls": 48,
+  "bob_calls": 18,
+  "konrad_calls": 16,
+  "rita_calls": 6,
+  "finder_calls": 2,
+  "usd": 1.195,
+  "cached_share": 0.76,
+  "rejected": 2
+ },
+ "construction": {
+  "joints": 8,
+  "fasteners": "every joint: one shared catalog item, Träskruv förzinkad (inomhus) 3,5 × 30, count by the database; no glue",
+  "revisions": {
+   "1": "16 nodes, 39 bindings, 15 bound to code zero",
+   "2": "12 nodes, 39 bindings, 24 bound to code zero"
+  }
+ },
+ "material_finder": {
+  "calls": 2,
+  "usd": 0.002
+ },
+ "build_guide": {
+  "status": "generated",
+  "pages": 10,
+  "fasteners_complete": true
+ },
+ "compared": {
+  "run16": "USD 0.84, 37 calls (concept 0.38, width 0.25, drawing 0.21)",
+  "run17": "USD 1.20, 48 calls"
+ }
+}

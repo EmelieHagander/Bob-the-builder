@@ -138,8 +138,9 @@ owns the implementation and replacement of the current full CAD-review gate.
 
 ### Chosen joint fasteners — owner decision 2026-11-01
 
-**Status: built (`20261101100000_joint_fasteners_from_catalog.sql`), not
-applied.** Box runs came out glue only or screws only by chance (8 of 15 glue
+**Status: applied 2026-11-01** (`20261101100000_joint_fasteners_from_catalog.sql`,
+recorded `20261101120022`; [install](foundation-verification.md#konrad-lean-install-2026-11-01)).
+Box runs came out glue only or screws only by chance (8 of 15 glue
 only, 7 screws only, never both). Owner: the structural designer decides from
 the available materials what holds a joint; no fixed alternatives. This
 replaces the 2026-10-26 rule below for joints saved this way; earlier joints
