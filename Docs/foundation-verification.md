@@ -29,7 +29,35 @@ With the owner's OK ("Okay go"; the CAD worker deploy confirmed separately),
    effort, Konrad's two new tools, the shorter report texts). All 370 active
    definitions equal the fixture.
 
-Not yet run: the paid box run that measures it (about USD 0.85, needs the owner's OK).
+**[Run 41306354208](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41306354208)
+passed** (run 17, owner OK), all three turns saved. Evidence: `Docs/archive/form-box-paid-2026-11-01-run17.json`.
+
+| | Run 16 | Run 17 (lean Konrad) |
+|---|---|---|
+| Concept turn | USD 0.38 | USD 0.77 |
+| Width change | USD 0.25 | USD 0.21 |
+| Final drawing | USD 0.21 | USD 0.21 |
+| Total | USD 0.84, 37 calls | **USD 1.20, 48 calls** |
+| Konrad | 11 calls | 16 calls |
+| Rejected calls | 0 | 2 |
+
+- **Joints:** Konrad chose real hardware: every joint is held by the shared
+  catalog's 3.5 × 30 wood screw (database counts; no glue). Bob told the owner
+  the screw joints are not verified for capacity. The material finder ran twice
+  for USD 0.002.
+- **Build guide:** generated from the new joints, 10 pages, fastener list
+  complete.
+- **Why the concept turn cost more (USD 0.48 of waste):** Bob's first saved
+  solution left out the owner's outer dimensions (the 6 box runs before all had
+  them), so Konrad searched, found none and handed back (USD 0.14); Bob added
+  them and sent him again (USD 0.07). Konrad's first save failed the tool's
+  schema check after 10,520 output tokens (USD 0.17), and he saved a second
+  revision with more code zeros and the same joints (USD 0.10). The width and
+  drawing turns cost the same as run 16 or less.
+- **Logging gap fixed in source:** schema-check failures logged as
+  `unspecified` because their field paths (`$.joints[0]…`) were filtered out.
+  They now log `schema_mismatch` with dotted field paths (`tool-rejection.ts`);
+  not deployed yet.
 
 <a id="solution-first-install-2026-11-01"></a>
 ## Code check and solution first installed; paid box run 16 passed at USD 0.84 — 2026-11-01

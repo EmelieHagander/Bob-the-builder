@@ -57,7 +57,7 @@ export const CONSTRUCTION_REJECTION_CODES: readonly (readonly [string, string])[
   ['Use next_read from this exact revision', 'construction_view_cursor_invalid'],
   ['Use fewer named IDs or one result section', 'construction_view_header_too_large'],
 ]
-export const TOOL_REJECTION_CODES: readonly string[] = [...new Set([...EDIT_REJECTION_CODES.map(([, code]) => code), ...CONSTRUCTION_REJECTION_CODES.map(([, code]) => code), 'invalid_json', 'unspecified'])]
+export const TOOL_REJECTION_CODES: readonly string[] = [...new Set([...EDIT_REJECTION_CODES.map(([, code]) => code), ...CONSTRUCTION_REJECTION_CODES.map(([, code]) => code), 'invalid_json', 'schema_mismatch', 'unspecified'])]
 
 /** A short, stable fingerprint of a fixed server message (FNV-1a): it tells two
  * unmapped messages apart in the logs without carrying any of their text. */
@@ -72,13 +72,18 @@ const PATH = /^[A-Za-z0-9_.\/\-*]{1,120}$/
 
 export interface ToolRejection { code: string; fields: string[]; message_id?: string }
 
+// Schema check paths ($.joints[0].fasteners) as dotted field paths (joints.0.fasteners).
+const fieldPath = (path: unknown) => typeof path === 'string' ? path.replace(/^\$\.?/, '').replace(/\[(\d+)\]/g, '.$1').replace(/^\./, '') : path
+
 export function toolRejection(result: unknown): ToolRejection {
   const r = result && typeof result === 'object' ? result as Record<string, any> : {}
   const issues = Array.isArray(r.issues) ? r.issues.filter((i: unknown) => i && typeof i === 'object') : []
-  const fields = (Array.isArray(r.validation?.fields) ? r.validation.fields : issues.map((i: Record<string, unknown>) => i.path))
+  const fields = (Array.isArray(r.validation?.fields) ? r.validation.fields : issues.map((i: Record<string, unknown>) => fieldPath(i.path)))
     .filter((f: unknown): f is string => typeof f === 'string' && PATH.test(f)).slice(0, 8)
   const typed = [r.validation?.code, r.reason, issues[0]?.code].find(c => typeof c === 'string' && CODE.test(c))
   if (typed) return { code: typed, fields }
+  // Box run 17 (2026-11-01): arguments that failed the tool's schema logged as unspecified.
+  if (issues.length && issues.every((i: Record<string, unknown>) => typeof i.expected === 'string')) return { code: 'schema_mismatch', fields }
   const message = typeof r.message === 'string' ? r.message.replace(/^No change made\.\s*/, '') : ''
   const mapped = [...EDIT_REJECTION_CODES, ...CONSTRUCTION_REJECTION_CODES].find(([prefix]) => message.startsWith(prefix))?.[1]
   if (mapped) return { code: mapped, fields }
