@@ -1163,8 +1163,9 @@ with the new sheets needs the owner's OK.
 
 ### Build guides (IKEA-style) — slice 1, 2026-10-30
 
-**Status: source only, behind an off switch.** Worker route, database, Edge and
-app are written (PR #383); nothing is deployed or applied. Owner decisions
+**Status: installed 2026-10-30, switch off; no guide made in a live run yet.**
+See [Installation and paid runs](#build-guide-installation-and-paid-runs).
+Owner decisions
 2026-10-30: a guide is made together with every final drawing, in the same Bob
 request, and the first live run measures what that adds; build pages show
 screws, nails, bolts and glue per step. The ordinary drawing sheets keep no
@@ -1216,10 +1217,10 @@ case (pages, hashes, pin, rule fasteners, 401/422).
 no owner/organiser authority in the database yet (`has_project_access` is any
 member), so a per-project toggle would let any member start paid work.
 
-**Database (PR 2, source only):** [`20261030170000_cad_build_guide.sql`](../db/README.md#build-guides-with-the-drawing-revision--source-only-2026-10-30) adds the switch row (off), the
+**Database (PR 2, applied 2026-10-30):** [`20261030170000_cad_build_guide.sql`](../db/README.md#build-guides-with-the-drawing-revision--applied-2026-10-30) adds the switch row (off), the
 `validate_cad_build_guide` trigger and the volunteer reader change.
 
-**Edge (PR 3, source only).**
+**Edge (PR 3, deployed 2026-10-30).**
 
 - **Catalog.** Publication `cad-build-guide-v1`
   (`20261030171000_cad_build_guide_catalog.sql`) gives `design_project_cad` a
@@ -1264,7 +1265,7 @@ Release order, each step manual with the owner's OK: deploy the Modal worker
 (PR 1), apply `20261030170000`, deploy `ask-bob` and `bob-worker`, then apply
 `20261030171000`. With the switch off this changes nothing for Bob.
 
-**App (PR 4, source only).** `CadBuildGuide` shows a "Build guide · N pages"
+**App (PR 4, deployed 2026-10-30).** `CadBuildGuide` shows a "Build guide · N pages"
 section under the drawing sheets, in the owner view and the volunteer view
 (which receives guide pages only where it receives the drawing). Each page is a
 zoomable sheet with a download link; pages are labelled "What is in the box",
@@ -1276,8 +1277,50 @@ Browser checks: `check-volunteer-browser.mjs` (pages, labels, zoom at
 
 Release order, continued: deploy Pages after the Edge.
 
-Remaining: one paid run to measure the cost, with the owner's OK and the switch
-turned on.
+#### Build guide installation and paid runs
+
+**Installed 2026-10-30** (owner OK), from main `03144da` (PR #383), after a check
+found no running Bob jobs and the live Edge matching main:
+
+- Modal worker: run 41130741299 (tests and deploy passed).
+- `20261030170000` as hosted `20261030212645` / `cad_build_guide`: switch row
+  off, `validate_cad_build_guide` trigger, volunteer reader with guide pages.
+- `ask-bob` v191 and `bob-worker` v159 (`supabase functions deploy --use-api`);
+  both bundles contain the switch read and `/guide` transport; ask-bob CORS 204,
+  bob-worker unauthenticated 401.
+- `20261030171000` as hosted `20261030213752` / `cad_build_guide_catalog`:
+  `tools.design_project_cad` v18 with `assembly_dependencies`.
+- Pages run 41131175792.
+
+Later Edge deploys by other work (v195/v163, 2026-10-31) still contain the guide
+path; `design_project_cad` v19 (`bob-build-workers-v1`) kept the parameter.
+
+**Paid box runs with the switch on** (`live-form-acceptance.yml`, box, label
+`candidate`; the switch was turned on only for the run and off after it):
+
+- 2026-10-30, run 41132533248: failed in the concept turn before any drawing.
+  The provider never answered one Bob call (sent 21:47:07, cancelled at the
+  runner's 15-minute turn limit); earlier calls took 2.5 and 4 minutes. About
+  USD 0.44. No guide code ran.
+- 2026-11-01: passed, 3 turns, 44 model calls, USD 1.07 (concept 0.42, width
+  change 0.41, final drawing 0.24); comparable run 13 without the switch: USD
+  0.86. The drawing worker (Rita) called `design_project_cad` with
+  `assembly_dependencies: null`, so the drawing was saved with
+  `build_guide.status: not_generated` (`no_assembly_order`). The difference is
+  not guide cost; offering the field adds about 100 input tokens per call.
+
+**Field text v2 (owner approved 2026-11-01).** The first text ("Build guide only
+… Null makes no build guide") made null read as a normal choice.
+`20261101020000_cad_build_guide_text_catalog.sql` (publication
+`cad-build-guide-v2`) says what the guide is for: "The build guide made with
+this drawing: the builders follow it page by page with the parts in front of
+them. For every saved joint, the joints that must already be done before it,
+in the order you would put it together. Null only when the construction has no
+saved joints." Catalog text only; the runtime offers the catalog definition, so
+no Edge deploy is needed.
+
+Remaining: a paid box run with the v2 text to see a generated guide and its
+cost.
 
 ### Fastener schedule on drawings — annotations version 2, 2026-10-26
 

@@ -1853,7 +1853,7 @@ applied; [hosted verification](../Docs/foundation-verification.md#form-delivery-
 records its managed version, exact function readback and rollback-only caller
 probe. This does not close browser or ordinary model/CAD acceptance.
 
-## Build guides with the drawing revision — source only, 2026-10-30
+## Build guides with the drawing revision — applied 2026-10-30
 
 Migration `20261030170000_cad_build_guide.sql`
 ([contract](../Docs/cad-adapter.md#build-guides-ikea-style--slice-1-2026-10-30)):
