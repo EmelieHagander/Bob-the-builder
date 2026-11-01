@@ -5,7 +5,7 @@ from PIL import Image
 import hashlib, os
 from unittest.mock import patch
 from bob_cad import guide as guide_module
-from bob_cad.guide import fastener_rows, render_guide, _lift_direction
+from bob_cad.guide import fastener_rows, hardware_summary, render_guide, _clear_lift, _lift_direction, _move_arrows
 from bob_cad.worker import CadContractError
 
 FIXTURE = json.loads((Path(__file__).parent / 'fixtures/bench_guide.json').read_text())
@@ -47,6 +47,28 @@ class GuideTest(unittest.TestCase):
                 'beam': {'min': [0, 0, 345], 'max': [600, 45, 400]}}
         # Pinned from above and the side: it leaves through a free side, not into the beam.
         self.assertNotIn(_lift_direction('brace', ['post', 'beam'], side, [300, 22, 450]), [(2, 1), (0, -1)])
+
+    def test_a_part_going_into_a_box_is_drawn_above_it_with_arrows_into_it(self):
+        # The live box (2026-11-01): a 476 x 276 bottom between four 250 mm walls.
+        walls = {'front': {'min': [12, 0, 0], 'max': [488, 12, 250]}, 'back': {'min': [12, 288, 0], 'max': [488, 300, 250]},
+                 'left': {'min': [0, 0, 0], 'max': [12, 300, 250]}, 'right': {'min': [488, 0, 0], 'max': [500, 300, 250]}}
+        bottom = {'min': [12, 12, 0], 'max': [488, 288, 12]}
+        boxes = {**walls, 'bottom': bottom}
+        lift = _clear_lift('bottom', 2, 1, boxes, list(walls), 120, 40)
+        self.assertGreaterEqual(bottom['min'][2] + lift, 250 + 40, 'clear of the walls, not floating inside the box')
+        # A part beside the frame keeps the normal lift.
+        self.assertEqual(_clear_lift('side', 0, 1, {**walls, 'side': {'min': [500, 0, 0], 'max': [512, 300, 250]}}, list(walls), 120, 40), 120)
+        arrows = _move_arrows(bottom, 2, 1, lift, (1, -1, 1), 600)
+        for a in arrows:
+            bb = a.bounding_box()
+            self.assertTrue(12 < bb.min.Y < 288 and bb.max.Z <= lift, 'inside the footprint, between the lifted part and its place')
+
+    def test_the_box_page_says_glue_only_instead_of_missing_screws(self):
+        self.assertEqual(hardware_summary('', True, []), 'glue only')
+        self.assertEqual(hardware_summary('8× screw 4 × 40', True, []), '8× screw 4 × 40 + glue')
+        self.assertEqual(hardware_summary('', False, ['j1']), '1 joint(s) without a rule')
+        self.assertEqual(hardware_summary('', False, []), 'none')
+        self.assertEqual(hardware_summary('', True, [], read=False), 'not read for this guide')
 
     def test_hardware_is_never_guessed(self):
         sched = {'joints': [

@@ -1163,7 +1163,7 @@ with the new sheets needs the owner's OK.
 
 ### Build guides (IKEA-style) — slice 1, 2026-10-30
 
-**Status: installed 2026-10-30, switch off; no guide made in a live run yet.**
+**Status: installed 2026-10-30; switch on since 2026-11-01; first live guide made 2026-11-01.**
 See [Installation and paid runs](#build-guide-installation-and-paid-runs).
 Owner decisions
 2026-10-30: a guide is made together with every final drawing, in the same Bob
@@ -1319,8 +1319,28 @@ in the order you would put it together. Null only when the construction has no
 saved joints." Catalog text only; the runtime offers the catalog definition, so
 no Edge deploy is needed.
 
-Remaining: a paid box run with the v2 text to see a generated guide and its
-cost.
+- 2026-11-01, v2 text, third attempt: passed, USD 0.91 (concept 0.49, width
+  change 0.22, final drawing 0.20); run 13 without the switch: USD 0.86. Rita
+  sent an order and the drawing was saved with a **generated** guide: 4 pages
+  (box contents, two steps, done), rule fasteners complete (this box is glued
+  only), about 20 KB of SVG. The guide adds no measurable model cost. The
+  attempt before it (07:25) failed in the concept turn: one Konrad call got no
+  provider answer in 12 minutes (USD 0.12).
+
+**Switch on (owner decision 2026-11-01, 08:30 UTC):** every final drawing gets a
+guide.
+
+**Page fixes after the first live guide (2026-11-01):**
+
+- Part names drop definition prefixes ("Def front back" → "Front back") on the
+  sheets, the guide and the app's parts list (`part_name`, `cadPartName`).
+- A part going into a frame or box is lifted clear of it (`_clear_lift`)
+  instead of floating inside; its arrows run just inside its camera-facing edge
+  (`_move_arrows`) so the part does not hide them.
+- The box page says "Fasteners: glue only" when every joint is glued, instead of
+  "none sized yet + glue" (`hardware_summary`).
+
+Checked by redrawing the live box locally and the bench fixture; CAD tests 47 OK.
 
 ### Fastener schedule on drawings — annotations version 2, 2026-10-26
 
