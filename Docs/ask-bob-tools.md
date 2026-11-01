@@ -178,7 +178,7 @@ himself. Manifests with `bob.tools` `build_workers_version` 1
   code, field paths and, for an unmapped message, a content-free fingerprint in
   the run's event log. A job the spending stop ends reports `paused_at_limit`
   with the same receipts and readback when the job is pinned to the
-  [final answer](ask-bob-conversations.md#final-answer-past-stop) (prepared).
+  [final answer](ask-bob-conversations.md#final-answer-past-stop) (installed 2026-11-01).
 
 Pinned manifests keep their behaviour: before this publication Bob holds the
 construction and drawing tools, Mattias gets Bob's brief, and the AI reviewer
@@ -232,7 +232,10 @@ tokens, and every box construction was glue only or screws only by chance.
   project's material list (`bob.read_material_shortlist`: shared and own items
   at their current revision, with name, profile, fastener kind and sizes) and may
   answer only with IDs from it. Code returns each item's own values and drops
-  any other ID. It replaces Konrad's two catalog lookups.
+  any other ID. It replaces Konrad's two catalog lookups. Since the evening of 2026-11-01 Mattias reads with it too (he keeps
+  catalog search for categories, profiles, stock at home and store prices, and
+  read), Bob can pick it, and its texts name no single asker
+  ([install](foundation-verification.md#finder-save-fixes-install-2026-11-01)).
 
 Pinned manifests keep the former schemas, rule fastener and lookups.
 
