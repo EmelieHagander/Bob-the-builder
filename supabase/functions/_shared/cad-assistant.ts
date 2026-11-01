@@ -46,10 +46,11 @@ export function withoutResumeViews<T>(value:T):T{
  return copy
 }
 /** Build guides (2026-10-30): an order Bob proposed for every saved joint. The
- * drawing's reviewer never sees the guide; review cost is unchanged. */
+ * drawing's reviewer never sees the guide; review cost is unchanged. Text from
+ * cad-build-guide-v2 (owner approved 2026-11-01). */
 export const ASSEMBLY_ORDER_SCHEMA={type:['array','null'],maxItems:1024,items:{type:'object',additionalProperties:false,required:['joint_id','depends_on'],
  properties:{joint_id:{type:'string'},depends_on:{type:'array',maxItems:1024,items:{type:'string'}}}},
- description:'Build guide only. For every saved joint of the construction, the joints that must be done before it: your proposed assembly order. Null makes no build guide.'}
+ description:'The build guide made with this drawing: the builders follow it page by page with the parts in front of them. For every saved joint, the joints that must already be done before it, in the order you would put it together. Null only when the construction has no saved joints.'}
 export function withoutAssemblyOrder<T>(value:T):T{
  const copy:any=structuredClone(value),parameters=copy?.function?.parameters??copy?.parameters
  if(parameters?.properties?.assembly_dependencies===undefined)return copy

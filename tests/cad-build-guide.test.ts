@@ -89,13 +89,20 @@ test('the order parameter is offered only when the switch is on',()=>{
  assert.equal(hidden.function.parameters.required.includes('assembly_dependencies'),false)
 })
 
-// 20261030171000 (cad-build-guide-v1): the catalog carries exactly the runtime's order schema.
+// 20261030171000 (cad-build-guide-v1) and 20261101020000 (cad-build-guide-v2, text):
+// the catalog carries exactly the runtime's order schema.
 import {catalogFixture} from './support/ai-catalog-fixture.ts'
 import {ASSEMBLY_ORDER_SCHEMA} from '../supabase/functions/_shared/cad-assistant.ts'
 test('the catalog publication adds the same nullable, required order parameter as the runtime',()=>{
  const catalog=catalogFixture(),tool:any=catalog.tool('design_project_cad'),parameters=tool.function?.parameters??tool.parameters
  assert.deepEqual(parameters.properties.assembly_dependencies,ASSEMBLY_ORDER_SCHEMA)
  assert.equal(parameters.required.at(-1),'assembly_dependencies')
- assert.equal(catalog.manifest().definitions.find(d=>d.prompt_key==='tools.design_project_cad')!.metadata.publication,'cad-build-guide-v1')
- assert.deepEqual(parameters,DESIGN_CAD_TOOL.function.parameters,'catalog and local definition agree')
+ assert.equal(catalog.manifest().definitions.find(d=>d.prompt_key==='tools.design_project_cad')!.metadata.publication,'cad-build-guide-v2')
+ // Other fields' texts are owned by later publications (bob-build-workers-v1); the order field and required list agree.
+ assert.deepEqual(parameters.required,DESIGN_CAD_TOOL.function.parameters.required,'catalog and local required lists agree')
+})
+test('the order field says what the guide is for; null only without joints',()=>{
+ assert.match(ASSEMBLY_ORDER_SCHEMA.description,/builders follow it page by page/)
+ assert.match(ASSEMBLY_ORDER_SCHEMA.description,/Null only when the construction has no saved joints/)
+ assert.doesNotMatch(ASSEMBLY_ORDER_SCHEMA.description,/Build guide only/)
 })
