@@ -7,7 +7,10 @@ import {designIntent} from './support/design-intent-fixture.ts'
 import {compileCadParameters} from '../supabase/functions/_shared/cad-parameters.ts'
 import {CONSTRUCTION_EDIT_TOOL} from '../supabase/functions/_shared/construction-edits.ts'
 import {createAiCatalogSession} from '../supabase/functions/_shared/ai-catalog.ts'
-import {catalogFixture,preConstructionEditsCatalogFixture} from './support/ai-catalog-fixture.ts'
+import {catalogFixture,preConstructionEditsCatalogFixture,preKonradLeanCatalogFixture} from './support/ai-catalog-fixture.ts'
+import {CAD_PARAMETERS_SCHEMA,withDefaultZeroText} from '../supabase/functions/_shared/cad-parameters.ts'
+import {CAD_ARRAYS_SCHEMA} from '../supabase/functions/_shared/cad-arrays.ts'
+import {withChosenJointFasteners} from '../supabase/functions/_shared/construction-fasteners.ts'
 import {withConstructionWorkWrite} from '../supabase/functions/_shared/construction-work.ts'
 import {withConstructionText} from '../supabase/functions/_shared/construction-text.ts'
 import {createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
@@ -89,7 +92,11 @@ test('bounded construction edits preserve canonical data, receipts and authority
    assert.deepEqual(current.definition(key).metadata,catalogFixture().definition(key).metadata,key)
   }
   // 2026-10-29: new manifests also carry corrected title/description text with a change.
-  assert.deepEqual(current.tool('edit_construction_parts').function.parameters,withConstructionText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL)).function.parameters)
+  // 2026-11-01 (bob-konrad-lean-v1): chosen joint fasteners and auto-zero wording on top.
+  const former={path:(CAD_PARAMETERS_SCHEMA.properties.bindings as any).items.properties.path.description,arrays:CAD_ARRAYS_SCHEMA.description}
+  const textEdit=withConstructionText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL)).function.parameters
+  assert.deepEqual(preKonradLeanCatalogFixture().tool('edit_construction_parts').function.parameters,textEdit)
+  assert.deepEqual(current.tool('edit_construction_parts').function.parameters,withDefaultZeroText(withChosenJointFasteners(textEdit),former))
   const options={message,writer:writer(),constructionTools:tools(),lookup:createProjectLookup(project,async()=>({data:[],error:null}),async()=>({data:[],error:null})),readPolicy:seedToolPolicy}
   const old=createBobToolSession({...options,aiCatalog:preConstructionEditsCatalogFixture()})
   assert(!(await old.prepare()).some(t=>t.function.name==='edit_construction_parts'))

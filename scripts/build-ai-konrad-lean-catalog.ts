@@ -45,7 +45,7 @@ const toolRow = (tool: { function: { name: string; description: string; paramete
 })
 const FIND_ADDITIONAL = 'Name each thing and the sizes you need, one need per thing; the finder matches words to this project\'s material list and does not choose for a purpose. Put all of a job\'s needs in one call where you can: every call reads the whole list. close is the same kind of thing at another size or variant; whether it will do is your call. Copy the IDs and revisions it returns.'
 const find = toolRow(CATALOG_FIND_TOOL, { additional: FIND_ADDITIONAL,
-  card: 'Use when a construction needs catalog items for its parts or joints. Gives, per need named in words, exact, close or no matches with each item\'s ID, revision, name and catalog sizes.',
+  card: 'Use when a construction needs catalog items for its parts or joints. Gives exact, close or no matches per need named in words, with each item\'s ID, revision, name and catalog sizes.',
   contract: 'status ok, or why not; per need in the order asked: need, match (exact, close or none) and items, each with material_id, material_revision, name, profile, fastener (kind or null), counting for fasteners, sizes as catalog text and project_own; list_complete false when the list was cut. Code copies each item\'s values from the catalog and drops anything not on the list; a need left without a valid item is none. unavailable is not proof of absence.' })
 const ADD_ADDITIONAL = 'Name it as the material list should show it. kind is one word for what it is, the same word each time, since totals group by it. counting: along_contact items are spaced along the contact and counted by the database from their size; per_joint items take the count you give each joint; per_construction is one package for the whole construction. The size is nominal, your design choice, not a measurement.'
 const add = toolRow(CATALOG_FASTENER_TOOL, { additional: ADD_ADDITIONAL,
@@ -54,6 +54,8 @@ const add = toolRow(CATALOG_FASTENER_TOOL, { additional: ADD_ADDITIONAL,
 
 const policy = (row: ReturnType<typeof toolRow>) => ({ name: row.name, description: row.description, how_to: row.additional_description, schema_version: 1, always_load: false, preload_phases: [], active: true })
 const structure = (def('bob.tools').build_workers as Record<string, any>).structure
+const MATERIALS_SHELF = (def('bob.tools').shelves as { label: string }[]).findIndex(s => s.label === 'Materials, stock and Shopping')
+if (MATERIALS_SHELF < 0) throw new Error('materials shelf missing')
 const spec = {
   publication: PUBLICATION,
   header: [
@@ -136,6 +138,7 @@ const spec = {
   toolbox_append: [
     { path: ['contract_keys'], values: ['tools.find_catalog_materials', 'tools.add_catalog_fastener'] },
     { path: ['catalog'], values: [policy(find), policy(add)] },
+    { path: ['shelves', String(MATERIALS_SHELF), 'tools'], values: ['find_catalog_materials', 'add_catalog_fastener'] },
   ],
   how_to: {},
   tool_catalog: [policy(find), policy(add)],

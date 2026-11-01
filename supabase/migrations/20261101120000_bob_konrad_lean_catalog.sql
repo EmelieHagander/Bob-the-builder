@@ -213,7 +213,7 @@ declare spec jsonb:=$bob_catalog_publication${
      "format": "json",
      "contract": "status ok, or why not; per need in the order asked: need, match (exact, close or none) and items, each with material_id, material_revision, name, profile, fastener (kind or null), counting for fasteners, sizes as catalog text and project_own; list_complete false when the list was cut. Code copies each item's values from the catalog and drops anything not on the list; a need left without a valid item is none. unavailable is not proof of absence."
     },
-    "card_description": "Use when a construction needs catalog items for its parts or joints. Gives, per need named in words, exact, close or no matches with each item's ID, revision, name and catalog sizes.",
+    "card_description": "Use when a construction needs catalog items for its parts or joints. Gives exact, close or no matches per need named in words, with each item's ID, revision, name and catalog sizes.",
     "optional_parameters": [],
     "required_parameters": [
      "needs"
@@ -583,6 +583,17 @@ declare spec jsonb:=$bob_catalog_publication${
      "preload_phases": [],
      "active": true
     }
+   ]
+  },
+  {
+   "path": [
+    "shelves",
+    "6",
+    "tools"
+   ],
+   "values": [
+    "find_catalog_materials",
+    "add_catalog_fastener"
    ]
   }
  ],
