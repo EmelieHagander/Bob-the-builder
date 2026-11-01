@@ -22,7 +22,7 @@ import { humanTextIssues } from './human-text.ts'
 import { answerTextFragments, type AnswerTextOutcome } from './answer-text.ts'
 import { toolRejection } from './tool-rejection.ts'
 import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
-import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogReportReadback, catalogConstructionAutoCheck, readbackReads, workerOwnedTools, parseWorkerJob, runWorker } from './bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogReportReadback, catalogConstructionAutoCheck, readbackReads, workerOwnedTools, parseWorkerJob, runWorker, validWorkerProgress, type WorkerProgress } from './bob-workers.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
@@ -235,6 +235,8 @@ export interface BobAnswerState {
   reviewedAnswer?: string
   /** The spending stop refused Bob's call; his one last call cannot call tools. */
   finalCall?: boolean
+  /** Worker checkpoints: the hand-over at this step and call index, and the worker's place in it. */
+  worker?: { key: string; index: number; session: unknown; projectName?: string; progress: WorkerProgress }
   tools: NonNullable<OpenAIServiceOptions['tools']>
   closedByLimit: boolean; closedByCommentary: boolean
   request?: OpenAIServiceOptions
@@ -280,6 +282,8 @@ export type ProjectAnswerOptions = {
   /** Pinned per execution (finalAnswerVersion): past the spending stop Bob gets one
    * last call without callable tools, and a stopped worker reports back as a result. */
   finalAnswer?: boolean;
+  /** Pinned per execution (workerCheckpointVersion): a worker's place is saved after each of its steps. */
+  workerCheckpoint?: boolean;
   resultReferences?: boolean;
   /** Main-role compaction epoch; loaded manuals expire on the next prepare. */
   contextEpoch?: () => number;
@@ -301,6 +305,8 @@ export async function runProjectAnswer(opts: ProjectAnswerOptions): Promise<Proj
       || ![saved.completionChecked, saved.closedNoteSent, saved.closedByLimit, saved.closedByCommentary].every(v => typeof v === 'boolean')
       || saved.reviewedAnswer !== undefined && (typeof saved.reviewedAnswer !== 'string' || !saved.reviewedAnswer)
       || saved.finalCall !== undefined && typeof saved.finalCall !== 'boolean'
+      || saved.worker !== undefined && (saved.phase !== 'tools' || !saved.worker || typeof saved.worker.key !== 'string' || saved.worker.index !== saved.toolIndex
+        || !saved.worker.session || typeof saved.worker.session !== 'object' || saved.worker.projectName !== undefined && typeof saved.worker.projectName !== 'string' || !validWorkerProgress(saved.worker.progress, 40))
       || !saved.initial || !saved.toolbox || !saved.observation || !Array.isArray(saved.messages) || !Array.isArray(saved.tools) || !Array.isArray(saved.workResults)
       || (saved.phase !== 'ready' && (!saved.request || saved.request.app !== 'bob' || saved.request.aiFunction !== 'ask-bob' || saved.request.userId !== opts.userId))
       || (['response', 'tools'].includes(saved.phase) && !saved.response)
@@ -409,8 +415,11 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   } : basePolicy
   const withoutDiagnostics = (result: any) => { if (result && typeof result === 'object' && 'diagnostics' in result) { const { diagnostics: _d, ...rest } = result; return rest } return result }
   const workerSessions = new Map<string, ReturnType<typeof createBobToolSession>>()
-  let currentStep = restored?.step ?? 0
+  let currentStep = restored?.step ?? 0, currentIndex = -1
   let workerToolEvents = 0
+  // Worker checkpoints: the saved place is used once, by the same hand-over call.
+  let workerResume = opts.workerCheckpoint ? restored?.worker : undefined
+  let workerState: BobAnswerState['worker']
   // The project's name for the workers' personas: the locked snapshot, else one read.
   let projectName: string | undefined
   const readProjectName = async () => {
@@ -429,17 +438,25 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const plain = !!worker.knowledge
       const job = parseWorkerJob(raw, plain)
       if (!job) return { status: 'invalid', issues: [{ path: '$', expected: plain ? 'request (text)' : 'job (text) and findings (text or null)' }] }
+      const resume = workerResume && workerResume.key === key && workerResume.index === currentIndex ? workerResume : undefined
+      workerResume = undefined
       let session = workerSessions.get(key)
-      if (!session) {
+      if (!session || resume) {
         session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: () => [...worker.tools, ...worker.reads], offerWaiting: true, readPolicy: basePolicy })
+        if (resume) session.restoreState(structuredClone(resume.session) as Parameters<typeof session.restoreState>[0])
         workerSessions.set(key, session)
       }
+      if (resume?.projectName !== undefined) projectName = resume.projectName
       const stair = opts.context?.stair
       const history = stair ? stairConversation(opts.aiCatalog, stair) : (opts.context?.recent.slice(0, -1) ?? []).map(m => ({ role: m.role, content: m.text }))
-      const workerStep = currentStep
-      return runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
+      const workerStep = currentStep, workerIndex = currentIndex
+      const report = await runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
         session, hasAccess: opts.hasAccess, deadline, ...(opts.modelTimeoutMs ? { modelTimeoutMs: opts.modelTimeoutMs } : {}),
         ...(opts.finalAnswer ? { stopAsResult: true } : {}),
+        ...(opts.workerCheckpoint ? { progress: { ...(resume ? { restored: resume.progress } : {}), save: async (progress: WorkerProgress) => {
+          workerState = { key, index: workerIndex, session: session!.exportState(), ...(projectName !== undefined ? { projectName } : {}), progress }
+          await save(workerStep)
+        } } } : {}),
         readCurrent: async () => key === 'materials' ? opts.lookup.search({ dataset: 'materials', query: null, status: null, area_id: null, record_id: null }) : null,
         // In order, one at a time: the journal replays reads by position.
         // Auto check (2026-11-01): a saved construction left unchecked is checked by the server, in order.
@@ -481,6 +498,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           // Distinct event keys: Bob's own calls use index 0..n of the step.
           opts.onTool?.({ name, status, step: workerStep + 1, index: 100 + workerToolEvents++, ms, ...(rejection ? { rejection } : {}) })
         } })
+      // The job is over: Bob's next save records its result, not a place inside it.
+      workerState = undefined
+      return report
     } }))
   const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: turnPreload,
     ...(boundedOrientation ? { orientationReader: { tools: [ORIENTATION_DIRECTORY_TOOL], execute: (raw: unknown) => {
@@ -597,6 +617,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       messages, previousResponseId, preparedEpoch, observation, toolbox: toolbox.exportState(), workResults,
       completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
       ...(finalCall ? { finalCall } : {}),
+      ...(workerState ? { worker: workerState } : {}),
       tools, closedByLimit, closedByCommentary, request, response: pendingResponse, toolIndex }))
   }
   const answered = (text: string, responseId: string | undefined, incomplete: boolean): ProjectAnswer => ({ ok: true, answer: text, projectId: opts.projectId, providerResponseId: responseId,
@@ -754,6 +775,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         progress({ stage: 'tool', tool: toolName, step: step + 1 })
         let result: any
         const began = Date.now()
+        currentIndex = index
         try { result = await toolbox.execute(toolName, args) }
         catch (error) { rethrowContinuation(error); observe('failed'); return { ok: false, error: toolFailureCode(error) } }
         if (toolRepair && result?.status === 'invalid' && toolName !== USE_TOOL && toolName !== 'describe_tool' && repairsUsed < TOOL_REPAIR_LIMIT

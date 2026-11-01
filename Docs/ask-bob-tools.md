@@ -181,7 +181,12 @@ himself. Manifests with `bob.tools` `build_workers_version` 1
   Konrad's live read left out `result_id`); present values are checked unchanged. Workers and other specialists refresh their context at
   `specialist_continuation_tokens` (150k, pinned per job; prepared 2026-11-01) instead of
   Bob's 64k: at 64k Konrad's chain on a 70-part bunk bed was summarized almost every
-  step, and he re-read about 20 pages without saving (job da79a46e). A job the spending stop ends reports `paused_at_limit`
+  step, and he re-read about 20 pages without saving (job da79a46e). Jobs pinned with
+  `worker_checkpoint_version` 1 (prepared 2026-11-01) save the worker's place after each of
+  its steps in Bob's turn checkpoint (`worker` in the answer state: hand-over index, worker
+  tool session, chain id, pending tool results, calls and receipts), so a resume continues
+  the job instead of replaying it from the first step; the same job hit "CPU Time exceeded"
+  on every resume. A job the spending stop ends reports `paused_at_limit`
   with the same receipts and readback when the job is pinned to the
   [final answer](ask-bob-conversations.md#final-answer-past-stop) (installed 2026-11-01).
 

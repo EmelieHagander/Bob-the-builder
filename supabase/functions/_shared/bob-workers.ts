@@ -116,6 +116,23 @@ export function buildWorkerMessages(aiCatalog: AiCatalogSession, opts: {
   ]
 }
 
+/** Owner decision 2026-11-01 (job da79a46e, "CPU Time exceeded" on every resume):
+ * a worker job runs inside one of Bob's tool calls, so each resume replayed the
+ * whole job from its first step. Jobs pinned with workerCheckpointVersion save the
+ * worker's place after each finished step, and a resume continues from there. */
+export interface WorkerProgress {
+  version: 1; step: number; previous: string; messages: Messages
+  calls: { tool: string; status: string }[]; receipts: Record<string, unknown>[]; order: string[]
+}
+export function validWorkerProgress(value: unknown, maxSteps: number): value is WorkerProgress {
+  const v = value as Partial<WorkerProgress> | null
+  return !!v && typeof v === 'object' && v.version === 1 && Number.isSafeInteger(v.step) && v.step! >= 0 && v.step! < maxSteps
+    && typeof v.previous === 'string' && !!v.previous && Array.isArray(v.messages)
+    && Array.isArray(v.calls) && v.calls.every(c => !!c && typeof c.tool === 'string' && typeof c.status === 'string')
+    && Array.isArray(v.receipts) && v.receipts.every(r => !!r && typeof r === 'object' && !Array.isArray(r))
+    && Array.isArray(v.order) && v.order.every(name => typeof name === 'string' && NAME.test(name))
+}
+
 export async function runWorker(opts: {
   aiCatalog: AiCatalogSession; worker: WorkerDefinition; callModel: ModelCall; userId: string
   job: { job: string; findings: string | null }; context?: WorkingContext; history: Messages
@@ -133,6 +150,8 @@ export async function runWorker(opts: {
   /** Owner decision 2026-11-01: a job stopped by the spending stop reports back
    * paused_at_limit with what it saved, instead of failing Bob's turn. */
   stopAsResult?: boolean
+  /** Pinned per job (workerCheckpointVersion): the place saved after each step, and the save. */
+  progress?: { restored?: WorkerProgress; save(progress: WorkerProgress): Promise<void> }
 }): Promise<Record<string, unknown>> {
   const roleKey = opts.worker.role.replace(/^role\./, '')
   const allowed = new Set([...opts.worker.tools, ...opts.worker.reads])
@@ -146,19 +165,25 @@ export async function runWorker(opts: {
     for (const spec of offered) if (!order.includes(spec.function.name)) order.push(spec.function.name)
     return order.flatMap(name => offered.filter(spec => spec.function.name === name))
   }
-  let specs = await offer()
-  if (!specs.length) return { status: 'unavailable', worker: roleKey }
+  const restored = opts.progress?.restored
+  if (restored && !validWorkerProgress(restored, opts.worker.max_steps)) throw new Error('worker_checkpoint_invalid')
+  // A resumed job already read its knowledge and holds its place; the next step offers the tools again.
+  if (restored) order.push(...restored.order)
+  let specs = restored ? [] : await offer()
+  if (!restored && !specs.length) return { status: 'unavailable', worker: roleKey }
   let current: unknown, knowledge: Record<string, unknown> | undefined
-  if (opts.readKnowledge) knowledge = await opts.readKnowledge()
+  if (restored) { /* the first messages went with the saved chain */ }
+  else if (opts.readKnowledge) knowledge = await opts.readKnowledge()
   else try { current = await opts.readCurrent() } catch (error) { rethrowContinuation(error); current = { status: 'unavailable' } }
-  let messages: Messages = buildWorkerMessages(opts.aiCatalog, { prefix: roleKey, context: opts.context, history: opts.history, brief: { ...opts.job, current }, ...(knowledge ? { knowledge } : {}) })
+  let messages: Messages = restored ? structuredClone(restored.messages)
+    : buildWorkerMessages(opts.aiCatalog, { prefix: roleKey, context: opts.context, history: opts.history, brief: { ...opts.job, current }, ...(knowledge ? { knowledge } : {}) })
   // The worker sees full manuals: it has few tools and they are fixed for the job.
   const params = { server_quote: true, include_manual: true }
   const toolParams = () => Object.fromEntries(specs.map(spec => [spec.function.name, { card: false, include_manual: true }]))
-  const calls: { tool: string; status: string }[] = []
+  const calls: { tool: string; status: string }[] = structuredClone(restored?.calls ?? [])
   // Workers with knowledge: what they saved travels to Bob as receipts, in code (no AI restates ids),
   // and with the readback switch the saved records themselves, read after the job.
-  const receipts: Record<string, unknown>[] = []
+  const receipts: Record<string, unknown>[] = structuredClone(restored?.receipts ?? [])
   const finish = async (result: Record<string, unknown>) => {
     if (!opts.readKnowledge) return result
     const targets = opts.autoCheck ? uncheckedConstructions(receipts) : []
@@ -167,8 +192,8 @@ export async function runWorker(opts: {
     const readback = opts.readback && receipts.length ? await opts.readback(receipts) : undefined
     return { ...result, receipts, ...(readback?.length ? { readback } : {}) }
   }
-  let previous: string | undefined
-  for (let step = 0; step < opts.worker.max_steps; step++) {
+  let previous: string | undefined = restored?.previous
+  for (let step = restored ? restored.step + 1 : 0; step < opts.worker.max_steps; step++) {
     if (!await opts.hasAccess()) throw new Error('project_denied')
     if (Date.now() + 15_000 >= opts.deadline) return finish({ status: 'time_budget', worker: roleKey, calls })
     if (step) specs = await offer()
@@ -207,6 +232,7 @@ export async function runWorker(opts: {
       messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) })
     }
     for (const call of response.toolCalls.slice(8)) messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ status: 'deferred' }) })
+    if (opts.progress) await opts.progress.save(structuredClone({ version: 1 as const, step, previous, messages, calls, receipts, order }))
   }
   return finish({ status: 'step_budget', worker: roleKey, calls })
 }
