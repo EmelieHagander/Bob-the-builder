@@ -1,4 +1,5 @@
 import { SUPERSEDED_PLAN_LINK_TOOLS, type PlanLinks } from '../project-plan-links.ts'
+import type { BuildTreeTools } from '../build-tree.ts'
 import type { BuildingScope } from '../project-building-scope.ts'
 import { SUPERSEDED_WORK_TOOLS, WORK_RECORD_TOOLS_V2, WORK_VALUE_TOOL_NAMES, type WorkRecords } from '../project-work-records.ts'
 import type { SolutionActions } from '../project-solution-actions.ts'
@@ -38,7 +39,7 @@ export const TOOLBOX_SHELVES: { label: string; tools: string[] }[] = [
   { label: 'Drawings and CAD', tools: ['read_construction_delivery', 'read_construction_draft', 'save_construction_draft', 'edit_construction_parts', 'change_construction_parameters', 'transition_legacy_drawing', 'change_construction_roles', 'read_construction_changes', 'continue_construction_change', 'check_construction_draft', 'derive_construction_lists', 'design_project_cad', 'plan_cad_pieces', 'compose_cad_shell', 'read_cad_shell', 'link_cad_shell_steps', 'read_drawing_requests', 'read_drawing_request_work', 'link_drawing_gap', 'ensure_drawing_gap_task', 'cancel_drawing_request', 'restore_drawing_request', 'save_cad_design', 'link_project_drawing', 'save_project_building_plan', 'inspect_building_projection', 'save_project_stair', 'inspect_stair_options', 'create_project_room_layout', 'edit_project_room_layout', 'save_project_drawing'] },
   { label: 'Materials, stock and Shopping', tools: ['search_material_catalog', 'read_material_catalog', 'save_catalog_definition', 'manage_project_material', 'derive_cad_material_requirement', 'check_construction_cut_fit', 'save_construction_cut_plan', 'delete_shopping_item', 'find_catalog_materials', 'add_catalog_fastener'] },
   { label: 'Images and mockups', tools: ['list_project_category', 'open_project_item', 'describe_project_image', 'generate_project_image', 'attach_project_image', 'detach_project_image', 'finalize_project_image'] },
-  { label: 'Building and site', tools: ['read_building_scope', 'change_building_scope', 'save_building_context'] },
+  { label: 'Building and site', tools: ['read_building_scope', 'change_building_scope', 'save_building_context', 'read_build_tree', 'place_build'] },
   { label: 'Building knowledge', tools: ['search_building_knowledge'] },
 ]
 const shelfOf = (name: string) => TOOLBOX_SHELVES.find(s => s.tools.includes(name))?.label ?? 'Other tools'
@@ -107,6 +108,7 @@ export function createBobToolSession(opts: {
   /** FORM small source reader; offered only where a publication enables it. */
   sourceReader?: SourceReader;
   operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; workRecords?: WorkRecords; planLinks?: PlanLinks; buildingScope?: BuildingScope; planAssistant?: ReturnType<typeof createPlanAssistant>;
+  buildTree?: BuildTreeTools;
 }) {
   const writeGate = (): ToolGate => !opts.writer ? 'not_allowed' : opts.writer.uncertain ? 'write_uncertain' : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted'
   const readGate = (): ToolGate => opts.lookup.remaining > 0 ? 'available' : 'budget_exhausted'
@@ -156,6 +158,11 @@ export function createBobToolSession(opts: {
     ...(opts.buildingScope?.tools ?? []).filter(spec => !opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + spec.function.name)).map(spec => ({ spec, version: 1,
       gate: (): ToolGate => spec.function.name === 'read_building_scope' ? opts.buildingScope!.remaining > 0 ? 'available' : 'budget_exhausted' : writeGate(),
       execute: (v: unknown) => opts.buildingScope!.execute(spec.function.name, v),
+    })),
+    // The build tree (2026-11-01): only manifests that publish these contracts offer them.
+    ...(opts.buildTree?.tools ?? []).filter(spec => !opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + spec.function.name)).map(spec => ({ spec, version: 1,
+      gate: (): ToolGate => spec.function.name === 'read_build_tree' ? 'available' : writeGate(),
+      execute: (v: unknown) => opts.buildTree!.execute(spec.function.name, v),
     })),
     // Konrad's add tool (2026-11-01) exists only for manifests that publish it.
     ...WRITE_TOOLS.filter(spec => spec.function.name !== 'add_catalog_fastener' || !opts.aiCatalog

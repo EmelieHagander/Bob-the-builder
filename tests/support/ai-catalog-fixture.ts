@@ -803,7 +803,7 @@ for(const migration of migrations){
  }
  // Read tools published from the read_construction_changes template: FORM 4b
  // delivery readback (#357) and the inactive FORM 3 task source packet.
- for(const [tag,publication,shelfLabel] of [['construction_delivery','construction-delivery-v1','Drawings and CAD'],['task_sources','task-sources-v1','Project records and memory'],['source_findings','source-reader-v1','Project records and memory']] as const){
+ for(const [tag,publication,shelfLabel] of [['construction_delivery','construction-delivery-v1','Drawings and CAD'],['task_sources','task-sources-v1','Project records and memory'],['source_findings','source-reader-v1','Project records and memory'],['build_tree','build-tree-v1','Building and site']] as const){
   const contracts=source.match(new RegExp('\\$'+tag+'_contracts\\$([\\s\\S]+?)\\$'+tag+'_contracts\\$'))
   if(!contracts)continue
   const policies=JSON.parse(source.match(new RegExp('\\$'+tag+'_policies\\$([\\s\\S]+?)\\$'+tag+'_policies\\$'))![1])
@@ -820,6 +820,15 @@ for(const migration of migrations){
    if(!box.definition.catalog.some((p:any)=>p.name===policy.name))box.definition.catalog.push(policy)
    if(!box.definition.contract_keys.includes('tools.'+policy.name))box.definition.contract_keys.push('tools.'+policy.name)
    const shelf=box.definition.shelves.find((s:any)=>s.label===shelfLabel);if(!shelf.tools.includes(policy.name))shelf.tools.push(policy.name)
+  }
+ }
+ // The build tree (2026-11-01): every colleague reads it and gets its outline as knowledge.
+ const buildTreeKnowledge=source.match(/\$build_tree_knowledge\$([\s\S]+?)\$build_tree_knowledge\$/)
+ if(buildTreeKnowledge){
+  const knowledge=JSON.parse(buildTreeKnowledge[1]),box=seed.find(row=>row.key==='bob.tools')
+  for(const group of ['workers','build_workers'])for(const worker of Object.values(box.definition[group]??{}) as any[]){
+   if(!worker.reads.includes('read_build_tree'))worker.reads.push('read_build_tree')
+   if(Array.isArray(worker.knowledge)&&worker.knowledge.length<8&&!worker.knowledge.some((k:any)=>k.label==='build_map'))worker.knowledge.push(structuredClone(knowledge))
   }
  }
  const calculatorContract=source.match(/\$calculator_contract\$([\s\S]+?)\$calculator_contract\$/)
