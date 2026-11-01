@@ -477,6 +477,26 @@ for(const migration of migrations){
   const box=seed.find(row=>row.key==='bob.tools')
   box.definition={...box.definition,report_readback_version:1,catalog:box.definition.catalog.map((c:any)=>c.name in howTo?{...c,how_to:howTo[c.name]}:c)};publishAs(box,publication);versions.set(box.key,versions.get(box.key)!+1)
  }
+ // Small publications from scratchpad gen-publication.py: text edits, bob.tools switches, policy how_to copies.
+ const publicationSpec=source.match(/\$bob_catalog_publication\$([\s\S]+?)\$bob_catalog_publication\$/)
+ if(publicationSpec){
+  const spec=JSON.parse(publicationSpec[1])
+  for(const edit of spec.edits){
+   const row=seed.find(row=>row.key===edit.key)
+   for(const {field,path,old,new:next} of edit.replace??[]){
+    const keys:(string|number)[]=path?path.map((k:string)=>/^\d+$/.test(k)?Number(k):k):[field]
+    if(field!=='content')row.definition=structuredClone(row.definition)
+    const parent=field==='content'?null:keys.slice(0,-1).reduce((o:any,k)=>o?.[k],row.definition)
+    const text=field==='content'?row.content:parent?.[keys.at(-1)!]
+    if(typeof text!=='string'||text.split(old).length!==2)throw new Error('publication_replace_unexpected: '+edit.key+' '+(path??[field]).join('.'))
+    if(field==='content')row.content=text.replace(old,()=>next);else parent[keys.at(-1)!]=text.replace(old,()=>next)
+   }
+   publishAs(row,spec.publication);versions.set(row.key,versions.get(row.key)!+1)
+  }
+  const box=seed.find(row=>row.key==='bob.tools')
+  box.definition={...box.definition,...spec.flags,catalog:box.definition.catalog.map((c:any)=>c.name in spec.how_to?{...c,how_to:spec.how_to[c.name]}:c)}
+  publishAs(box,spec.publication);versions.set(box.key,versions.get(box.key)!+1)
+ }
  if(/\$bob_tool_order_restore\$/.test(source)){
   preToolOrderRestoreRows=structuredClone(seed);preToolOrderRestoreVersions=new Map(versions)
   const box=seed.find(row=>row.key==='bob.tools')
