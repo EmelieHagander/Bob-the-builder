@@ -26,3 +26,18 @@ export function schemaIssues(schema:Record<string,any>, value:unknown, path='$',
   }
   return []
 }
+
+const acceptsNull = (schema: Record<string, any> | undefined): boolean => !!schema && (
+  schema.type === 'null' || (Array.isArray(schema.type) && schema.type.includes('null')) ||
+  (Array.isArray(schema.anyOf) && schema.anyOf.some((s: Record<string, any>) => acceptsNull(s))))
+
+/** A required top-level field that accepts null and was left out means null.
+ * Live 2026-11-01: Konrad's read left out result_id and was refused, paying a
+ * full model call to resend the same read. Code fills the omission instead;
+ * every present value is still checked. Only top-level, only nullable fields. */
+export function withOmittedNulls(schema: Record<string, any>, value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !schema?.properties) return value
+  const filled: Record<string, unknown> = { ...(value as Record<string, unknown>) }
+  for (const key of schema.required ?? []) if (!Object.hasOwn(filled, key) && acceptsNull(schema.properties[key])) filled[key] = null
+  return filled
+}

@@ -176,7 +176,9 @@ himself. Manifests with `bob.tools` `build_workers_version` 1
   goes to Konrad. Bob goes by that record; he reads Mattias's saves
   himself (no readback for materials yet). Every rejected tool call records its
   code, field paths and, for an unmapped message, a content-free fingerprint in
-  the run's event log. A job the spending stop ends reports `paused_at_limit`
+  the run's event log. Construction tools read a left-out field that accepts null
+  as null before the schema check (`withOmittedNulls`, prepared 2026-11-01 after
+  Konrad's live read left out `result_id`); present values are checked unchanged. A job the spending stop ends reports `paused_at_limit`
   with the same receipts and readback when the job is pinned to the
   [final answer](ask-bob-conversations.md#final-answer-past-stop) (installed 2026-11-01).
 
