@@ -22,7 +22,7 @@ import { humanTextIssues } from './human-text.ts'
 import { answerTextFragments, type AnswerTextOutcome } from './answer-text.ts'
 import { toolRejection } from './tool-rejection.ts'
 import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
-import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogReportReadback, readbackReads, workerOwnedTools, parseWorkerJob, runWorker } from './bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogReportReadback, catalogConstructionAutoCheck, readbackReads, workerOwnedTools, parseWorkerJob, runWorker } from './bob-workers.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
@@ -392,6 +392,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // The reads Bob checks a report with are loaded from the first step too.
   const checkReads = workers ? catalogCheckReads(opts.aiCatalog) : []
   const reportReadback = !!workers && catalogReportReadback(opts.aiCatalog)
+  const constructionAutoCheck = !!workers && catalogConstructionAutoCheck(opts.aiCatalog)
   // Retired tools are hidden from Bob the same way (new manifests only).
   const workerOwned = new Set([...workerOwnedTools(workers), ...catalogRetiredTools(opts.aiCatalog)])
   // Never picker candidates: the workers' own tools, and the hand-overs Bob always has.
@@ -434,6 +435,18 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         session, hasAccess: opts.hasAccess, deadline, ...(opts.modelTimeoutMs ? { modelTimeoutMs: opts.modelTimeoutMs } : {}),
         readCurrent: async () => key === 'materials' ? opts.lookup.search({ dataset: 'materials', query: null, status: null, area_id: null, record_id: null }) : null,
         // In order, one at a time: the journal replays reads by position.
+        // Auto check (2026-11-01): a saved construction left unchecked is checked by the server, in order.
+        ...(worker.knowledge && constructionAutoCheck && worker.tools.includes('check_construction_draft') ? { autoCheck: async (targets: { artifact_id: string; revision: number }[]) => {
+          const results: Record<string, unknown>[] = []
+          for (const target of targets) {
+            let result: any
+            try { result = withoutDiagnostics(await session!.execute('check_construction_draft', { ...target, component_ids: [], requirement_checks: [], outputs: [] })) }
+            catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; result = { status: 'unavailable' } }
+            results.push({ ...target, ...(result && typeof result === 'object' ? result : {}), artifact_id: target.artifact_id, revision: target.revision })
+            try { opts.onTool?.({ name: 'check_construction_draft', status: String(result?.status ?? 'returned'), step: currentStep + 1, index: 100 + workerToolEvents++, ms: 0 }) } catch { /* diagnostics only */ }
+          }
+          return results
+        } } : {}),
         // Readback (2026-10-31): the saved records, read in order through the worker's own session.
         ...(worker.knowledge && reportReadback ? { readback: async (receipts: Record<string, unknown>[]) => {
           const records: unknown[] = []
