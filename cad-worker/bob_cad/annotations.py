@@ -36,12 +36,15 @@ COLUMN_CHARS = 32
 # Parts whose centres project within this distance (one behind the other) share one callout.
 COINCIDENT_PX = 3
 LABEL_CHARS = 14
+# Id tokens that are not words: units and definition prefixes.
+ID_NOISE = {'mm', 'def', 'defn', 'definition'}
 
 def part_name(identifier):
     """A Bob-authored id as plain words. Tokens with digits are dropped: stable
-    ids can keep sizes from an earlier revision and must not claim a size."""
+    ids can keep sizes from an earlier revision and must not claim a size.
+    "def"/"definition" are id prefixes, not words a builder uses."""
     words=re.sub(r'([a-z])([A-Z])',r'\1 \2',identifier)
-    tokens=[t for t in re.split(r'[_.:\-\s]+',words) if t and not re.search(r'\d',t) and t.lower()!='mm']
+    tokens=[t for t in re.split(r'[_.:\-\s]+',words) if t and not re.search(r'\d',t) and t.lower() not in ID_NOISE]
     name=' '.join(tokens).lower()
     if not name: return 'Part'
     name=name[0].upper()+name[1:]

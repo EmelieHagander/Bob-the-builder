@@ -117,6 +117,9 @@ class PlainLanguageTest(unittest.TestCase):
         self.assertEqual(annotations.part_name('sidePanel.left'),'Side panel left')
         self.assertEqual(annotations.part_name('retained_assembly_600_800_300'),'Retained assembly')
         self.assertEqual(annotations.part_name('P1'),'Part')
+        # Definition prefixes are not words (live box, 2026-11-01: "Def front back").
+        self.assertEqual(annotations.part_name('def_front_back'),'Front back')
+        self.assertEqual(annotations.part_name('definitionLeg'),'Leg')
         self.assertEqual(annotations.part_name('a_very_long_descriptive_cabinet_part'),'A very long descript...')
 
     def test_blank_sizes_name_the_length(self):

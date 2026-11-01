@@ -81,6 +81,36 @@ def _lift_direction(mover, bases, boxes, center):
     return free[0] if free else (2, 1)
 
 
+def _clear_lift(mover, axis, sign, boxes, staying, base, margin):
+    """Lift far enough that a part going into a frame or box is drawn clear of it,
+    not floating inside it."""
+    if not staying: return base
+    b = boxes[mover]
+    lo = [min(boxes[i]['min'][k] for i in staying) for k in range(3)]
+    hi = [max(boxes[i]['max'][k] for i in staying) for k in range(3)]
+    if any(min(b['max'][k], hi[k]) - max(b['min'][k], lo[k]) <= TOUCH_MM for k in range(3) if k != axis): return base
+    need = hi[axis] - b['min'][axis] if sign > 0 else b['max'][axis] - lo[axis]
+    return max(base, need + margin)
+
+
+def _move_arrows(b, axis, sign, lift, cam, size):
+    """Arrows from the lifted part back to its place, along its camera-facing edge
+    (just inside it, so they point into where the part goes) and below or beside the
+    part so it hides as little of them as possible."""
+    perp = [k for k in range(3) if k != axis]
+    along = max(perp, key=lambda k: b['max'][k] - b['min'][k]); side = perp[0] if perp[1] == along else perp[1]
+    out = 1 if cam[side] >= 0 else -1; clear = -min(max(size * 0.03, 15), (b['max'][side] - b['min'][side]) * 0.25)
+    lead = b['min'][axis] if sign > 0 else b['max'][axis]
+    arrows = []
+    for f in ((0.2, 0.8) if b['max'][along] - b['min'][along] > size * 0.3 else (0.5,)):
+        p = [0.0, 0.0, 0.0]; p[along] = b['min'][along] + f * (b['max'][along] - b['min'][along])
+        p[side] = (b['max'][side] if out > 0 else b['min'][side]) + out * clear
+        start = list(p); start[axis] = lead + sign * (lift - 12)
+        end = list(p); end[axis] = lead + sign * 12
+        arrows += _arrow(start, end, size)
+    return arrows
+
+
 def _arrow(start, end, size):
     """Shaft and head as solids from start to end along one axis, so they project with the parts."""
     d = _v(end, start); axis = max(range(3), key=lambda k: abs(d[k])); length = abs(d[axis]); sign = 1 if d[axis] > 0 else -1
@@ -162,6 +192,14 @@ def _glyph(page, kind, x, y):
         ET.SubElement(g, f'{{{NS}}}line', {'x1': str(x + 24), 'y1': str(y + 12), 'x2': str(x + 46), 'y2': str(y + 12)})
     if kind == 'screw':
         for t in range(4): ET.SubElement(g, f'{{{NS}}}line', {'x1': str(x + 31), 'y1': str(y + 30 + t * 9), 'x2': str(x + 39), 'y2': str(y + 25 + t * 9)})
+
+
+def hardware_summary(hardware, glue, unsized, read=True):
+    """One line for the box page: what to have ready, without implying missing screws."""
+    if not read: return 'not read for this guide'
+    items = ([hardware] if hardware else []) + (['glue'] if glue else []) + ([f'{len(unsized)} joint(s) without a rule'] if unsized else [])
+    if items == ['glue']: return 'glue only'
+    return ' + '.join(items) if items else 'none'
 
 
 def fastener_rows(joint_ids, schedule):
@@ -296,8 +334,7 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
             ET.SubElement(page, f'{{{NS}}}rect', {'x': str(x), 'y': '400', 'width': '215', 'height': '110', 'rx': '12', 'fill': 'none', 'stroke': INK, 'stroke-width': '2'})
             _glyph(page, kind, x + 8, 416); _text(page, x + 92, 450, count, 28, '700'); _text(page, x + 92, 478, words, 13, '400', 'start', '#333333')
     hw = ', '.join(f'{r["count"]}× {KIND_NAMES[r["kind"]].lower()} {_number(r["diameter_mm"])} × {_number(r["length_mm"])}' for r in all_rows)
-    _text(page, 40, 700, 'Fasteners: ' + (hw or ('none sized yet' if fasteners is not None else 'not read for this guide'))
-          + (' + glue' if all_glue else '') + (f' + {len(all_unsized)} joint(s) without a rule' if all_unsized else ''), 15, '600')
+    _text(page, 40, 700, 'Fasteners: ' + hardware_summary(hw, all_glue, all_unsized, fasteners is not None), 15, '600')
     _text(page, 40, 724, 'Fastener counts are rule-of-thumb proposals, not a strength check.', 12, fill='#333333')
     save(page, 'guide-0', {'kind': 'parts'})
 
@@ -313,19 +350,13 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
                 low = min(boxes[i]['min'][2] for i in parts); bases = [i for i in parts if abs(boxes[i]['min'][2] - low) <= TOUCH_MM]
             movers = [i for i in parts if i not in bases]
             lift_mm = max(size_mm * 0.22, 120)
-            lifted, arrows, offsets = [], [], {}
+            staying = [i for i in sorted(placed | set(parts)) if i not in movers]
+            lifted, offsets, moves = [], {}, {}
             for m in movers:
                 axis, sign = _lift_direction(m, bases, boxes, center)
-                off = [0, 0, 0]; off[axis] = sign * lift_mm; offsets[m] = off
+                lift = _clear_lift(m, axis, sign, boxes, staying, lift_mm, max(size_mm * 0.08, 40))
+                off = [0, 0, 0]; off[axis] = sign * lift; offsets[m] = off; moves[m] = (axis, sign, lift)
                 lifted.append(Location(tuple(off)) * solids[m])
-                # Arrows run from the lifted part's leading face back to where that face ends up.
-                b = boxes[m]; long = max(range(3), key=lambda k: b['max'][k] - b['min'][k] if k != axis else -1)
-                lead = b['min'][axis] if sign > 0 else b['max'][axis]
-                for f in ((0.2, 0.8) if b['max'][long] - b['min'][long] > size_mm * 0.3 else (0.5,)):
-                    p = [(b['min'][k] + b['max'][k]) / 2 for k in range(3)]; p[long] = b['min'][long] + f * (b['max'][long] - b['min'][long])
-                    start = list(p); start[axis] = lead + sign * (lift_mm - 12)
-                    end = list(p); end[axis] = lead + sign * 12
-                    arrows += _arrow(start, end, size_mm)
             hardware, unsized, glue = fastener_rows(comp, fasteners)
             # Choose the overview corner that shows the most screw heads, so fasteners are drawn on faces you can see.
             heads = []
@@ -348,6 +379,7 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
             def seen(cam): return sum(1 for _, n, out_sign, _k in heads if cam[n] * out_sign > 0)
             camera_name = max(CAMERAS, key=lambda c: (seen(CAMERAS[c]), c == 'isometric'))
             cam = CAMERAS[camera_name]
+            arrows = [a for m in movers for a in _move_arrows(boxes[m], *moves[m], cam, size_mm)]
             context = [solids[i] for i in sorted(placed | set(bases))]
             page = _page()
             ET.SubElement(page, f'{{{NS}}}circle', {'cx': '76', 'cy': '76', 'r': '44', 'fill': 'none', 'stroke': INK, 'stroke-width': '3'})
