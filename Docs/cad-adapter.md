@@ -1339,8 +1339,13 @@ guide.
   (`_move_arrows`) so the part does not hide them.
 - The box page says "Fasteners: glue only" when every joint is glued, instead of
   "none sized yet + glue" (`hardware_summary`).
+- Every fastener in a step's parts box is drawn on the page (owner feedback: the
+  bench's step 2 drew 1 of 2 screws). One that goes in from a face turned away
+  from the camera is dashed, with "Dashed: put in from the other side." Heads
+  have one symbol per kind, also beside the parts-box glyph: screw = cross head,
+  nail = solid dot, bolt = hexagon (`_head`).
 
-Checked by redrawing the live box locally and the bench fixture; CAD tests 47 OK.
+Checked by redrawing the live box locally and the bench fixture; CAD tests 48 OK.
 
 ### Fastener schedule on drawings — annotations version 2, 2026-10-26
 
