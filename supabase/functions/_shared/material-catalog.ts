@@ -112,13 +112,17 @@ export function parseCatalogWrite(value: unknown): WritePayload | null {
  * write (profile joint_hardware) as this project's material, with the same
  * receipts, reuse and review rules as any other definition. */
 const sizeOrNull = { anyOf: [{ type: 'number', exclusiveMinimum: 0, maximum: 10000 }, { type: 'null' }] }
+/** The catalog's material-axis categories (a test keeps this equal to the
+ * database), so the designer picks one without a category lookup. */
+export const MATERIAL_CATEGORIES = ['adhesive', 'bitumen', 'coating', 'metal', 'mineral', 'mineral.aggregate', 'mineral.concrete', 'mineral.gypsum',
+  'plastic', 'plastic.pvc', 'wood', 'wood.plywood', 'wood.softwood']
 export const CATALOG_FASTENER_TOOL = tool('add_catalog_fastener',
   'Add joint hardware the catalog lacks, as this project\'s material: what it is, how it is counted on a joint and its nominal size. Returns the saved definition\'s exact ID and revision for the joint\'s fasteners.', {
     key: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,80}$' },
     name: { type: 'string', minLength: 1, maxLength: 200 },
     kind: { type: 'string', pattern: '^[a-z][a-z_]{1,31}$' },
     counting: { type: 'string', enum: ['along_contact', 'per_joint', 'per_construction'] },
-    material_category: { type: 'string', pattern: '^[a-z][a-z0-9_.]{0,63}$' },
+    material_category: { type: 'string', enum: MATERIAL_CATEGORIES },
     diameter_mm: sizeOrNull, length_mm: sizeOrNull,
     request_quote: { type: 'string' },
   })
@@ -128,12 +132,17 @@ export function catalogFastenerWrite(value: unknown): { payload: WritePayload } 
   if (!isObject(value) || !exactKeys(value, CATALOG_FASTENER_TOOL.function.parameters.required)) return null
   const v = value, size = (x: unknown) => x === null || (typeof x === 'number' && x > 0 && x <= 10000)
   if (typeof v.key !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(v.key) || !text(v.name, 200) || typeof v.kind !== 'string' || !/^[a-z][a-z_]{1,31}$/.test(v.kind)
-    || !['along_contact', 'per_joint', 'per_construction'].includes(String(v.counting)) || typeof v.material_category !== 'string' || !category.test(v.material_category)
+    || !['along_contact', 'per_joint', 'per_construction'].includes(String(v.counting)) || typeof v.material_category !== 'string' || !MATERIAL_CATEGORIES.includes(v.material_category)
     || !size(v.diameter_mm) || !size(v.length_mm) || !text(v.request_quote, 500)) return null
   if (v.counting === 'along_contact' && (v.diameter_mm === null || v.length_mm === null))
     return { issue: { fields: ['diameter_mm', 'length_mm'], message: 'Hardware counted along the contact needs its diameter and length. Nothing was saved.' } }
   if (v.counting === 'per_construction' && (v.diameter_mm !== null || v.length_mm !== null))
     return { issue: { fields: ['diameter_mm', 'length_mm'], message: 'Hardware counted per construction has no diameter or length. Nothing was saved.' } }
+  // The material list sizes screws, nails and bolts and gives glue one package.
+  if (['screw', 'nail', 'bolt'].includes(v.kind) && (v.diameter_mm === null || v.length_mm === null))
+    return { issue: { fields: ['diameter_mm', 'length_mm'], message: 'A screw, nail or bolt needs its diameter and length. Nothing was saved.' } }
+  if (v.kind === 'glue' && v.counting !== 'per_construction')
+    return { issue: { fields: ['counting'], message: 'Glue is counted per construction. Nothing was saved.' } }
   const note = 'Vald av konstruktören.'
   const properties: Record<string, unknown> = { fastener_kind: specValue(v.kind, null, note), fastener_counting: specValue(String(v.counting), null, note),
     ...(v.diameter_mm !== null ? { diameter: specValue(String(v.diameter_mm), 'mm', note) } : {}),
@@ -207,13 +216,13 @@ export const CATALOG_FIND_TOOL = tool('find_catalog_materials',
   'Find exact catalog materials for needs stated in words, for example a board size or a fastener size. Returns, per need, the matching items with their exact IDs, revisions and catalog sizes, or none. Only items in the catalog are returned.', {
     needs: { type: 'array', minItems: 1, maxItems: 12, items: { type: 'string', minLength: 1, maxLength: 200 } },
   })
-export type MaterialShortlistRow = { id: string; revision: number; name: string; profile: string; fastener: string | null; own: boolean; sizes: Record<string, string> }
+export type MaterialShortlistRow = { id: string; revision: number; name: string; profile: string; fastener: string | null; counting: string | null; own: boolean; sizes: Record<string, string> }
 export type MaterialShortlist = { rows: MaterialShortlistRow[]; complete: boolean }
 export function parseMaterialShortlist(value: unknown): MaterialShortlist | null {
   const v = value as { items?: unknown; complete?: unknown } | null
   if (!v || typeof v !== 'object' || !Array.isArray(v.items) || v.items.length > 500 || typeof v.complete !== 'boolean') return null
   const ok = v.items.every(r => r && typeof r === 'object' && typeof r.id === 'string' && Number.isSafeInteger(r.revision) && typeof r.name === 'string'
-    && typeof r.profile === 'string' && (r.fastener === null || typeof r.fastener === 'string') && typeof r.own === 'boolean'
+    && typeof r.profile === 'string' && (r.fastener === null || typeof r.fastener === 'string') && (r.counting === null || typeof r.counting === 'string') && typeof r.own === 'boolean'
     && r.sizes && typeof r.sizes === 'object' && !Array.isArray(r.sizes))
   return ok ? { rows: v.items as MaterialShortlistRow[], complete: v.complete } : null
 }
@@ -235,7 +244,7 @@ export function materialFindResult(needs: string[], list: MaterialShortlist, ans
     const refs = Array.isArray(entry?.item_refs) ? [...new Set(entry!.item_refs.filter((ref): ref is string => typeof ref === 'string' && byRef.has(ref)))].slice(0, 5) : []
     const match = refs.length && (entry?.match === 'exact' || entry?.match === 'close') ? entry.match : 'none'
     return { need, match, items: match === 'none' ? [] : refs.map(ref => { const r = byRef.get(ref)!
-      return { material_id: r.id, material_revision: r.revision, name: r.name, profile: r.profile, fastener: r.fastener, sizes: r.sizes, project_own: r.own } }) }
+      return { material_id: r.id, material_revision: r.revision, name: r.name, profile: r.profile, fastener: r.fastener, ...(r.fastener ? { counting: r.counting } : {}), sizes: r.sizes, project_own: r.own } }) }
   }) }
 }
 

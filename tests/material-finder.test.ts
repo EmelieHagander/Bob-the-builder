@@ -9,8 +9,8 @@ import {projectSchema,asProjectUser} from './support/project-schema.ts'
 
 const ply='00000000-0000-4000-8000-0000000000b1',screw='00000000-0000-4000-8000-0000000000b2'
 const rows:MaterialShortlistRow[]=[
- {id:ply,revision:2,name:'Plywood, björk 12 × 1220 × 2440',profile:'sheet_stock',fastener:null,own:false,sizes:{thickness:'12 mm'}},
- {id:screw,revision:1,name:'Träskruv, förzinkad (inomhus) 3,5 × 30',profile:'fastener',fastener:'screw',own:false,sizes:{diameter:'3.5 mm',length:'30 mm'}},
+ {id:ply,revision:2,name:'Plywood, björk 12 × 1220 × 2440',profile:'sheet_stock',fastener:null,counting:null,own:false,sizes:{thickness:'12 mm'}},
+ {id:screw,revision:1,name:'Träskruv, förzinkad (inomhus) 3,5 × 30',profile:'fastener',fastener:'screw',counting:'along_contact',own:false,sizes:{diameter:'3.5 mm',length:'30 mm'}},
 ]
 
 test('code returns the catalog values of the references the model named; anything else never passes',()=>{
@@ -19,7 +19,7 @@ test('code returns the catalog values of the references the model named; anythin
   {index:0,match:'exact',item_refs:['m1']},{index:1,match:'close',item_refs:['m2','m9']},{index:2,match:'exact',item_refs:[ply]}]})
  assert.equal(out.status,'ok');assert.equal('list_complete' in out,false)
  assert.deepEqual(out.needs[0],{need:'12 mm plywood',match:'exact',items:[{material_id:ply,material_revision:2,name:rows[0].name,profile:'sheet_stock',fastener:null,sizes:{thickness:'12 mm'},project_own:false}]})
- assert.equal(out.needs[1].match,'close');assert.deepEqual(out.needs[1].items.map((i:any)=>i.material_id),[screw])
+ assert.equal(out.needs[1].match,'close');assert.deepEqual(out.needs[1].items.map((i:any)=>[i.material_id,i.counting]),[[screw,'along_contact']])
  assert.deepEqual(out.needs[2],{need:'wood glue',match:'none',items:[]},'a reference not on the list, or a raw ID, is no match')
  assert.equal((materialFindResult(['x'],list,'not json') as any).status,'unavailable')
  assert.equal((materialFindResult(['x'],{rows,complete:false},{needs:[]}) as any).list_complete,false,'a cut list says so')
@@ -56,7 +56,7 @@ test('the material list holds shared and own materials at their current revision
  const {rows:list,complete}=parseMaterialShortlist(await call(owner,'bob.read_material_shortlist',[project]))!
  assert(list.length>=40);assert.equal(complete,true)
  const screw=list.find(r=>r.name==='Träskruv, förzinkad (inomhus) 3,5 × 30')!
- assert.deepEqual({fastener:screw.fastener,sizes:screw.sizes,own:screw.own},{fastener:'screw',sizes:{diameter:'3.5 mm',length:'30 mm'},own:false})
+ assert.deepEqual({fastener:screw.fastener,counting:screw.counting,sizes:screw.sizes,own:screw.own},{fastener:'screw',counting:'along_contact',sizes:{diameter:'3.5 mm',length:'30 mm'},own:false})
  assert.equal(list.find(r=>r.name.startsWith('Plywood, björk 12'))?.sizes.thickness,'12 mm')
  assert.deepEqual(list.find(r=>r.name==='Trälim, utomhus (D3)')&&{f:list.find(r=>r.name==='Trälim, utomhus (D3)')!.fastener,g:list.find(r=>r.name==='Trälim, utomhus (D3)')!.sizes.grade},{f:'glue',g:'D3'})
  await assert.rejects(call(outsider,'bob.read_material_shortlist',[project]),/project_denied/)

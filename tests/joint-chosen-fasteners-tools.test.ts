@@ -63,3 +63,17 @@ test('the model check accepts a butt joint with chosen items and asks for them w
  assert(!result.issues.some((i:any)=>i.code==='unsupported_joint_method'))
  assert.deepEqual(result.issues.filter((i:any)=>i.code==='joint_fasteners_missing').map((i:any)=>i.ids[0]),['left0'])
 })
+
+test('added hardware: sizes follow how it is counted; screws, nails and bolts need a size; glue counts per construction',async()=>{
+ const {catalogFastenerWrite,MATERIAL_CATEGORIES}=await import('../supabase/functions/_shared/material-catalog.ts')
+ const add=(patch:Record<string,unknown>)=>catalogFastenerWrite({key:'k',name:'Item',kind:'dowel',counting:'along_contact',material_category:'wood',diameter_mm:8,length_mm:40,request_quote:'q',...patch}) as any
+ assert.equal(add({}).payload.data.profile_code,'joint_hardware')
+ assert.deepEqual(add({}).payload.data.categories,['wood','fastener'])
+ assert.deepEqual(add({diameter_mm:null}).issue.fields,['diameter_mm','length_mm'])
+ assert.deepEqual(add({kind:'glue',counting:'per_construction',diameter_mm:null,length_mm:null}).payload.data.properties.fastener_counting.value,'per_construction')
+ assert.deepEqual(add({kind:'glue',counting:'per_joint',diameter_mm:null,length_mm:null}).issue.fields,['counting'])
+ assert.deepEqual(add({kind:'screw',counting:'per_joint',diameter_mm:null,length_mm:null}).issue.fields,['diameter_mm','length_mm'])
+ assert.deepEqual(add({kind:'bracket',counting:'per_joint',diameter_mm:null,length_mm:null,material_category:'metal'}).payload.data.properties,
+  {fastener_kind:{value:'bracket',unit:null,truth:'provided_spec',parameter:null,note:'Vald av konstruktören.'},fastener_counting:{value:'per_joint',unit:null,truth:'provided_spec',parameter:null,note:'Vald av konstruktören.'}})
+ assert.equal(add({material_category:'unobtainium'}),null);assert(MATERIAL_CATEGORIES.includes('adhesive'))
+})

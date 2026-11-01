@@ -29,6 +29,8 @@ const issue=async(pg:any,list:unknown,project:string|null=null)=>(await pg.query
 
 test('the seeded screw, nail and glue types are tagged; other materials are not fasteners',async t=>{
  const {pg,item}=await setup();
+ const {MATERIAL_CATEGORIES}=await import('../supabase/functions/_shared/material-catalog.ts')
+ assert.deepEqual((await pg.query(`select code from bob.catalog_categories where axis='material' order by code`)).rows.map((r:any)=>r.code),MATERIAL_CATEGORIES,'the add tool offers exactly the catalog material categories')
  const kinds=(await pg.query(`select seed_key,fastener_kind from bob.material_types where fastener_kind is not null order by seed_key`)).rows
  assert.deepEqual(kinds.map((r:any)=>[r.seed_key,r.fastener_kind]),[['anchor_nail','nail'],['drywall_screw','screw'],['outdoor_screw','screw'],
   ['stainless_screw','screw'],['wire_nail_zinc','nail'],['wood_glue_indoor','glue'],['wood_glue_outdoor','glue'],['wood_screw_zinc','screw']])

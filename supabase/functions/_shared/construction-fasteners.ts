@@ -28,7 +28,7 @@ const isObject = (v: unknown): v is Row => !!v && typeof v === 'object' && !Arra
  * Saved joints carry method 'butt' and this list. */
 export const JOINT_CHOSEN_FASTENERS_SCHEMA = {
   type: 'array', maxItems: 8,
-  description: 'What holds this joint: exact catalog fastener items (screws, nails, bolts, glue) in any mix, each item once. Empty when nothing is chosen yet. count and spacing_mm are for screws, nails and bolts; null spreads them by rule; glue takes null for both.',
+  description: 'What holds this joint: catalog items with a fastener kind, in any mix; empty while nothing is chosen. count and spacing_mm follow how the item is counted: along the contact, a null count lets the database count and space it; per joint, give the count and no spacing; per construction, both stay null.',
   items: { type: 'object', additionalProperties: false, required: ['material_id', 'material_revision', 'count', 'spacing_mm'], properties: {
     material_id: { type: 'string', format: 'uuid' }, material_revision: { type: 'integer', minimum: 1, maximum: 999999999 },
     count: { anyOf: [{ type: 'integer', minimum: 1, maximum: 10000 }, { type: 'null' }] },

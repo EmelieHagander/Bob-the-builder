@@ -114,7 +114,9 @@ test('derive saves one need per fastener group and one glue package; unsized joi
  await assert.rejects(f.derive(f.glue({ name: 'Second glue' })), /fastener_requirement_exists/)
  await assert.rejects(f.derive(f.fields({ name: 'Wrong size', diameter_mm: 5, length_mm: 50 })), /fastener_group_not_in_schedule/)
  await assert.rejects(f.derive(f.fields({ name: 'Forged', required_quantity: '99' })), /invalid_cad_requirement/)
- await assert.rejects(f.derive(f.fields({ name: 'Staples', fastener_kind: 'staple' })), /invalid_cad_requirement/)
+ // 2026-11-01: kinds are open words; a kind this construction does not hold is no group of it.
+ await assert.rejects(f.derive(f.fields({ name: 'Staples', fastener_kind: 'staple' })), /fastener_group_not_in_schedule/)
+ await assert.rejects(f.derive(f.fields({ name: 'Bad kind', fastener_kind: 'Staple 8' })), /invalid_cad_requirement/)
  await assert.rejects(f.derive(f.fields({ name: 'Text size', diameter_mm: '4' })), /invalid_cad_requirement/)
  await assert.rejects(f.derive({ ...f.glue({ name: 'Sized glue' }), diameter_mm: 4 }), /invalid_cad_requirement/)
  await assert.rejects(f.derive(f.fields({ name: 'Size change' }), 'revise', nailId, 1), /construction_requirement_identity_changed/)
