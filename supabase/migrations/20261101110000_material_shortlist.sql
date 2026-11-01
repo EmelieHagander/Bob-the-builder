@@ -4,7 +4,8 @@
 -- those words against this list and answers with item IDs only. Code then
 -- copies each item's own values from the list, so no model retypes catalog
 -- facts. One row per material of the shared catalog and of this project, at
--- its current revision: id, revision, name, profile, fastener kind (if any),
+-- its current revision: id, revision, name, profile, fastener kind (if any,
+-- from bob_private.joint_fastener_item),
 -- whether it is the project's own, and its stated sizes and grade as text.
 -- At most 500 rows, the project's own first; complete=false says it was cut.
 -- Read-only. SECURITY DEFINER because material types are not readable by
@@ -22,12 +23,11 @@ begin
  -- the limit says the list is cut.
  select coalesce(jsonb_agg(x.row order by x.own desc, x.name, x.id),'[]'::jsonb) into items from (
   select i.project_id is not null own, r.name, i.id,
-   jsonb_build_object('id',i.id,'revision',r.revision,'name',r.name,'profile',r.profile_code,'fastener',t.fastener_kind,'own',i.project_id is not null,
+   jsonb_build_object('id',i.id,'revision',r.revision,'name',r.name,'profile',r.profile_code,'fastener',bob_private.joint_fastener_item(i.id,r.revision)->>'kind','own',i.project_id is not null,
     'sizes',(select coalesce(jsonb_object_agg(k,(r.properties->k->>'value')||coalesce(' '||(r.properties->k->>'unit'),'')),'{}'::jsonb)
      from unnest(array['thickness','width','diameter','length','nominal_size','volume','grade']) k where r.properties->k->>'value' is not null)) row
   from bob.catalog_items i
   join bob.catalog_item_revisions r on r.item_id=i.id and r.revision=i.current_revision
-  left join bob.material_types t on t.id=i.material_type_id
   where i.kind='material' and (i.project_id is null or i.project_id=p_project)
   order by i.project_id is not null desc, r.name, i.id
   limit 501) x;

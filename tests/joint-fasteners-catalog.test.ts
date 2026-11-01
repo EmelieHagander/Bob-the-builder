@@ -40,7 +40,7 @@ test('the seeded screw, nail and glue types are tagged; other materials are not 
  assert.deepEqual(glues.map((g:any)=>[g.name,g.profile_code,g.grade,g.unit_code,g.hashed,g.cats]),[
   ['Trälim, inomhus','liquid','D2','pcs',true,['adhesive','liquid']],['Trälim, utomhus (D3)','liquid','D3','pcs',true,['adhesive','liquid']]])
  const screw=await item('Träskruv, förzinkad (inomhus) 3,5 × 30')
- assert.deepEqual((await pg.query('select bob_private.joint_fastener_item($1,$2) f',[screw.id,screw.revision])).rows[0].f,{kind:'screw',project_id:null,diameter_mm:3.5,length_mm:30})
+ assert.deepEqual((await pg.query('select bob_private.joint_fastener_item($1,$2) f',[screw.id,screw.revision])).rows[0].f,{kind:'screw',counting:'along_contact',project_id:null,diameter_mm:3.5,length_mm:30})
  const plywood=await item('Plywood, björk 12 × 1220 × 2440')
  assert.equal((await pg.query('select bob_private.joint_fastener_item($1,$2) f',[plywood.id,plywood.revision])).rows[0].f,null)
 })
@@ -81,7 +81,7 @@ test('the chosen list only accepts real fastener items of this project or the sh
  const screw=await item('Träskruv, förzinkad (inomhus) 3,5 × 30'),plywood=await item('Plywood, björk 12 × 1220 × 2440')
  assert.equal(await issue(pg,[pick(screw),pick(glue)]),null)
  assert.equal(await issue(pg,[]),null)
- for(const [bad,code] of [[[pick(plywood)],'joint_fastener_not_in_catalog'],[[pick(screw),pick(screw)],'joint_fastener_repeated'],[[pick(glue,2)],'joint_fastener_glue_counted'],
+ for(const [bad,code] of [[[pick(plywood)],'joint_fastener_not_in_catalog'],[[pick(screw),pick(screw)],'joint_fastener_repeated'],[[pick(glue,2)],'joint_fastener_package_counted'],
   [[{...pick(screw),material_revision:99}],'joint_fastener_not_in_catalog'],[[{...pick(screw),extra:1}],'joint_fasteners_invalid'],[[pick(screw,0)],'joint_fasteners_invalid'],
   [[pick(screw,null,0)],'joint_fasteners_invalid'],[[{material_id:randomUUID(),material_revision:1,count:null,spacing_mm:null}],'joint_fastener_not_in_catalog'],
   [Array(9).fill(0).map(()=>pick(screw)),'joint_fasteners_invalid']] as [unknown[],string][])

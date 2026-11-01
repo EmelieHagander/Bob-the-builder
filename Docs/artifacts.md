@@ -150,17 +150,25 @@ keep it.
   count, spacing_mm}`. Count and spacing are for screws, nails and bolts; glue
   takes neither. An empty list means nothing is chosen yet.
 - **What an item is.** `bob.material_types.fastener_kind` (screw, nail, bolt,
-  glue) says what a material type is as a fastener; the seeded screw and nail
-  types are tagged. `bob_private.joint_fastener_item` reads one item revision's
-  kind and nominal diameter and length. Nothing is retyped by a model.
+  glue) says what a seeded material type is as a fastener. Hardware the
+  designer adds uses the catalog profile `joint_hardware`: its kind (one word),
+  how it is counted (`along_contact`, `per_joint`, `per_construction`) and an
+  optional diameter and length. `bob_private.joint_fastener_item` reads one
+  item revision's kind, counting and nominal size; seeded glue counts per
+  construction, seeded screws and nails along the contact. Nothing is retyped
+  by a model.
 - **The schedule.** One row per chosen item (`source: chosen`, with its
-  `material_id` and revision). A missing count is spread by the rule below. Fact
+  counting, `material_id` and revision). Along the contact, a missing count is
+  spread by the rule below; per joint, the designer gives the count; per
+  construction, glue gives the one package and anything else one package in
+  the totals. Totals group by kind and size; a size may be null. Fact
   gaps: `does_not_reach` (not longer than the board it goes through),
   `passes_through` (tip within 5 mm of the far face or beyond),
   `short_penetration` (shorter than 2.5 × that board, the rule of thumb),
   `short_contact`, `narrow_contact`, `count_unknown`, `fastener_unknown`,
-  `no_fastener_chosen`. Glue gives the one package per construction. Totals and
-  material needs group by kind and size as before.
+  `no_fastener_chosen`. Material needs
+  (`20261101104000_fastener_needs_open_kinds.sql`) take any kind of one totals
+  row, sized or not; screws, nails and bolts still need a size.
 - **Glue in the shared catalog** (owner decision 2026-11-01,
   `20261101103000_shared_wood_glue.sql`, not applied): *Trälim, inomhus* (D2)
   and *Trälim, utomhus (D3)*, generic liquids in the new material category

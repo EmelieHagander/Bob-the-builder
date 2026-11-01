@@ -9,23 +9,31 @@
 --    fastener: screw, nail, bolt or glue. Set here for the seeded screw and
 --    nail types. Other types, and project materials without a type, are not
 --    fasteners.
--- 2. bob_private.joint_fastener_item(item, revision) gives one catalog item
---    revision's kind and nominal size (diameter and length in mm; glue has
---    none). It reads catalog tables, so it is SECURITY DEFINER and returns
---    only these three facts.
+-- 2. Joint hardware the designer adds himself (same day): catalog profile
+--    joint_hardware (form fastener) with fastener_kind (one lowercase word),
+--    fastener_counting (along_contact | per_joint | per_construction) and an
+--    optional diameter and length. bob_private.joint_fastener_item(item,
+--    revision) gives one item revision's kind, counting and nominal size;
+--    seeded glue counts per construction, seeded screws and nails along the
+--    contact. It reads catalog tables, so it is SECURITY DEFINER and returns
+--    only these facts.
 -- 3. bob_private.joint_fasteners_issue(project, list) names what is wrong with
 --    a joint's chosen list, or null: up to 8 distinct items of the shared
 --    catalog or this project, each {material_id, material_revision, count,
 --    spacing_mm}; count and spacing are for screws, nails and bolts and may be
 --    null. Codes: joint_fasteners_invalid, joint_fastener_repeated,
 --    joint_fastener_not_in_catalog, joint_fastener_other_project,
---    joint_fastener_glue_counted, joint_fastener_size_unknown.
+--    joint_fastener_package_counted, joint_fastener_spaced_per_joint,
+--    joint_fastener_size_unknown.
 -- 4. bob_private.check_construction accepts method 'butt' with a fasteners
 --    list, and only then (guarded replace of its installed body); a list that
 --    fails (3) raises the code (3) names. Earlier joints are unchanged.
 -- 5. bob_private.construction_fastener_schedule: a 'butt' joint gives one row
---    per chosen item (source 'chosen', with material_id and
---    material_revision). A missing count is spread by the existing rule.
+--    per chosen item (source 'chosen', with counting, material_id and
+--    material_revision). Along the contact, a missing count is spread by the
+--    existing rule; per joint, the designer gives the count; per
+--    construction, glue keeps glue_packages and anything else is one package
+--    in the totals. Totals group by kind and size; sizes may be null.
 --    Fact gaps: does_not_reach (not longer than the board it goes through),
 --    passes_through (tip within 5 mm of the far face or beyond),
 --    short_penetration (shorter than 2.5 x that board, the existing rule of
@@ -47,20 +55,44 @@ do $$ begin
  if (select count(*) from bob.material_types where fastener_kind is not null)<>6 then raise exception 'joint_fasteners_seed_types_changed'; end if;
 end $$;
 
+-- Joint hardware the designer adds himself (owner decision 2026-11-01): a
+-- catalog profile whose items say what they are and how they are counted.
+insert into bob.catalog_property_definitions(key,label,value_type,canonical_unit,description) values
+ ('fastener_kind','Fästelementtyp','text',null,'What the item is as a joint fastener, as one lowercase word.'),
+ ('fastener_counting','Räknas','text',null,'How the item is counted on a joint: along_contact, per_joint or per_construction.')
+on conflict do nothing;
+insert into bob.catalog_profiles(code,name) values('joint_hardware','Förbandsdetalj') on conflict do nothing;
+-- Fields go in before publication; a published profile revision is immutable.
+insert into bob.catalog_profile_revisions(profile_code,revision,form_code,description,published)
+ values('joint_hardware',1,'fastener','Joint hardware the structural designer adds: what it is, how it is counted and its nominal size.',false);
+insert into bob.catalog_profile_fields(profile_code,profile_revision,property_key,required,min_value,max_value,position) values
+ ('joint_hardware',1,'fastener_kind',true,null,null,0),('joint_hardware',1,'fastener_counting',true,null,null,1),
+ ('joint_hardware',1,'diameter',false,0.000001,1000000,2),('joint_hardware',1,'length',false,0.000001,1000000,3),
+ ('joint_hardware',1,'grade',false,null,null,21),('joint_hardware',1,'finish',false,null,null,22);
+update bob.catalog_profile_revisions set published=true where profile_code='joint_hardware' and revision=1;
+
+-- kind, counting (along_contact | per_joint | per_construction) and nominal
+-- size of one item revision. Seeded types: glue is per construction, screws
+-- and nails along the contact. Joint hardware states its own.
 create function bob_private.joint_fastener_item(p_item uuid, p_revision integer) returns jsonb
 language sql stable security definer set search_path='' as $$
- select jsonb_build_object('kind',t.fastener_kind,'project_id',i.project_id,
-  'diameter_mm',case when t.fastener_kind<>'glue' and r.properties->'diameter'->>'unit'='mm' and r.properties->'diameter'->>'value'~'^[0-9]{1,4}(\.[0-9]{1,3})?$'
-   then (r.properties->'diameter'->>'value')::numeric end,
-  'length_mm',case when t.fastener_kind<>'glue' and r.properties->'length'->>'unit'='mm' and r.properties->'length'->>'value'~'^[0-9]{1,4}(\.[0-9]{1,3})?$'
-   then (r.properties->'length'->>'value')::numeric end)
- from bob.catalog_item_revisions r
- join bob.catalog_items i on i.id=r.item_id and i.kind='material'
- join bob.material_types t on t.id=i.material_type_id and t.fastener_kind is not null
- where r.item_id=p_item and r.revision=p_revision
+ select jsonb_build_object('kind',x.kind,'counting',x.counting,'project_id',x.project_id,
+  'diameter_mm',case when x.counting<>'per_construction' and x.p->'diameter'->>'unit'='mm' and x.p->'diameter'->>'value'~'^[0-9]{1,4}(\.[0-9]{1,3})?$'
+   then (x.p->'diameter'->>'value')::numeric end,
+  'length_mm',case when x.counting<>'per_construction' and x.p->'length'->>'unit'='mm' and x.p->'length'->>'value'~'^[0-9]{1,4}(\.[0-9]{1,3})?$'
+   then (x.p->'length'->>'value')::numeric end)
+ from (select i.project_id, r.properties p,
+   case when r.profile_code='joint_hardware' then r.properties->'fastener_kind'->>'value' else t.fastener_kind end kind,
+   case when r.profile_code='joint_hardware' then r.properties->'fastener_counting'->>'value'
+    when t.fastener_kind='glue' then 'per_construction' when t.fastener_kind is not null then 'along_contact' end counting
+  from bob.catalog_item_revisions r
+  join bob.catalog_items i on i.id=r.item_id and i.kind='material'
+  left join bob.material_types t on t.id=i.material_type_id
+  where r.item_id=p_item and r.revision=p_revision) x
+ where coalesce(x.kind,'')~'^[a-z][a-z_]{1,31}$' and x.counting in ('along_contact','per_joint','per_construction')
 $$;
 revoke all on function bob_private.joint_fastener_item(uuid,integer) from public,anon,authenticated,service_role;
--- The fastener schedule runs as the reading user and needs these three facts.
+-- The fastener schedule runs as the reading user and needs these facts.
 grant execute on function bob_private.joint_fastener_item(uuid,integer) to authenticated;
 
 create function bob_private.joint_fasteners_issue(p_project text, f jsonb) returns text
@@ -81,8 +113,9 @@ begin
   item:=bob_private.joint_fastener_item((e->>'material_id')::uuid,(e->>'material_revision')::integer);
   if item is null then return 'joint_fastener_not_in_catalog'; end if;
   if item->>'project_id' is not null and item->>'project_id'<>p_project then return 'joint_fastener_other_project'; end if;
-  if item->>'kind'='glue' and (jsonb_typeof(e->'count')<>'null' or jsonb_typeof(e->'spacing_mm')<>'null') then return 'joint_fastener_glue_counted'; end if;
-  if item->>'kind'<>'glue' and (jsonb_typeof(item->'diameter_mm')<>'number' or jsonb_typeof(item->'length_mm')<>'number') then return 'joint_fastener_size_unknown'; end if;
+  if item->>'counting'='per_construction' and (jsonb_typeof(e->'count')<>'null' or jsonb_typeof(e->'spacing_mm')<>'null') then return 'joint_fastener_package_counted'; end if;
+  if item->>'counting'='per_joint' and jsonb_typeof(e->'spacing_mm')<>'null' then return 'joint_fastener_spaced_per_joint'; end if;
+  if item->>'counting'='along_contact' and (jsonb_typeof(item->'diameter_mm')<>'number' or jsonb_typeof(item->'length_mm')<>'number') then return 'joint_fastener_size_unknown'; end if;
  end loop;
  return null;
 end $$;
@@ -124,7 +157,7 @@ declare
  d numeric; len numeric; lmax numeric; e numeric; n integer; spacing numeric; gaps text[];
  kind text; source text; proposal jsonb; rows jsonb:='[]'; mech jsonb; glue integer:=0; complete boolean:=true;
  method text; passes integer; existing text[]:='{}'; pair boolean;
- chosen jsonb; item jsonb; own text[];
+ chosen jsonb; item jsonb; own text[]; counting text;
 begin
  existing:=array(select x->>'instance_id' from jsonb_array_elements(case when jsonb_typeof(p_policy->'instances')='array' then p_policy->'instances' else '[]' end) x where x->>'role'='existing_part');
  for def in select value from jsonb_array_elements(coalesce(p_recipe->'definitions','[]')) loop
@@ -188,10 +221,13 @@ begin
    end if;
    for chosen in select value from jsonb_array_elements(j->'fasteners') loop
     own:=gaps; item:=bob_private.joint_fastener_item((chosen->>'material_id')::uuid,(chosen->>'material_revision')::integer);
-    kind:=item->>'kind'; d:=(item->>'diameter_mm')::numeric; len:=(item->>'length_mm')::numeric;
+    kind:=item->>'kind'; counting:=item->>'counting'; d:=(item->>'diameter_mm')::numeric; len:=(item->>'length_mm')::numeric;
     n:=(chosen->>'count')::integer; spacing:=(chosen->>'spacing_mm')::numeric;
     if item is null then own:=own||'fastener_unknown'::text; complete:=false;
-    elsif kind in ('screw','nail','bolt') then
+    elsif counting='per_joint' then
+     -- Brackets and the like: the designer gives the count; there is no rule.
+     if n is null then own:=own||'count_unknown'::text; complete:=false; end if;
+    elsif counting='along_contact' then
      -- Count and spacing along the longer side of the contact (the existing rule).
      if n is null and d is not null and lc is not null then
       e:=greatest(15,5*d);
@@ -207,7 +243,7 @@ begin
      if wc is not null and d is not null and wc<5*d then own:=own||'narrow_contact'::text; end if;
     elsif kind='glue' then glue:=1;
     end if;
-    rows:=rows||jsonb_build_array(jsonb_build_object('joint_id',j->>'id','method',method,'source','chosen','kind',kind,
+    rows:=rows||jsonb_build_array(jsonb_build_object('joint_id',j->>'id','method',method,'source','chosen','kind',kind,'counting',counting,
      'diameter_mm',d,'length_mm',len,'count',n,'spacing_mm',spacing,'through_instance_id',through,'through_mm',t,'embed_mm',embed,
      'contact_length_mm',lc,'contact_width_mm',wc,'proposal',null,'gaps',to_jsonb(own),
      'material_id',chosen->'material_id','material_revision',chosen->'material_revision'));
@@ -264,12 +300,18 @@ begin
    'contact_length_mm',lc,'contact_width_mm',wc,'proposal',case when source='override' then proposal end,'gaps',to_jsonb(gaps)));
  end loop;
 
- select coalesce(jsonb_agg(jsonb_build_object('kind',x.kind,'diameter_mm',x.d,'length_mm',x.l,'count',x.n,'joint_ids',x.ids) order by x.kind,x.d,x.l),'[]')
+ -- Earlier rows: screws, nails and bolts with a size and count. Chosen rows:
+ -- counted items by kind and size; a per-construction item other than glue is
+ -- one package per construction (glue keeps glue_packages).
+ select coalesce(jsonb_agg(jsonb_build_object('kind',x.kind,'diameter_mm',x.d,'length_mm',x.l,'count',x.n,'joint_ids',x.ids) order by x.kind,x.d nulls first,x.l nulls first),'[]')
  into mech from (
-  select jr->>'kind' kind,(jr->>'diameter_mm')::numeric d,(jr->>'length_mm')::numeric l,sum((jr->>'count')::integer) n,
-   jsonb_agg(jr->>'joint_id' order by jr->>'joint_id') ids
+  select jr->>'kind' kind,(jr->>'diameter_mm')::numeric d,(jr->>'length_mm')::numeric l,
+   case when bool_and(jr->>'counting'='per_construction') then 1 else sum((jr->>'count')::integer) end::integer n,
+   jsonb_agg(distinct jr->>'joint_id' order by jr->>'joint_id') ids
   from jsonb_array_elements(rows) jr
-  where jr->>'kind' in ('screw','nail','bolt') and jsonb_typeof(jr->'count')='number' and jsonb_typeof(jr->'diameter_mm')='number' and jsonb_typeof(jr->'length_mm')='number'
+  where (not jr ? 'counting' and jr->>'kind' in ('screw','nail','bolt') and jsonb_typeof(jr->'count')='number' and jsonb_typeof(jr->'diameter_mm')='number' and jsonb_typeof(jr->'length_mm')='number')
+   or (jr->>'counting' in ('along_contact','per_joint') and jsonb_typeof(jr->'count')='number')
+   or (jr->>'counting'='per_construction' and jr->>'kind'<>'glue')
   group by 1,2,3) x;
  return jsonb_build_object('rule_version','fastener-rules-v1','complete',complete,'joints',rows,'totals',mech,'glue_packages',glue);
 end $function$;

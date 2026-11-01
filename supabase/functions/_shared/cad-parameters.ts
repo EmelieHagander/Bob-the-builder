@@ -215,6 +215,22 @@ export function withZeroDefaults(recipe:CadAssemblyRequest|null,plan:ParameterPl
  return {...plan,nodes:[...plan.nodes.filter(n=>!d.unused.includes(n.id)),...d.nodes],bindings:[...plan.bindings,...d.bindings]}
 }
 
+/** The binding and repeat descriptions of the default-zero pin (owner-approved
+ * text). Every schema object carrying the former wording gets the new one. */
+const ZERO_PATH_TEXT='Exact slash-separated recipe path through stable IDs and field names, as the recipe nests them; no dot notation or array positions. Bind every controlling numeric field; a position or rotation the recipe states as 0 may stay unbound, and code binds it to zero.'
+const ZERO_ARRAYS_TEXT='Repeat templates for evenly spaced identical parts. Each expands to instances <id>.1..<id>.<count>. Bind arrays/<id>/start/x|y|z (first copy, zero included) and arrays/<id>/spacing_mm (centre-to-centre step along axis); an unbound start rotation means none. Do not bind the expanded instances. Copy N sits at start + (N-1) x spacing along axis.'
+export function withDefaultZeroText<T>(value:T,former:{path:string;arrays:string}):T{
+ const walk=(v:unknown):unknown=>{
+  if(Array.isArray(v))return v.map(walk)
+  if(!v||typeof v!=='object')return v
+  const out:Record<string,unknown>=Object.fromEntries(Object.entries(v).map(([k,x])=>[k,walk(x)]))
+  if(out.description===former.path)out.description=ZERO_PATH_TEXT
+  else if(out.description===former.arrays)out.description=ZERO_ARRAYS_TEXT
+  return out
+ }
+ return walk(value) as T
+}
+
 export function cadParameterSources(value:CadParameters|undefined):ParameterSource[]{
  return value?.nodes.flatMap(n=>n.role==='source'?n.sources:[])??[]
 }

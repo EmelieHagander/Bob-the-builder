@@ -3,7 +3,7 @@ import { BOB_WRITE_LIMIT } from '../../../src/data/bobEvidence.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import { OPERATION_WRITE_TOOLS, parseOperationalWrite } from './project-operations.ts'
 import { EXPERT_TOOLS, parseExpertWrite } from './project-expert-tools.ts'
-import { CATALOG_WRITE_TOOL, parseCatalogWrite, catalogRejection } from './material-catalog.ts'
+import { CATALOG_FASTENER_TOOL, CATALOG_WRITE_TOOL, catalogFastenerWrite, parseCatalogWrite, catalogRejection } from './material-catalog.ts'
 import { PLAN_WRITE_TOOLS, parsePlanWrite } from './project-plan.ts'
 import { STAIR_WRITE_TOOL, parseStairWrite } from './project-stair.ts'
 import { withDerivedStair } from '../../../src/lib/stairStudy.ts'
@@ -32,6 +32,7 @@ export const WRITE_TOOLS = [
   ...OPERATION_WRITE_TOOLS,
   ...EXPERT_TOOLS,
   CATALOG_WRITE_TOOL,
+  CATALOG_FASTENER_TOOL,
   ...PLAN_WRITE_TOOLS,
   STAIR_WRITE_TOOL,
   BUILDING_PLAN_TOOL,
@@ -197,6 +198,10 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   }
   if (EXPERT_TOOLS.some(t => t.function.name === name)) return parseExpertWrite(name, v)
   if (name === CATALOG_WRITE_TOOL.function.name) return parseCatalogWrite(v)
+  if (name === CATALOG_FASTENER_TOOL.function.name) {
+    const result = catalogFastenerWrite(v)
+    return !result ? null : 'issue' in result ? invalid('field_value', result.issue.fields, result.issue.message) : result.payload
+  }
   if (PLAN_WRITE_TOOLS.some(t => t.function.name === name)) return parsePlanWrite(name, v)
   if (name === STAIR_WRITE_TOOL.function.name) return parseStairWrite(v)
   if (name === COMPOSE_CAD_SHELL_TOOL.function.name) return parseCadShellWrite(v)

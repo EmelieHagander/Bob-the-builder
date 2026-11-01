@@ -106,6 +106,44 @@ export function parseCatalogWrite(value: unknown): WritePayload | null {
   return { kind: 'catalog', record_id: record_id as string | null, expected_revision: expected_revision as number,
     expected_updated_at: null, request_quote: request_quote as string, data }
 }
+/** Owner decision 2026-11-01 (pinned per manifest: tools.add_catalog_fastener).
+ * The structural designer adds joint hardware the catalog lacks: what it is, how
+ * it is counted and its nominal size. It is saved through the ordinary catalog
+ * write (profile joint_hardware) as this project's material, with the same
+ * receipts, reuse and review rules as any other definition. */
+const sizeOrNull = { anyOf: [{ type: 'number', exclusiveMinimum: 0, maximum: 10000 }, { type: 'null' }] }
+export const CATALOG_FASTENER_TOOL = tool('add_catalog_fastener',
+  'Add joint hardware the catalog lacks, as this project\'s material: what it is, how it is counted on a joint and its nominal size. Returns the saved definition\'s exact ID and revision for the joint\'s fasteners.', {
+    key: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,80}$' },
+    name: { type: 'string', minLength: 1, maxLength: 200 },
+    kind: { type: 'string', pattern: '^[a-z][a-z_]{1,31}$' },
+    counting: { type: 'string', enum: ['along_contact', 'per_joint', 'per_construction'] },
+    material_category: { type: 'string', pattern: '^[a-z][a-z0-9_.]{0,63}$' },
+    diameter_mm: sizeOrNull, length_mm: sizeOrNull,
+    request_quote: { type: 'string' },
+  })
+const specValue = (value: string, unit: string | null, note: string) => ({ value, unit, truth: 'provided_spec', parameter: null, note })
+/** The catalog write for one piece of joint hardware, or a reason it cannot be. */
+export function catalogFastenerWrite(value: unknown): { payload: WritePayload } | { issue: { fields: string[]; message: string } } | null {
+  if (!isObject(value) || !exactKeys(value, CATALOG_FASTENER_TOOL.function.parameters.required)) return null
+  const v = value, size = (x: unknown) => x === null || (typeof x === 'number' && x > 0 && x <= 10000)
+  if (typeof v.key !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(v.key) || !text(v.name, 200) || typeof v.kind !== 'string' || !/^[a-z][a-z_]{1,31}$/.test(v.kind)
+    || !['along_contact', 'per_joint', 'per_construction'].includes(String(v.counting)) || typeof v.material_category !== 'string' || !category.test(v.material_category)
+    || !size(v.diameter_mm) || !size(v.length_mm) || !text(v.request_quote, 500)) return null
+  if (v.counting === 'along_contact' && (v.diameter_mm === null || v.length_mm === null))
+    return { issue: { fields: ['diameter_mm', 'length_mm'], message: 'Hardware counted along the contact needs its diameter and length. Nothing was saved.' } }
+  if (v.counting === 'per_construction' && (v.diameter_mm !== null || v.length_mm !== null))
+    return { issue: { fields: ['diameter_mm', 'length_mm'], message: 'Hardware counted per construction has no diameter or length. Nothing was saved.' } }
+  const note = 'Vald av konstruktören.'
+  const properties: Record<string, unknown> = { fastener_kind: specValue(v.kind, null, note), fastener_counting: specValue(String(v.counting), null, note),
+    ...(v.diameter_mm !== null ? { diameter: specValue(String(v.diameter_mm), 'mm', note) } : {}),
+    ...(v.length_mm !== null ? { length: specValue(String(v.length_mm), 'mm', note) } : {}) }
+  const payload = parseCatalogWrite({ action: 'ensure', key: v.key, kind: 'material', record_id: null, expected_revision: 0, name: v.name, aliases: [],
+    profile_code: 'joint_hardware', profile_revision: 1, categories: [v.material_category, 'fastener'], properties, material_id: null, material_revision: null,
+    notes: 'Förbandsdetalj tillagd av konstruktören.', source_kind: 'design_choice', source_quote: String(v.request_quote).slice(0, 1000), source_seq: null,
+    request_quote: v.request_quote })
+  return payload ? { payload } : null
+}
 export function parseCatalogRead(name: string, value: unknown, options: { lookupCursor?: boolean } = {}): Record<string, unknown> | null {
   if (!isObject(value)) return null
   const base = { action: '', kind: null as string | null, query: null as string | null, after: null as string | null,

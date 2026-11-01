@@ -209,9 +209,18 @@ tokens, and every box construction was glue only or screws only by chance.
   model checks today). The database owns the facts
   ([Artifacts](artifacts.md#chosen-joint-fasteners--owner-decision-2026-11-01));
   a list the database refuses names its mistake (`joint_fastener_not_in_catalog`,
-  `_repeated`, `_other_project`, `_glue_counted`, `_size_unknown`, or
-  `joint_fasteners_invalid`). The table view, lists and model check show
+  `_repeated`, `_other_project`, `_package_counted`, `_spaced_per_joint`,
+  `_size_unknown`, or `joint_fasteners_invalid`). The table view, lists and model check show
   several items per joint; single-item joints keep their former shape.
+- **Hardware Konrad adds** (`tools.add_catalog_fastener`, owner decision
+  2026-11-01: "he doesn't have to use the list of pre-seeds, he can add if
+  needed"). When the catalog lacks what should hold a joint, Konrad adds it:
+  what it is (one word), how it is counted (along the contact, per joint, or
+  once per construction), its material category and nominal size. Code saves it
+  through the ordinary catalog write (profile `joint_hardware`) as the project's
+  material, with its receipt; he uses the returned ID in the joint. Along the
+  contact needs a diameter and length; per construction has neither. Mattias's
+  material list derives needs of any such kind, with or without a size.
 - **Material finder** (`tools.find_catalog_materials`, role `material-finder` on
   the nano model). Konrad names up to 12 needs in words; the small model sees the
   project's material list (`bob.read_material_shortlist`: shared and own items
