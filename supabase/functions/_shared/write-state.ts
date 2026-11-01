@@ -36,6 +36,18 @@ export function compactConstructionCheck(check: Row | undefined): Row {
       if (countSerializedTokens(result) > CHECK_TOKENS) { result[key].pop(); break }
     }
   }
+  // Chosen joint fasteners (2026-11-01): only checks that carry them, after the
+  // findings and within the same budget.
+  const facts = check.fastener_facts
+  if (facts && typeof facts === 'object' && !Array.isArray(facts)) {
+    const rows: unknown[] = Array.isArray(facts.rows) ? facts.rows : [], shown: Row = { ...facts, rows: [] }
+    result.fastener_facts = shown
+    for (const row of rows) {
+      shown.rows.push(row)
+      if (countSerializedTokens(result) > CHECK_TOKENS) { shown.rows.pop(); break }
+    }
+    if (shown.rows.length < rows.length) shown.rows_omitted = rows.length - shown.rows.length
+  }
   const shown = result.issues.length + result.fabrication_gaps.length
   if (shown < result.issue_count + result.fabrication_gap_count) {
     result.findings_omitted = result.issue_count + result.fabrication_gap_count - shown

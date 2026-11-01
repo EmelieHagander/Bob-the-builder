@@ -1038,5 +1038,23 @@
     "always_load": false,
     "preload_phases": [],
     "active": false
+  },
+  {
+    "name": "find_catalog_materials",
+    "description": "Find catalog items for things you need, named in words with the sizes that matter. Returns per need whether the catalog has the thing exactly, closely or not at all, with each match's exact ID, revision, name and catalog sizes.",
+    "how_to": "Name each thing and the sizes you need, one need per thing; the finder matches words to this project's material list and does not choose for a purpose. Put all of a job's needs in one call where you can: every call reads the whole list. close is the same kind of thing at another size or variant; whether it will do is your call. Copy the IDs and revisions it returns.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "add_catalog_fastener",
+    "description": "Add joint hardware the catalog lacks, as this project's material: what it is, how it is counted on a joint and its nominal size. Returns the saved definition's exact ID and revision for the joint's fasteners.",
+    "how_to": "Name it as the material list should show it. kind is one word for what it is, the same word each time, since totals group by it. counting: along_contact items are spaced along the contact and counted by the database from their size; per_joint items take the count you give each joint; per_construction is one package for the whole construction. The size is nominal, your design choice, not a measurement.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
   }
 ]

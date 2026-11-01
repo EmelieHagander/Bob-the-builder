@@ -212,6 +212,13 @@ test('a check that cannot complete is reported inside the saved result, never as
     result: { result_id: 'cs_x', read: { view: 'result', result_id: 'cs_x' } } })
   assert(compact.issues.length > 0 && compact.issues.length < 80); assert.equal(compact.findings_omitted, 80 - compact.issues.length)
   assert.equal(compact.coverage_complete, false); assert.equal(compact.concept_ready, false); assert.equal(compact.details_read.result_id, 'cs_x')
+  // Chosen joint fasteners (2026-11-01): facts follow the findings inside the same budget.
+  const rows = Array.from({ length: 80 }, (_, n) => ({ joint_id: 'j' + n, kind: 'screw', diameter_mm: 4, length_mm: 45, count: 3, gaps: ['narrow_contact'] }))
+  const few = issues.slice(0, 3), withFacts = compactConstructionCheck({ status: 'checked', concept_ready: false, issue_count: 3, issues: few, fabrication_gaps: [], fabrication_gap_count: 0,
+    coverage: { complete: true }, fastener_facts: { status: 'ok', complete: true, glue_packages: 1, rows } })
+  assert.deepEqual(withFacts.issues, few, 'facts never push findings out')
+  assert(withFacts.fastener_facts.rows.length > 0 && withFacts.fastener_facts.rows.length < 80)
+  assert.equal(withFacts.fastener_facts.rows_omitted, 80 - withFacts.fastener_facts.rows.length); assert.equal(withFacts.fastener_facts.glue_packages, 1)
 })
 
 test('manifests pinned before the phase tools offer the five-tool bench; project search stays loadable, not preloaded', async () => {

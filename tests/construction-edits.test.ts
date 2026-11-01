@@ -7,7 +7,10 @@ import {designIntent} from './support/design-intent-fixture.ts'
 import {compileCadParameters} from '../supabase/functions/_shared/cad-parameters.ts'
 import {CONSTRUCTION_EDIT_TOOL} from '../supabase/functions/_shared/construction-edits.ts'
 import {createAiCatalogSession} from '../supabase/functions/_shared/ai-catalog.ts'
-import {catalogFixture,preConstructionEditsCatalogFixture} from './support/ai-catalog-fixture.ts'
+import {catalogFixture,preConstructionEditsCatalogFixture,preKonradLeanCatalogFixture} from './support/ai-catalog-fixture.ts'
+import {CAD_PARAMETERS_SCHEMA,withDefaultZeroText} from '../supabase/functions/_shared/cad-parameters.ts'
+import {CAD_ARRAYS_SCHEMA} from '../supabase/functions/_shared/cad-arrays.ts'
+import {withChosenJointFasteners} from '../supabase/functions/_shared/construction-fasteners.ts'
 import {withConstructionWorkWrite} from '../supabase/functions/_shared/construction-work.ts'
 import {withConstructionText} from '../supabase/functions/_shared/construction-text.ts'
 import {createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
@@ -89,7 +92,11 @@ test('bounded construction edits preserve canonical data, receipts and authority
    assert.deepEqual(current.definition(key).metadata,catalogFixture().definition(key).metadata,key)
   }
   // 2026-10-29: new manifests also carry corrected title/description text with a change.
-  assert.deepEqual(current.tool('edit_construction_parts').function.parameters,withConstructionText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL)).function.parameters)
+  // 2026-11-01 (bob-konrad-lean-v1): chosen joint fasteners and auto-zero wording on top.
+  const former={path:(CAD_PARAMETERS_SCHEMA.properties.bindings as any).items.properties.path.description,arrays:CAD_ARRAYS_SCHEMA.description}
+  const textEdit=withConstructionText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL)).function.parameters
+  assert.deepEqual(preKonradLeanCatalogFixture().tool('edit_construction_parts').function.parameters,textEdit)
+  assert.deepEqual(current.tool('edit_construction_parts').function.parameters,withDefaultZeroText(withChosenJointFasteners(textEdit),former))
   const options={message,writer:writer(),constructionTools:tools(),lookup:createProjectLookup(project,async()=>({data:[],error:null}),async()=>({data:[],error:null})),readPolicy:seedToolPolicy}
   const old=createBobToolSession({...options,aiCatalog:preConstructionEditsCatalogFixture()})
   assert(!(await old.prepare()).some(t=>t.function.name==='edit_construction_parts'))
@@ -234,5 +241,34 @@ test('bounded construction edits preserve canonical data, receipts and authority
   await assert.rejects(write(stale),/construction_changed|source_changed/)
   assert.equal((await rpc(owner,'bob.read_construction_draft',[project,checkpoint.recordId,null,null])).revision,2)
   const calls=sourceReads;assert.deepEqual(await tools().execute('edit_construction_parts',edit),saved);assert.equal(sourceReads,calls)
+ })
+ await t.test('default zero (2026-11-01): a new part binds only its non-zero values; removing it drops the unused code zero',async()=>{
+  // A fresh claimed turn: earlier cases spend this turn's write allowance.
+  await rpc(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')
+  const fresh=randomUUID(),next=await rpc(null,'bob.bob_claim_turn',[project,owner,fresh,message],'service_role'),bound=[project,next.thread_id,fresh,next.generation]
+  const zeroWriter=()=>createProjectWriter(project,message,async p=>{try{return {data:await rpc(owner,'bob.bob_project_write_v16',[...bound,JSON.stringify(p)]),error:null}}catch(e:any){sqlErrors.push(e.message);return {data:null,error:{code:e.code,message:e.message}}}},async()=>({data:[],error:null}),async()=>({data:[],error:null}))
+  const zeroTools=(defaultZero:boolean)=>createConstructionTools({projectId:project,message,writer:zeroWriter(),hasAccess:async()=>true,read:(_id,revision)=>read(revision),readSources,defaultZero,
+   prepareEdit:async p=>{try{return await rpc(owner,'bob.prepare_construction_edit',[...bound,JSON.stringify(p)])}catch(e:any){return {status:'invalid',reason:e.message}}}})
+  const head=(await read()).revision
+  const shelf={id:'shelf',definition_id:'board',placement:{x:18,y:0,z:100,rx:0,ry:0,rz:0}}
+  const changes:any={instances:delta([shelf]),nodes:delta([{id:'shelfHeight',role:'decision',value:100,unit:'mm',reason:'Synthetic shelf height'}]),
+   bindings:delta([{path:'instances/shelf/placement/x',node:'sideThickness'},{path:'instances/shelf/placement/z',node:'shelfHeight'}]),
+   roles:delta([{instance_id:'shelf',role:'build_part',quantity_policy:'manufacture',reason:'Synthetic shelf'}])}
+  const add={...input,key:'zeroShelf',expected_revision:head,change_note:'Add one shelf',changes}
+  const old=await zeroTools(false).execute('edit_construction_parts',add)
+  assert.equal(old.status,'invalid','pinned turns keep the old rule');assert.equal((await read()).revision,head)
+  const saved=await zeroTools(true).execute('edit_construction_parts',{...add,key:'zeroShelf2'})
+  assert.equal(saved.status,'saved',JSON.stringify({saved,sqlErrors}));assert.equal(saved.receipt.revision,head+1)
+  const after=await read(),node=(path:string)=>after.parameters.bindings.find((b:any)=>b.path===path)?.node
+  assert.equal(node('instances/shelf/placement/y'),'origin.zero_mm');assert.equal(node('instances/shelf/placement/ry'),'origin.zero_deg')
+  assert.equal(node('instances/shelf/placement/z'),'shelfHeight')
+  // Konrad removes only the bindings he made; code removes its zero bindings of the gone part.
+  const remove={...input,key:'zeroShelfGone',expected_revision:head+1,change_note:'Remove the shelf',changes:{instances:delta([],['shelf']),nodes:delta([],['shelfHeight']),
+   bindings:delta([],['x','z'].map(k=>'instances/shelf/placement/'+k)),roles:delta([],['shelf'])}}
+  const gone=await zeroTools(true).execute('edit_construction_parts',remove)
+  assert.equal(gone.status,'saved',JSON.stringify({gone,sqlErrors}))
+  const last=await read()
+  assert.equal(last.parameters.nodes.some((n:any)=>n.id.startsWith('origin.')),last.parameters.bindings.some((b:any)=>b.node.startsWith('origin.')))
+  assert(!last.parameters.bindings.some((b:any)=>b.path.startsWith('instances/shelf/')))
  })
 })

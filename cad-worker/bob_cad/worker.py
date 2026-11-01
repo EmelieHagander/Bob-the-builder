@@ -181,6 +181,8 @@ def _checks(req,children,rows):
     return {"collisions":{"status":"partial" if skipped else "complete","tested_pairs":tested,"skipped_pairs":skipped,"overlaps":overlaps},"clearances":clearances,"motions":motions}
 
 FASTENER_JOINT_FIELDS={"joint_id","method","source","kind","diameter_mm","length_mm","count","spacing_mm","through_instance_id","through_mm","embed_mm","contact_length_mm","contact_width_mm","proposal","gaps"}
+CHOSEN_FIELDS={"counting","material_id","material_revision"}
+KIND_WORD=re.compile(r"[a-z][a-z_]{1,31}")
 def _text(v,limit=200): return isinstance(v,str) and 0<len(v)<=limit
 def _optional(v,name,integer=False):
     if v is None: return
@@ -194,20 +196,33 @@ def validate_fasteners(raw:Any)->dict[str,Any]:
         or not isinstance(raw["rule_version"],str) or not ID.fullmatch(raw["rule_version"]) or type(raw["complete"]) is not bool
         or type(raw["glue_packages"]) is not int or raw["glue_packages"] not in (0,1)
         or not isinstance(raw["joints"],list) or len(raw["joints"])>1024 or not isinstance(raw["totals"],list) or len(raw["totals"])>1024): raise CadContractError("fasteners")
-    ids=set()
+    # 2026-11-01: a joint held by catalog items the designer chose has one row per
+    # item (source chosen, or none while nothing is chosen), any kind word, and
+    # its counting and catalog item; earlier rows keep their exact shape.
+    ids=set(); chosen=set()
     for j in raw["joints"]:
-        if (not isinstance(j,dict) or set(j)!=FASTENER_JOINT_FIELDS or not _text(j["joint_id"]) or j["joint_id"] in ids
-            or j["source"] not in ("rule","override","no_rule","existing") or j["kind"] not in (None,"screw","nail","bolt","glue","none")
+        # Rows of chosen-fastener joints carry the catalog item fields, whatever their source.
+        is_chosen=isinstance(j,dict) and "material_id" in j
+        if (not isinstance(j,dict) or set(j)!=(FASTENER_JOINT_FIELDS|CHOSEN_FIELDS if is_chosen else FASTENER_JOINT_FIELDS) or not _text(j["joint_id"])
+            or (j["source"] in ("chosen","none") and not is_chosen)
+            or (j["joint_id"] in ids and not (is_chosen and j["joint_id"] in chosen))
+            or j["source"] not in ("rule","override","no_rule","existing","chosen","none")
+            or not (j["kind"] in (None,"screw","nail","bolt","glue","none") or (is_chosen and isinstance(j["kind"],str) and KIND_WORD.fullmatch(j["kind"])))
+            or (is_chosen and (j["counting"] not in (None,"along_contact","per_joint","per_construction")
+             or (j["material_id"] is not None and not _text(j["material_id"],64)) or (j["material_revision"] is not None and type(j["material_revision"]) is not int)))
             or any(j[k] is not None and not _text(j[k]) for k in ("method","through_instance_id"))
             or (j["proposal"] is not None and not isinstance(j["proposal"],dict))
             or not isinstance(j["gaps"],list) or len(j["gaps"])>16 or any(not _text(g,80) for g in j["gaps"])): raise CadContractError("fastener_joint")
         for k in ("diameter_mm","length_mm","spacing_mm","through_mm","embed_mm","contact_length_mm","contact_width_mm"): _optional(j[k],"fastener_joint")
         _optional(j["count"],"fastener_joint",True)
         ids.add(j["joint_id"])
+        if is_chosen: chosen.add(j["joint_id"])
     for t in raw["totals"]:
-        if (not isinstance(t,dict) or set(t)!={"kind","diameter_mm","length_mm","count","joint_ids"} or t["kind"] not in ("screw","nail","bolt")
+        sized=t.get("kind") in ("screw","nail","bolt") if isinstance(t,dict) else True
+        if (not isinstance(t,dict) or set(t)!={"kind","diameter_mm","length_mm","count","joint_ids"} or not isinstance(t["kind"],str) or not KIND_WORD.fullmatch(t["kind"]) or t["kind"]=="glue"
             or type(t["count"]) is not int or t["count"]<1 or not isinstance(t["joint_ids"],list) or not t["joint_ids"] or any(i not in ids for i in t["joint_ids"])): raise CadContractError("fastener_total")
-        _num(t["diameter_mm"],"fastener_total",True); _num(t["length_mm"],"fastener_total",True)
+        if sized: _num(t["diameter_mm"],"fastener_total",True); _num(t["length_mm"],"fastener_total",True)
+        else: _optional(t["diameter_mm"],"fastener_total"); _optional(t["length_mm"],"fastener_total")
     return raw
 
 def validate_drawing_source(drawing_source)->None:

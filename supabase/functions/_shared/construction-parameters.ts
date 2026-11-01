@@ -1,5 +1,6 @@
-import {CAD_PARAMETERS_SCHEMA, CadParameterGap, compileCadParameters, inheritCadParameters, parseParameterPlan, parameterSourcePins, type ParameterInput} from './cad-parameters.ts'
+import {CAD_PARAMETERS_SCHEMA, CadParameterGap, ZERO_NODE_IDS, compileCadParameters, inheritCadParameters, parseParameterPlan, parameterSourcePins, type ParameterInput} from './cad-parameters.ts'
 import {parseCadAssemblyRequest} from './cad-adapter.ts'
+const ZERO_IDS=new Set<string>(Object.values(ZERO_NODE_IDS))
 
 // A delta names existing inputs only. It carries no geometry, bindings, formula,
 // catalog pins or normalised values for the model to recreate.
@@ -15,6 +16,8 @@ export async function compileConstructionParameterChange(projectId:string,draft:
  const seen=new Set<string>(),nodes=new Map(plan.nodes.map(n=>[n.id,n])),gaps:CadParameterGap['gaps']=[]
  for(const change of changes){
   const old=nodes.get(change.id)
+  // A code zero node is shared by every unbound zero position or rotation.
+  if(old&&ZERO_IDS.has(change.id))throw new Error('parameter_code_zero:'+change.id)
   if(!old||seen.has(change.id)||old.role==='derived')throw new Error('invalid_parameter_change_identity')
   seen.add(change.id)
   if(change.role==='unknown'){gaps.push({id:change.id,unit:change.unit,reason:change.reason});continue}

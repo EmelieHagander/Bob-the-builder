@@ -1,0 +1,85 @@
+{
+ "run": "https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41283593223",
+ "workflow": "live-form-acceptance.yml",
+ "scenario": "box",
+ "config": "baseline",
+ "head": "94352665b68e5b9b399fc85027d51b73f7ce0dee",
+ "functions": {
+  "bob-worker": 164,
+  "ask-bob": 196
+ },
+ "catalog": {
+  "bob.tools": "v36, construction_auto_check_version 1 (20261101070834)",
+  "tools.ask_structure_worker": "v3, solution first"
+ },
+ "passed": true,
+ "turns": [
+  {
+   "step": "concept",
+   "turn": "a67756cc-7061-46eb-ba24-7eb45758c50d",
+   "delivery": "saved",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 5,
+    "structure-worker": 6,
+    "completion-gate": 1
+   },
+   "usd": 0.382,
+   "rejected": 0,
+   "answer_text": "clean"
+  },
+  {
+   "step": "width_change",
+   "turn": "2b29031d-0ce0-4bd3-a7e8-cf1d2b09b6ad",
+   "delivery": "saved",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 5,
+    "structure-worker": 4,
+    "completion-gate": 1
+   },
+   "usd": 0.251,
+   "rejected": 0,
+   "answer_text": "clean",
+   "notes": "Bob recorded the new width in the selected solution once, then one hand-over; Konrad changed and checked the construction."
+  },
+  {
+   "step": "final_drawing",
+   "turn": "7f078d42-613e-4958-9d26-68998bb77f0c",
+   "delivery": "saved",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 4,
+    "drawing-worker": 6,
+    "completion-gate": 1
+   },
+   "usd": 0.208,
+   "rejected": 0,
+   "answer_text": "clean",
+   "notes": "No Konrad job: the construction was already checked; Rita drew and saved."
+  }
+ ],
+ "total": {
+  "calls": 37,
+  "bob_calls": 14,
+  "konrad_calls": 11,
+  "rita_calls": 6,
+  "usd": 0.841,
+  "cached_share": 0.8,
+  "rejected": 0
+ },
+ "baseline_run15": {
+  "run": "https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41282458796",
+  "started_by": "owner account, outside this session",
+  "setup": "as run 14",
+  "usd": 1.071,
+  "calls": 44,
+  "konrad_calls": 15,
+  "notes": "Turn 2 repeated run 14's double hand-over; one rejected parameter change logged the writer's catch-all message (fingerprint mc870f4a0)."
+ },
+ "compared": {
+  "run14": "USD 1.07, 46 calls",
+  "run15": "USD 1.07, 44 calls",
+  "run16": "USD 0.84, 37 calls"
+ }
+}

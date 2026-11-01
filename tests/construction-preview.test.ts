@@ -107,6 +107,11 @@ test('fastener schedule: exact server counts are parsed strictly and appended to
   assert.equal(parseConstructionFasteners({ ...schedule, rule_version: 'fastener-rules-v2' }, artifact, 6), null)
   assert.equal(parseConstructionFasteners({ ...schedule, totals: [{ ...schedule.totals[0], count: 2.5 }] }, artifact, 6), null)
   assert.equal(parseConstructionFasteners({ status: 'not_found' }, artifact, 6), null)
+  // Chosen catalog items (2026-11-01): one row per item; an unchosen joint is not counted, not a warning.
+  const chosen = { ...schedule, joints: [joint('c1', { source: 'chosen' }), joint('c1', { source: 'chosen', kind: 'glue', diameter_mm: null, length_mm: null, count: null, gaps: ['narrow_contact'] }),
+    joint('c2', { source: 'none', kind: null, diameter_mm: null, length_mm: null, count: null, gaps: ['no_fastener_chosen'] }),
+    joint('c3', { source: 'chosen', kind: 'bracket', diameter_mm: null, length_mm: null, count: null, gaps: ['count_unknown'] })] }
+  assert.deepEqual([parseConstructionFasteners(chosen, artifact, 6)?.unsizedJoints, parseConstructionFasteners(chosen, artifact, 6)?.flaggedJoints], [2, 1])
   const list = preliminaryConstructionList(fixture())
   assert.equal(list.status, 'preliminary')
   if (list.status !== 'preliminary') return

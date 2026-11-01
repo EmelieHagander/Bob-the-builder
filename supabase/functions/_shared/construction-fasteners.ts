@@ -21,6 +21,44 @@ export const JOINT_FASTENER_SCHEMA = {
 type Row = Record<string, any>
 const isObject = (v: unknown): v is Row => !!v && typeof v === 'object' && !Array.isArray(v)
 
+/** Owner decision 2026-11-01 (pinned per manifest: joint_fastener_version 2).
+ * The structural designer chooses what holds each joint from catalog items, in
+ * any mix. The database resolves each item's kind and size and spreads a
+ * missing count by the existing rule; code never retypes catalog facts.
+ * Saved joints carry method 'butt' and this list. */
+export const JOINT_CHOSEN_FASTENERS_SCHEMA = {
+  type: 'array', maxItems: 8,
+  description: 'What holds this joint: catalog items with a fastener kind, in any mix; empty while nothing is chosen. count and spacing_mm follow how the item is counted: along the contact, a null count lets the database count and space it; per joint, give the count and no spacing; per construction, both stay null.',
+  items: { type: 'object', additionalProperties: false, required: ['material_id', 'material_revision', 'count', 'spacing_mm'], properties: {
+    material_id: { type: 'string', format: 'uuid' }, material_revision: { type: 'integer', minimum: 1, maximum: 999999999 },
+    count: { anyOf: [{ type: 'integer', minimum: 1, maximum: 10000 }, { type: 'null' }] },
+    spacing_mm: { anyOf: [{ type: 'number', exclusiveMinimum: 0, maximum: 2000 }, { type: 'null' }] },
+  } },
+}
+const JOINT_KEYS = ['id', 'method', 'first', 'second', 'reason', 'fastener']
+/** Rebuild every joint item schema (save and edit tools alike) without a method
+ * or rule fastener and with the chosen list. */
+export function withChosenJointFasteners<T>(value: T): T {
+  const walk = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(walk)
+    if (!isObject(v)) return v
+    const out: Row = Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]))
+    const props = out.properties
+    if (isObject(props) && JOINT_KEYS.every(k => k in props)) {
+      out.properties = { id: props.id, first: props.first, second: props.second, reason: props.reason, fasteners: JOINT_CHOSEN_FASTENERS_SCHEMA }
+      out.required = ['id', 'first', 'second', 'reason', 'fasteners']
+    }
+    return out
+  }
+  return walk(value) as T
+}
+/** A chosen-fastener joint as saved: the only joint shape the 3D model checks
+ * (boards meeting face to face), held by the chosen list. */
+export function storedChosenJoints<T>(joints: T): T {
+  return (Array.isArray(joints) ? joints.map(j => isObject(j)
+    ? { id: j.id, method: 'butt', first: j.first, second: j.second, reason: j.reason, fasteners: j.fasteners } : j) : joints) as T
+}
+
 /** Older pinned tool schemas have no fastener field: treat it as "use the rule". */
 export function withRuleFasteners(joints: unknown): unknown {
   return Array.isArray(joints) ? joints.map(j => isObject(j) && !('fastener' in j) ? { ...j, fastener: null } : j) : joints

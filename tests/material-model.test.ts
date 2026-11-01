@@ -43,13 +43,14 @@ test('the seed holds the reviewed starting list once, through the catalog identi
     (select count(*)::int from bob.catalog_items where project_id is null and material_type_id is not null and review_status='reviewed') c`)).rows[0]
   const aliases = data.materials.reduce((n, m) => n + m.aliases.length, 0) + data.sizes.reduce((n, s) => n + s.aliases.length, 0)
   // 2026-10-30: "Utomhusskruv, C4/rostfri" became C4 plus a separate stainless screw with the same two sizes.
-  const expected = { t: data.materials.length + 1, s: data.sizes.length, a: aliases, c: data.combinations.length + 2 }
+  // 2026-11-01: two wood glues (20261101103000_shared_wood_glue.sql), three aliases each.
+  const expected = { t: data.materials.length + 3, s: data.sizes.length, a: aliases + 6, c: data.combinations.length + 4 }
   assert.deepEqual(await counts(), expected)
   // Re-applying the seed on the schema it was written for changes nothing; later
   // migrations (such as the 2026-10-30 split) are not the seed's to keep.
   const seeded = await projectSchema(undefined, '20261029160100_standard_materials_seed.sql')
   try {
-    const once = await counts(seeded); assert.deepEqual(once, { ...expected, t: data.materials.length, c: data.combinations.length })
+    const once = await counts(seeded); assert.deepEqual(once, { ...expected, t: data.materials.length, a: aliases, c: data.combinations.length })
     await seeded.exec(readFileSync(SEED, 'utf8')); assert.deepEqual(await counts(seeded), once)
   } finally { await seeded.close() }
   assert.equal(readFileSync(SEED, 'utf8'), standardMaterialsSeedSql(data))
@@ -179,7 +180,7 @@ test('the combined lookup returns one row per purchase place, null when unknown,
   assert.deepEqual(byAlias.items.map((r: any) => r.name).sort(), ['Konstruktionsvirke C24, gran/furu 45 × 95', 'Tryckimpregnerat virke, NTR/AB 45 × 95'])
   const rows: any[] = []; let after: string | null = null, pages = 0
   do { const page: any = await lookup(one, { after }); rows.push(...page.items); after = page.next_cursor; pages++ } while (after && pages < 20)
-  assert.equal(rows.length, data.combinations.length + 2 + 1, 'the two stainless screws (2026-10-30), and one extra row for the second plywood store')
+  assert.equal(rows.length, data.combinations.length + 2 + 2 + 1, 'the two stainless screws (2026-10-30), the two wood glues (2026-11-01), and one extra row for the second plywood store')
   assert.equal(new Set(rows.map(r => r.id + ':' + r.store_article_id)).size, rows.length)
   assert(pages >= 4)
   await rejects(lookup(one, { after: 'not-a-cursor' }), '22023')

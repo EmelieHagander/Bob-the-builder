@@ -74,7 +74,7 @@ export function constructionLists(draft: Row, catalog: Map<string, Row>, depende
   bom, cuts, joints: joints.map(j => ({ joint_id: j.id, method: j.method, first: j.first, second: j.second,
    ...(fasteners ? jointFastener(fasteners, j.id) : { hardware_quantity: null, hardware_product: null, adhesive_quantity: null }) })),
   ...(fasteners ? { fasteners: { rule_version: fasteners.rule_version, complete: fasteners.complete, totals: fasteners.totals,
-   glue_packages: fasteners.glue_packages, basis: 'rule_of_thumb_proposal' } } : {}),
+   glue_packages: fasteners.glue_packages, basis: fasteners.joints.some(j => j.source === 'chosen') ? 'chosen_catalog_items' : 'rule_of_thumb_proposal' } } : {}),
   assembly: { status: dependencies.length ? 'proposed_order' : 'needs_dependencies', provenance: 'design_choice', steps, access_verified: false },
   gaps: [
    ...policy.instances.filter(i=>i.role==='prefabricated_part'||i.role==='existing_part').map(i=>({code:i.role==='existing_part'?'retained_part_condition_unverified':'complete_item_procurement_unverified',
@@ -93,15 +93,31 @@ export function constructionLists(draft: Row, catalog: Map<string, Row>, depende
  }
 }
 
+// Counted hardware and packaged items (glue and the like), for earlier rows by kind.
+const counted = (r: Record<string, any>) => r.counting ? r.counting !== 'per_construction' : ['screw', 'nail', 'bolt'].includes(r.kind)
+const packaged = (r: Record<string, any>) => r.counting ? r.counting === 'per_construction' : r.kind === 'glue'
 function jointFastener(schedule: FastenerSchedule, jointId: string) {
- const f = schedule.joints.find(j => j.joint_id === jointId)
+ const rows = schedule.joints.filter(j => j.joint_id === jointId)
+ // A joint held by several chosen items (2026-11-01) lists each of them.
+ if (rows.length > 1) {
+  const mechanical = rows.filter(counted)
+  return {
+   hardware_quantity: mechanical.length === 1 ? mechanical[0].count ?? null : null,
+   hardware_product: mechanical.length === 1 && mechanical[0].diameter_mm != null && mechanical[0].length_mm != null
+    ? { kind: mechanical[0].kind, diameter_mm: mechanical[0].diameter_mm, length_mm: mechanical[0].length_mm } : null,
+   adhesive_quantity: rows.some(packaged) ? 'shared_package' : null,
+   fasteners: rows.map(f => ({ source: f.source, kind: f.kind, diameter_mm: f.diameter_mm, length_mm: f.length_mm, count: f.count, spacing_mm: f.spacing_mm, gaps: f.gaps,
+    material_id: f.material_id ?? null, material_revision: f.material_revision ?? null })),
+  }
+ }
+ const f = rows[0]
  if (!f) return { hardware_quantity: null, hardware_product: null, adhesive_quantity: null, fastener: null }
- const mechanical = ['screw', 'nail', 'bolt'].includes(f.kind)
+ const mechanical = counted(f)
  return {
   hardware_quantity: mechanical ? f.count ?? null : null,
   hardware_product: mechanical && f.diameter_mm != null && f.length_mm != null ? { kind: f.kind, diameter_mm: f.diameter_mm, length_mm: f.length_mm } : null,
-  adhesive_quantity: f.kind === 'glue' ? 'shared_package' : null,
+  adhesive_quantity: packaged(f) ? 'shared_package' : null,
   fastener: { source: f.source, kind: f.kind, diameter_mm: f.diameter_mm, length_mm: f.length_mm, count: f.count, spacing_mm: f.spacing_mm, gaps: f.gaps,
-   ...(f.proposal ? { rule_proposal: f.proposal } : {}) },
+   ...(f.proposal ? { rule_proposal: f.proposal } : {}), ...(f.source === 'chosen' ? { material_id: f.material_id, material_revision: f.material_revision } : {}) },
  }
 }

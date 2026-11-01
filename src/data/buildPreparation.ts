@@ -78,9 +78,12 @@ export function parseConstructionFasteners(value: unknown, artifactId: string, r
     totals.push({ kind: t.kind, diameterMm: t.diameter_mm, lengthMm: t.length_mm, count: t.count, joints: t.joint_ids.length })
   }
   const mechanical = (j: Row) => ['screw', 'nail', 'bolt'].includes(j?.kind)
-  const unsized = (v.joints as Row[]).filter(j => j?.source === 'no_rule' || mechanical(j) && [j.diameter_mm, j.length_mm, j.count].some(x => x === null))
-  const flagged = (v.joints as Row[]).filter(j => Array.isArray(j?.gaps) && j.gaps.length && !unsized.includes(j))
-  return { complete: v.complete, totals, gluePackages: v.glue_packages, unsizedJoints: unsized.length, flaggedJoints: flagged.length }
+  // Chosen catalog items (2026-11-01) give one row per item: count joints, not rows.
+  const open = (j: Row) => j?.source === 'no_rule' || j?.source === 'none' || mechanical(j) && [j.diameter_mm, j.length_mm, j.count].some(x => x === null)
+    || Array.isArray(j?.gaps) && j.gaps.some((g: unknown) => g === 'count_unknown' || g === 'fastener_unknown')
+  const unsized = new Set((v.joints as Row[]).filter(open).map(j => j.joint_id))
+  const flagged = new Set((v.joints as Row[]).filter(j => Array.isArray(j?.gaps) && j.gaps.length && !unsized.has(j.joint_id)).map(j => j.joint_id))
+  return { complete: v.complete, totals, gluePackages: v.glue_packages, unsizedJoints: unsized.size, flaggedJoints: flagged.size }
 }
 
 function checked<T>(result: { data: T | null; error: { message: string } | null }): T {

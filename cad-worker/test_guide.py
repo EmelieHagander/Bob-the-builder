@@ -102,6 +102,44 @@ class GuideTest(unittest.TestCase):
         self.assertEqual(unsized, ['d', 'e', 'missing']); self.assertTrue(glue)
         self.assertEqual(fastener_rows(['a'], None), ([], [], False), 'no schedule read: nothing claimed')
 
+    def test_chosen_items_group_by_kind_and_size_with_glue_packages_and_open_joints(self):
+        # 2026-11-01: one row per chosen item; added kinds count along the contact,
+        # per joint, or once per construction.
+        def row(jid, kind, d, l, n, counting, source='chosen'):
+            return {'joint_id': jid, 'source': source, 'kind': kind, 'diameter_mm': d, 'length_mm': l, 'count': n, 'counting': counting, 'gaps': []}
+        sched = {'joints': [row('a', 'screw', 3.5, 30, 3, 'along_contact'), row('a', 'glue', None, None, None, 'per_construction'),
+                            row('b', 'dowel', 8, 40, 3, 'along_contact'), row('c', 'bracket', None, None, 2, 'per_joint'),
+                            row('d', 'bracket', None, None, None, 'per_joint'), row('e', 'adhesive', None, None, None, 'per_construction'),
+                            row('f', None, None, None, None, None, 'none'), row('g', None, None, None, None, None)]}
+        rows, unsized, glue = fastener_rows(['a', 'b', 'c', 'd', 'e', 'f', 'g'], sched)
+        self.assertEqual(rows, [{'kind': 'adhesive', 'diameter_mm': None, 'length_mm': None, 'count': 1},
+                                {'kind': 'bracket', 'diameter_mm': None, 'length_mm': None, 'count': 2},
+                                {'kind': 'dowel', 'diameter_mm': 8, 'length_mm': 40, 'count': 3},
+                                {'kind': 'screw', 'diameter_mm': 3.5, 'length_mm': 30, 'count': 3}])
+        self.assertEqual(unsized, ['d', 'f', 'g']); self.assertTrue(glue)
+
+    def test_the_schedule_check_accepts_chosen_item_rows_as_the_database_sends_them(self):
+        from bob_cad.worker import validate_fasteners
+        base = {'method': 'butt', 'diameter_mm': None, 'length_mm': None, 'count': None, 'spacing_mm': None, 'through_instance_id': 'left',
+                'through_mm': 12, 'embed_mm': 276, 'contact_length_mm': 250, 'contact_width_mm': 12, 'proposal': None, 'gaps': []}
+        item = {'counting': 'along_contact', 'material_id': '00000000-0000-4000-8000-0000000000a1', 'material_revision': 1}
+        joints = [{**base, **item, 'joint_id': 'a', 'source': 'chosen', 'kind': 'screw', 'diameter_mm': 3.5, 'length_mm': 30, 'count': 3, 'spacing_mm': 108},
+                  {**base, 'joint_id': 'a', 'source': 'chosen', 'kind': 'glue', 'counting': 'per_construction', 'material_id': item['material_id'][:-1] + '2', 'material_revision': 1},
+                  {**base, 'joint_id': 'b', 'source': 'none', 'kind': None, 'counting': None, 'material_id': None, 'material_revision': None, 'gaps': ['no_fastener_chosen']},
+                  {**base, 'joint_id': 'c', 'source': 'existing', 'kind': None, 'counting': None, 'material_id': None, 'material_revision': None, 'through_instance_id': None},
+                  {**base, 'joint_id': 'd', 'source': 'chosen', 'kind': 'bracket', 'counting': 'per_joint', 'material_id': item['material_id'], 'material_revision': 2, 'count': 2}]
+        totals = [{'kind': 'screw', 'diameter_mm': 3.5, 'length_mm': 30, 'count': 3, 'joint_ids': ['a']},
+                  {'kind': 'bracket', 'diameter_mm': None, 'length_mm': None, 'count': 2, 'joint_ids': ['d']}]
+        sched = {'rule_version': 'fastener-rules-v1', 'complete': False, 'glue_packages': 1, 'joints': joints, 'totals': totals}
+        self.assertIs(validate_fasteners(sched), sched)
+        # A rule row cannot repeat a joint; every chosen-joint row carries the item fields; kinds are one lowercase word.
+        rule = {**base, 'joint_id': 'a', 'method': 'screwed_butt', 'source': 'rule', 'kind': 'screw'}
+        for bad in (rule, {k: v for k, v in joints[2].items() if k != 'counting'}, {**joints[0], 'kind': 'Skruv!'}):
+            with self.assertRaises(CadContractError): validate_fasteners({**sched, 'joints': joints + [bad]})
+        old = {**base, 'joint_id': 'x', 'method': 'screwed_butt', 'source': 'rule', 'kind': 'dowel'}
+        with self.assertRaises(CadContractError): validate_fasteners({**sched, 'joints': [old], 'totals': []})
+        with self.assertRaises(CadContractError): validate_fasteners({**sched, 'totals': [{**totals[0], 'diameter_mm': None}]})
+
     def test_parts_left_out_of_every_step_are_named_on_the_done_page(self):
         f = bench(); f['steps'] = f['steps'][:2]
         with tempfile.TemporaryDirectory() as tmp:

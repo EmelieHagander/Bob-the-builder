@@ -170,3 +170,14 @@ test('only exact known task domain errors get recovery codes; access, conflict a
   assert.deepEqual(await execute(wrap(status), '42501', 'project_denied'), { status: 'denied', reason: 'access' })
   assert.equal((await execute(wrap(status), 'XX000', fixed)).status, 'unknown')
 })
+
+test('with rejectionReasons the catch-all rejection carries the database reason as a code only (2026-11-01)', async () => {
+  const { databaseRejectionReason } = await import('../supabase/functions/_shared/project-write.ts')
+  assert.equal(databaseRejectionReason({ code: 'P0001', message: 'construction_revision_stale: expected 3' }), 'construction_revision_stale')
+  assert.equal(databaseRejectionReason({ code: '23514', message: 'new row for relation "x" violates check constraint' }), 'db_23514')
+  assert.equal(databaseRejectionReason({ code: null, message: 'Something with spaces' }), undefined)
+  const payload: WritePayload = { kind: 'task_work', record_id: 'fixture', expected_updated_at: '2026-10-17T00:00:00Z', expected_revision: null, request_quote: quote, data: { status: 'done', person_ids: [] } }
+  const writer = (rejectionReasons: boolean) => createProjectWriter('A', quote, async () => ({ data: null, error: { code: 'P0001', message: 'construction_revision_stale: expected 3' } }), async () => ({ data: [], error: null }), async () => ({ data: { generation: 1, receipts: [] }, error: null }), { rejectionReasons })
+  assert.equal((await writer(true).commit(payload) as any).reason, 'construction_revision_stale')
+  assert.equal((await writer(false).commit(payload) as any).reason, undefined, 'pinned turns keep byte-identical feedback')
+})

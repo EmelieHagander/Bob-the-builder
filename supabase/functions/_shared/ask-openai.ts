@@ -37,7 +37,7 @@ import { createRecordDetailReader } from './project-record-detail.ts'
 import { createProjectImageTools } from './project-image-tools.ts'
 import { createCadAssistant, cadRenderInput } from './cad-assistant.ts'
 import { createCadGuideTransport, createCadTransport } from './cad-transport.ts'
-import { createMaterialCatalogReader } from './material-catalog.ts'
+import { createMaterialCatalogReader, materialFindResult, parseMaterialShortlist, shortlistLine, shortlistRef } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
 import { createProjectContext, type Opened } from './project-context/dispatcher.ts'
@@ -196,7 +196,7 @@ export async function answerWithOpenAi(opts: {
   const WORKER_ROLES = new Set(['materials-worker', 'structure-worker', 'drawing-worker'])
   // 'bob-ask-<32 hex>' becomes 'bob-<role>-<32 hex>': one route per worker and project.
   const workerCacheKey = (key: string, role: string) => 'bob-' + role + '-' + key.slice('bob-ask-'.length)
-  const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'completion-gate': 15000, 'tool-picker': 15000, 'tool-repair': 15000, 'materials-worker': 60000, 'structure-worker': 75000, 'drawing-worker': 60000, 'memory-stair': 30000, 'bob-delivery-language': 15000 }
+  const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'completion-gate': 15000, 'tool-picker': 15000, 'tool-repair': 15000, 'material-finder': 20000, 'materials-worker': 60000, 'structure-worker': 75000, 'drawing-worker': 60000, 'memory-stair': 30000, 'bob-delivery-language': 15000 }
   let drawingRequestId:string|null=null
   let drawingBudget:ReturnType<typeof createDrawingBudget>|undefined
   let modelBudget: ReturnType<typeof createBobModelBudget>
@@ -475,7 +475,9 @@ export async function answerWithOpenAi(opts: {
     payload => writeRpc(payload.kind === 'construction_work' ? 'commit_construction_work' : payload.kind === 'form_feedback' ? 'record_model_feedback' : payload.kind === 'bound_building_scope' ? 'bob_project_write_v21' : payload.kind === 'bound_plan_link' ? 'bob_project_write_v20' : payload.kind === 'bound_work' ? 'bob_project_write_v19' : ['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'].includes(payload.kind) ? 'bob_project_write_v18' : ['bound_project', 'bound_solution'].includes(payload.kind) ? 'bob_project_write_v17' : 'bob_project_write_v16', { ...binding, p_payload: payload }),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
-    { unlimitedWork, taskWorkDiagnostics: [1, 2, 3].includes(contract.work_completion_version as number) },
+    { unlimitedWork, taskWorkDiagnostics: [1, 2, 3].includes(contract.work_completion_version as number),
+      // Catalog switch (2026-11-01): the database's coded reason on the catch-all rejection.
+      ...(aiCatalog.definition('bob.tools', 'tool_contract').definition.rejection_reason_version === 1 ? { rejectionReasons: true } : {}) },
   ) : undefined
   const planLinks = createPlanLinks({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
     read: input => rpc('read_bob_plan_link_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
@@ -535,10 +537,30 @@ export async function answerWithOpenAi(opts: {
   // Pinned per manifest (material_lookup_version 1): untyped material searches
   // return the combined lookup with household stock and latest store prices.
   const materialLookup = aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.search_material_catalog' && row.metadata?.material_lookup_version === 1)
+  // Pinned per manifest (owner decision 2026-11-01): the structural designer names
+  // needs in words; a small model matches them to IDs of the project's material
+  // list and code returns each item's own values.
+  const materialFinder = ['tools.find_catalog_materials', 'role.material-finder', 'schema.bob_material_find']
+    .every(key => aiCatalog.manifest().definitions.some(row => row.prompt_key === key))
+  const findMaterials = async (needs: string[]) => {
+    const { data, error } = await rpc('read_material_shortlist', { p_project: opts.projectId }, AbortSignal.timeout(12000))
+    if (error) return { status: error.code === '42501' ? 'denied' : 'unavailable' }
+    const list = parseMaterialShortlist(data)
+    if (!list) return { status: 'unavailable' }
+    if (!list.rows.length) return materialFindResult(needs, list, { needs: [] })
+    // The list comes first so its prefix stays the same between calls.
+    const result = await dispatchModel({ app: 'bob', coworkerId: 'bob', functionName: 'material-finder', aiFunction: 'material-finder', module: 'global', userId: opts.userId,
+      catalogRoleKey: 'material-finder', catalogSchemaKey: 'bob_material_find', catalogSchemaParameters: { item_refs: list.rows.map((_, i) => shortlistRef(i)) },
+      messages: [{ role: 'user', content: JSON.stringify({ materials: list.rows.map(shortlistLine), needs: needs.map((text, index) => ({ index, text })) }) }], timeoutMs: 20000 })
+    let value: unknown = result.data
+    try { if (typeof value === 'string') value = JSON.parse(value) } catch { value = null }
+    return result.success ? materialFindResult(needs, list, value) : { status: 'unavailable' }
+  }
   const catalogReader = createMaterialCatalogReader(opts.projectId,
     checkpointed((input:Record<string,unknown>, signal:AbortSignal) => rpc('catalog_read', { p_project: opts.projectId, p_input: input }, signal)),
     hasAccess, lookup.sources, undefined, { unlimitedWork,
-      ...(materialLookup ? { lookup: checkpointed((input:Record<string,unknown>, signal:AbortSignal) => rpc('material_lookup', { p_project: opts.projectId, p_input: input }, signal)) } : {}) })
+      ...(materialLookup ? { lookup: checkpointed((input:Record<string,unknown>, signal:AbortSignal) => rpc('material_lookup', { p_project: opts.projectId, p_input: input }, signal)) } : {}),
+      ...(materialFinder ? { find: findMaterials } : {}) })
   const readDesignReadiness=async(targetRevision:number,purpose:DesignPurpose|null,areaId:string|null=null,fresh=false):Promise<DesignReadiness>=>{
     const args={p_project:opts.projectId,p_area:areaId,p_target_revision:targetRevision,p_purpose:purpose}
     // Replaying a recorded gate reconstructs an earlier completed operation.
@@ -635,6 +657,8 @@ export async function answerWithOpenAi(opts: {
     preciseEditDiagnostics:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.edit_construction_parts'),
     constructionViews:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_draft'&&row.metadata?.construction_view_version===1),
     constructionRepeats:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.construction_repeat_version===1),
+    defaultZero:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.default_zero_version===1),
+    chosenJointFasteners:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.joint_fastener_version===2),
     observationTime:(input:unknown)=>memo('construction:observation',input,async()=>new Date().toISOString()),
     prepareEdit:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_edit',{...binding,p_payload:payload},AbortSignal.timeout(12000))

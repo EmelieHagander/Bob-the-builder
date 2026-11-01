@@ -106,6 +106,53 @@ export function parseCatalogWrite(value: unknown): WritePayload | null {
   return { kind: 'catalog', record_id: record_id as string | null, expected_revision: expected_revision as number,
     expected_updated_at: null, request_quote: request_quote as string, data }
 }
+/** Owner decision 2026-11-01 (pinned per manifest: tools.add_catalog_fastener).
+ * The structural designer adds joint hardware the catalog lacks: what it is, how
+ * it is counted and its nominal size. It is saved through the ordinary catalog
+ * write (profile joint_hardware) as this project's material, with the same
+ * receipts, reuse and review rules as any other definition. */
+const sizeOrNull = { anyOf: [{ type: 'number', exclusiveMinimum: 0, maximum: 10000 }, { type: 'null' }] }
+/** The catalog's material-axis categories (a test keeps this equal to the
+ * database), so the designer picks one without a category lookup. */
+export const MATERIAL_CATEGORIES = ['adhesive', 'bitumen', 'coating', 'metal', 'mineral', 'mineral.aggregate', 'mineral.concrete', 'mineral.gypsum',
+  'plastic', 'plastic.pvc', 'wood', 'wood.plywood', 'wood.softwood']
+export const CATALOG_FASTENER_TOOL = tool('add_catalog_fastener',
+  'Add joint hardware the catalog lacks, as this project\'s material: what it is, how it is counted on a joint and its nominal size. Returns the saved definition\'s exact ID and revision for the joint\'s fasteners.', {
+    key: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,80}$' },
+    name: { type: 'string', minLength: 1, maxLength: 200 },
+    kind: { type: 'string', pattern: '^[a-z][a-z_]{1,31}$' },
+    counting: { type: 'string', enum: ['along_contact', 'per_joint', 'per_construction'] },
+    material_category: { type: 'string', enum: MATERIAL_CATEGORIES },
+    diameter_mm: sizeOrNull, length_mm: sizeOrNull,
+    request_quote: { type: 'string' },
+  })
+const specValue = (value: string, unit: string | null, note: string) => ({ value, unit, truth: 'provided_spec', parameter: null, note })
+/** The catalog write for one piece of joint hardware, or a reason it cannot be. */
+export function catalogFastenerWrite(value: unknown): { payload: WritePayload } | { issue: { fields: string[]; message: string } } | null {
+  if (!isObject(value) || !exactKeys(value, CATALOG_FASTENER_TOOL.function.parameters.required)) return null
+  const v = value, size = (x: unknown) => x === null || (typeof x === 'number' && x > 0 && x <= 10000)
+  if (typeof v.key !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(v.key) || !text(v.name, 200) || typeof v.kind !== 'string' || !/^[a-z][a-z_]{1,31}$/.test(v.kind)
+    || !['along_contact', 'per_joint', 'per_construction'].includes(String(v.counting)) || typeof v.material_category !== 'string' || !MATERIAL_CATEGORIES.includes(v.material_category)
+    || !size(v.diameter_mm) || !size(v.length_mm) || !text(v.request_quote, 500)) return null
+  if (v.counting === 'along_contact' && (v.diameter_mm === null || v.length_mm === null))
+    return { issue: { fields: ['diameter_mm', 'length_mm'], message: 'Hardware counted along the contact needs its diameter and length. Nothing was saved.' } }
+  if (v.counting === 'per_construction' && (v.diameter_mm !== null || v.length_mm !== null))
+    return { issue: { fields: ['diameter_mm', 'length_mm'], message: 'Hardware counted per construction has no diameter or length. Nothing was saved.' } }
+  // The material list sizes screws, nails and bolts and gives glue one package.
+  if (['screw', 'nail', 'bolt'].includes(v.kind) && (v.diameter_mm === null || v.length_mm === null))
+    return { issue: { fields: ['diameter_mm', 'length_mm'], message: 'A screw, nail or bolt needs its diameter and length. Nothing was saved.' } }
+  if (v.kind === 'glue' && v.counting !== 'per_construction')
+    return { issue: { fields: ['counting'], message: 'Glue is counted per construction. Nothing was saved.' } }
+  const note = 'Vald av konstruktören.'
+  const properties: Record<string, unknown> = { fastener_kind: specValue(v.kind, null, note), fastener_counting: specValue(String(v.counting), null, note),
+    ...(v.diameter_mm !== null ? { diameter: specValue(String(v.diameter_mm), 'mm', note) } : {}),
+    ...(v.length_mm !== null ? { length: specValue(String(v.length_mm), 'mm', note) } : {}) }
+  const payload = parseCatalogWrite({ action: 'ensure', key: v.key, kind: 'material', record_id: null, expected_revision: 0, name: v.name, aliases: [],
+    profile_code: 'joint_hardware', profile_revision: 1, categories: [v.material_category, 'fastener'], properties, material_id: null, material_revision: null,
+    notes: 'Förbandsdetalj tillagd av konstruktören.', source_kind: 'design_choice', source_quote: String(v.request_quote).slice(0, 1000), source_seq: null,
+    request_quote: v.request_quote })
+  return payload ? { payload } : null
+}
 export function parseCatalogRead(name: string, value: unknown, options: { lookupCursor?: boolean } = {}): Record<string, unknown> | null {
   if (!isObject(value)) return null
   const base = { action: '', kind: null as string | null, query: null as string | null, after: null as string | null,
@@ -161,10 +208,50 @@ export type MaterialCatalogReaderState = { version: 1; projectId: string; used: 
  * and purchase place with household stock and latest prices. Older manifests
  * keep the definition-only catalog_read search. */
 export type MaterialLookupInput = { query: string | null; categories: string[]; after: string | null; id: null }
-export function createMaterialCatalogReader(projectId: string, transport: CatalogTransport, hasAccess: () => Promise<boolean>, sources: ProjectSource[], timeoutMs = 10000, options: { unlimitedWork?: boolean; lookup?: CatalogTransport } = {}) {
+/** Owner decision 2026-11-01 (pinned per manifest: tools.find_catalog_materials).
+ * The structural designer names what he needs in words. A small model matches
+ * each need against the project's material list and may answer only with IDs
+ * from it; code returns each item's own catalog values. */
+export const CATALOG_FIND_TOOL = tool('find_catalog_materials',
+  'Find catalog items for things you need, named in words with the sizes that matter. Returns per need whether the catalog has the thing exactly, closely or not at all, with each match\'s exact ID, revision, name and catalog sizes.', {
+    needs: { type: 'array', minItems: 1, maxItems: 12, items: { type: 'string', minLength: 1, maxLength: 200 } },
+  })
+export type MaterialShortlistRow = { id: string; revision: number; name: string; profile: string; fastener: string | null; counting: string | null; own: boolean; sizes: Record<string, string> }
+export type MaterialShortlist = { rows: MaterialShortlistRow[]; complete: boolean }
+export function parseMaterialShortlist(value: unknown): MaterialShortlist | null {
+  const v = value as { items?: unknown; complete?: unknown } | null
+  if (!v || typeof v !== 'object' || !Array.isArray(v.items) || v.items.length > 500 || typeof v.complete !== 'boolean') return null
+  const ok = v.items.every(r => r && typeof r === 'object' && typeof r.id === 'string' && Number.isSafeInteger(r.revision) && typeof r.name === 'string'
+    && typeof r.profile === 'string' && (r.fastener === null || typeof r.fastener === 'string') && (r.counting === null || typeof r.counting === 'string') && typeof r.own === 'boolean'
+    && r.sizes && typeof r.sizes === 'object' && !Array.isArray(r.sizes))
+  return ok ? { rows: v.items as MaterialShortlistRow[], complete: v.complete } : null
+}
+/** The small model sees each item by a short list reference, never its ID:
+ * fewer tokens, and an answer can only name a reference that is on the list.
+ * Sizes are the catalog's own text. */
+export const shortlistRef = (index: number) => 'm' + (index + 1)
+export const shortlistLine = (r: MaterialShortlistRow, index: number) => ({ ref: shortlistRef(index), name: r.name, profile: r.profile,
+  ...(r.fastener ? { fastener: r.fastener } : {}), sizes: r.sizes, ...(r.own ? { own: true } : {}) })
+/** Turn the small model's answer into the tool result. A reference that is not
+ * on the list is dropped, never passed on; a need without a valid match is none.
+ * A cut list says so, because then none is not proof of absence. */
+export function materialFindResult(needs: string[], list: MaterialShortlist, answer: unknown): Record<string, unknown> {
+  const byRef = new Map(list.rows.map((r, i) => [shortlistRef(i), r]))
+  const found = (answer as { needs?: unknown } | null)?.needs
+  const entries = Array.isArray(found) ? found : []
+  return { status: Array.isArray(found) ? 'ok' : 'unavailable', ...(list.complete ? {} : { list_complete: false }), needs: needs.map((need, index) => {
+    const entry = entries.find(e => e && typeof e === 'object' && (e as Record<string, unknown>).index === index) as Record<string, unknown> | undefined
+    const refs = Array.isArray(entry?.item_refs) ? [...new Set(entry!.item_refs.filter((ref): ref is string => typeof ref === 'string' && byRef.has(ref)))].slice(0, 5) : []
+    const match = refs.length && (entry?.match === 'exact' || entry?.match === 'close') ? entry.match : 'none'
+    return { need, match, items: match === 'none' ? [] : refs.map(ref => { const r = byRef.get(ref)!
+      return { material_id: r.id, material_revision: r.revision, name: r.name, profile: r.profile, fastener: r.fastener, ...(r.fastener ? { counting: r.counting } : {}), sizes: r.sizes, project_own: r.own } }) }
+  }) }
+}
+
+export function createMaterialCatalogReader(projectId: string, transport: CatalogTransport, hasAccess: () => Promise<boolean>, sources: ProjectSource[], timeoutMs = 10000, options: { unlimitedWork?: boolean; lookup?: CatalogTransport; find?: (needs: string[]) => Promise<Record<string, unknown>> } = {}) {
   let used = 0, partial = false
   return {
-    tools: [CATALOG_SEARCH_TOOL, CATALOG_READ_TOOL],
+    tools: options.find ? [CATALOG_SEARCH_TOOL, CATALOG_READ_TOOL, CATALOG_FIND_TOOL] : [CATALOG_SEARCH_TOOL, CATALOG_READ_TOOL],
     exportState(): MaterialCatalogReaderState {
       return JSON.parse(JSON.stringify({ version: 1, projectId, used, partial, sources }))
     },
@@ -178,6 +265,12 @@ export function createMaterialCatalogReader(projectId: string, transport: Catalo
     get remaining() { return options.unlimitedWork ? Infinity : Math.max(0, 12 - used) }, get partial() { return partial },
     async read(name: string, value: unknown): Promise<Record<string, unknown>> {
       if (++used > 12 && !options.unlimitedWork) { partial = true; return { status: 'budget_exhausted' } }
+      if (name === CATALOG_FIND_TOOL.function.name && options.find) {
+        if (schemaIssues(CATALOG_FIND_TOOL.function.parameters, value).length) return { status: 'invalid', issues: schemaIssues(CATALOG_FIND_TOOL.function.parameters, value) }
+        if (!await hasAccess()) return { status: 'denied' }
+        try { return await options.find((value as { needs: string[] }).needs) }
+        catch (error) { rethrowContinuation(error); partial = true; return { status: 'unavailable', message: 'Could not match the materials. A failed lookup does not mean they are absent.' } }
+      }
       const input = parseCatalogRead(name, value, { lookupCursor: !!options.lookup })
       if (!input) { partial = true; return catalogReadIssue(name, value) }
       if (!await hasAccess()) return { status: 'denied' }

@@ -114,7 +114,9 @@ test('derive saves one need per fastener group and one glue package; unsized joi
  await assert.rejects(f.derive(f.glue({ name: 'Second glue' })), /fastener_requirement_exists/)
  await assert.rejects(f.derive(f.fields({ name: 'Wrong size', diameter_mm: 5, length_mm: 50 })), /fastener_group_not_in_schedule/)
  await assert.rejects(f.derive(f.fields({ name: 'Forged', required_quantity: '99' })), /invalid_cad_requirement/)
- await assert.rejects(f.derive(f.fields({ name: 'Staples', fastener_kind: 'staple' })), /invalid_cad_requirement/)
+ // 2026-11-01: kinds are open words; a kind this construction does not hold is no group of it.
+ await assert.rejects(f.derive(f.fields({ name: 'Staples', fastener_kind: 'staple' })), /fastener_group_not_in_schedule/)
+ await assert.rejects(f.derive(f.fields({ name: 'Bad kind', fastener_kind: 'Staple 8' })), /invalid_cad_requirement/)
  await assert.rejects(f.derive(f.fields({ name: 'Text size', diameter_mm: '4' })), /invalid_cad_requirement/)
  await assert.rejects(f.derive({ ...f.glue({ name: 'Sized glue' }), diameter_mm: 4 }), /invalid_cad_requirement/)
  await assert.rejects(f.derive(f.fields({ name: 'Size change' }), 'revise', nailId, 1), /construction_requirement_identity_changed/)
@@ -268,4 +270,60 @@ test('only project members read or derive fastener needs; provenance and private
    assert.equal((await f.pg.query("select has_function_privilege($1,$2,'execute') allowed", [role, fn])).rows[0].allowed, false, `${role} ${fn}`)
  const policies = (await f.pg.query("select relrowsecurity from pg_class where oid='bob.material_requirement_fastener_sources'::regclass")).rows[0] as any
  assert.equal(policies.relrowsecurity, true)
+})
+
+// Owner decision 2026-11-01: the structural designer adds joint hardware the
+// catalog lacks (profile joint_hardware) and its needs reach the material list,
+// with or without a size.
+test('hardware the designer adds is saved like any definition, held in joints and derived as needs of its own kind', async t => {
+ const { catalogFastenerWrite } = await import('../supabase/functions/_shared/material-catalog.ts')
+ const f = await fixture(t)
+ await f.newTurn()
+ const add = async (input: Record<string, unknown>) => {
+  const built: any = catalogFastenerWrite({ key: input.kind, name: input.name, kind: input.kind, counting: input.counting, material_category: input.material_category,
+   diameter_mm: input.diameter_mm ?? null, length_mm: input.length_mm ?? null, request_quote: 'Put the screws, nails and glue' })
+  assert.ok(built && 'payload' in built, JSON.stringify(built))
+  return f.write(built.payload)
+ }
+ const dowel = await add({ name: 'Träplugg, bok 8 × 40', kind: 'dowel', counting: 'along_contact', material_category: 'wood', diameter_mm: 8, length_mm: 40 })
+ const bracket = await add({ name: 'Vinkeljärn 40 × 40', kind: 'bracket', counting: 'per_joint', material_category: 'metal' })
+ const missing: any = catalogFastenerWrite({ key: 'k', name: 'Plugg', kind: 'dowel', counting: 'along_contact', material_category: 'wood', diameter_mm: null, length_mm: null, request_quote: 'q' })
+ assert.deepEqual(missing.issue.fields, ['diameter_mm', 'length_mm'], 'counted along the contact needs a size')
+ const item = async (id: string) => (await f.pg.query('select bob_private.joint_fastener_item($1,1) i', [id])).rows[0].i
+ assert.deepEqual(await item(dowel.recordId), { kind: 'dowel', counting: 'along_contact', project_id: f.project, diameter_mm: 8, length_mm: 40 })
+ assert.deepEqual(await item(bracket.recordId), { kind: 'bracket', counting: 'per_joint', project_id: f.project, diameter_mm: null, length_mm: null })
+ const pick = (id: string, count: number | null = null) => ({ material_id: id, material_revision: 1, count, spacing_mm: null })
+ const data: any = f.constructionData(300, false, 'hardware')
+ data.joints = [
+  { id: 'left_middle', method: 'butt', first: { instance_id: 'left', face: 'x_max' }, second: { instance_id: 'middle', face: 'x_min' }, reason: 'Dowelled', fasteners: [pick(dowel.recordId)] },
+  { id: 'middle_right', method: 'butt', first: { instance_id: 'middle', face: 'x_max' }, second: { instance_id: 'right', face: 'x_min' }, reason: 'Bracketed', fasteners: [pick(bracket.recordId, 2)] },
+  { id: 'left_top', method: 'butt', first: { instance_id: 'left', face: 'x_max' }, second: { instance_id: 'top', face: 'x_min' }, reason: 'Bracket, count open', fasteners: [pick(bracket.recordId)] },
+ ]
+ const saved = await f.write({ ...f.base, kind: 'construction', data })
+ const schedule = await f.call('bob.read_construction_fasteners', [f.project, saved.recordId, 1])
+ assert.deepEqual(schedule.totals.map((r: any) => [r.kind, r.diameter_mm, r.length_mm, r.count]), [['bracket', null, null, 2], ['dowel', 8, 40, 3]])
+ assert.deepEqual(schedule.joints.find((r: any) => r.joint_id === 'left_top').gaps, ['count_unknown']); assert.equal(schedule.complete, false)
+ const base = { artifact_id: saved.recordId, artifact_revision: 1 }
+ const derive = (fields: any) => f.write({ ...f.base, kind: 'operational', data: { resource: 'cad_requirement', action: 'create', fields } })
+ const read = async (id: string) => (await f.call('bob.read_project_work', [f.project, JSON.stringify({ resource: 'requirement', record_id: id, after_id: null })])).records[0]
+ const dowels = await derive(f.fields({ ...base, name: 'Träplugg', fastener_kind: 'dowel', diameter_mm: 8, length_mm: 40 }))
+ const dowelNeed = await read(dowels.recordId)
+ assert.equal(Number(dowelNeed.required_quantity), 3); assert.match(dowelNeed.basis, /3 dowels of 8 x 40 mm over 1 joint/)
+ assert.match(dowelNeed.basis, /1 other joint has no fastener size or rule yet/, 'the bracket joint without a count stays open')
+ const brackets = await derive(f.fields({ ...base, name: 'Vinkeljärn', fastener_kind: 'bracket', diameter_mm: null, length_mm: null }))
+ const bracketNeed = await read(brackets.recordId)
+ assert.equal(Number(bracketNeed.required_quantity), 2); assert.match(bracketNeed.basis, /2 brackets over 1 joint/)
+ assert.deepEqual((await f.sources(brackets.recordId)).map((s: any) => [s.kind, s.diameter_mm, s.length_mm]), [['bracket', null, null]])
+ await assert.rejects(derive(f.fields({ ...base, name: 'Skruv', fastener_kind: 'screw', diameter_mm: null, length_mm: null })), /invalid_cad_requirement/, 'screws still need their size')
+ // The database keeps the material list's rules for hardware saved another way:
+ // screws, nails and bolts carry a size, glue is one package per construction.
+ const raw = async (name: string, kind: string, counting: string) => {
+  const built: any = catalogFastenerWrite({ key: kind + '_raw', name, kind: 'bracket', counting: 'per_joint', material_category: 'metal', diameter_mm: null, length_mm: null, request_quote: 'Put the screws, nails and glue' })
+  built.payload.data.properties.fastener_kind.value = kind; built.payload.data.properties.fastener_counting.value = counting
+  return f.write(built.payload)
+ }
+ for (const [kind, counting, code] of [['screw', 'per_joint', 'joint_fastener_size_unknown'], ['glue', 'per_joint', 'joint_fastener_glue_counted']]) {
+  const added = await raw('Odd ' + kind, kind, counting)
+  assert.equal(await f.pg.query('select bob_private.joint_fasteners_issue($1,$2::jsonb) v', [f.project, JSON.stringify([pick(added.recordId, 2)])]).then((r: any) => r.rows[0].v), code, kind)
+ }
 })

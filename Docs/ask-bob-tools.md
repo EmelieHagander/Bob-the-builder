@@ -168,8 +168,8 @@ himself. Manifests with `bob.tools` `build_workers_version` 1
   or checked construction's overview (with its check results) and each saved
   drawing's record (source state, linked Steps) at that revision, read by code
   through the worker's session, up to eight; a save without a revision or past the
-  limit is listed as not read. With `construction_auto_check_version` 1 (built
-  2026-11-01), a construction revision Konrad saved and left unchecked gets the
+  limit is listed as not read. With `construction_auto_check_version` 1 (installed
+  2026-11-01, [run 16](foundation-verification.md#solution-first-install-2026-11-01)), a construction revision Konrad saved and left unchecked gets the
   server check by code after his job (whole model, no requirement probes); it
   shows in the receipts (`by: code`) and the readback. Bob's hand-over manual
   asks for the owner's latest decisions in the selected solution before the job
@@ -187,6 +187,48 @@ checks drawings. Source: `bob-workers.ts`, the toolbox setup in
 (`bob.tools.check_reads`: the construction, a drawing delivery, a record section)
 load from his first step and are never picker candidates; box run 13 cost USD 0.86
 ([record](foundation-verification.md#build-team-cost-2026-10-31)).
+
+<a id="konrad-lean"></a>
+**Konrad's lean construction — built 2026-11-01, not live (owner decisions;
+each part waits for its catalog pin and the owner's approval of its texts).**
+Box run 16: Konrad cost USD 0.42 of USD 0.84; one save call wrote about 9,400
+tokens, and every box construction was glue only or screws only by chance.
+
+- **Auto zero** (`tools.save_construction_draft` `default_zero_version` 1). A
+  position or rotation the recipe states as 0 may stay unbound: code binds it to
+  one fixed zero node (`origin.zero_mm`, `origin.zero_deg`) with a code reason,
+  so the saved graph stays complete and reads back unchanged. Dimensions and
+  non-zero values still need their own node; array starts default only their
+  rotations. Part edits get the same through a second prepare. A parameter
+  change cannot move a code zero node. Source: `cad-parameters.ts`
+  (`withZeroDefaults`), `construction-draft.ts`.
+- **Joints held by chosen catalog items** (`joint_fastener_version` 2). A joint
+  names `fasteners`: exact catalog items (screws, nails, bolts, glue) in any mix,
+  each with an optional count and spacing; it has no method or rule fastener and
+  is saved as method `butt` (boards meeting face to face, the only shape the 3D
+  model checks today). The database owns the facts
+  ([Artifacts](artifacts.md#chosen-joint-fasteners--owner-decision-2026-11-01));
+  a list the database refuses names its mistake (`joint_fastener_not_in_catalog`,
+  `_repeated`, `_other_project`, `_package_counted`, `_spaced_per_joint`,
+  `_size_unknown`, or `joint_fasteners_invalid`). The table view, lists and model check show
+  several items per joint; single-item joints keep their former shape.
+- **Hardware Konrad adds** (`tools.add_catalog_fastener`, owner decision
+  2026-11-01: "he doesn't have to use the list of pre-seeds, he can add if
+  needed"). When the catalog lacks what should hold a joint, Konrad adds it:
+  what it is (one word), how it is counted (along the contact, per joint, or
+  once per construction), its material category and nominal size. Code saves it
+  through the ordinary catalog write (profile `joint_hardware`) as the project's
+  material, with its receipt; he uses the returned ID in the joint. Along the
+  contact needs a diameter and length; per construction has neither. Mattias's
+  material list derives needs of any such kind, with or without a size.
+- **Material finder** (`tools.find_catalog_materials`, role `material-finder` on
+  the nano model). Konrad names up to 12 needs in words; the small model sees the
+  project's material list (`bob.read_material_shortlist`: shared and own items
+  at their current revision, with name, profile, fastener kind and sizes) and may
+  answer only with IDs from it. Code returns each item's own values and drops
+  any other ID. It replaces Konrad's two catalog lookups.
+
+Pinned manifests keep the former schemas, rule fastener and lookups.
 
 <a id="materials-worker"></a>
 **Superseded for new manifests by [the build team](#build-team) (built

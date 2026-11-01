@@ -24,6 +24,10 @@ TOUCH_MM = 0.5
 CAMERAS = {'isometric': (1, -1, 1), 'isometric_front_left': (-1, -1, 1),
            'isometric_back_left': (-1, 1, 1), 'isometric_back_right': (1, 1, 1)}
 KIND_NAMES = {'screw': 'Screw', 'nail': 'Nail', 'bolt': 'Bolt'}
+# 2026-11-01: hardware the designer adds (dowels, brackets ...) names itself.
+def kind_name(kind): return KIND_NAMES.get(kind) or kind.replace('_', ' ').capitalize()
+def size_text(d, l): return '' if d is None and l is None else f' {_number(d) if d is not None else "?"} × {_number(l) if l is not None else "?"}'
+def counted(j): return j.get('counting') in ('along_contact', 'per_joint') if j.get('counting') else j['kind'] in KIND_NAMES
 INK, CONTEXT = '#111111', '#9a9a9a'
 
 
@@ -190,9 +194,12 @@ def _head(page, kind, cx, cy, hidden=False):
         ET.SubElement(g, f'{{{NS}}}polygon', {'points': pts})
     elif kind == 'nail':
         ET.SubElement(g, f'{{{NS}}}circle', {'cx': str(cx), 'cy': str(cy), 'r': '5', 'fill': '#ffffff' if hidden else INK})
-    else:
+    elif kind == 'screw':
         ET.SubElement(g, f'{{{NS}}}circle', {'cx': str(cx), 'cy': str(cy), 'r': '7'})
         ET.SubElement(g, f'{{{NS}}}path', {'d': f'M{cx - 4} {cy} L{cx + 4} {cy} M{cx} {cy - 4} L{cx} {cy + 4}', 'fill': 'none'})
+    else:
+        # Hardware the designer added (2026-11-01): a plain end, named in the box list.
+        ET.SubElement(g, f'{{{NS}}}circle', {'cx': str(cx), 'cy': str(cy), 'r': '6'})
 
 
 def _glyph(page, kind, x, y):
@@ -223,18 +230,25 @@ def fastener_rows(joint_ids, schedule):
     """Per-step hardware from the server's rule schedule, never guessed: grouped sized rows,
     glue, and joints without a rule or size (shown with '?')."""
     if schedule is None: return [], [], False
-    by = {j['joint_id']: j for j in schedule['joints']}
-    groups, unsized, glue = {}, [], False
+    by = {}
+    for j in schedule['joints']: by.setdefault(j['joint_id'], []).append(j)
+    groups, unsized, glue, packages = {}, [], False, set()
     for jid in joint_ids:
-        j = by.get(jid)
-        if j is None or j['source'] == 'no_rule': unsized.append(jid); continue
-        if j['kind'] == 'glue': glue = True; continue
-        if j['kind'] in KIND_NAMES:
-            if None in (j['diameter_mm'], j['length_mm'], j['count']): unsized.append(jid); continue
-            key = (j['kind'], j['diameter_mm'], j['length_mm'])
-            groups[key] = groups.get(key, 0) + j['count']
-    rows = [{'kind': k, 'diameter_mm': d, 'length_mm': l, 'count': c} for (k, d, l), c in sorted(groups.items())]
-    return rows, sorted(unsized), glue
+        rows = by.get(jid)
+        if not rows: unsized.append(jid); continue
+        for j in rows:
+            # No rule, nothing chosen yet, or a chosen item the catalog no longer resolves.
+            if j['source'] in ('no_rule', 'none') or (j['source'] == 'chosen' and j['kind'] is None): unsized.append(jid); continue
+            if j['kind'] == 'glue': glue = True; continue
+            if j.get('counting') == 'per_construction': packages.add((j['kind'], j['diameter_mm'], j['length_mm'])); continue
+            if j['kind'] and counted(j):
+                if j['count'] is None or (j['kind'] in KIND_NAMES and None in (j['diameter_mm'], j['length_mm'])): unsized.append(jid); continue
+                key = (j['kind'], j['diameter_mm'], j['length_mm'])
+                groups[key] = groups.get(key, 0) + j['count']
+    for key in packages: groups.setdefault(key, 1)
+    order = lambda item: (item[0][0], item[0][1] if item[0][1] is not None else -1, item[0][2] if item[0][2] is not None else -1)
+    rows = [{'kind': k, 'diameter_mm': d, 'length_mm': l, 'count': c} for (k, d, l), c in sorted(groups.items(), key=order)]
+    return rows, sorted(set(unsized)), glue
 
 
 def _components(joint_ids, joints):
@@ -324,7 +338,7 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
             _text(page, 146, y + 34, f'{count}×', 26, '700'); _text(page, 146, y + 58, f'{label(part_ids)} {part_name(defs_of[part_ids[0]])}', 13, fill='#333333'); y += 84
         for h in hardware:
             _glyph(page, h['kind'], 60, y); _head(page, h['kind'], 126, y + 22); _text(page, 146, y + 34, f'{h["count"]}×', 26, '700')
-            _text(page, 146, y + 58, f'{KIND_NAMES[h["kind"]]} {_number(h["diameter_mm"])} × {_number(h["length_mm"])}', 13, fill='#333333'); y += 84
+            _text(page, 146, y + 58, f'{kind_name(h["kind"])}{size_text(h["diameter_mm"], h["length_mm"])}', 13, fill='#333333'); y += 84
         if glue: _glyph(page, 'glue', 60, y); _text(page, 146, y + 34, 'Glue', 22, '700'); _text(page, 146, y + 58, 'on the joining faces', 13, fill='#333333'); y += 84
         if unsized: _text(page, 60, y + 34, '?', 30, '700'); _text(page, 146, y + 34, 'No rule yet', 16, '700'); _text(page, 146, y + 58, f'{len(unsized)} joint(s): ask Bob', 13, fill='#333333')
 
@@ -344,7 +358,7 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
     if len(kinds) > 8: _text(page, 40, 650, f'{len(kinds) - 8} more kinds of part: see Parts and sizes.', 15, fill='#333333')
     all_rows, all_unsized, all_glue = fastener_rows([j['id'] for j in joints], fasteners)
     if len(kinds) <= 4:
-        tiles = [(r['kind'], f'{r["count"]}×', f'{KIND_NAMES[r["kind"]]} {_number(r["diameter_mm"])} × {_number(r["length_mm"])}') for r in all_rows]
+        tiles = [(r['kind'], f'{r["count"]}×', f'{kind_name(r["kind"])}{size_text(r["diameter_mm"], r["length_mm"])}') for r in all_rows]
         if all_glue: tiles.append(('glue', 'Glue', 'on glued joints'))
         for n, (kind, count, words) in enumerate(tiles[:4]):
             x = 40 + n * 235
@@ -352,7 +366,7 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
             _glyph(page, kind, x + 8, 416)
             if kind in KIND_NAMES: _head(page, kind, x + 72, 438)
             _text(page, x + 92, 450, count, 28, '700'); _text(page, x + 92, 478, words, 13, '400', 'start', '#333333')
-    hw = ', '.join(f'{r["count"]}× {KIND_NAMES[r["kind"]].lower()} {_number(r["diameter_mm"])} × {_number(r["length_mm"])}' for r in all_rows)
+    hw = ', '.join(f'{r["count"]}× {kind_name(r["kind"]).lower()}{size_text(r["diameter_mm"], r["length_mm"])}' for r in all_rows)
     _text(page, 40, 700, 'Fasteners: ' + hardware_summary(hw, all_glue, all_unsized, fasteners is not None), 15, '600')
     _text(page, 40, 724, 'Fastener counts are rule-of-thumb proposals, not a strength check.', 12, fill='#333333')
     save(page, 'guide-0', {'kind': 'parts'})
@@ -380,10 +394,11 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
             # Choose the overview corner that shows the most screw heads, so fasteners are drawn on faces you can see.
             heads = []
             if fasteners is not None:
-                by = {j['joint_id']: j for j in fasteners['joints']}
-                for jid in comp:
-                    j = by.get(jid)
-                    if not j or j['kind'] not in KIND_NAMES or not j['count'] or j['through_instance_id'] not in parts: continue
+                by = {}
+                for row in fasteners['joints']: by.setdefault(row['joint_id'], []).append(row)
+                # Heads along the contact; hardware counted per joint has no placed positions.
+                for jid, j in [(jid, row) for jid in comp for row in by.get(jid, [])]:
+                    if not j['kind'] or not counted(j) or j.get('counting') == 'per_joint' or not j['count'] or j['through_instance_id'] not in parts: continue
                     t = j['through_instance_id']; o = [i for i in joint_ends[jid] if i != t][0]
                     touch = _contact(boxes[t], boxes[o])
                     if not touch: continue

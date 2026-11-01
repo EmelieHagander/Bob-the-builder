@@ -20,7 +20,8 @@ import type { OpenAIServiceOptions } from '../supabase/functions/_shared/openai-
 // with no values, and each worker gets project knowledge read from the database.
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
 const call = (id: string, name: string, args: unknown) => ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } })
-const STRUCTURE = ['save_construction_draft', 'check_construction_draft', 'change_construction_parameters', 'edit_construction_parts', 'change_construction_roles', 'continue_construction_change', 'derive_construction_lists', 'transition_legacy_drawing']
+// 2026-11-01 (bob-konrad-lean-v1): Konrad also adds joint hardware the catalog lacks.
+const STRUCTURE = ['save_construction_draft', 'check_construction_draft', 'change_construction_parameters', 'edit_construction_parts', 'change_construction_roles', 'continue_construction_change', 'derive_construction_lists', 'transition_legacy_drawing', 'add_catalog_fastener']
 const DRAWING = ['design_project_cad', 'save_cad_design', 'plan_cad_pieces', 'compose_cad_shell', 'link_cad_shell_steps', 'link_project_drawing', 'link_drawing_gap', 'ensure_drawing_gap_task']
 const names = (o: OpenAIServiceOptions) => (o.tools ?? []).map(t => t.function.name)
 const texts = (o: OpenAIServiceOptions) => (o.messages ?? []).map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content))
