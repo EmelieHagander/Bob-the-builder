@@ -138,7 +138,8 @@ begin
  perform pg_advisory_xact_lock(hashtextextended('ai_catalog:bob',0));
  for setting in select value from jsonb_array_elements(spec->'settings') loop
   insert into shared.ai_settings(app,coworker_id,function_name,module_id,model,model_type,max_output_tokens,temperature,reasoning_effort,prompt_template,web_search,is_enabled,metadata)
-   select 'bob','bob',setting->>'function_name','global',setting->>'model',setting->>'model_type',(setting->>'max_output_tokens')::integer,null,setting->>'reasoning_effort',null,false,is_enabled,setting->'metadata'
+   select 'bob','bob',setting->>'function_name','global',setting->>'model',(setting->>'model_type')::shared.ai_model_type,(setting->>'max_output_tokens')::integer,null,
+    (setting->>'reasoning_effort')::shared.ai_reasoning_effort,null,false,is_enabled,setting->'metadata'
    from shared.ai_settings where app='bob' and coworker_id='bob' and function_name=setting->>'copy_from' and module_id='global'
    on conflict(app,coworker_id,function_name,module_id) do nothing;
   if not exists(select 1 from shared.ai_settings where app='bob' and coworker_id='bob' and function_name=setting->>'function_name' and module_id='global') then raise exception 'publication_settings_missing: %',setting->>'function_name'; end if;

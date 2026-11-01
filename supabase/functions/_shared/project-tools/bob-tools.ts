@@ -157,7 +157,9 @@ export function createBobToolSession(opts: {
       gate: (): ToolGate => spec.function.name === 'read_building_scope' ? opts.buildingScope!.remaining > 0 ? 'available' : 'budget_exhausted' : writeGate(),
       execute: (v: unknown) => opts.buildingScope!.execute(spec.function.name, v),
     })),
-    ...WRITE_TOOLS.map(spec => ({ spec, version: spec.function.name === 'save_project_solution' ? 2 : 1,
+    // Konrad's add tool (2026-11-01) exists only for manifests that publish it.
+    ...WRITE_TOOLS.filter(spec => spec.function.name !== 'add_catalog_fastener' || !opts.aiCatalog
+      || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.add_catalog_fastener')).map(spec => ({ spec, version: spec.function.name === 'save_project_solution' ? 2 : 1,
       ...(spec.function.name === 'propose_project_plan' ? { waitingFor: opts.aiCatalog?.text('tools.waiting.plan-direct') ?? 'use save_compiled_project_plan for a plan compiled or edited in this turn' } : {}),
       gate: (): ToolGate => !opts.writer ? 'not_allowed'
         : boundPlanLinks && SUPERSEDED_PLAN_LINK_TOOLS.includes(spec.function.name) ? 'not_allowed'
