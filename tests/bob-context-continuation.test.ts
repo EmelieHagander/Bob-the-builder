@@ -491,3 +491,32 @@ test('a specialist request uses its own wider envelope while Bob keeps the main 
   await assert.rejects(adapter.call({ ...reviewer, messages: [{ role: 'user', content: Array.from({ length: 30 }, () => preview) }] }), /context_input_too_large/)
   assert.equal(sent, 1)
 })
+
+// Live 2026-11-01 (job da79a46e): Konrad's chain refreshed at Bob's 64k limit on a
+// 70-part construction, about 20 reads, 7 summaries and no save.
+test('a worker refreshes at the pinned specialist limit while Bob keeps his own', async () => {
+  const words = (n: number) => Array.from({ length: n }, (_, i) => 'ord' + (i % 97)).join(' ')
+  const run = async (role: string, specialistContinuationTokens?: number) => {
+    const policy = { definition: () => ({ metadata: { continuation_input_tokens: 10000, context_input_ceiling_tokens: 96000,
+      continuation_summary_tokens: 1600, retained_tool_exchanges: 2, continuation_retention_version: 2 } }) }
+    let rollovers = 0, main = 0, provider = 0
+    const adapter = createBobContextContinuation({ version: 1, rolloverVersion: 1, ...(specialistContinuationTokens ? { specialistContinuationTokens } : {}),
+      aiCatalog: { ...catalog, ...policy } as unknown as AiCatalogSession,
+      onRollover: () => { rollovers++ }, callModel: async options => {
+        if (options.catalogRoleKey === 'context-compactor') return handoff(options)
+        main++
+        provider = options.previousResponseId ? provider + 50 + countContextTokens(JSON.stringify(options.messages))
+          : countContextTokens(JSON.stringify({ system: options.systemMessage, tools: options.tools, messages: options.messages }))
+        return { ...response('r' + main, [call('c' + main, 'read_construction_draft')]), usage: { input_tokens: provider, output_tokens: 600, total_tokens: provider + 600 } }
+      } })
+    const start = { ...seed, functionName: role, aiFunction: role, catalogRoleKey: role, tools: [tool('read_construction_draft')],
+      messages: [{ role: 'user' as const, content: 'Build the bunk bed. ' + words(500) }] }
+    let last = await adapter.call(start)
+    for (let step = 1; step < 40; step++) last = await adapter.call({ ...start, previousResponseId: last.responseId,
+      messages: [output('c' + main, { status: 'ok', page: words(800) })] })
+    return rollovers
+  }
+  assert((await run('structure-worker')) >= 3, 'without the pin a worker refreshes at Bob\'s limit')
+  assert.equal(await run('structure-worker', 150000), 0)
+  assert((await run('ask-bob', 150000)) >= 3, 'Bob keeps his own limit')
+})

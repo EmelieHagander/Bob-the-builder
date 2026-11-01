@@ -248,6 +248,12 @@ for(const migration of migrations){
   const row=seed.find(row=>row.key==='agent-contract.ask-bob');const{seed_version,source_revision,...rest}=row.metadata??{}
   row.metadata={...rest,publication:'bob-turn-usd-stop-v2',...JSON.parse(usdStopChange[1])};versions.set(row.key,versions.get(row.key)!+1)
  }
+ const contractFlags=source.match(/\$contract_flags_change\$([\s\S]+?)\$contract_flags_change\$/)
+ if(contractFlags){
+  const publication=source.match(/'publication','([a-z0-9-]+)'/)?.[1]??'contract-flags'
+  const row=seed.find(row=>row.key==='agent-contract.ask-bob');const{seed_version,source_revision,...rest}=row.metadata??{}
+  row.metadata={...rest,publication,...JSON.parse(contractFlags[1])};versions.set(row.key,versions.get(row.key)!+1)
+ }
  const completeContext=source.match(/\$bob_complete_context_patches\$([\s\S]+?)\$bob_complete_context_patches\$/)
  if(completeContext){
   preCompleteContextRows=structuredClone(seed);preCompleteContextVersions=new Map(versions)

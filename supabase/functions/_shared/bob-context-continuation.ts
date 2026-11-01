@@ -212,6 +212,12 @@ export function createBobContextContinuation(opts: {
    * read repeated later leaves first and the latest result per record stays
    * whole; see selectBobResultWindow. Absent keeps the version 1 window. */
   resultWindowVersion?: 2
+  /** Pinned per job (2026-11-01). Workers and other specialists refresh at this
+   * many tokens instead of Bob's continuation limit. At 64k Konrad's chain was
+   * summarized almost every step on a 70-part construction, so he lost the
+   * pages he had read and read them again without saving. Capped below the
+   * specialist ceiling. Absent keeps Bob's limit for every role. */
+  specialistContinuationTokens?: number
   /** Per-tool literal size for a recent result, pinned per job. Tools not
    * named here keep BOB_RESULT_PAGE_TOKENS. */
   literalResultTokens?: Record<string, number>
@@ -402,7 +408,9 @@ export function createBobContextContinuation(opts: {
     const references = opts.mainResultReferences === 1 && requested.responseItemsMode === 'preserve'
       && requested.functionName === 'ask-bob' && (requested.catalogRoleKey ?? requested.functionName) === 'ask-bob'
     let options = requested
-    const roleCeiling = (requested.catalogRoleKey ?? requested.functionName) === 'ask-bob' ? ceiling : Math.max(ceiling, SPECIALIST_INPUT_CEILING_TOKENS)
+    const isBob = (requested.catalogRoleKey ?? requested.functionName) === 'ask-bob'
+    const roleCeiling = isBob ? ceiling : Math.max(ceiling, SPECIALIST_INPUT_CEILING_TOKENS)
+    const roleLimit = isBob || !opts.specialistContinuationTokens ? limit : Math.min(Math.max(limit, opts.specialistContinuationTokens), roleCeiling)
     for (;;) {
       const consumedResponseId = options.previousResponseId
       const native = options.responseItemsMode === 'preserve'
@@ -504,7 +512,7 @@ export function createBobContextContinuation(opts: {
       // and every step was summarized again (2026-10-20 read loop).
       const reported = chain.inputTokens + chain.outputTokens + (opts.rolloverVersion === 1 ? 0 : fixed) + input
       const estimate = native ? fullEstimate : Math.max(fullEstimate, reported)
-      if (options.previousResponseId && estimate >= limit && chain.groups.length > keep) {
+      if (options.previousResponseId && estimate >= roleLimit && chain.groups.length > keep) {
         const all = chain.groups.flat()
         const calls = all.flatMap(message => message.tool_calls ?? [])
         // Never cross an unfinished native call/output boundary. Callers may
@@ -536,7 +544,7 @@ export function createBobContextContinuation(opts: {
         // A refresh that would only fold a few small exchanges cannot bring
         // the request under the limit; it would just drop exact results Bob
         // has just read. Wait until the older part is worth summarizing.
-        const worthwhile = opts.rolloverVersion !== 1 || split > 0 && countInputTokens(chain.groups.slice(0, split)) >= Math.ceil(limit / 4)
+        const worthwhile = opts.rolloverVersion !== 1 || split > 0 && countInputTokens(chain.groups.slice(0, split)) >= Math.ceil(roleLimit / 4)
         if (complete && split > 0 && worthwhile) {
           chain.handoff = await summarize(options, chain, chain.groups.slice(0, split), beforeDispatch)
           if (native) {
