@@ -1,0 +1,93 @@
+{
+ "run": "https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41235159197",
+ "workflow": "live-form-acceptance.yml",
+ "scenario": "box",
+ "config": "baseline",
+ "head": "a85af9e314c8d661076a6a5a310430f2358ac7e0",
+ "functions": {
+  "bob-worker": 163,
+  "ask-bob": 195
+ },
+ "catalog": {
+  "bob.tools": "v35, report_readback_version 1 (20261031193809)"
+ },
+ "passed": true,
+ "turns": [
+  {
+   "step": "concept",
+   "turn": "dcc1c535-a516-4fb4-a5e8-87fade30bf3f",
+   "delivery": "saved",
+   "wall": "5.4 min",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 5,
+    "structure-worker": 6,
+    "completion-gate": 1
+   },
+   "usd": 0.419,
+   "rejected": 0,
+   "answer_text": "clean",
+   "bob_reads_after_report": 0
+  },
+  {
+   "step": "width_change",
+   "turn": "02d68a3b-2b32-42de-921f-167c193b4601",
+   "delivery": "asked (saved)",
+   "wall": "3.9 min",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 7,
+    "structure-worker": 8,
+    "completion-gate": 1
+   },
+   "usd": 0.33,
+   "rejected": 0,
+   "answer_text": "clean",
+   "bob_reads_after_report": 1,
+   "notes": "Two hand-overs to Konrad: the first only read; Bob then recorded the owner's width himself and asked again."
+  },
+  {
+   "step": "final_drawing",
+   "turn": "67c732cf-28ee-498d-9e36-6e283eaec7d2",
+   "delivery": "saved",
+   "wall": "4.3 min",
+   "calls": {
+    "tool-picker": 1,
+    "ask-bob": 6,
+    "structure-worker": 3,
+    "drawing-worker": 5,
+    "completion-gate": 1
+   },
+   "usd": 0.317,
+   "rejected": 0,
+   "answer_text": "clean",
+   "bob_reads_after_report": 2,
+   "notes": "Konrad changed a parameter again before Rita drew; after Rita's report Bob still read the delivery and the drawing record."
+  }
+ ],
+ "total": {
+  "calls": 46,
+  "bob_calls": 18,
+  "konrad_calls": 17,
+  "rita_calls": 5,
+  "usd": 1.066,
+  "cached_share": 0.78,
+  "rejected": 0,
+  "answer_text": "clean in 3 of 3 turns"
+ },
+ "by_role_usd": {
+  "structure-worker": 0.592,
+  "ask-bob": 0.341,
+  "drawing-worker": 0.11,
+  "tool-picker": 0.02,
+  "completion-gate": 0.004
+ },
+ "compared_with_run13": {
+  "usd": "1.07 vs 0.86",
+  "calls": "46 vs 37",
+  "konrad": "17 calls USD 0.59 vs 9 calls USD 0.42",
+  "bob": "18 calls USD 0.34 vs 17 calls USD 0.31",
+  "cache": "78% vs 75%",
+  "rejected": "0 vs 1"
+ }
+}

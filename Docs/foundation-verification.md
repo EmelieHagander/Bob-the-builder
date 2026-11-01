@@ -1,7 +1,54 @@
 # Foundation verification and rollout
 
+<a id="solution-first-2026-11-01"></a>
+## Code check after Konrad's job; solution first — built 2026-11-01, not installed
+
+Run 14 showed two wasted Konrad jobs: Bob handed over the 500 mm change before
+recording it in the selected solution (Konrad, going by the database, handed back),
+and Konrad changed the width without the server check, so Bob sent him back before
+Rita drew (a no-op revision). Owner decisions: **A** code runs the server
+construction check on every revision Konrad saved and left unchecked
+(`construction_auto_check_version` 1); **B** Bob's hand-over manual: the owner's
+latest decisions are in the selected solution before the job goes to Konrad, and
+the return contract names the code check (Saoirse's texts; the owner approved
+the exact lines on 2026-11-01). Catalog: `20261101010000_bob_solution_first_catalog.sql`. Tests:
+`bob-build-workers` (11), the fixture replay.
+
+<a id="report-readback-install-2026-10-31"></a>
+## Report readback installed; paid box run 14 passed — 2026-10-31
+
+With the owner's OK, [PR #388](https://github.com/EmelieHagander/Bob-the-builder/pull/388)
+merged as `a85af9e314c8d661076a6a5a310430f2358ac7e0`. Zero active Bob jobs before
+every step. `bob-worker` v163 and `ask-bob` v195 (129 of 130 and 131 of 132 files
+equal the repository, the empty `cad-intake.ts`; 401 without login). Catalog
+recorded as `20261031193809_bob_report_readback_catalog`: `bob.tools` v35, the
+principle and both hand-over manuals; all 362 active definitions equal the
+fixture.
+
+**[Run 41235159197](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41235159197)
+passed** (saved, asked after saving, saved). Evidence:
+`Docs/archive/form-box-paid-2026-10-31-run14.json`.
+
+| | Run 13 | Run 14 |
+|---|---|---|
+| Calls | 37 | 46 |
+| Bob | 17 calls, USD 0.31 | 18 calls, USD 0.34 |
+| Konrad | 9 calls, USD 0.42 | 17 calls, USD 0.59 |
+| Total | USD 0.86 | USD 1.07 |
+| Read from cache | 75% | 78% |
+| Rejected calls | 1 | 0 |
+| Bob's reads after a report | one step per report | 0, 1 and 2 in the three turns |
+
+- The readback removed Bob's re-check after Konrad's first report; after the
+  second Konrad report and after Rita's he still read once or twice.
+- The extra cost is Konrad's: in turn 2 Bob handed over twice (the first job only
+  read; Bob recorded the owner's width himself, then asked again), and in turn 3
+  Konrad changed a parameter again before Rita drew. Single runs vary; this run
+  does not show whether the readback lowers cost.
+- No rejected call, so the new rejection codes were not exercised.
+
 <a id="report-readback-2026-10-31"></a>
-## Report readback and rejection codes — built 2026-10-31, not installed
+## Report readback and rejection codes — built 2026-10-31 (installed, see above)
 
 Owner decision after run 13 ("do both now"):
 

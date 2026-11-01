@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { catalogFixture, catalogCall, preBuildWorkersCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { catalogCoreTools } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { runProjectAnswer, seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
-import { catalogWorkers, catalogRetiredTools, catalogCheckReads, saveReceipt, readbackReads } from '../supabase/functions/_shared/bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, catalogCheckReads, saveReceipt, readbackReads, uncheckedConstructions } from '../supabase/functions/_shared/bob-workers.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createConstructionTools } from '../supabase/functions/_shared/construction-draft.ts'
@@ -126,7 +126,9 @@ test('Bob asks Konrad in plain words; Konrad has his own tools, the project in h
   assert.equal(report.status, 'ok'); assert.equal(report.worker, 'structure-worker')
   assert.deepEqual(report.calls.map((c: any) => c.tool), ['save_construction_draft'])
   // What he saved comes back as receipts copied by code, not restated by a model.
-  assert.deepEqual(report.receipts, [{ tool: 'save_construction_draft', dataset: 'artifacts', record_id: 'c1', revision: 3, operation: 'updated' }])
+  // His save, then the server check code ran on the revision he left unchecked (construction_auto_check_version 1).
+  assert.deepEqual(report.receipts, [{ tool: 'save_construction_draft', dataset: 'artifacts', record_id: 'c1', revision: 3, operation: 'updated' },
+    { tool: 'check_construction_draft', artifact_id: 'c1', revision: 3, status: 'checked', by: 'code' }])
   // The saved construction comes back with the report, read by code (report_readback_version 1).
   assert.deepEqual(report.readback, [{ construction: { status: 'ok', drafts: [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }] } }])
   // An image he opened goes with his own next call and is confirmed there; Bob's next call does not carry it.
@@ -161,6 +163,23 @@ test('receipts are copied by code from nested and flat results; the readback rea
   // Every saved construction is read back, up to the limit; the rest say so.
   const many = readbackReads(Array.from({ length: 10 }, (_, i) => ({ tool: 'save_construction_draft', record_id: 'c' + i, revision: 1 })))
   assert.equal(many.filter(r => 'tool' in r).length, 8); assert.deepEqual(many.slice(8).map(r => 'not_read' in r && r.not_read), ['limit', 'limit'])
+})
+
+test('a construction Konrad saved without checking is checked by code after his job; without the switch it is not', async () => {
+  const on = catalogFixture()
+  assert.equal(on.definition('bob.tools', 'tool_contract').definition.construction_auto_check_version, 1)
+  const saveOnly = [() => ({ success: true, model: 'fixture', usage, responseId: 'w1', toolCalls: [call('w1c', 'save_construction_draft', {})] })]
+  const { bob, constructionCalls } = await turn(on, [ask('ask_structure_worker', { request: 'Konrad, gör lådan 500 mm bred.' })], { 'structure-worker': saveOnly })
+  const check = constructionCalls.find(c => c.name === 'check_construction_draft')!
+  assert.deepEqual(check.args, { artifact_id: 'c1', revision: 3, component_ids: [], requirement_checks: [], outputs: [] })
+  const report = toolOutput(bob[1])
+  assert.deepEqual(report.receipts.at(-1), { tool: 'check_construction_draft', artifact_id: 'c1', revision: 3, status: 'checked', by: 'code' })
+  // Already checked by Konrad, or no switch: no second check.
+  assert.deepEqual(uncheckedConstructions([{ tool: 'save_construction_draft', record_id: 'c1', revision: 3 }, { tool: 'check_construction_draft', artifact_id: 'c1', revision: 3 }]), [])
+  assert.deepEqual(uncheckedConstructions([{ tool: 'save_construction_draft', record_id: 'c1', revision: 2 }, { tool: 'edit_construction_parts', record_id: 'c1', revision: 3 }, { tool: 'check_construction_draft', artifact_id: 'c1', revision: 2 }]), [{ artifact_id: 'c1', revision: 3 }])
+  const withoutSwitch = catalogFixture(m => { const box = m.definitions.find(d => d.prompt_key === 'bob.tools')!; const { construction_auto_check_version: _a, ...rest } = box.definition; box.definition = rest })
+  const off = await turn(withoutSwitch, [ask('ask_structure_worker', { request: 'Konrad, gör lådan 500 mm bred.' })], { 'structure-worker': saveOnly })
+  assert(!off.constructionCalls.some(c => c.name === 'check_construction_draft'))
 })
 
 test('a rejected worker call records why, as a code and field paths only', async () => {

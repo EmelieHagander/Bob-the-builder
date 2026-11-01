@@ -161,14 +161,19 @@ himself. Manifests with `bob.tools` `build_workers_version` 1
   the check) is retired for new jobs (`retired_tools`). Floor plans, room layouts
   and stair studies stay with Bob.
 - Bob keeps the reads (`read_construction_draft`, drawing requests and their
-  controls). With `bob.tools` `report_readback_version` 1 (built 2026-10-31, not
-  installed), the hand-over result is `{status, worker, report, calls, receipts,
+  controls). With `bob.tools` `report_readback_version` 1 (installed 2026-10-31,
+  [run 14](foundation-verification.md#report-readback-install-2026-10-31)), the hand-over result is `{status, worker, report, calls, receipts,
   readback}`: `receipts` are the ids, dataset, revision and operation of each save
   or check, copied by code; `readback` is, after Konrad's or Rita's job, each saved
   or checked construction's overview (with its check results) and each saved
   drawing's record (source state, linked Steps) at that revision, read by code
   through the worker's session, up to eight; a save without a revision or past the
-  limit is listed as not read. Bob goes by that record; he reads Mattias's saves
+  limit is listed as not read. With `construction_auto_check_version` 1 (built
+  2026-11-01), a construction revision Konrad saved and left unchecked gets the
+  server check by code after his job (whole model, no requirement probes); it
+  shows in the receipts (`by: code`) and the readback. Bob's hand-over manual
+  asks for the owner's latest decisions in the selected solution before the job
+  goes to Konrad. Bob goes by that record; he reads Mattias's saves
   himself (no readback for materials yet). Every rejected tool call records its
   code, field paths and, for an unmapped message, a content-free fingerprint in
   the run's event log.

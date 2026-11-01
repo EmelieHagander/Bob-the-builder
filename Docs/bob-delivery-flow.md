@@ -556,6 +556,12 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
+**Installerat 2026-10-31 — kodläsning av det sparade i kollegornas rapport, koder för avvisningar; lådprov 14 godkänt (`bob-worker` v163, `ask-bob` v195, [bevis](foundation-verification.md#report-readback-install-2026-10-31)):**
+Bob slapp läsa om efter Konrads första rapport men läste fortfarande efter den
+andra och efter Ritas. Provet kostade USD 1,07 (prov 13: 0,86); skillnaden är
+Konrads extra jobb i tur 2 och 3. Enstaka prov varierar; flera prov behövs för att
+se om kodläsningen sänker kostnaden.
+
 **Installerat 2026-10-31 — billigare byggteam; lådprov 13 godkänt (`bob-worker` v162, `ask-bob` v194, [bevis](foundation-verification.md#build-team-cost-2026-10-31)):**
 egna cachenycklar för kollegorna, Bobs kontrolläsningar från första steget och
 skälet till varje avvisat anrop i körloggen. Lådprovet kostade USD 0,86 (prov 12:

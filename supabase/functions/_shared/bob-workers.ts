@@ -127,6 +127,8 @@ export async function runWorker(opts: {
   images?: { carrier: () => Messages; confirmDelivery: () => void }
   /** Reads what the worker saved, by code, after the job (see readbackReads). */
   readback?: (receipts: Record<string, unknown>[]) => Promise<unknown[]>
+  /** Checks, by code, each saved construction revision the job left unchecked; returns the check results. */
+  autoCheck?: (targets: { artifact_id: string; revision: number }[]) => Promise<Record<string, unknown>[]>
   onTool?: (value: { name: string; status: string; ms: number; rejection?: ToolRejection }) => void
 }): Promise<Record<string, unknown>> {
   const roleKey = opts.worker.role.replace(/^role\./, '')
@@ -156,6 +158,9 @@ export async function runWorker(opts: {
   const receipts: Record<string, unknown>[] = []
   const finish = async (result: Record<string, unknown>) => {
     if (!opts.readKnowledge) return result
+    const targets = opts.autoCheck ? uncheckedConstructions(receipts) : []
+    if (targets.length) for (const checked of await opts.autoCheck!(targets))
+      receipts.push({ ...saveReceipt('check_construction_draft', checked), status: String(checked.status ?? 'returned'), by: 'code' })
     const readback = opts.readback && receipts.length ? await opts.readback(receipts) : undefined
     return { ...result, receipts, ...(readback?.length ? { readback } : {}) }
   }
@@ -246,6 +251,24 @@ export function readbackReads(receipts: Record<string, unknown>[]): ReadbackEntr
   const all = [...reads.values()]
   return all.map((entry, i) => i < READBACK_LIMIT || !('tool' in entry) ? entry : { label: entry.label, not_read: 'limit' as const })
 }
+/** Box run 14: Konrad changed a construction without running the server check,
+ * so Bob sent him back before Rita drew. Every construction revision a job saved
+ * and left unchecked is checked by code after the job (a server check, no model). */
+export function uncheckedConstructions(receipts: Record<string, unknown>[]): { artifact_id: string; revision: number }[] {
+  const latest = new Map<string, number>(), checked = new Set<string>()
+  for (const r of receipts) {
+    const id = typeof r.artifact_id === 'string' ? r.artifact_id : typeof r.record_id === 'string' ? r.record_id : null
+    const revision = typeof r.revision === 'number' && Number.isSafeInteger(r.revision) && r.revision > 0 ? r.revision : null
+    if (!id || revision === null || !CONSTRUCTION_READBACK.has(String(r.tool))) continue
+    if (r.tool === 'check_construction_draft') checked.add(id + '@' + revision)
+    else latest.set(id, Math.max(latest.get(id) ?? 0, revision))
+  }
+  return [...latest].filter(([id, revision]) => !checked.has(id + '@' + revision)).map(([artifact_id, revision]) => ({ artifact_id, revision }))
+}
+export function catalogConstructionAutoCheck(catalog: AiCatalogSession): boolean {
+  return catalog.definition('bob.tools', 'tool_contract').definition.construction_auto_check_version === 1
+}
+
 /** Box run 13: catalog switch for the readback (texts tell Bob it is there). */
 export function catalogReportReadback(catalog: AiCatalogSession): boolean {
   return catalog.definition('bob.tools', 'tool_contract').definition.report_readback_version === 1
