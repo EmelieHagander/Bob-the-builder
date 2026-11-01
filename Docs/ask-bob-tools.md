@@ -176,7 +176,9 @@ himself. Manifests with `bob.tools` `build_workers_version` 1
   goes to Konrad. Bob goes by that record; he reads Mattias's saves
   himself (no readback for materials yet). Every rejected tool call records its
   code, field paths and, for an unmapped message, a content-free fingerprint in
-  the run's event log.
+  the run's event log. A job the spending stop ends reports `paused_at_limit`
+  with the same receipts and readback when the job is pinned to the
+  [final answer](ask-bob-conversations.md#final-answer-past-stop) (prepared).
 
 Pinned manifests keep their behaviour: before this publication Bob holds the
 construction and drawing tools, Mattias gets Bob's brief, and the AI reviewer

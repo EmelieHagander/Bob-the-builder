@@ -13,7 +13,13 @@ export type DrawingBudgetAuthority = {
  requestId: string;
  options: Pick<OpenAIServiceOptions,'app'|'coworkerId'|'module'|'functionName'|'aiFunction'|'aiDefinition'>;
 }
-export interface BobModelBudgetState { version:1; spent:number; calls:number; unpriced:boolean }
+export interface BobModelBudgetState { version:1|2; spent:number; calls:number; unpriced:boolean; finalAnswerUsed?:boolean }
+/** Owner decision 2026-11-01 ("Bob's final answer always gets through"): jobs
+ * pinned from agent-contract.ask-bob final_answer_version 1 give Bob one last
+ * call past the spending stop. Jobs on older manifests end at the stop. */
+export function bobFinalAnswerVersion(contract:Record<string,unknown>):{finalAnswerVersion?:1}{
+ return contract.final_answer_version===1?{finalAnswerVersion:1}:{}
+}
 /** Constructed inside the trusted requestModel scope, never from model/browser
  * input. These calls also pass through the durable DB reservation before work.
  * A bound request does not make Bob, planners or other roles CAD operations. */
@@ -35,17 +41,21 @@ const DRAWING_ROLE_KEYS:Record<string,readonly string[]>={'cad-reviewer':['role.
  * Ordinary roles outside the reserve stop at the limit minus the reserve;
  * reserved ordinary roles may use the whole limit. A server-bound CAD operation
  * is accounted exactly once by its persisted owner-task period instead: this
- * transient guard cannot override its allocation or starve Bob's final save. */
-export function createBobModelBudget(limitUsd = 1, maxCalls = 24, reserve: { usd: number; calls: number; roles: readonly string[] } = BOB_REVIEW_RESERVE, policy: { unlimitedWork?: boolean; usdStop?: number } = {}) {
- let spent = 0, calls = 0, unpriced = false
+ * transient guard cannot override its allocation or starve Bob's final save.
+ * With policy.finalAnswer, one 'ask-bob' call whose tools cannot be called
+ * (textOnly) still runs past the spending stop; the checkpoint keeps the grant. */
+export function createBobModelBudget(limitUsd = 1, maxCalls = 24, reserve: { usd: number; calls: number; roles: readonly string[] } = BOB_REVIEW_RESERVE, policy: { unlimitedWork?: boolean; usdStop?: number; finalAnswer?: boolean } = {}) {
+ let spent = 0, calls = 0, unpriced = false, finalAnswerUsed = false
  return {
-  exportState():BobModelBudgetState{return {version:1,spent,calls,unpriced}},
+  // Jobs without the final answer keep writing version 1.
+  exportState():BobModelBudgetState{return policy.finalAnswer?{version:2,spent,calls,unpriced,finalAnswerUsed}:{version:1,spent,calls,unpriced}},
   restoreState(state:BobModelBudgetState){
-   if(state?.version!==1||!Number.isFinite(state.spent)||state.spent<0||!Number.isSafeInteger(state.calls)||state.calls<0||typeof state.unpriced!=='boolean')throw new Error('model_budget_checkpoint_invalid')
-   spent=state.spent;calls=state.calls;unpriced=state.unpriced
+   if((state?.version!==1&&state?.version!==2)||!Number.isFinite(state.spent)||state.spent<0||!Number.isSafeInteger(state.calls)||state.calls<0||typeof state.unpriced!=='boolean'
+    ||state.version===2&&typeof state.finalAnswerUsed!=='boolean')throw new Error('model_budget_checkpoint_invalid')
+   spent=state.spent;calls=state.calls;unpriced=state.unpriced;finalAnswerUsed=state.version===2&&state.finalAnswerUsed===true
   },
   get usage() { return { spent, calls, unpriced, limitUsd } },
-  async run<T>(work: () => Promise<OpenAIServiceResponse<T>>, role?: string, authority?: DrawingBudgetAuthority): Promise<OpenAIServiceResponse<T>> {
+  async run<T>(work: () => Promise<OpenAIServiceResponse<T>>, role?: string, authority?: DrawingBudgetAuthority, textOnly = false): Promise<OpenAIServiceResponse<T>> {
    if(isDrawingModelCall(authority,role))return work()
    const reserved = !!role && reserve.roles.includes(role)
    // An owner-set spending stop for unlimited turns: no call allotment, and
@@ -53,7 +63,9 @@ export function createBobModelBudget(limitUsd = 1, maxCalls = 24, reserve: { usd
    const stopUsd = policy.unlimitedWork && policy.usdStop !== undefined ? policy.usdStop : undefined
    if(stopUsd!==undefined){
     const usdLimit = reserved ? stopUsd : Math.max(0, stopUsd - reserve.usd)
-    if(spent>=usdLimit)return budgetFailure<T>({scope:'turn',reasons:spent<stopUsd?['usd_limit','review_reserve']:['usd_limit'],calls,spent_usd:spent,usd_limit:usdLimit,unpriced})
+    // Bob's one final answer: an 'ask-bob' call that cannot call tools.
+    if(spent>=usdLimit&&policy.finalAnswer&&role==='ask-bob'&&textOnly&&!finalAnswerUsed)finalAnswerUsed=true
+    else if(spent>=usdLimit)return budgetFailure<T>({scope:'turn',reasons:spent<stopUsd?['usd_limit','review_reserve']:['usd_limit'],calls,spent_usd:spent,usd_limit:usdLimit,unpriced})
    }
    const usdLimit = reserved ? limitUsd : Math.max(0, limitUsd - reserve.usd)
    const callLimit = reserved ? maxCalls : Math.max(0, maxCalls - reserve.calls)

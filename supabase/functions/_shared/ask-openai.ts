@@ -21,7 +21,7 @@ import { createCurrentViewGuard } from './current-view-guard.ts'
 import { parseBobScreen, type BobScreenPointer, type CurrentView } from '../../../src/domain/bobScreen.ts'
 import {createDrawingBudget} from './drawing-budget.ts'
 import {createDrawingRequestStore} from './drawing-request-store.ts'
-import { createBobModelBudget, isDrawingModelCall, type DrawingBudgetAuthority } from './bob-model-budget.ts'
+import { createBobModelBudget, bobFinalAnswerVersion, isDrawingModelCall, type DrawingBudgetAuthority } from './bob-model-budget.ts'
 import { createExecutionMetrics } from './execution-metrics.ts'
 import { AIBackgroundPending } from './ai-background.ts'
 import { pinBobModelDeadline } from './bob-model-deadline.ts'
@@ -209,6 +209,7 @@ export async function answerWithOpenAi(opts: {
    const drawingAuthority:DrawingBudgetAuthority|undefined=drawingRequestId&&drawingBudget
     ?{requestId:drawingRequestId,options}:undefined
    const boundDrawing=isDrawingModelCall(drawingAuthority,options.aiFunction)
+   // tool_choice 'none' (no callable tools) marks Bob's final answer past the spending stop.
    return modelBudget.run(async () => {
    const timeout = options.timeoutMs ?? 120000
    const asyncModels = !!(opts.background?.asyncModels && opts.background.jobId)
@@ -261,7 +262,7 @@ export async function answerWithOpenAi(opts: {
     if(error instanceof Error&&error.message==='provider_retry_exhausted')return {success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'provider_retry_exhausted'}
     throw error
    }
-  },options.aiFunction,boundDrawing?drawingAuthority:undefined).then(result=>{
+  },options.aiFunction,boundDrawing?drawingAuthority:undefined,options.tool_choice==='none').then(result=>{
    if(result.priorAttemptUncertain)priorDrawingAttemptUncertain=true
    const stop=readBudgetStop(result)
    if(stop)console.warn('[Bob budget stop]',JSON.stringify({role:options.aiFunction,job_id:opts.background?.jobId??null,...stop}))
@@ -341,7 +342,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -364,6 +365,8 @@ export async function answerWithOpenAi(opts: {
       ...(checkpoint && contract.result_reference_version === 1 ? { resultWindowVersion: contract.result_window_version === 2 ? 2 as const : 1 as const } : {}),
       // Owner-set spending stop, pinned when the job starts (2026-10-20).
       ...(typeof contract.turn_usd_stop === 'number' && Number.isFinite(contract.turn_usd_stop) && contract.turn_usd_stop > 0 ? { turnUsdStop: contract.turn_usd_stop } : {}),
+      // Bob's one final answer past that stop (2026-11-01). Jobs without this pin end at the stop.
+      ...bobFinalAnswerVersion(contract),
       memoryManagementVersion: contract.context_strategy_version === 1 ? 2 as const : 1 as const,
       ...(contract.context_strategy_version === 1 ? { contextStrategyVersion: 1 as const } : {}),
       // Owner decision 2026-10-30: the memory stair and the prompt ordered by how often its parts change.
@@ -371,7 +374,9 @@ export async function answerWithOpenAi(opts: {
         ? { memoryStairVersion: 1 as const, promptTiersVersion: 1 as const } : {}),
     }))
   if (execution.turnUsdStop !== undefined && !(typeof execution.turnUsdStop === 'number' && Number.isFinite(execution.turnUsdStop) && execution.turnUsdStop > 0)) throw new Error('turn_usd_stop_invalid')
-  modelBudget = createBobModelBudget(undefined, undefined, undefined, { unlimitedWork, ...(execution.turnUsdStop !== undefined ? { usdStop: execution.turnUsdStop } : {}) })
+  if (execution.finalAnswerVersion !== undefined && execution.finalAnswerVersion !== 1) throw new Error('final_answer_version_invalid')
+  const finalAnswer = execution.finalAnswerVersion === 1 && unlimitedWork && execution.turnUsdStop !== undefined
+  modelBudget = createBobModelBudget(undefined, undefined, undefined, { unlimitedWork, ...(execution.turnUsdStop !== undefined ? { usdStop: execution.turnUsdStop } : {}), ...(finalAnswer ? { finalAnswer: true } : {}) })
   if (execution.lookupObservationVersion !== undefined && execution.lookupObservationVersion !== 1) throw new Error('lookup_observation_version_invalid')
   if (execution.rolloverVersion !== undefined && execution.rolloverVersion !== 1) throw new Error('rollover_version_invalid')
   if (execution.groundingReadOrderVersion !== undefined && execution.groundingReadOrderVersion !== 1) throw new Error('grounding_read_order_version_invalid')
@@ -1049,6 +1054,7 @@ export async function answerWithOpenAi(opts: {
     ...(execution.projectFactsVersion === 1 ? { pureFacts: true, ...(projectFacts ? { projectFacts } : {}) } : {}),
     ...(execution.completeRequestVersion === 1 ? { completeRequest: true } : {}),
     ...(execution.resultReferenceVersion === 1 ? { resultReferences: true } : {}),
+    ...(finalAnswer ? { finalAnswer: true } : {}),
     ...(contextStrategy ? { contextEpoch: () => mainContextEpoch,
       registerContextSurface: (refresh: () => Promise<ContextSurface>) => { refreshMainContextSurface = refresh },
     } : {}),
