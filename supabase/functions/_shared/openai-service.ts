@@ -214,7 +214,8 @@ export interface OpenAIServiceOptions {
       strict?: boolean;
     };
   }>;
-  tool_choice?: 'auto' | 'required' | { type: 'function'; function: { name: string } };
+  /** 'none': the tools stay in the request (and its cached start) but cannot be called. */
+  tool_choice?: 'auto' | 'required' | 'none' | { type: 'function'; function: { name: string } };
   /** Trusted server opt-in: retain a strict response schema while offering
    * tools and validate a final text answer. Legacy tool callers keep text. */
   structuredToolOutput?: boolean;

@@ -130,6 +130,9 @@ export async function runWorker(opts: {
   /** Checks, by code, each saved construction revision the job left unchecked; returns the check results. */
   autoCheck?: (targets: { artifact_id: string; revision: number }[]) => Promise<Record<string, unknown>[]>
   onTool?: (value: { name: string; status: string; ms: number; rejection?: ToolRejection }) => void
+  /** Owner decision 2026-11-01: a job stopped by the spending stop reports back
+   * paused_at_limit with what it saved, instead of failing Bob's turn. */
+  stopAsResult?: boolean
 }): Promise<Record<string, unknown>> {
   const roleKey = opts.worker.role.replace(/^role\./, '')
   const allowed = new Set([...opts.worker.tools, ...opts.worker.reads])
@@ -175,6 +178,7 @@ export async function runWorker(opts: {
       ...(previous ? { previousResponseId: previous } : {}), maxOutputTokens: 8000,
       timeoutMs: Math.max(1000, Math.min(opts.modelTimeoutMs ?? 45_000, opts.deadline - Date.now())) })
     if (!response.success) {
+      if (response.error === 'turn_budget_exhausted' && opts.stopAsResult) return finish({ status: 'paused_at_limit', worker: roleKey, calls })
       if (response.error === 'turn_budget_exhausted') throw new Error('turn_budget_exhausted')
       return finish({ status: 'unavailable', worker: roleKey, calls })
     }
