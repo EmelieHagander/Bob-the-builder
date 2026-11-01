@@ -10,8 +10,8 @@ Rita drew (a no-op revision). Owner decisions: **A** code runs the server
 construction check on every revision Konrad saved and left unchecked
 (`construction_auto_check_version` 1); **B** Bob's hand-over manual: the owner's
 latest decisions are in the selected solution before the job goes to Konrad, and
-the return contract names the code check (Saoirse's texts, pending the owner's
-approval). Catalog: `20261101010000_bob_solution_first_catalog.sql`. Tests:
+the return contract names the code check (Saoirse's texts; the owner approved
+the exact lines on 2026-11-01). Catalog: `20261101010000_bob_solution_first_catalog.sql`. Tests:
 `bob-build-workers` (11), the fixture replay.
 
 <a id="report-readback-install-2026-10-31"></a>
