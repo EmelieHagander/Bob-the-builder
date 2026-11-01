@@ -1,7 +1,38 @@
 # Foundation verification and rollout
 
+<a id="solution-first-install-2026-11-01"></a>
+## Code check and solution first installed; paid box run 16 passed at USD 0.84 — 2026-11-01
+
+With the owner's OK, [PR #389](https://github.com/EmelieHagander/Bob-the-builder/pull/389)
+merged as `94352665b68e5b9b399fc85027d51b73f7ce0dee`. `bob-worker` v164 and `ask-bob`
+v196 (129 of 130 and 131 of 132 files equal the repository, the empty
+`cad-intake.ts`; 401 without login). A box run started from the owner's account
+(run 15, the run-14 setup) was left to finish first; then the catalog was recorded
+as `20261101070834_bob_solution_first_catalog` (`bob.tools` v36,
+`tools.ask_structure_worker` v3) with no Bob job running; all 362 active
+definitions equal the fixture.
+
+**[Run 41283593223](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41283593223)
+passed**, all three turns saved. Evidence: `Docs/archive/form-box-paid-2026-11-01-run16.json`.
+
+| | Run 14 | Run 15 (same setup) | Run 16 (A + B) |
+|---|---|---|---|
+| Calls | 46 | 44 | 37 |
+| Konrad | 17 calls | 15 calls | 11 calls |
+| Total | USD 1.07 | USD 1.07 | **USD 0.84** |
+| Read from cache | 78% | 79% | 80% |
+| Rejected calls | 0 | 1 | 0 |
+
+- Turn 2: Bob recorded the new width in the selected solution once and handed
+  over once; Konrad changed and checked the construction. Turn 3 needed no Konrad
+  job: the construction was checked, and Rita drew and saved.
+- Run 15's rejected parameter change logged the writer's catch-all message
+  (fingerprint `mc870f4a0`, "The database rejected this command…"). The writer now
+  has the database's coded reason ready behind `rejection_reason_version`
+  (source, not yet switched on).
+
 <a id="solution-first-2026-11-01"></a>
-## Code check after Konrad's job; solution first — built 2026-11-01, not installed
+## Code check after Konrad's job; solution first — built 2026-11-01 (installed, see above)
 
 Run 14 showed two wasted Konrad jobs: Bob handed over the 500 mm change before
 recording it in the selected solution (Konrad, going by the database, handed back),

@@ -556,6 +556,11 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
+**Installerat 2026-11-01 — kodkontroll efter Konrads jobb och lösningen först; lådprov 16 godkänt (`bob-worker` v164, `ask-bob` v196, [bevis](foundation-verification.md#solution-first-install-2026-11-01)):**
+Bob sparar beställarens beslut i den valda lösningen innan Konrad får jobbet, och
+koden kontrollerar en konstruktion som Konrad lämnat okontrollerad. Lådprovet
+kostade USD 0,84 (prov 14 och 15: 1,07) med 37 anrop; inga extra Konrad-jobb.
+
 **Installerat 2026-10-31 — kodläsning av det sparade i kollegornas rapport, koder för avvisningar; lådprov 14 godkänt (`bob-worker` v163, `ask-bob` v195, [bevis](foundation-verification.md#report-readback-install-2026-10-31)):**
 Bob slapp läsa om efter Konrads första rapport men läste fortfarande efter den
 andra och efter Ritas. Provet kostade USD 1,07 (prov 13: 0,86); skillnaden är
