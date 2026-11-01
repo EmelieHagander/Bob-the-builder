@@ -57,7 +57,8 @@ passed** (run 17, owner OK), all three turns saved. Evidence: `Docs/archive/form
 - **Logging gap fixed in source:** schema-check failures logged as
   `unspecified` because their field paths (`$.joints[0]…`) were filtered out.
   They now log `schema_mismatch` with dotted field paths (`tool-rejection.ts`);
-  not deployed yet.
+  deployed 2026-11-01 from `c5967ad` (owner OK): `bob-worker` v166, `ask-bob` v198,
+  files equal main (except the empty `cad-intake.ts`), 401 without login.
 
 <a id="solution-first-install-2026-11-01"></a>
 ## Code check and solution first installed; paid box run 16 passed at USD 0.84 — 2026-11-01
