@@ -37,6 +37,7 @@ let preToolRepairRows:any[]|undefined,preToolRepairVersions:Map<string,number>|u
 let preToolOrderRestoreRows:any[]|undefined,preToolOrderRestoreVersions:Map<string,number>|undefined
 let preMaterialsWorkerRows:any[]|undefined,preMaterialsWorkerVersions:Map<string,number>|undefined
 let preBuildWorkersRows:any[]|undefined,preBuildWorkersVersions:Map<string,number>|undefined
+let preKonradLeanRows:any[]|undefined,preKonradLeanVersions:Map<string,number>|undefined
 let preMemoryStairRows:any[]|undefined,preMemoryStairVersions:Map<string,number>|undefined
 // SQL publications drop the seed markers and name themselves, as `(prior.metadata-'seed_version'-'source_revision')||publication`.
 const publishAs=(row:any,publication:string)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication}}
@@ -481,8 +482,21 @@ for(const migration of migrations){
  const publicationSpec=source.match(/\$bob_catalog_publication\$([\s\S]+?)\$bob_catalog_publication\$/)
  if(publicationSpec){
   const spec=JSON.parse(publicationSpec[1])
+  if(spec.publication==='bob-konrad-lean-v1'){preKonradLeanRows=structuredClone(seed);preKonradLeanVersions=new Map(versions)}
+  // 2026-11-01: publications may also add rows, set definition paths, add
+  // metadata and change the toolbox by path (the SQL applies the same spec).
+  for(const {key,kind,content,definition,metadata} of spec.additions??[]){
+   if(seed.some(row=>row.key===key))throw new Error('publication_already_published: '+key)
+   seed.push({key,kind,content:content??'',definition:definition??{},variables:[],metadata:{...metadata,publication:spec.publication}});versions.set(key,1)
+  }
   for(const edit of spec.edits){
    const row=seed.find(row=>row.key===edit.key)
+   for(const {path,value} of edit.set??[]){
+    row.definition=structuredClone(row.definition)
+    const parent=path.slice(0,-1).reduce((o:any,k:string)=>o?.[k],row.definition)
+    if(!parent||!(path.at(-1) in parent))throw new Error('publication_set_missing: '+edit.key+' '+path.join('.'))
+    parent[path.at(-1)]=structuredClone(value)
+   }
    for(const {field,path,old,new:next} of edit.replace??[]){
     const keys:(string|number)[]=path?path.map((k:string)=>/^\d+$/.test(k)?Number(k):k):[field]
     if(field!=='content')row.definition=structuredClone(row.definition)
@@ -491,10 +505,22 @@ for(const migration of migrations){
     if(typeof text!=='string'||text.split(old).length!==2)throw new Error('publication_replace_unexpected: '+edit.key+' '+(path??[field]).join('.'))
     if(field==='content')row.content=text.replace(old,()=>next);else parent[keys.at(-1)!]=text.replace(old,()=>next)
    }
-   publishAs(row,spec.publication);versions.set(row.key,versions.get(row.key)!+1)
+   publishAs(row,spec.publication);if(edit.metadata)row.metadata={...row.metadata,...edit.metadata,publication:spec.publication};versions.set(row.key,versions.get(row.key)!+1)
   }
   const box=seed.find(row=>row.key==='bob.tools')
   box.definition={...box.definition,...spec.flags,catalog:box.definition.catalog.map((c:any)=>c.name in spec.how_to?{...c,how_to:spec.how_to[c.name]}:c)}
+  for(const {path,value} of spec.toolbox_set??[]){
+   box.definition=structuredClone(box.definition)
+   const parent=path.slice(0,-1).reduce((o:any,k:string)=>o?.[k],box.definition)
+   if(!parent||!(path.at(-1) in parent))throw new Error('publication_toolbox_set_missing: '+path.join('.'))
+   parent[path.at(-1)]=structuredClone(value)
+  }
+  for(const {path,values} of spec.toolbox_append??[]){
+   box.definition=structuredClone(box.definition)
+   const parent=path.slice(0,-1).reduce((o:any,k:string)=>o?.[k],box.definition)
+   if(!Array.isArray(parent?.[path.at(-1)]))throw new Error('publication_toolbox_append_missing: '+path.join('.'))
+   parent[path.at(-1)]=[...parent[path.at(-1)],...structuredClone(values)]
+  }
   publishAs(box,spec.publication);versions.set(box.key,versions.get(box.key)!+1)
  }
  if(/\$bob_tool_order_restore\$/.test(source)){
@@ -937,6 +963,10 @@ for(const row of preMaterialsWorkerRows??[])if(row.kind==='tier_binding'&&row.de
 const preMaterialsWorkerManifest=fixtureManifest(preMaterialsWorkerRows??seed,preMaterialsWorkerVersions??versions,'fixture-pre-materials-worker-manifest')
 /** The manifest before the materials worker pilot: Bob offers the materials tools himself. */
 export function preMaterialsWorkerCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preMaterialsWorkerManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
+for(const row of preKonradLeanRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preKonradLeanManifest=fixtureManifest(preKonradLeanRows??seed,preKonradLeanVersions??versions,'fixture-pre-konrad-lean-manifest')
+/** Manifests pinned before Konrad's lean construction (2026-11-01): rule fasteners, every zero bound, catalog lookups. */
+export function preKonradLeanCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preKonradLeanManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 for(const row of preBuildWorkersRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preBuildWorkersManifest=fixtureManifest(preBuildWorkersRows??seed,preBuildWorkersVersions??versions,'fixture-pre-build-workers-manifest')
 /** Manifests pinned before the 2026-10-31 structural designer and Rita (drawing) workers. */

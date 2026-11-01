@@ -213,7 +213,7 @@ export type MaterialLookupInput = { query: string | null; categories: string[]; 
  * each need against the project's material list and may answer only with IDs
  * from it; code returns each item's own catalog values. */
 export const CATALOG_FIND_TOOL = tool('find_catalog_materials',
-  'Find exact catalog materials for needs stated in words, for example a board size or a fastener size. Returns, per need, the matching items with their exact IDs, revisions and catalog sizes, or none. Only items in the catalog are returned.', {
+  'Find catalog items for things you need, named in words with the sizes that matter. Returns per need whether the catalog has the thing exactly, closely or not at all, with each match\'s exact ID, revision, name and catalog sizes.', {
     needs: { type: 'array', minItems: 1, maxItems: 12, items: { type: 'string', minLength: 1, maxLength: 200 } },
   })
 export type MaterialShortlistRow = { id: string; revision: number; name: string; profile: string; fastener: string | null; counting: string | null; own: boolean; sizes: Record<string, string> }
