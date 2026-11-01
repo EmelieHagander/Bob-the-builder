@@ -78,7 +78,7 @@ const fieldPath = (path: unknown) => typeof path === 'string' ? path.replace(/^\
 export function toolRejection(result: unknown): ToolRejection {
   const r = result && typeof result === 'object' ? result as Record<string, any> : {}
   const issues = Array.isArray(r.issues) ? r.issues.filter((i: unknown) => i && typeof i === 'object') : []
-  const fields = (Array.isArray(r.validation?.fields) ? r.validation.fields : issues.map((i: Record<string, unknown>) => fieldPath(i.path)))
+  const fields = (Array.isArray(r.validation?.fields) ? r.validation.fields : Array.isArray(r.unbound) ? r.unbound : issues.map((i: Record<string, unknown>) => fieldPath(i.path)))
     .filter((f: unknown): f is string => typeof f === 'string' && PATH.test(f)).slice(0, 8)
   const typed = [r.validation?.code, r.reason, issues[0]?.code].find(c => typeof c === 'string' && CODE.test(c))
   if (typed) return { code: typed, fields }

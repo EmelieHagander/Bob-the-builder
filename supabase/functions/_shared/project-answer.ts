@@ -233,6 +233,8 @@ export interface BobAnswerState {
   rejectionSignature?: string; rejectionStreak: number
   /** Bob's answer sent back for the completion review; delivered if a spending stop ends the review. */
   reviewedAnswer?: string
+  /** The spending stop refused Bob's call; his one last call cannot call tools. */
+  finalCall?: boolean
   tools: NonNullable<OpenAIServiceOptions['tools']>
   closedByLimit: boolean; closedByCommentary: boolean
   request?: OpenAIServiceOptions
@@ -275,6 +277,9 @@ export type ProjectAnswerOptions = {
   pureFacts?: boolean; projectFacts?: ProjectFacts;
   /** Pinned for new durable main turns; never changes a running old job. */
   completeRequest?: boolean;
+  /** Pinned per execution (finalAnswerVersion): past the spending stop Bob gets one
+   * last call without callable tools, and a stopped worker reports back as a result. */
+  finalAnswer?: boolean;
   resultReferences?: boolean;
   /** Main-role compaction epoch; loaded manuals expire on the next prepare. */
   contextEpoch?: () => number;
@@ -295,6 +300,7 @@ export async function runProjectAnswer(opts: ProjectAnswerOptions): Promise<Proj
       || ![saved.toolIndex, saved.protocolNudges, saved.emptyNudges, saved.commentaryStreak, saved.rejectionStreak].every(counter)
       || ![saved.completionChecked, saved.closedNoteSent, saved.closedByLimit, saved.closedByCommentary].every(v => typeof v === 'boolean')
       || saved.reviewedAnswer !== undefined && (typeof saved.reviewedAnswer !== 'string' || !saved.reviewedAnswer)
+      || saved.finalCall !== undefined && typeof saved.finalCall !== 'boolean'
       || !saved.initial || !saved.toolbox || !saved.observation || !Array.isArray(saved.messages) || !Array.isArray(saved.tools) || !Array.isArray(saved.workResults)
       || (saved.phase !== 'ready' && (!saved.request || saved.request.app !== 'bob' || saved.request.aiFunction !== 'ask-bob' || saved.request.userId !== opts.userId))
       || (['response', 'tools'].includes(saved.phase) && !saved.response)
@@ -433,6 +439,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const workerStep = currentStep
       return runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
         session, hasAccess: opts.hasAccess, deadline, ...(opts.modelTimeoutMs ? { modelTimeoutMs: opts.modelTimeoutMs } : {}),
+        ...(opts.finalAnswer ? { stopAsResult: true } : {}),
         readCurrent: async () => key === 'materials' ? opts.lookup.search({ dataset: 'materials', query: null, status: null, area_id: null, record_id: null }) : null,
         // In order, one at a time: the journal replays reads by position.
         // Auto check (2026-11-01): a saved construction left unchecked is checked by the server, in order.
@@ -574,7 +581,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const saved = (name: string) => toolbox.events.some(e => e.operation === 'execute' && e.name === name && e.status === 'saved')
   let completionChecked = restored?.completionChecked ?? false, protocolNudges = restored?.protocolNudges ?? 0, emptyNudges = restored?.emptyNudges ?? 0, closedNoteSent = restored?.closedNoteSent ?? false, commentaryStreak = restored?.commentaryStreak ?? 0
   let rejectionSignature = restored?.rejectionSignature, rejectionStreak = restored?.rejectionStreak ?? 0
-  let reviewedAnswer = restored?.reviewedAnswer
+  let reviewedAnswer = restored?.reviewedAnswer, finalCall = restored?.finalCall ?? false
   let phase = restored?.phase ?? 'ready', toolIndex = restored?.toolIndex ?? 0
   let request = restored?.request, pendingResponse = restored?.response
   let tools: NonNullable<OpenAIServiceOptions['tools']> = structuredClone(restored?.tools ?? [])
@@ -589,6 +596,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       ...(availabilitySent !== undefined ? { availability: availabilitySent } : {}),
       messages, previousResponseId, preparedEpoch, observation, toolbox: toolbox.exportState(), workResults,
       completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
+      ...(finalCall ? { finalCall } : {}),
       tools, closedByLimit, closedByCommentary, request, response: pendingResponse, toolIndex }))
   }
   const answered = (text: string, responseId: string | undefined, incomplete: boolean): ProjectAnswer => ({ ok: true, answer: text, projectId: opts.projectId, providerResponseId: responseId,
@@ -633,7 +641,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       if (opts.validateCurrentView && !await opts.validateCurrentView()) throw new Error('context_unavailable')
       if (opts.projectContext && !await opts.projectContext.validate()) throw new Error('context_unavailable')
       if (opts.completeRequest || opts.carryLoadedTools) toolbox.carryInstructions(); else toolbox.resetInstructions()
-      if (!closedByLimit && !closedByCommentary) tools = await toolbox.prepare()
+      if (!closedByLimit && !closedByCommentary && !finalCall) tools = await toolbox.prepare()
       else { toolbox.closeSurface(); tools = [] }
       // A rollover summarizes the sheets away: send them again at the end of the next step.
       callable = tools.map(tool => tool.function.name)
@@ -687,6 +695,19 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       pendingResponse = typeof cadFailure?.user_message === 'string'
         ? { success: true, data: cadFailure.user_message, model: 'server', usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } }
         : await opts.callModel(request)
+      // Owner decision 2026-11-01: Bob's final answer always gets through. When the
+      // spending stop refuses his call, he gets one last call with the same request
+      // but no callable tools, and answers from what he already has.
+      if (opts.finalAnswer && !finalCall && !reviewedAnswer && !pendingResponse.success && pendingResponse.error === 'turn_budget_exhausted') {
+        finalCall = true; tools = []; toolbox.closeSurface()
+        // He is told once that the tools are closed (the approved closed-bench note).
+        const note = closedNoteSent ? [] : [{ role: 'user' as const, content: opts.aiCatalog.text('bob.note.prefix') + opts.aiCatalog.text('bob.note.closed', { budget: 'spending' }) }]
+        closedNoteSent = true
+        request = { ...request, tool_choice: 'none', messages: [...request.messages, ...note] }
+        pendingResponse = undefined
+        await save(step)
+        pendingResponse = await opts.callModel(request)
+      }
       if (pendingResponse.success && !cadFailure?.user_message) opts.projectContext?.confirmDelivery()
       phase = 'response'
       await save(step)
@@ -746,7 +767,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
             try {
               repair = await repairToolArguments({ callModel: opts.callModel, userId: opts.userId, tool: spec, args, result,
                 catalogSchemaParameters: schemaParameters(), ...(bound ? { catalogToolParameters: bound } : {}), timeoutMs: Math.min(30_000, deadline - Date.now()) })
-            } catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'turn_budget_exhausted') { observe('failed'); return { ok: false, error: 'turn_budget_exhausted' } } repair = { status: 'unavailable' } }
+            } catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'turn_budget_exhausted' && !opts.finalAnswer) { observe('failed'); return { ok: false, error: 'turn_budget_exhausted' } } repair = { status: 'unavailable' } }
             console.log('[Bob tool repair]', JSON.stringify({ tool: /^[a-z][a-z0-9_]{0,63}$/.test(toolName) ? toolName : 'invalid_name', outcome: repair.status }))
             if (repair.status === 'repaired') {
               if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
@@ -805,7 +826,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     }
     const answerText = typeof response.data === 'string' ? response.data.trim() : ''
     const canContinue = !!response.responseId && tools.length > 0 && (unlimitedWork ? Date.now() < deadline : step < steps - 2 && Date.now() + 40000 < deadline)
-    if (completionAware && response.outputPhase === 'commentary') {
+    // The final call's text is delivered whatever its phase: no further call follows.
+    if (completionAware && response.outputPhase === 'commentary' && !finalCall) {
       // Repeated progress without tool activity is a no-progress condition,
       // not a work quota. A tool result resets the streak.
       if (commentaryStreak < 2 && response.responseId && (unlimitedWork ? Date.now() < deadline : step < steps - 1 && Date.now() + 20000 < deadline)) {
@@ -848,7 +870,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const workNote = !workEligible ? null : facts.length ? opts.aiCatalog.text('bob.note.finish', { facts: facts.join(' ') })
         : gate?.remaining ? opts.aiCatalog.text('bob.note.gate-gap', { reason: gate.reason }) : null
       const textIssues = answerTextV1 ? humanTextIssues(answerText) : []
-      const textEligible = textIssues.length > 0 && !!response.responseId
+      const textEligible = textIssues.length > 0 && !!response.responseId && !finalCall
         && (unlimitedWork ? Date.now() < deadline : step < steps - 1 && Date.now() + 20000 < deadline)
       const textNote = textEligible ? opts.aiCatalog.text(workNote ? 'bob.note.answer-text-also' : 'bob.note.answer-text', { fragments: answerTextFragments(textIssues) }) : null
       if (workNote || textNote) {
@@ -890,8 +912,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       observation.answer_text = observation.answer_text === 'rewrite_requested' ? (remaining ? 'rewrite_unchanged' : 'rewritten') : remaining ? 'delivered_with_issues' : 'clean'
       observation.answer_text_issues = remaining
     }
-    observe(completionAware && response.outputPhase === 'refusal' ? 'refused' : closedByCommentary ? 'commentary_limit' : closedByLimit && step > 0 ? (lastStep ? 'step_budget' : 'time_budget') : /\?\s*$/.test(answerText) ? 'asked' : 'answered')
-    return answered(answerText, response.responseId, completionAware && response.outputPhase === 'refusal' || facts.length > 0)
+    observe(completionAware && response.outputPhase === 'refusal' ? 'refused' : finalCall ? 'step_budget' : closedByCommentary ? 'commentary_limit' : closedByLimit && step > 0 ? (lastStep ? 'step_budget' : 'time_budget') : /\?\s*$/.test(answerText) ? 'asked' : 'answered')
+    // An answer after the spending stop is partial: the work may not be finished.
+    return answered(answerText, response.responseId, completionAware && response.outputPhase === 'refusal' || facts.length > 0 || finalCall)
   }
   observe('failed')
   return { ok: false, error: 'step_budget_exhausted' }

@@ -922,6 +922,38 @@ ordinary project searches, and its sources remain in provenance. The final round
 is tool-free and elapsed-time fences reserve settlement time. Write limits belong
 to [bounded writes](ask-bob-writes.md). Pages and truncation remain explicit.
 
+<a id="final-answer-past-stop"></a>
+### Final answer past the spending stop — prepared 2026-11-01
+
+Owner decision 2026-11-01: "Bob's final answer always gets through." The
+temporary spending stop (`agent-contract.ask-bob` `turn_usd_stop`, USD 2) refuses
+Bob's and his workers' calls once the turn has spent the stop minus the review
+reserve. In a live turn Konrad's job brought the turn to USD 1.957; Bob's next
+call was refused and the owner got the recovery template, not Bob's answer.
+
+Jobs pinned with `final_answer_version` 1 on the same contract (execution
+`finalAnswerVersion`, read once per job; only with the stop and unlimited work):
+
+- A worker whose call the stop refuses ends its job and reports to Bob as an
+  ordinary hand-over result: `status: paused_at_limit` with its calls, receipts
+  and readback (and the code check), no figures. A tool-repair call the stop
+  refuses leaves the rejected call as it was. Without the pin both fail the turn.
+- When the stop refuses Bob's own call, he gets exactly one more: the same
+  request with `tool_choice: none`, so the tools and the cached prompt start stay
+  but nothing can be called, and he answers in text from what he already has.
+  The budget grants it once per job (checkpoint state version 2 keeps
+  `finalAnswerUsed`; version 1 states still restore). Its text is delivered
+  whatever its output phase, without a rewrite note, as partial evidence
+  (observed end `step_budget`). A second refusal ends the turn as before.
+- Unchanged: workers and further tool rounds stay refused, the review and
+  delivery reserve holds, and a stop during the completion review still
+  delivers the reviewed answer as partial.
+
+No model-facing text changed. Source: `bob-model-budget.ts`, `bob-workers.ts`
+(`stopAsResult`), `project-answer.ts` (`finalCall`), `ask-openai.ts`; tests:
+`tests/bob-final-answer.test.ts`. **Not active:** the catalog flag is not
+published; publication, install and a paid acceptance run remain.
+
 ### Bob-directed completion — 2026-09-27
 
 **Supersedes [Delegated work delivery](#delegated-work-delivery) and [Drawing delivery](#drawing-delivery) below**, which remain as history. The dated [runtime review](bob-ai-runtime-review-2026-09-27.md) records the reasons.
