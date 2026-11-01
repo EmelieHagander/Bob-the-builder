@@ -137,6 +137,18 @@ const CONSTRUCTION_PROSE:Record<string,readonly string[]>={
 }
 /** The table's schedule for one exact saved revision. A failed or mismatched
  * read is shown as unavailable; fasteners are never recomputed here. */
+/** The exact unbound array paths of a parameter_gaps rejection, when readable. */
+function arrayGaps(message:string):string[]{
+ try{const v=JSON.parse(message.slice('parameter_gaps:'.length));return Array.isArray(v?.unbound)?v.unbound.filter((p:unknown)=>typeof p==='string').slice(0,12):[]}catch{return []}
+}
+/** The schedule rows of chosen items that carry a fact, compactly; null when
+ * the schedule could not be read (never shown as "no facts"). */
+export function chosenFastenerFacts(schedule:FastenerSchedule|null){
+ if(!schedule)return {status:'unavailable'}
+ return {status:'ok',complete:schedule.complete,glue_packages:schedule.glue_packages,
+  rows:schedule.joints.filter(r=>(r.source==='chosen'||r.source==='none')&&Array.isArray(r.gaps)&&r.gaps.length)
+   .map(r=>({joint_id:r.joint_id,kind:r.kind??null,diameter_mm:r.diameter_mm??null,length_mm:r.length_mm??null,count:r.count??null,gaps:r.gaps}))}
+}
 async function tableFasteners(read:((id:string,revision:number)=>Promise<unknown>)|undefined,id:string,revision:number):Promise<FastenerSchedule|null>{
  if(!read)return null
  try{return parseFastenerSchedule(await read(id,revision),id,revision)}
@@ -492,7 +504,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
      if(opts.constructionTable&&v.view==='overview'){
       const fasteners=await tableFasteners(opts.readFasteners,draft.artifact_id,draft.revision)
       if(!await opts.hasAccess())return {status:'denied'}
-      return await views.read(draft,v,opts.viewPageTokens?.(),{table:true,fasteners},extraHeader)
+      return await views.read(draft,v,opts.viewPageTokens?.(),{table:true,fasteners,...(opts.chosenJointFasteners?{chosen:true}:{})},extraHeader)
      }
      return await views.read(draft,v,opts.viewPageTokens?.(),undefined,extraHeader)
     }
@@ -532,9 +544,14 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     const workKey=opts.coherentWork&&name===CONSTRUCTION_CHECK_TOOL.function.name?await fingerprint({artifact_id:v.artifact_id,revision:v.revision,
      component_ids:v.component_ids??[],requirement_checks:v.requirement_checks??[],contract:constructionEvidenceContract(draft,today)}):null
     const reused=workKey?await reusableCheck(current,workKey,today):undefined
-    const checked=reused?.output??(opts.formEvidence&&name===CONSTRUCTION_CHECK_TOOL.function.name
+    const model=reused?.output??(opts.formEvidence&&name===CONSTRUCTION_CHECK_TOOL.function.name
      ?checkConstructionEvidence(draft,catalog,today,v.component_ids,v.requirement_checks)
      :checkConstruction(draft,catalog,today,!!opts.constructionViews))
+    // Chosen joint fasteners (2026-11-01): the database's facts per chosen item
+    // come with the check, so a weak choice shows where the designer looks.
+    const facts=!reused&&opts.chosenJointFasteners&&name===CONSTRUCTION_CHECK_TOOL.function.name&&(Array.isArray(draft.joints)?draft.joints:[]).some((j:any)=>j?.method==='butt')
+     ?chosenFastenerFacts(await tableFasteners(opts.readFasteners,v.artifact_id,v.revision)):undefined
+    const checked=facts?{...model,fastener_facts:facts}:model
     if(name===CONSTRUCTION_CHECK_TOOL.function.name){
      if(!opts.coherentWork)return await present('check',v.artifact_id,v.revision,{projectId:opts.projectId,...checked},observedAt)
      const outputs:Record<string,any>=v.outputs.length
@@ -627,7 +644,11 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(error instanceof CadParameterBindingGap)return {status:'invalid',message:'Bind every path in unbound to a parameter node using these exact slash-separated paths. Keep the same construction IDs and correct the parameter plan; no source lookup retry is needed.',unbound:error.unbound}
    const message=error instanceof Error?error.message:''
    if(opts.constructionRepeats&&/^(invalid_cad_array|cad_array_[a-z_]+)(:.*)?$/.test(message))return {status:'invalid',reason:message.split(':')[0],message:'No construction saved. Correct array IDs/counts and bindings; generated instance/node IDs must be unique and fit the existing canonical limits.'}
-   if(opts.constructionRepeats&&message.startsWith('parameter_gaps:'))return {status:'invalid',reason:'array_binding_missing',message:opts.defaultZero?'Bind arrays/<id>/start/x, y and z and arrays/<id>/spacing_mm; unbound start rotations are none. No construction saved.':'Bind all six arrays/<id>/start placement paths and arrays/<id>/spacing_mm. No construction saved.'}
+   if(opts.constructionRepeats&&message.startsWith('parameter_gaps:'))return opts.defaultZero
+    ?{status:'invalid',reason:'array_binding_missing',unbound:arrayGaps(message),message:'No construction saved. Bind arrays/<id>/start/x, y and z, zero included, and arrays/<id>/spacing_mm; an unbound start rotation means none.'}
+    :{status:'invalid',reason:'array_binding_missing',message:'Bind all six arrays/<id>/start placement paths and arrays/<id>/spacing_mm. No construction saved.'}
+   if(message.startsWith('parameter_code_zero:'))return {status:'invalid',reason:'parameter_code_zero',
+    message:'No construction changed. '+message.slice('parameter_code_zero:'.length)+' is code\'s shared zero; to move what sits on it, bind that path to a node of its own with edit_construction_parts.'}
    if(opts.constructionViews&&message==='construction_view_cursor_invalid')return {status:'invalid',message:'Use next_read from this exact revision, view and selection. A cursor cannot be reused for another selection.'}
    if(opts.constructionViews&&message==='construction_view_header_too_large')return {status:'invalid',message:'Use fewer named IDs or one result section to keep the page envelope small. No data was omitted as complete.'}
    const known=/^(invalid_requirement_probe|invalid_form_refinement|invalid_instance_policy|invalid_parameter_[a-z_]+|parameter_[a-z_]+|unknown_required_parameters|coordinate_[a-z_]+)$/

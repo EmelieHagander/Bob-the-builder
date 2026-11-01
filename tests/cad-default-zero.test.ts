@@ -95,7 +95,7 @@ test('a parameter change cannot move the shared code zero',async()=>{
  const {recipe,plan}=box(),saved=compileCadParameters('p',structuredClone(recipe),withZeroDefaults(recipe,plan),new Map(),new Map())
  const draft={projectId:'p',status:'ok',recipe,parameters:saved}
  const none=async()=>({project:new Map(),physical:new Map()})
- await assert.rejects(compileConstructionParameterChange('p',draft,[{id:ZERO_NODE_IDS.mm,role:'decision',value:5,unit:'mm',reason:'Shift'}],none),/invalid_parameter_change_identity/)
+ await assert.rejects(compileConstructionParameterChange('p',draft,[{id:ZERO_NODE_IDS.mm,role:'decision',value:5,unit:'mm',reason:'Shift'}],none),/^Error: parameter_code_zero:origin\.zero_mm$|parameter_code_zero:origin\.zero_mm/)
  const changed=await compileConstructionParameterChange('p',draft,[{id:'w',role:'decision',value:500,unit:'mm',reason:'Wider'}],none)
  assert.equal(changed.recipe.instances.find(i=>i.id==='right')?.placement.x,488)
  assert.equal(changed.recipe.instances.find(i=>i.id==='left')?.placement.x,0)

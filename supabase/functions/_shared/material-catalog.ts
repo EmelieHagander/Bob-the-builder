@@ -170,27 +170,33 @@ export const CATALOG_FIND_TOOL = tool('find_catalog_materials',
     needs: { type: 'array', minItems: 1, maxItems: 12, items: { type: 'string', minLength: 1, maxLength: 200 } },
   })
 export type MaterialShortlistRow = { id: string; revision: number; name: string; profile: string; fastener: string | null; own: boolean; sizes: Record<string, string> }
-export function parseMaterialShortlist(value: unknown): MaterialShortlistRow[] | null {
-  if (!Array.isArray(value) || value.length > 400) return null
-  const ok = value.every(r => r && typeof r === 'object' && typeof r.id === 'string' && Number.isSafeInteger(r.revision) && typeof r.name === 'string'
+export type MaterialShortlist = { rows: MaterialShortlistRow[]; complete: boolean }
+export function parseMaterialShortlist(value: unknown): MaterialShortlist | null {
+  const v = value as { items?: unknown; complete?: unknown } | null
+  if (!v || typeof v !== 'object' || !Array.isArray(v.items) || v.items.length > 500 || typeof v.complete !== 'boolean') return null
+  const ok = v.items.every(r => r && typeof r === 'object' && typeof r.id === 'string' && Number.isSafeInteger(r.revision) && typeof r.name === 'string'
     && typeof r.profile === 'string' && (r.fastener === null || typeof r.fastener === 'string') && typeof r.own === 'boolean'
     && r.sizes && typeof r.sizes === 'object' && !Array.isArray(r.sizes))
-  return ok ? value as MaterialShortlistRow[] : null
+  return ok ? { rows: v.items as MaterialShortlistRow[], complete: v.complete } : null
 }
-/** What the small model sees per item. The ID is the only answer it may give;
- * sizes are the catalog's own text. */
-export const shortlistLine = (r: MaterialShortlistRow) => ({ id: r.id, name: r.name, profile: r.profile, ...(r.fastener ? { fastener: r.fastener } : {}), sizes: r.sizes, ...(r.own ? { own: true } : {}) })
-/** Turn the small model's answer into the tool result. Unknown IDs are dropped,
- * never passed on; a need without a valid match is reported as none. */
-export function materialFindResult(needs: string[], rows: MaterialShortlistRow[], answer: unknown): Record<string, unknown> {
-  const byId = new Map(rows.map(r => [r.id, r]))
+/** The small model sees each item by a short list reference, never its ID:
+ * fewer tokens, and an answer can only name a reference that is on the list.
+ * Sizes are the catalog's own text. */
+export const shortlistRef = (index: number) => 'm' + (index + 1)
+export const shortlistLine = (r: MaterialShortlistRow, index: number) => ({ ref: shortlistRef(index), name: r.name, profile: r.profile,
+  ...(r.fastener ? { fastener: r.fastener } : {}), sizes: r.sizes, ...(r.own ? { own: true } : {}) })
+/** Turn the small model's answer into the tool result. A reference that is not
+ * on the list is dropped, never passed on; a need without a valid match is none.
+ * A cut list says so, because then none is not proof of absence. */
+export function materialFindResult(needs: string[], list: MaterialShortlist, answer: unknown): Record<string, unknown> {
+  const byRef = new Map(list.rows.map((r, i) => [shortlistRef(i), r]))
   const found = (answer as { needs?: unknown } | null)?.needs
-  const list = Array.isArray(found) ? found : []
-  return { status: Array.isArray(found) ? 'ok' : 'unavailable', needs: needs.map((need, index) => {
-    const entry = list.find(e => e && typeof e === 'object' && (e as Record<string, unknown>).index === index) as Record<string, unknown> | undefined
-    const ids = Array.isArray(entry?.item_ids) ? [...new Set(entry!.item_ids.filter((id): id is string => typeof id === 'string' && byId.has(id)))].slice(0, 5) : []
-    const match = ids.length && (entry?.match === 'exact' || entry?.match === 'close') ? entry.match : 'none'
-    return { need, match, items: match === 'none' ? [] : ids.map(id => { const r = byId.get(id)!
+  const entries = Array.isArray(found) ? found : []
+  return { status: Array.isArray(found) ? 'ok' : 'unavailable', ...(list.complete ? {} : { list_complete: false }), needs: needs.map((need, index) => {
+    const entry = entries.find(e => e && typeof e === 'object' && (e as Record<string, unknown>).index === index) as Record<string, unknown> | undefined
+    const refs = Array.isArray(entry?.item_refs) ? [...new Set(entry!.item_refs.filter((ref): ref is string => typeof ref === 'string' && byRef.has(ref)))].slice(0, 5) : []
+    const match = refs.length && (entry?.match === 'exact' || entry?.match === 'close') ? entry.match : 'none'
+    return { need, match, items: match === 'none' ? [] : refs.map(ref => { const r = byRef.get(ref)!
       return { material_id: r.id, material_revision: r.revision, name: r.name, profile: r.profile, fastener: r.fastener, sizes: r.sizes, project_own: r.own } }) }
   }) }
 }

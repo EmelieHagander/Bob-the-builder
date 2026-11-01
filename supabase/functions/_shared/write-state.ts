@@ -29,7 +29,9 @@ export function compactConstructionCheck(check: Row | undefined): Row {
     fabrication_gap_count: Number.isSafeInteger(check.fabrication_gap_count) ? check.fabrication_gap_count : gaps.length,
     part_count: check.part_count ?? null, joint_count: check.joint_count ?? null, bounds_mm: check.bounds_mm ?? null,
     result_id: check.result?.result_id ?? null, details_read: check.result?.read ?? check.next_read ?? null,
-    coverage_complete: check.coverage?.complete === true, issues: [], fabrication_gaps: [] }
+    coverage_complete: check.coverage?.complete === true, issues: [], fabrication_gaps: [],
+    // Chosen joint fasteners (2026-11-01): only checks that carry them.
+    ...(check.fastener_facts ? { fastener_facts: check.fastener_facts } : {}) }
   for (const [key, values] of [['issues', issues], ['fabrication_gaps', gaps]] as const) {
     for (const value of values) {
       result[key].push(value)

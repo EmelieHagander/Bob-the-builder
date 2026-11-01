@@ -208,8 +208,9 @@ tokens, and every box construction was glue only or screws only by chance.
   is saved as method `butt` (boards meeting face to face, the only shape the 3D
   model checks today). The database owns the facts
   ([Artifacts](artifacts.md#chosen-joint-fasteners--owner-decision-2026-11-01));
-  an item that is not a tagged fastener is refused as
-  `joint_fasteners_not_in_catalog`. The table view, lists and model check show
+  a list the database refuses names its mistake (`joint_fastener_not_in_catalog`,
+  `_repeated`, `_other_project`, `_glue_counted`, `_size_unknown`, or
+  `joint_fasteners_invalid`). The table view, lists and model check show
   several items per joint; single-item joints keep their former shape.
 - **Material finder** (`tools.find_catalog_materials`, role `material-finder` on
   the nano model). Konrad names up to 12 needs in words; the small model sees the

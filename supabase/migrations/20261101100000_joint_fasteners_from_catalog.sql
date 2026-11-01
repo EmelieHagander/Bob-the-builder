@@ -13,14 +13,16 @@
 --    revision's kind and nominal size (diameter and length in mm; glue has
 --    none). It reads catalog tables, so it is SECURITY DEFINER and returns
 --    only these three facts.
--- 3. bob_private.valid_joint_fasteners(project, list) validates a joint's
---    chosen list: up to 8 distinct items of the shared catalog or this
---    project, each {material_id, material_revision, count, spacing_mm};
---    count and spacing are for screws, nails and bolts and may be null.
+-- 3. bob_private.joint_fasteners_issue(project, list) names what is wrong with
+--    a joint's chosen list, or null: up to 8 distinct items of the shared
+--    catalog or this project, each {material_id, material_revision, count,
+--    spacing_mm}; count and spacing are for screws, nails and bolts and may be
+--    null. Codes: joint_fasteners_invalid, joint_fastener_repeated,
+--    joint_fastener_not_in_catalog, joint_fastener_other_project,
+--    joint_fastener_glue_counted, joint_fastener_size_unknown.
 -- 4. bob_private.check_construction accepts method 'butt' with a fasteners
 --    list, and only then (guarded replace of its installed body); a list that
---    fails (3) raises joint_fasteners_not_in_catalog. Earlier joints are
---    unchanged.
+--    fails (3) raises the code (3) names. Earlier joints are unchanged.
 -- 5. bob_private.construction_fastener_schedule: a 'butt' joint gives one row
 --    per chosen item (source 'chosen', with material_id and
 --    material_revision). A missing count is spread by the existing rule.
@@ -61,29 +63,30 @@ revoke all on function bob_private.joint_fastener_item(uuid,integer) from public
 -- The fastener schedule runs as the reading user and needs these three facts.
 grant execute on function bob_private.joint_fastener_item(uuid,integer) to authenticated;
 
-create function bob_private.valid_joint_fasteners(p_project text, f jsonb) returns boolean
+create function bob_private.joint_fasteners_issue(p_project text, f jsonb) returns text
 language plpgsql stable set search_path='' as $$
 declare e jsonb; item jsonb; seen text[]:='{}';
 begin
- if jsonb_typeof(f) is distinct from 'array' or jsonb_array_length(f)>8 then return false; end if;
+ if jsonb_typeof(f) is distinct from 'array' or jsonb_array_length(f)>8 then return 'joint_fasteners_invalid'; end if;
  for e in select value from jsonb_array_elements(f) loop
   if jsonb_typeof(e) is distinct from 'object' or e-array['material_id','material_revision','count','spacing_mm']<>'{}'::jsonb
    or (select count(*) from jsonb_object_keys(e))<>4
    or coalesce(e->>'material_id','')!~'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
    or jsonb_typeof(e->'material_revision') is distinct from 'number' or coalesce(e->>'material_revision','')!~'^[1-9][0-9]{0,8}$'
-   or jsonb_typeof(e->'count') not in ('null','number') or jsonb_typeof(e->'spacing_mm') not in ('null','number')
-   or (e->>'material_id')=any(seen) then return false; end if;
-  if jsonb_typeof(e->'count')='number' and (coalesce(e->>'count','')!~'^[1-9][0-9]{0,3}$' and e->>'count'<>'10000') then return false; end if;
-  if jsonb_typeof(e->'spacing_mm')='number' and not ((e->>'spacing_mm')::numeric>0 and (e->>'spacing_mm')::numeric<=2000) then return false; end if;
+   or jsonb_typeof(e->'count') not in ('null','number') or jsonb_typeof(e->'spacing_mm') not in ('null','number') then return 'joint_fasteners_invalid'; end if;
+  if jsonb_typeof(e->'count')='number' and (coalesce(e->>'count','')!~'^[1-9][0-9]{0,3}$' and e->>'count'<>'10000') then return 'joint_fasteners_invalid'; end if;
+  if jsonb_typeof(e->'spacing_mm')='number' and not ((e->>'spacing_mm')::numeric>0 and (e->>'spacing_mm')::numeric<=2000) then return 'joint_fasteners_invalid'; end if;
+  if (e->>'material_id')=any(seen) then return 'joint_fastener_repeated'; end if;
   seen:=seen||(e->>'material_id');
   item:=bob_private.joint_fastener_item((e->>'material_id')::uuid,(e->>'material_revision')::integer);
-  if item is null or (item->>'project_id' is not null and item->>'project_id'<>p_project) then return false; end if;
-  if item->>'kind'='glue' and (jsonb_typeof(e->'count')<>'null' or jsonb_typeof(e->'spacing_mm')<>'null') then return false; end if;
-  if item->>'kind'<>'glue' and (jsonb_typeof(item->'diameter_mm')<>'number' or jsonb_typeof(item->'length_mm')<>'number') then return false; end if;
+  if item is null then return 'joint_fastener_not_in_catalog'; end if;
+  if item->>'project_id' is not null and item->>'project_id'<>p_project then return 'joint_fastener_other_project'; end if;
+  if item->>'kind'='glue' and (jsonb_typeof(e->'count')<>'null' or jsonb_typeof(e->'spacing_mm')<>'null') then return 'joint_fastener_glue_counted'; end if;
+  if item->>'kind'<>'glue' and (jsonb_typeof(item->'diameter_mm')<>'number' or jsonb_typeof(item->'length_mm')<>'number') then return 'joint_fastener_size_unknown'; end if;
  end loop;
- return true;
+ return null;
 end $$;
-revoke all on function bob_private.valid_joint_fasteners(text,jsonb) from public,anon,authenticated,service_role;
+revoke all on function bob_private.joint_fasteners_issue(text,jsonb) from public,anon,authenticated,service_role;
 
 do $$
 declare fn regprocedure:='bob_private.check_construction(text,uuid,jsonb,jsonb,jsonb,jsonb)'::regprocedure; def text;
@@ -94,7 +97,8 @@ declare fn regprocedure:='bob_private.check_construction(text,uuid,jsonb,jsonb,j
    or (coalesce(j->>'method','')='butt')<>(j ? 'fasteners')$q$;
  old_raise constant text:=$q$then raise exception 'invalid_joint' using errcode='22023'; end if;$q$;
  new_raise constant text:=$q$then raise exception 'invalid_joint' using errcode='22023'; end if;
-  if j ? 'fasteners' and not bob_private.valid_joint_fasteners(p_project,j->'fasteners') then raise exception 'joint_fasteners_not_in_catalog' using errcode='22023'; end if;$q$;
+  if j ? 'fasteners' and bob_private.joint_fasteners_issue(p_project,j->'fasteners') is not null then
+   raise exception using message=bob_private.joint_fasteners_issue(p_project,j->'fasteners'),errcode='22023'; end if;$q$;
  old_methods constant text:=$q$coalesce(j->>'method','') not in ('screwed_butt','glued_butt','dowel','bolted','unresolved')$q$;
  new_methods constant text:=$q$coalesce(j->>'method','') not in ('screwed_butt','glued_butt','dowel','bolted','unresolved','butt')$q$;
 begin

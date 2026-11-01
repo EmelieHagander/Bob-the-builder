@@ -25,7 +25,7 @@ async function build(){
  return {pg,item,pick,glue:{id:glue.id as string,revision:glue.revision as number}}
 }
 const schedule=async(pg:any,joints:unknown)=>(await pg.query('select bob_private.construction_fastener_schedule($1::jsonb,$2::jsonb) s',[JSON.stringify(recipe),JSON.stringify(joints)])).rows[0].s
-const valid=async(pg:any,list:unknown,project:string|null=null)=>(await pg.query('select bob_private.valid_joint_fasteners($1,$2::jsonb) v',[project,JSON.stringify(list)])).rows[0].v
+const issue=async(pg:any,list:unknown,project:string|null=null)=>(await pg.query('select bob_private.joint_fasteners_issue($1,$2::jsonb) v',[project,JSON.stringify(list)])).rows[0].v
 
 test('the seeded screw, nail and glue types are tagged; other materials are not fasteners',async t=>{
  const {pg,item}=await setup();
@@ -76,14 +76,16 @@ test('plain facts: too short, through the far face, short penetration, a given c
  assert.equal(none.joints[0].source,'none');assert.deepEqual(none.joints[0].gaps,['no_fastener_chosen']);assert.equal(none.complete,false)
 })
 
-test('the chosen list only accepts real fastener items of this project or the shared catalog',async t=>{
+test('the chosen list only accepts real fastener items of this project or the shared catalog, and names each mistake',async t=>{
  const {pg,item,pick,glue}=await setup();
  const screw=await item('Träskruv, förzinkad (inomhus) 3,5 × 30'),plywood=await item('Plywood, björk 12 × 1220 × 2440')
- assert.equal(await valid(pg,[pick(screw),pick(glue)]),true)
- assert.equal(await valid(pg,[]),true)
- for(const bad of [[pick(plywood)],[pick(screw),pick(screw)],[pick(glue,2)],[{...pick(screw),material_revision:99}],[{...pick(screw),extra:1}],
-  [pick(screw,0)],[pick(screw,null,0)],[{material_id:randomUUID(),material_revision:1,count:null,spacing_mm:null}],Array(9).fill(0).map(()=>pick(screw))])
-  assert.equal(await valid(pg,bad),false,JSON.stringify(bad))
+ assert.equal(await issue(pg,[pick(screw),pick(glue)]),null)
+ assert.equal(await issue(pg,[]),null)
+ for(const [bad,code] of [[[pick(plywood)],'joint_fastener_not_in_catalog'],[[pick(screw),pick(screw)],'joint_fastener_repeated'],[[pick(glue,2)],'joint_fastener_glue_counted'],
+  [[{...pick(screw),material_revision:99}],'joint_fastener_not_in_catalog'],[[{...pick(screw),extra:1}],'joint_fasteners_invalid'],[[pick(screw,0)],'joint_fasteners_invalid'],
+  [[pick(screw,null,0)],'joint_fasteners_invalid'],[[{material_id:randomUUID(),material_revision:1,count:null,spacing_mm:null}],'joint_fastener_not_in_catalog'],
+  [Array(9).fill(0).map(()=>pick(screw)),'joint_fasteners_invalid']] as [unknown[],string][])
+  assert.equal(await issue(pg,bad),code,JSON.stringify(bad))
 })
 
 test('check_construction admits butt joints only with a valid list; earlier joints keep their rules',async t=>{
@@ -97,7 +99,7 @@ test('check_construction admits butt joints only with a valid list; earlier join
  await assert.rejects(check([{...butt('j',['left','y_min'],['front','y_max'],[]),method:'glued_butt'}]),/invalid_joint/)
  const {fasteners:_f,...bare}=butt('j',['left','y_min'],['front','y_max'],[])
  await assert.rejects(check([bare]),/invalid_joint/)
- await assert.rejects(check([butt('j',['left','y_min'],['front','y_max'],[pick(plywood)])]),/joint_fasteners_not_in_catalog/)
+ await assert.rejects(check([butt('j',['left','y_min'],['front','y_max'],[pick(plywood)])]),/joint_fastener_not_in_catalog/)
 })
 
 test('close the shared schema',async()=>{(await setup()).pg.close()})

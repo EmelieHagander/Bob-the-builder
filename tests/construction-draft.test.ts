@@ -232,7 +232,7 @@ test('K1 claimed tools create/read/revise the same construction; SQL authority, 
   assert.deepEqual(schedule.joints.map((r:any)=>[r.source,r.kind,r.diameter_mm,r.length_mm,r.material_id]),[['chosen','screw',3.5,30,screw.id]])
   const plywood=materials[0]
   const refused=await make().execute('save_construction_draft',{...input,key:'chosenBad',materials,joints:[{...joint,fasteners:[pick(plywood.material_id,plywood.material_revision)]}]})
-  assert.equal(refused.status,'invalid');assert.equal(refused.reason,'joint_fasteners_not_in_catalog',JSON.stringify(refused))
+  assert.equal(refused.status,'invalid');assert.equal(refused.reason,'joint_fastener_not_in_catalog',JSON.stringify(refused))
  })
  await call(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')
 })

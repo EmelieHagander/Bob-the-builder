@@ -13,20 +13,23 @@ const rows:MaterialShortlistRow[]=[
  {id:screw,revision:1,name:'Träskruv, förzinkad (inomhus) 3,5 × 30',profile:'fastener',fastener:'screw',own:false,sizes:{diameter:'3.5 mm',length:'30 mm'}},
 ]
 
-test('code returns the catalog values of the IDs the model named; unknown IDs never pass',()=>{
- const out:any=materialFindResult(['12 mm plywood','screws about 3.5 x 30','wood glue'],rows,{needs:[
-  {index:0,match:'exact',item_ids:[ply]},{index:1,match:'close',item_ids:[screw,'invented-id']},{index:2,match:'exact',item_ids:['invented-id']}]})
- assert.equal(out.status,'ok')
+test('code returns the catalog values of the references the model named; anything else never passes',()=>{
+ const list={rows,complete:true}
+ const out:any=materialFindResult(['12 mm plywood','screws about 3.5 x 30','wood glue'],list,{needs:[
+  {index:0,match:'exact',item_refs:['m1']},{index:1,match:'close',item_refs:['m2','m9']},{index:2,match:'exact',item_refs:[ply]}]})
+ assert.equal(out.status,'ok');assert.equal('list_complete' in out,false)
  assert.deepEqual(out.needs[0],{need:'12 mm plywood',match:'exact',items:[{material_id:ply,material_revision:2,name:rows[0].name,profile:'sheet_stock',fastener:null,sizes:{thickness:'12 mm'},project_own:false}]})
  assert.equal(out.needs[1].match,'close');assert.deepEqual(out.needs[1].items.map((i:any)=>i.material_id),[screw])
- assert.deepEqual(out.needs[2],{need:'wood glue',match:'none',items:[]},'an invented ID is reported as no match')
- assert.equal((materialFindResult(['x'],rows,'not json') as any).status,'unavailable')
+ assert.deepEqual(out.needs[2],{need:'wood glue',match:'none',items:[]},'a reference not on the list, or a raw ID, is no match')
+ assert.equal((materialFindResult(['x'],list,'not json') as any).status,'unavailable')
+ assert.equal((materialFindResult(['x'],{rows,complete:false},{needs:[]}) as any).list_complete,false,'a cut list says so')
 })
 
-test('the model sees names, profiles, fastener kinds and sizes, never revisions or prices',()=>{
- assert.deepEqual(shortlistLine(rows[1]),{id:screw,name:rows[1].name,profile:'fastener',fastener:'screw',sizes:{diameter:'3.5 mm',length:'30 mm'}})
- assert.equal(parseMaterialShortlist([{...rows[0],revision:'2'}]),null)
- assert.deepEqual(parseMaterialShortlist(rows),rows)
+test('the model sees short references, names, profiles, fastener kinds and sizes, never IDs, revisions or prices',()=>{
+ assert.deepEqual(shortlistLine(rows[1],1),{ref:'m2',name:rows[1].name,profile:'fastener',fastener:'screw',sizes:{diameter:'3.5 mm',length:'30 mm'}})
+ assert.equal(parseMaterialShortlist({items:[{...rows[0],revision:'2'}],complete:true}),null)
+ assert.equal(parseMaterialShortlist(rows),null)
+ assert.deepEqual(parseMaterialShortlist({items:rows,complete:true}),{rows,complete:true})
 })
 
 test('the reader offers the finder only when it is wired, validates input and keeps the read budget',async()=>{
@@ -50,10 +53,11 @@ test('the material list holds shared and own materials at their current revision
  await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now())',[owner,'finder-owner@example.test',outsider,'finder-outsider@example.test'])
  const call=async(uid:string,name:string,args:unknown[])=>(await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) r`,args)).rows[0].r
  const project=(await call(owner,'bob.create_project',[JSON.stringify({name:'Finder fixture'})])).id
- const list=parseMaterialShortlist(await call(owner,'bob.read_material_shortlist',[project]))!
- assert(list.length>=40)
+ const {rows:list,complete}=parseMaterialShortlist(await call(owner,'bob.read_material_shortlist',[project]))!
+ assert(list.length>=40);assert.equal(complete,true)
  const screw=list.find(r=>r.name==='Träskruv, förzinkad (inomhus) 3,5 × 30')!
  assert.deepEqual({fastener:screw.fastener,sizes:screw.sizes,own:screw.own},{fastener:'screw',sizes:{diameter:'3.5 mm',length:'30 mm'},own:false})
  assert.equal(list.find(r=>r.name.startsWith('Plywood, björk 12'))?.sizes.thickness,'12 mm')
+ assert.deepEqual(list.find(r=>r.name==='Trälim, utomhus (D3)')&&{f:list.find(r=>r.name==='Trälim, utomhus (D3)')!.fastener,g:list.find(r=>r.name==='Trälim, utomhus (D3)')!.sizes.grade},{f:'glue',g:'D3'})
  await assert.rejects(call(outsider,'bob.read_material_shortlist',[project]),/project_denied/)
 })

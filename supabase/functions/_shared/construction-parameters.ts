@@ -17,7 +17,8 @@ export async function compileConstructionParameterChange(projectId:string,draft:
  for(const change of changes){
   const old=nodes.get(change.id)
   // A code zero node is shared by every unbound zero position or rotation.
-  if(!old||seen.has(change.id)||old.role==='derived'||ZERO_IDS.has(change.id))throw new Error('invalid_parameter_change_identity')
+  if(old&&ZERO_IDS.has(change.id))throw new Error('parameter_code_zero:'+change.id)
+  if(!old||seen.has(change.id)||old.role==='derived')throw new Error('invalid_parameter_change_identity')
   seen.add(change.id)
   if(change.role==='unknown'){gaps.push({id:change.id,unit:change.unit,reason:change.reason});continue}
   if(change.role!==old.role)throw new Error('invalid_parameter_change_role')

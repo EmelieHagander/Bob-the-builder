@@ -37,7 +37,7 @@ import { createRecordDetailReader } from './project-record-detail.ts'
 import { createProjectImageTools } from './project-image-tools.ts'
 import { createCadAssistant, cadRenderInput } from './cad-assistant.ts'
 import { createCadGuideTransport, createCadTransport } from './cad-transport.ts'
-import { createMaterialCatalogReader, materialFindResult, parseMaterialShortlist, shortlistLine } from './material-catalog.ts'
+import { createMaterialCatalogReader, materialFindResult, parseMaterialShortlist, shortlistLine, shortlistRef } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
 import { createProjectContext, type Opened } from './project-context/dispatcher.ts'
@@ -545,16 +545,16 @@ export async function answerWithOpenAi(opts: {
   const findMaterials = async (needs: string[]) => {
     const { data, error } = await rpc('read_material_shortlist', { p_project: opts.projectId }, AbortSignal.timeout(12000))
     if (error) return { status: error.code === '42501' ? 'denied' : 'unavailable' }
-    const rows = parseMaterialShortlist(data)
-    if (!rows) return { status: 'unavailable' }
-    if (!rows.length) return materialFindResult(needs, rows, { needs: [] })
+    const list = parseMaterialShortlist(data)
+    if (!list) return { status: 'unavailable' }
+    if (!list.rows.length) return materialFindResult(needs, list, { needs: [] })
     // The list comes first so its prefix stays the same between calls.
     const result = await dispatchModel({ app: 'bob', coworkerId: 'bob', functionName: 'material-finder', aiFunction: 'material-finder', module: 'global', userId: opts.userId,
-      catalogRoleKey: 'material-finder', catalogSchemaKey: 'bob_material_find', catalogSchemaParameters: { item_ids: rows.map(r => r.id) },
-      messages: [{ role: 'user', content: JSON.stringify({ materials: rows.map(shortlistLine), needs: needs.map((text, index) => ({ index, text })) }) }], timeoutMs: 20000 })
+      catalogRoleKey: 'material-finder', catalogSchemaKey: 'bob_material_find', catalogSchemaParameters: { item_refs: list.rows.map((_, i) => shortlistRef(i)) },
+      messages: [{ role: 'user', content: JSON.stringify({ materials: list.rows.map(shortlistLine), needs: needs.map((text, index) => ({ index, text })) }) }], timeoutMs: 20000 })
     let value: unknown = result.data
     try { if (typeof value === 'string') value = JSON.parse(value) } catch { value = null }
-    return result.success ? materialFindResult(needs, rows, value) : { status: 'unavailable' }
+    return result.success ? materialFindResult(needs, list, value) : { status: 'unavailable' }
   }
   const catalogReader = createMaterialCatalogReader(opts.projectId,
     checkpointed((input:Record<string,unknown>, signal:AbortSignal) => rpc('catalog_read', { p_project: opts.projectId, p_input: input }, signal)),

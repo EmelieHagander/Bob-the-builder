@@ -133,7 +133,10 @@ const TABLE_SECTIONS:Record<string,Row>={
  fastener_totals:{columns:['kind','diameter_mm','length_mm','count','joint_ids']},
 }
 const TABLE_MESSAGE='Compact table of exact saved values. Placements, formulas, materials, reasons and notes are in the named views: open exact records by ID. Role unknown means not recorded. Fasteners are the server rule-of-thumb proposal with its rule gaps, not verified strength. No current check is inferred from a saved draft or historical result.'
-export type ConstructionTableOption={table:true;fasteners?:FastenerSchedule|null}
+export type ConstructionTableOption={table:true;fasteners?:FastenerSchedule|null;chosen?:boolean}
+// Chosen joint fasteners (2026-11-01, pinned per manifest): the fastener column holds each joint's chosen items.
+const TABLE_MESSAGE_CHOSEN=TABLE_MESSAGE.replace('Fasteners are the server rule-of-thumb proposal with its rule gaps, not verified strength.',
+ 'Fasteners are each joint\'s chosen catalog items with the database\'s facts per item (older joints: the rule-of-thumb proposal), not verified strength.')
 
 /** Fixed row order: definitions, parts, joints, then the server fastener totals.
  * Fasteners come only from the SQL schedule, with its rule gaps (for example
@@ -295,7 +298,7 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
    if(table?.table!==true)return {...overview,next_read:{...query,revision:draft.revision,view:'notes'},message:'Description, questions, parts and dependencies are available in the named views. No current check is inferred from a saved draft or historical result.'}
    // The cursor also binds whether the server schedule was present: its rows differ.
    const fasteners=table.fasteners??null,rows=tableRows(draft,fasteners),openQuestions=arr(draft.open_questions).length
-   return page({...query,revision:draft.revision},{...overview,message:TABLE_MESSAGE},rows,budget,{binding:{table:1,fasteners:fasteners!==null},scope:'overview_table',
+   return page({...query,revision:draft.revision},{...overview,message:table.chosen?TABLE_MESSAGE_CHOSEN:TABLE_MESSAGE},rows,budget,{binding:{table:1,fasteners:fasteners!==null},scope:'overview_table',
     present:records=>({table:presentTable(records,rows,fasteners,openQuestions)}),last:{...query,revision:draft.revision,view:'notes',after:null}})
   }
   const selected=constructionViewItems(draft,query.view,query.ids)
