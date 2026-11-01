@@ -1,5 +1,19 @@
 # Foundation verification and rollout
 
+<a id="solution-first-2026-11-01"></a>
+## Code check after Konrad's job; solution first — built 2026-11-01, not installed
+
+Run 14 showed two wasted Konrad jobs: Bob handed over the 500 mm change before
+recording it in the selected solution (Konrad, going by the database, handed back),
+and Konrad changed the width without the server check, so Bob sent him back before
+Rita drew (a no-op revision). Owner decisions: **A** code runs the server
+construction check on every revision Konrad saved and left unchecked
+(`construction_auto_check_version` 1); **B** Bob's hand-over manual: the owner's
+latest decisions are in the selected solution before the job goes to Konrad, and
+the return contract names the code check (Saoirse's texts, pending the owner's
+approval). Catalog: `20261101010000_bob_solution_first_catalog.sql`. Tests:
+`bob-build-workers` (11), the fixture replay.
+
 <a id="report-readback-install-2026-10-31"></a>
 ## Report readback installed; paid box run 14 passed — 2026-10-31
 
