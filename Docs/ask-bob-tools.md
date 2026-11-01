@@ -188,6 +188,38 @@ checks drawings. Source: `bob-workers.ts`, the toolbox setup in
 load from his first step and are never picker candidates; box run 13 cost USD 0.86
 ([record](foundation-verification.md#build-team-cost-2026-10-31)).
 
+<a id="konrad-lean"></a>
+**Konrad's lean construction — built 2026-11-01, not live (owner decisions;
+each part waits for its catalog pin and the owner's approval of its texts).**
+Box run 16: Konrad cost USD 0.42 of USD 0.84; one save call wrote about 9,400
+tokens, and every box construction was glue only or screws only by chance.
+
+- **Auto zero** (`tools.save_construction_draft` `default_zero_version` 1). A
+  position or rotation the recipe states as 0 may stay unbound: code binds it to
+  one fixed zero node (`origin.zero_mm`, `origin.zero_deg`) with a code reason,
+  so the saved graph stays complete and reads back unchanged. Dimensions and
+  non-zero values still need their own node; array starts default only their
+  rotations. Part edits get the same through a second prepare. A parameter
+  change cannot move a code zero node. Source: `cad-parameters.ts`
+  (`withZeroDefaults`), `construction-draft.ts`.
+- **Joints held by chosen catalog items** (`joint_fastener_version` 2). A joint
+  names `fasteners`: exact catalog items (screws, nails, bolts, glue) in any mix,
+  each with an optional count and spacing; it has no method or rule fastener and
+  is saved as method `butt` (boards meeting face to face, the only shape the 3D
+  model checks today). The database owns the facts
+  ([Artifacts](artifacts.md#chosen-joint-fasteners--owner-decision-2026-11-01));
+  an item that is not a tagged fastener is refused as
+  `joint_fasteners_not_in_catalog`. The table view, lists and model check show
+  several items per joint; single-item joints keep their former shape.
+- **Material finder** (`tools.find_catalog_materials`, role `material-finder` on
+  the nano model). Konrad names up to 12 needs in words; the small model sees the
+  project's material list (`bob.read_material_shortlist`: shared and own items
+  at their current revision, with name, profile, fastener kind and sizes) and may
+  answer only with IDs from it. Code returns each item's own values and drops
+  any other ID. It replaces Konrad's two catalog lookups.
+
+Pinned manifests keep the former schemas, rule fastener and lookups.
+
 <a id="materials-worker"></a>
 **Superseded for new manifests by [the build team](#build-team) (built
 2026-10-31): Mattias's first form, kept by pinned manifests.**

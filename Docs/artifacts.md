@@ -136,6 +136,35 @@ silently, and visual acceptance never promotes a concept to fabrication-ready.
 [State](bob-delivery-flow.md#form-next)
 owns the implementation and replacement of the current full CAD-review gate.
 
+### Chosen joint fasteners — owner decision 2026-11-01
+
+**Status: built (`20261101100000_joint_fasteners_from_catalog.sql`), not
+applied.** Box runs came out glue only or screws only by chance (8 of 15 glue
+only, 7 screws only, never both). Owner: the structural designer decides from
+the available materials what holds a joint; no fixed alternatives. This
+replaces the 2026-10-26 rule below for joints saved this way; earlier joints
+keep it.
+
+- **The joint.** Method `butt` with `fasteners`: up to 8 distinct catalog items
+  of the shared catalog or the project, each `{material_id, material_revision,
+  count, spacing_mm}`. Count and spacing are for screws, nails and bolts; glue
+  takes neither. An empty list means nothing is chosen yet.
+- **What an item is.** `bob.material_types.fastener_kind` (screw, nail, bolt,
+  glue) says what a material type is as a fastener; the seeded screw and nail
+  types are tagged. `bob_private.joint_fastener_item` reads one item revision's
+  kind and nominal diameter and length. Nothing is retyped by a model.
+- **The schedule.** One row per chosen item (`source: chosen`, with its
+  `material_id` and revision). A missing count is spread by the rule below. Fact
+  gaps: `does_not_reach` (not longer than the board it goes through),
+  `passes_through` (tip within 5 mm of the far face or beyond),
+  `short_penetration` (shorter than 2.5 × that board, the rule of thumb),
+  `short_contact`, `narrow_contact`, `count_unknown`, `fastener_unknown`,
+  `no_fastener_chosen`. Glue gives the one package per construction. Totals and
+  material needs group by kind and size as before.
+- **Open:** the shared catalog has no glue yet (owner decision pending), and
+  other joint shapes (rebate, groove, finger joint) need cut boards in the 3D
+  model.
+
 ### Joint fasteners — owner decisions 2026-10-26
 
 **Status: merged in PR #337, applied and deployed 2026-10-26; not yet
