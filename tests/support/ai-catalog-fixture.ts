@@ -38,6 +38,7 @@ let preToolOrderRestoreRows:any[]|undefined,preToolOrderRestoreVersions:Map<stri
 let preMaterialsWorkerRows:any[]|undefined,preMaterialsWorkerVersions:Map<string,number>|undefined
 let preBuildWorkersRows:any[]|undefined,preBuildWorkersVersions:Map<string,number>|undefined
 let preKonradLeanRows:any[]|undefined,preKonradLeanVersions:Map<string,number>|undefined
+let preMaterialFinderTeamRows:any[]|undefined,preMaterialFinderTeamVersions:Map<string,number>|undefined
 let preMemoryStairRows:any[]|undefined,preMemoryStairVersions:Map<string,number>|undefined
 // SQL publications drop the seed markers and name themselves, as `(prior.metadata-'seed_version'-'source_revision')||publication`.
 const publishAs=(row:any,publication:string)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication}}
@@ -483,6 +484,7 @@ for(const migration of migrations){
  if(publicationSpec){
   const spec=JSON.parse(publicationSpec[1])
   if(spec.publication==='bob-konrad-lean-v1'){preKonradLeanRows=structuredClone(seed);preKonradLeanVersions=new Map(versions)}
+  if(spec.publication==='bob-material-finder-team-v1'){preMaterialFinderTeamRows=structuredClone(seed);preMaterialFinderTeamVersions=new Map(versions)}
   // 2026-11-01: publications may also add rows, set definition paths, add
   // metadata and change the toolbox by path (the SQL applies the same spec).
   for(const {key,kind,content,definition,metadata} of spec.additions??[]){
@@ -980,6 +982,10 @@ for(const row of preKonradLeanRows??[])if(row.kind==='tier_binding'&&row.definit
 const preKonradLeanManifest=fixtureManifest(preKonradLeanRows??seed,preKonradLeanVersions??versions,'fixture-pre-konrad-lean-manifest')
 /** Manifests pinned before Konrad's lean construction (2026-11-01): rule fasteners, every zero bound, catalog lookups. */
 export function preKonradLeanCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preKonradLeanManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
+for(const row of preMaterialFinderTeamRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+const preMaterialFinderTeamManifest=fixtureManifest(preMaterialFinderTeamRows??seed,preMaterialFinderTeamVersions??versions,'fixture-pre-material-finder-team-manifest')
+/** Manifests pinned before the finder was offered to the whole team (2026-11-01): Konrad's finder texts, Mattias without it. */
+export function preMaterialFinderTeamCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preMaterialFinderTeamManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 for(const row of preBuildWorkersRows??[])if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const preBuildWorkersManifest=fixtureManifest(preBuildWorkersRows??seed,preBuildWorkersVersions??versions,'fixture-pre-build-workers-manifest')
 /** Manifests pinned before the 2026-10-31 structural designer and Rita (drawing) workers. */

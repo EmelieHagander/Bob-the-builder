@@ -1042,7 +1042,7 @@
   {
     "name": "find_catalog_materials",
     "description": "Find catalog items for things you need, named in words with the sizes that matter. Returns per need whether the catalog has the thing exactly, closely or not at all, with each match's exact ID, revision, name and catalog sizes.",
-    "how_to": "Name each thing and the sizes you need, one need per thing; the finder matches words to this project's material list and does not choose for a purpose. Put all of a job's needs in one call where you can: every call reads the whole list. close is the same kind of thing at another size or variant; whether it will do is your call. Copy the IDs and revisions it returns.",
+    "how_to": "Name each thing and the sizes you need, one need per thing; the finder matches words to the catalog's materials, shared and this project's own, each at its current revision, and does not choose for a purpose. Put all of a job's needs in one call where you can: every call reads the whole list. close is the same kind of thing at another size or variant; whether it will do is your call. Copy the IDs and revisions it returns.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],
