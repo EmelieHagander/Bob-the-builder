@@ -1347,6 +1347,25 @@ guide.
 
 Checked by redrawing the live box locally and the bench fixture; CAD tests 48 OK.
 
+**Chosen joint fasteners (2026-11-01, [PR #391](https://github.com/EmelieHagander/Bob-the-builder/pull/391)).**
+Joints Konrad saves with chosen catalog items
+([decision](artifacts.md#chosen-joint-fasteners--owner-decision-2026-11-01)) give
+the guide a changed schedule; `validate_fasteners` and `fastener_rows` accept it:
+
+- One row per chosen item, so a joint ID can repeat (only for these joints).
+  Each row has three more fields: `counting` (`along_contact`, `per_joint`,
+  `per_construction`), `material_id`, `material_revision`. Sources `chosen`, and
+  `none` while nothing is chosen (shown as "?"); `existing` between two existing
+  parts.
+- `kind` may be any lowercase word (`dowel`, `bracket` …); sizes may be null for
+  per-joint and per-construction items. Totals take any kind but glue, sized only
+  for screws, nails and bolts. Unknown kinds get a plain circle head.
+- A per-construction item (other than glue) counts as one package in the step's
+  parts box; a chosen item the catalog no longer resolves shows as "?".
+
+Older joints keep their rows exactly, and those rows are checked exactly as
+before. Tests: `test_guide.py` (schedule check and grouping for chosen rows).
+
 ### Fastener schedule on drawings — annotations version 2, 2026-10-26
 
 **Status: dormant by owner decision 2026-10-26.** "We do not need to send

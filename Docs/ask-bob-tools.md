@@ -189,8 +189,8 @@ load from his first step and are never picker candidates; box run 13 cost USD 0.
 ([record](foundation-verification.md#build-team-cost-2026-10-31)).
 
 <a id="konrad-lean"></a>
-**Konrad's lean construction — built 2026-11-01, not live (owner decisions;
-each part waits for its catalog pin and the owner's approval of its texts).**
+**Konrad's lean construction — installed 2026-11-01 (owner decisions; texts
+approved by the owner; [install](foundation-verification.md#konrad-lean-install-2026-11-01)).**
 Box run 16: Konrad cost USD 0.42 of USD 0.84; one save call wrote about 9,400
 tokens, and every box construction was glue only or screws only by chance.
 
@@ -199,8 +199,9 @@ tokens, and every box construction was glue only or screws only by chance.
   one fixed zero node (`origin.zero_mm`, `origin.zero_deg`) with a code reason,
   so the saved graph stays complete and reads back unchanged. Dimensions and
   non-zero values still need their own node; array starts default only their
-  rotations. Part edits get the same through a second prepare. A parameter
-  change cannot move a code zero node. Source: `cad-parameters.ts`
+  rotations. Part edits get the same through a second prepare, and code's zero
+  bindings of a removed part go with it. A parameter change cannot move a code
+  zero node. Source: `cad-parameters.ts`
   (`withZeroDefaults`), `construction-draft.ts`.
 - **Joints held by chosen catalog items** (`joint_fastener_version` 2). A joint
   names `fasteners`: exact catalog items (screws, nails, bolts, glue) in any mix,
@@ -210,8 +211,11 @@ tokens, and every box construction was glue only or screws only by chance.
   ([Artifacts](artifacts.md#chosen-joint-fasteners--owner-decision-2026-11-01));
   a list the database refuses names its mistake (`joint_fastener_not_in_catalog`,
   `_repeated`, `_other_project`, `_package_counted`, `_spaced_per_joint`,
-  `_size_unknown`, or `joint_fasteners_invalid`). The table view, lists and model check show
-  several items per joint; single-item joints keep their former shape.
+  `_size_unknown`, `_glue_counted`, or `joint_fasteners_invalid`); screws, nails
+  and bolts need a size and glue counts once per construction, however the item
+  was saved. The table view, lists, model check and build guide show several
+  items per joint; single-item joints keep their former shape. The check a save
+  returns carries the facts per item after its findings, within the same budget.
 - **Hardware Konrad adds** (`tools.add_catalog_fastener`, owner decision
   2026-11-01: "he doesn't have to use the list of pre-seeds, he can add if
   needed"). When the catalog lacks what should hold a joint, Konrad adds it:

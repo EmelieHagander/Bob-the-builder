@@ -1,5 +1,36 @@
 # Foundation verification and rollout
 
+<a id="konrad-lean-install-2026-11-01"></a>
+## Konrad's lean construction installed — 2026-11-01
+
+With the owner's OK ("Okay go"; the CAD worker deploy confirmed separately),
+[PR #391](https://github.com/EmelieHagander/Bob-the-builder/pull/391) merged as
+`f21128cc67d1e0e21fbfc11f67ff725217ab5713`. Zero open Bob jobs before every step.
+
+1. **Database:** `20261101100000_joint_fasteners_from_catalog` (recorded
+   `20261101120022`), `20261101103000_shared_wood_glue` (`20261101120024`),
+   `20261101104000_fastener_needs_open_kinds` (`20261101120025`),
+   `20261101110000_material_shortlist` (`20261101120027`). Read back: eight
+   material types carry a fastener kind (four screws, two nails, two glues),
+   profile `joint_hardware` published, both glues in the shared catalog, the
+   three new functions present.
+2. **Functions:** `bob-worker` v165 and `ask-bob` v197. 129 of 130 and 131 of 132
+   files equal the repository (the established empty `cad-intake.ts`); both return
+   **401** without login.
+3. **CAD worker:** [run 41304535610](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41304535610)
+   deployed `f21128c` to Modal; engine tests and the live smoke check passed. The
+   build guide now accepts chosen-item schedule rows
+   ([format](cad-adapter.md#build-guides-ikea-style--slice-1-2026-10-30)).
+4. **Catalog:** live equalled the pre-publication snapshot (362 rows, 0
+   differences). Recorded as `20261101120439_bob_konrad_lean_catalog`: 18
+   definitions from `bob-konrad-lean-v1` (`bob.tools` v37 with
+   `rejection_reason_version` 1, `tools.save_construction_draft` v13,
+   `tools.edit_construction_parts` v7, the finder's role on `gpt-5.4-nano`, low
+   effort, Konrad's two new tools, the shorter report texts). All 370 active
+   definitions equal the fixture.
+
+Not yet run: the paid box run that measures it (about USD 0.85, needs the owner's OK).
+
 <a id="solution-first-install-2026-11-01"></a>
 ## Code check and solution first installed; paid box run 16 passed at USD 0.84 — 2026-11-01
 
