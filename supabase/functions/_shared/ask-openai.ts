@@ -658,6 +658,8 @@ export async function answerWithOpenAi(opts: {
     constructionViews:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_draft'&&row.metadata?.construction_view_version===1),
     constructionRepeats:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.construction_repeat_version===1),
     defaultZero:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.default_zero_version===1),
+    decimalRounding:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.decimal_rounding_version===1),
+    repeatStart:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.repeat_start_version===1),
     chosenJointFasteners:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.joint_fastener_version===2),
     observationTime:(input:unknown)=>memo('construction:observation',input,async()=>new Date().toISOString()),
     prepareEdit:async(payload:import('./project-write.ts').WritePayload)=>{

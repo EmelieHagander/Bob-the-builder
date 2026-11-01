@@ -195,14 +195,18 @@ export class CadReservedParameter extends Error {
  * whose path is gone, and the code zero nodes no binding, formula or frame
  * uses any more. A model node with a reserved ID
  * that is not the exact code node is rejected. */
-export function zeroDefaults(recipe:CadAssemblyRequest|null,plan:ParameterPlan,arrays:{id:string}[]=[]){
+export function zeroDefaults(recipe:CadAssemblyRequest|null,plan:ParameterPlan,arrays:{id:string;start?:Record<string,unknown>}[]=[]){
  const bound=new Set(plan.bindings.map(b=>b.path)),bindings:{path:string;node:string}[]=[]
  const targets=recipe?cadParameterTargets(recipe):null
  if(targets)for(const [path,t] of targets)if(!bound.has(path)&&PLACEMENT.test(path)&&t.get()===0)bindings.push({path,node:ZERO_NODE_IDS[t.unit as 'mm'|'deg']})
  // Code's zero bindings of a part that is gone go with it.
  const stale=targets?plan.bindings.filter(b=>ZERO_IDS.has(b.node)&&!targets.has(b.path)).map(b=>b.path):[]
- // Array starts have no recipe value; only their rotations default to none.
- for(const a of arrays)for(const k of ['rx','ry','rz']){const path=`arrays/${a.id}/start/${k}`;if(!bound.has(path))bindings.push({path,node:ZERO_NODE_IDS.deg})}
+ // Array start rotations default to none; a start position defaults to zero
+ // only where the repeat states it as 0 (repeat_start_version 1).
+ for(const a of arrays){
+  for(const k of ['rx','ry','rz']){const path=`arrays/${a.id}/start/${k}`;if(!bound.has(path))bindings.push({path,node:ZERO_NODE_IDS.deg})}
+  for(const k of ['x','y','z']){const path=`arrays/${a.id}/start/${k}`;if(a.start?.[k]===0&&!bound.has(path))bindings.push({path,node:ZERO_NODE_IDS.mm})}
+ }
  const present=new Map(plan.nodes.filter(n=>ZERO_IDS.has(n.id)).map(n=>[n.id,n]))
  for(const [id,n] of present)if(!isZeroNode(n,id===ZERO_NODE_IDS.mm?'mm':'deg'))throw new CadReservedParameter(id)
  const used=new Set([...plan.bindings.filter(b=>!stale.includes(b.path)),...bindings].map(b=>b.node))
@@ -212,8 +216,24 @@ export function zeroDefaults(recipe:CadAssemblyRequest|null,plan:ParameterPlan,a
  const unused=[...present.keys()].filter(id=>!used.has(id))
  return {bindings,nodes,unused,stale}
 }
+/** Pinned per manifest (decimal_rounding_version 1, owner decision 2026-11-01):
+ * stored values have at most 6 decimals (decimal_6). A decision or estimate
+ * value with more is rounded half away from zero, a change far below any
+ * building tolerance, and its node ID is reported instead of the save failing. */
+export function roundNodeValues(nodes:unknown):string[]{
+ const rounded:string[]=[]
+ if(!Array.isArray(nodes))return rounded
+ for(const n of nodes){
+  if(!n||typeof n!=='object'||!['decision','estimate'].includes((n as any).role))continue
+  const v=(n as any).value
+  if(typeof v!=='number'||!Number.isFinite(v)||Number(v.toFixed(6))===v)continue
+  ;(n as any).value=Number((Math.sign(v)*Math.round(Math.abs(v)*1e6)/1e6).toFixed(6))
+  if(typeof (n as any).id==='string')rounded.push((n as any).id)
+ }
+ return rounded
+}
 /** recipe null: before array expansion, only the array start rotations. */
-export function withZeroDefaults(recipe:CadAssemblyRequest|null,plan:ParameterPlan,arrays:{id:string}[]=[]):ParameterPlan{
+export function withZeroDefaults(recipe:CadAssemblyRequest|null,plan:ParameterPlan,arrays:{id:string;start?:Record<string,unknown>}[]=[]):ParameterPlan{
  const d=zeroDefaults(recipe,plan,arrays)
  if(!d.bindings.length&&!d.nodes.length&&!d.unused.length&&!d.stale.length)return plan
  return {...plan,nodes:[...plan.nodes.filter(n=>!d.unused.includes(n.id)),...d.nodes],bindings:[...plan.bindings.filter(b=>!d.stale.includes(b.path)),...d.bindings]}
@@ -222,7 +242,7 @@ export function withZeroDefaults(recipe:CadAssemblyRequest|null,plan:ParameterPl
 /** The binding and repeat descriptions of the default-zero pin (owner-approved
  * text). Every schema object carrying the former wording gets the new one. */
 const ZERO_PATH_TEXT='Exact slash-separated recipe path through stable IDs and field names, as the recipe nests them; no dot notation or array positions. Bind every controlling numeric field; a position or rotation the recipe states as 0 may stay unbound, and code binds it to zero.'
-const ZERO_ARRAYS_TEXT='Repeat templates for evenly spaced identical parts. Each expands to instances <id>.1..<id>.<count>. Bind arrays/<id>/start/x|y|z (first copy, zero included) and arrays/<id>/spacing_mm (centre-to-centre step along axis); an unbound start rotation means none. Do not bind the expanded instances. Copy N sits at start + (N-1) x spacing along axis.'
+export const ZERO_ARRAYS_TEXT='Repeat templates for evenly spaced identical parts. Each expands to instances <id>.1..<id>.<count>. Bind arrays/<id>/start/x|y|z (first copy, zero included) and arrays/<id>/spacing_mm (centre-to-centre step along axis); an unbound start rotation means none. Do not bind the expanded instances. Copy N sits at start + (N-1) x spacing along axis.'
 export function withDefaultZeroText<T>(value:T,former:{path:string;arrays:string}):T{
  const walk=(v:unknown):unknown=>{
   if(Array.isArray(v))return v.map(walk)

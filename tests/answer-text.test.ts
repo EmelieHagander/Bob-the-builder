@@ -90,6 +90,8 @@ test('rejected calls log and record a content-free reason; every fixed edit mess
   // Arguments that fail the tool's schema name the failing fields, never the expectation text (box run 17).
   assert.deepEqual(toolRejection({ status: 'invalid', issues: [{ path: '$.joints[0].fasteners[1].count', expected: 'integer | null' }, { path: '$', expected: 'object' }] }),
     { code: 'schema_mismatch', fields: ['joints.0.fasteners.1.count'] })
+  // A refused repeat names the exact paths still unbound.
+  assert.deepEqual(toolRejection({ status: 'invalid', reason: 'array_binding_missing', unbound: ['arrays/slats/spacing_mm'], message: 'x' }), { code: 'array_binding_missing', fields: ['arrays/slats/spacing_mm'] })
   assert.equal(toolRejection({ status: 'invalid', message: 'No change made. Unexpected token } in JSON at position 4' }).code, 'invalid_json')
   assert.equal(toolRejection({ status: 'invalid', message: 'Something new happened with "Bob\'s words".' }).code, 'unspecified')
   // An unmapped message gets a fingerprint that tells messages apart and carries none of their text (2026-10-31).

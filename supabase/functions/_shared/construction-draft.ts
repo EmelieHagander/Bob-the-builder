@@ -5,9 +5,9 @@ import { constructionLists } from './construction-lists.ts'
 import { CONSTRUCTION_DELIVERY_TOOL, validConstructionDelivery, type ConstructionDeliveryResource } from './construction-delivery.ts'
 import { constructionCutFit } from './construction-cut-fit.ts'
 import { CAD_RECIPE_SCHEMA } from './cad-schema.ts'
-import { CAD_ARRAYS_SCHEMA, expandCadArrays } from './cad-arrays.ts'
+import { CAD_ARRAYS_SCHEMA, expandCadArrays, withRepeatStartSchema, withoutRepeatStarts } from './cad-arrays.ts'
 import { parseCadAssemblyRequest } from './cad-adapter.ts'
-import { CAD_PARAMETERS_SCHEMA, CadParameterBindingGap, CadParameterGap, CadParameterUnusedNodes, CadReservedParameter, compileCadParameters, parseParameterPlan, parameterSourcePins, withDefaultZeroText, withZeroDefaults, zeroDefaults } from './cad-parameters.ts'
+import { CAD_PARAMETERS_SCHEMA, CadParameterBindingGap, CadParameterGap, CadParameterUnusedNodes, CadReservedParameter, compileCadParameters, parseParameterPlan, roundNodeValues, parameterSourcePins, withDefaultZeroText, withZeroDefaults, zeroDefaults } from './cad-parameters.ts'
 import {CONSTRUCTION_PARAMETER_CHANGES_SCHEMA,compileConstructionParameterChange} from './construction-parameters.ts'
 import { INSTANCE_POLICY_SCHEMA,constructionInstancePolicy } from './construction-instance-policy.ts'
 import { CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL } from './construction-consequences.ts'
@@ -139,8 +139,10 @@ const CONSTRUCTION_PROSE:Record<string,readonly string[]>={
  * read is shown as unavailable; fasteners are never recomputed here. */
 /** The exact unbound array paths of a parameter_gaps rejection, when readable. */
 function arrayGaps(message:string):string[]{
- try{const v=JSON.parse(message.slice('parameter_gaps:'.length));return Array.isArray(v?.unbound)?v.unbound.filter((p:unknown)=>typeof p==='string').slice(0,12):[]}catch{return []}
+ try{const v=JSON.parse(message.slice('parameter_gaps:'.length));return Array.isArray(v?.unbound)?v.unbound.filter((p:unknown)=>typeof p==='string').slice(0,256):[]}catch{return []}
 }
+// Draft wording, pending the owner's OLD -> NEW approval (repeat_start_version 1).
+const REPEAT_GAP_MESSAGE='No construction saved. Bind every path in unbound.'
 /** The schedule rows of chosen items that carry a fact, compactly; null when
  * the schedule could not be read (never shown as "no facts"). */
 export function chosenFastenerFacts(schedule:FastenerSchedule|null){
@@ -173,6 +175,12 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  /** Pinned per manifest (default_zero_version 1): positions and rotations the
   * recipe states as 0 may stay unbound; code binds them to a fixed zero node. */
  defaultZero?:boolean;
+ /** Pinned per manifest (decimal_rounding_version 1): values with more than 6
+  * decimals are rounded and reported as rounded_values, not rejected. */
+ decimalRounding?:boolean;
+ /** Pinned per manifest (repeat_start_version 1, needs defaultZero): a repeat
+  * states its first copy's position; a start of 0 binds to the code zero. */
+ repeatStart?:boolean;
  /** Pinned per manifest (joint_fastener_version 2, owner decision 2026-11-01):
   * a joint names the catalog items that hold it, in any mix, instead of a
   * method with a rule fastener. Saved as method 'butt' with that list. */
@@ -219,7 +227,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  const baseSaveTool=opts.constructionRepeats?CONSTRUCTION_REPEAT_SAVE_TOOL:CONSTRUCTION_SAVE_TOOL
  const formSaveTool=opts.formRefinement?withFormRefinement(baseSaveTool):baseSaveTool
  const zeroText=<T,>(tool:T)=>opts.defaultZero?withDefaultZeroText(tool,{path:(CAD_PARAMETERS_SCHEMA.properties.bindings as any).items.properties.path.description,arrays:CAD_ARRAYS_SCHEMA.description}):tool
- const saveTool=zeroText(opts.chosenJointFasteners?withChosenJointFasteners(formSaveTool):formSaveTool)
+ const saveTool=(t=>opts.defaultZero&&opts.repeatStart?withRepeatStartSchema(t):t)(zeroText(opts.chosenJointFasteners?withChosenJointFasteners(formSaveTool):formSaveTool))
  const joints=(value:unknown)=>opts.chosenJointFasteners?storedChosenJoints(value):storedJoints(value)
  const baseParameterTool=opts.constructionSourceRefresh?CONSTRUCTION_PARAMETER_REFRESH_TOOL:CONSTRUCTION_PARAMETER_TOOL
  const withText=(tool:typeof CONSTRUCTION_EDIT_TOOL)=>opts.constructionText?withConstructionText(tool):tool
@@ -277,6 +285,16 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  restoreState(state:ConstructionToolsState){if(state?.version!==(opts.constructionViews?2:1)||!Number.isSafeInteger(state.used)||state.used<0)throw new Error('construction_tools_checkpoint_invalid');if(state.version===2)views.restoreState(state.observations);used=state.used},
  tools:[readTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.readDelivery?[CONSTRUCTION_DELIVERY_TOOL]:[]),...(opts.writer?[saveTool,editTool,parameterTool,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
  async execute(name:string,raw:unknown):Promise<Record<string,any>>{
+  // Owner decision 2026-11-01: a value with too many decimals no longer costs a
+  // whole save; code rounds it and says which values it rounded.
+  const rounded=opts.decimalRounding&&raw&&typeof raw==='object'&&!Array.isArray(raw)?(r=>
+   name===CONSTRUCTION_SAVE_TOOL.function.name?roundNodeValues(r.parameter_plan?.nodes)
+   :name===CONSTRUCTION_EDIT_TOOL.function.name?roundNodeValues(r.changes?.nodes?.upsert)
+   :name===CONSTRUCTION_PARAMETER_TOOL.function.name?roundNodeValues(r.changes):[])(raw=structuredClone(raw) as Record<string,any>):[]
+  const result=await tools.executeTool(name,raw)
+  return rounded.length&&result&&typeof result==='object'?{...result,rounded_values:rounded}:result
+ },
+ async executeTool(name:string,raw:unknown):Promise<Record<string,any>>{
   if(++used>12&&!opts.unlimitedWork)return {status:'budget_exhausted'}
   const spec=[editTool,CONSTRUCTION_LEGACY_TOOL,parameterTool,readTool,saveTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CUT_SAVE_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL,...(opts.readDelivery?[CONSTRUCTION_DELIVERY_TOOL]:[])].find(s=>s.function.name===name)
   if(!spec)return {status:'invalid'}
@@ -613,7 +631,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(readiness.target_revision!==v.target_revision)return {status:'conflict',message:'The selected target changed. Read its exact current revision and shared advice before fixing construction geometry.'}
    const arrays=opts.defaultZero&&opts.constructionRepeats&&Array.isArray(v.recipe?.arrays)?v.recipe.arrays.filter((a:any)=>typeof a?.id==='string'):[]
    const authored=opts.defaultZero?withZeroDefaults(null,parseParameterPlan(v.parameter_plan),arrays):v.parameter_plan
-   const expanded=opts.constructionRepeats?expandCadArrays(v.recipe,parseParameterPlan(authored)):{recipe:v.recipe,plan:authored}
+   const expanded=opts.constructionRepeats?expandCadArrays(opts.repeatStart?withoutRepeatStarts(v.recipe):v.recipe,parseParameterPlan(authored)):{recipe:v.recipe,plan:authored}
    if(opts.preciseEditDiagnostics){
     const issues=constructionEditIssues({...v,recipe:expanded.recipe,parameter_plan:expanded.plan,instance_policy:v.instance_policy??constructionInstancePolicy(expanded.recipe as any,null)})
     if(issues.length)return {status:'invalid',issues,message:'No construction changed. Correct only the named posts; for an existing construction use edit_construction_parts.'}
@@ -646,7 +664,9 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(error instanceof CadParameterBindingGap)return {status:'invalid',message:'Bind every path in unbound to a parameter node using these exact slash-separated paths. Keep the same construction IDs and correct the parameter plan; no source lookup retry is needed.',unbound:error.unbound}
    const message=error instanceof Error?error.message:''
    if(opts.constructionRepeats&&/^(invalid_cad_array|cad_array_[a-z_]+)(:.*)?$/.test(message))return {status:'invalid',reason:message.split(':')[0],message:'No construction saved. Correct array IDs/counts and bindings; generated instance/node IDs must be unique and fit the existing canonical limits.'}
-   if(opts.constructionRepeats&&message.startsWith('parameter_gaps:'))return opts.defaultZero
+   if(opts.constructionRepeats&&message.startsWith('parameter_gaps:'))return opts.defaultZero&&opts.repeatStart
+    ?{status:'invalid',reason:'array_binding_missing',unbound:arrayGaps(message),message:REPEAT_GAP_MESSAGE}
+    :opts.defaultZero
     ?{status:'invalid',reason:'array_binding_missing',unbound:arrayGaps(message),message:'No construction saved. Bind arrays/<id>/start/x, y and z, zero included, and arrays/<id>/spacing_mm; an unbound start rotation means none.'}
     :{status:'invalid',reason:'array_binding_missing',message:'Bind all six arrays/<id>/start placement paths and arrays/<id>/spacing_mm. No construction saved.'}
    if(message.startsWith('parameter_code_zero:'))return {status:'invalid',reason:'parameter_code_zero',

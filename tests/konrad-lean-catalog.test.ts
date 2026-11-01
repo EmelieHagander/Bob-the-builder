@@ -18,6 +18,7 @@ function codeTools(session:ReturnType<typeof catalogFixture>){
   constructionRepeats:meta('tools.save_construction_draft').construction_repeat_version===1,
   formRefinement:meta('tools.save_construction_draft').form_refinement_version===1,
   defaultZero:meta('tools.save_construction_draft').default_zero_version===1,
+  repeatStart:meta('tools.save_construction_draft').repeat_start_version===1,
   chosenJointFasteners:meta('tools.save_construction_draft').joint_fastener_version===2,
   coherentWork:meta('tools.read_construction_draft').construction_work_version===1,
   creationPreparation:meta('tools.read_construction_draft').creation_preparation_version===1,

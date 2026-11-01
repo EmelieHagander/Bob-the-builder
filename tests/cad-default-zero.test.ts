@@ -1,7 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {expandCadArrays} from '../supabase/functions/_shared/cad-arrays.ts'
-import {CadParameterBindingGap,CadReservedParameter,ZERO_NODE_IDS,compileCadParameters,inheritCadParameters,withZeroDefaults,zeroDefaults,type ParameterPlan} from '../supabase/functions/_shared/cad-parameters.ts'
+import {expandCadArrays,withoutRepeatStarts} from '../supabase/functions/_shared/cad-arrays.ts'
+import {CadParameterBindingGap,CadReservedParameter,ZERO_NODE_IDS,compileCadParameters,inheritCadParameters,roundNodeValues,withZeroDefaults,zeroDefaults,type ParameterPlan} from '../supabase/functions/_shared/cad-parameters.ts'
 import {compileConstructionParameterChange} from '../supabase/functions/_shared/construction-parameters.ts'
 import {parseCadAssemblyRequest,type CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
 
@@ -110,4 +110,35 @@ test('code zero bindings of a part that is gone are dropped with it',()=>{
  const d=zeroDefaults(gone,left)
  assert(d.stale.length>0&&d.stale.every(p=>p.startsWith(`instances/${id}/`)))
  assert(!withZeroDefaults(gone,left).bindings.some(b=>b.path.startsWith(`instances/${id}/`)))
+})
+
+// Owner decision 2026-11-01 (repeat_start_version 1): a repeat states its
+// first copy's position; a start of 0 binds to the code zero, others need a node.
+test('a repeat start stated as 0 binds to the code zero; a non-zero start and the spacing are all named at once when unbound',()=>{
+ const raw={contract_version:1,units:'mm',assembly_id:'bed',definitions:[{id:'slat',primitive:'box',material_ref:null,x_mm:800,y_mm:70,z_mm:20}],instances:[],views:['front'],
+  arrays:[{id:'slats',definition_id:'slat',axis:'y',count:3,start:{x:0,y:50,z:0}}]}
+ const plan:ParameterPlan={version:1,frames:[],nodes:[{id:'w',role:'decision',value:800,unit:'mm',reason:'Slat'},{id:'d',role:'decision',value:70,unit:'mm',reason:'Slat'},
+  {id:'t',role:'decision',value:20,unit:'mm',reason:'Slat'},{id:'cc',role:'decision',value:100,unit:'mm',reason:'Spacing'},{id:'first',role:'decision',value:50,unit:'mm',reason:'First slat'}],
+  bindings:[{path:'definitions/slat/x_mm',node:'w'},{path:'definitions/slat/y_mm',node:'d'},{path:'definitions/slat/z_mm',node:'t'},{path:'arrays/slats/spacing_mm',node:'cc'},{path:'arrays/slats/start/y',node:'first'}]}
+ const {recipe,plan:expanded}=expandCadArrays(withoutRepeatStarts(raw),withZeroDefaults(null,plan,raw.arrays))
+ const parsed=parseCadAssemblyRequest(recipe) as CadAssemblyRequest
+ const saved=compileCadParameters('p',parsed,withZeroDefaults(parsed,expanded),new Map(),new Map())
+ assert.equal(saved.bindings.find(b=>b.path==='instances/slats.2/placement/x')?.node,ZERO_NODE_IDS.mm)
+ assert.deepEqual(parsed.instances.map(i=>i.placement.y),[50,150,250])
+ // A non-zero start left unbound is a gap; every gap of every repeat comes back in one answer.
+ const gaps={...plan,bindings:plan.bindings.filter(b=>!['arrays/slats/start/y','arrays/slats/spacing_mm'].includes(b.path))}
+ assert.throws(()=>expandCadArrays(withoutRepeatStarts(raw),withZeroDefaults(null,gaps,raw.arrays)),
+  (e:any)=>JSON.stringify(JSON.parse(e.message.slice('parameter_gaps:'.length)).unbound)===JSON.stringify(['arrays/slats/start/y','arrays/slats/spacing_mm']))
+ // Without a stated start (pinned manifests) positions are never defaulted.
+ const pinned={...raw,arrays:[{id:'slats',definition_id:'slat',axis:'y',count:3}]}
+ assert.throws(()=>expandCadArrays(pinned,withZeroDefaults(null,plan,pinned.arrays)),/arrays\/slats\/start\/x/)
+})
+
+test('values with more than 6 decimals are rounded half away from zero and named; others are untouched',()=>{
+ const nodes:any[]=[{id:'third',role:'decision',value:2000/3,unit:'mm',reason:'Split'},{id:'neg',role:'estimate',value:-0.0000005,unit:'mm',reason:'Tiny'},
+  {id:'ok',role:'decision',value:12.5,unit:'mm',reason:'Fine'},{id:'src',role:'source',source:{kind:'measurement'}},{id:'d',role:'derived',operation:'add_v1',operands:['ok','ok'],rounding:'exact'}]
+ assert.deepEqual(roundNodeValues(nodes),['third','neg'])
+ assert.equal(nodes[0].value,666.666667);assert.equal(nodes[1].value,-0.000001);assert.equal(nodes[2].value,12.5)
+ for(const n of nodes.slice(0,3))assert.equal(Number(n.value.toFixed(6)),n.value)
+ assert.deepEqual(roundNodeValues(undefined),[])
 })

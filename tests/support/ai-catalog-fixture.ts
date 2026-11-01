@@ -484,7 +484,7 @@ for(const migration of migrations){
  if(publicationSpec){
   const spec=JSON.parse(publicationSpec[1])
   if(spec.publication==='bob-konrad-lean-v1'){preKonradLeanRows=structuredClone(seed);preKonradLeanVersions=new Map(versions)}
-  if(spec.publication==='bob-material-finder-team-v1'){preMaterialFinderTeamRows=structuredClone(seed);preMaterialFinderTeamVersions=new Map(versions)}
+  if(spec.publication==='bob-finder-save-fixes-v1'){preMaterialFinderTeamRows=structuredClone(seed);preMaterialFinderTeamVersions=new Map(versions)}
   // 2026-11-01: publications may also add rows, set definition paths, add
   // metadata and change the toolbox by path (the SQL applies the same spec).
   for(const {key,kind,content,definition,metadata} of spec.additions??[]){
