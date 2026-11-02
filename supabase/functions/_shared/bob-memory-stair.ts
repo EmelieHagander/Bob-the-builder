@@ -123,7 +123,10 @@ export async function prepareMemoryStair(opts: {
       let data: unknown = response.data
       try { if (typeof data === 'string') data = JSON.parse(data) } catch { data = null }
       const summary = object(data) && typeof data.summary === 'string' ? data.summary.trim() : ''
-      if (summary && summary.length <= 3000 && countContextTokens(summary) <= budget * 1.5) text = summary
+      // budget_tokens is what we ask for; the stored size is bounded by the
+      // schema's 3000 characters. Live Swedish summaries land at ~800–1000
+      // tokens, so a token check here discarded every one of them.
+      if (summary && summary.length <= 3000) text = summary
       else feedback = { reason: summary ? 'too_long' : 'empty', budget_tokens: budget }
     }
     if (text === undefined) {
