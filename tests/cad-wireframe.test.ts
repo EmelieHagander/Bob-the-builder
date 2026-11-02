@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { InstancedBufferGeometry, LineSegments } from 'three'
 import { cadViewerSourceHash, parseCadWireframe, parseCadViewerPin, type CadWireframe } from '../supabase/functions/_shared/cad-wireframe.ts'
 import { parseCadAssemblyRequest } from '../supabase/functions/_shared/cad-adapter.ts'
-import { createWireframeObjects, createWireframeOverview } from '../src/lib/wireframeObjects.ts'
+import { createWireframeObjects, createWireframeOverview, frameInstances, FRAME_ONLY } from '../src/lib/wireframeObjects.ts'
 import { placementMatrix, shellMatrix, multiply, transformPoint } from '../src/lib/shell3d.ts'
 import type { ShellComponent } from '../src/lib/cadShell.ts'
 const fixtures = JSON.parse(readFileSync(new URL('./fixtures/cad-wireframes.json',import.meta.url),'utf8'))
@@ -72,4 +72,20 @@ test('oversized piece fails before buffer creation; one selected part stays avai
  value.instances=Array.from({length:512},(_,i)=>({id:`stud${i}`,definition_id:value.definitions[0].id,placement:{x:i*600,y:0,z:0,rx:0,ry:0,rz:0}}))
  assert.throws(()=>createWireframeObjects(value,'#123456'),/too many edges/)
  const one=createWireframeObjects(value,'#123456',undefined,'stud1');assert.equal(one.segments,1000);one.dispose()
+})
+
+test('frame-only view hides thin boards on the outer faces and keeps the frame',()=>{
+ const box=(x:number,y:number,z:number)=>{const p=[[0,0,0],[x,0,0],[0,y,0],[0,0,z]];return p.flatMap(a=>a)}
+ const value={bounds:{min:[0,0,0],max:[2000,900,1600]},
+  definitions:[{id:'post',positions:box(45,45,1600)},{id:'panel',positions:box(2000,12,1600)},{id:'slat',positions:box(900,20,70)},{id:'rail',positions:box(2000,45,95)}],
+  instances:[{id:'post1',definition_id:'post',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}},
+   {id:'side',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}},
+   {id:'inner',definition_id:'panel',placement:{x:0,y:400,z:0,rx:0,ry:0,rz:0}},
+   {id:'slat1',definition_id:'slat',placement:{x:500,y:0,z:300,rx:0,ry:0,rz:0}},
+   {id:'rail1',definition_id:'rail',placement:{x:0,y:0,z:300,rx:0,ry:0,rz:0}}]} as unknown as CadWireframe
+ assert.deepEqual(frameInstances(value).map(i=>i.id),['post1','inner','rail1'])
+ // Cladding slats on the outer face go with the panel; a rail of the same length stays.
+ assert.equal(frameInstances(value).length,3)
+ const objects=createWireframeObjects(value,'#123456',undefined,FRAME_ONLY)
+ near(objects.bounds.max,[1000,450,800]);objects.dispose()
 })

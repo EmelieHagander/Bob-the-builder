@@ -5,6 +5,7 @@ import type { ShellComponent } from '../lib/cadShell'
 import { inputStyle } from './form'
 import CadWireframeCanvas, { webglAvailable } from './CadWireframeCanvas'
 import { userErrorMessage } from '../lib/userErrors'
+import { FRAME_ONLY } from '../lib/wireframeObjects'
 
 type Load = { key: string; state: 'idle' | 'loading' } | { key: string; state: 'failed'; message: string; retry: boolean } | { key: string; state: 'ready'; geometry: CadWireframe }
 const wait = (signal: AbortSignal) => new Promise<void>((resolve, reject) => {
@@ -65,6 +66,7 @@ export default function CadWireframeView({ projectId, title, artifactId, revisio
     {geometry && <label className="ui-field"><span className="ui-field-label">Parts to show</span>
       <select style={inputStyle} value={instanceId} onChange={e => { setInstanceId(e.target.value); setRenderError('') }}>
         <option value="">All parts in this piece</option>
+        <option value={FRAME_ONLY}>Frame only (hides thin boards on the outside)</option>
         {geometry.instances.map(i => <option key={i.id} value={i.id}>{i.id}</option>)}
       </select></label>}
     {renderError && <p role="alert" className="solution-attention">{renderError}</p>}

@@ -204,6 +204,17 @@ class CalloutTest(unittest.TestCase):
                 self.assertIn('Solid line: edge you can see',texts)
                 self.assertIn('Dashed line: edge hidden behind',texts)
 
+    def test_large_assembly_legend_says_hidden_edges_are_left_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=blank_svg(tmp)
+            box={'min':[0,0,0],'max':[10,20,30],'size':[10,20,30]}
+            rows=[{'id':f'part{i:03}','definition_id':'part','bounding_box_mm':box} for i in range(40)]
+            annotate(path,{'definitions':[{'id':'part','primitive':'box','x_mm':10,'y_mm':20,'z_mm':30}]},rows,box,'isometric',[100,-100,100],[0,0,1],[5,10,15],hidden_edges=False)
+            for page in [g for g in ET.parse(path).getroot() if g.get('id','').startswith('DrawingPage')]:
+                texts=[el.text for el in page.iter(NS+'text')]
+                self.assertIn('Edges hidden behind are left out',texts)
+                self.assertNotIn('Dashed line: edge hidden behind',texts)
+
 def bench():
     req={'definitions':[{'id':'leg','primitive':'box','x_mm':45,'y_mm':45,'z_mm':430},{'id':'rail','primitive':'box','x_mm':1110,'y_mm':45,'z_mm':45}]}
     box=lambda x,y,z,sx,sy,sz:{'min':[x,y,z],'max':[x+sx,y+sy,z+sz],'size':[sx,sy,sz]}
