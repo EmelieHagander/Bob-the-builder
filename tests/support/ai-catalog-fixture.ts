@@ -451,6 +451,38 @@ for(const migration of migrations){
    publishAs(row,'bob-drive-outcome-v1');row.metadata.drive_outcome_version=1;versions.set(key,versions.get(key)!+1)
   }
  }
+ const typedConcept=source.match(/\$bob_typed_concept_spec\$([\s\S]+?)\$bob_typed_concept_spec\$/)
+ if(typedConcept){
+  const spec=JSON.parse(typedConcept[1])
+  for(const key of spec.keys){
+   const row=seed.find(row=>row.key===key),def=structuredClone(row.definition)
+   if(JSON.stringify(sortKeys(def.parameters.properties.changes.items))!==JSON.stringify(sortKeys(spec.old_items))||def.strict!==true)throw new Error('bob_typed_concept_unexpected_schema '+key)
+   def.parameters.properties.changes.items=spec.items
+   if(key===spec.description.key){
+    if(def.description.split(spec.description.old).length!==2)throw new Error('bob_typed_concept_unexpected_description')
+    def.description=def.description.replace(spec.description.old,()=>spec.description.new)
+   }
+   row.definition=def;publishAs(row,'bob-typed-concept-items-v1');row.metadata.typed_concept_version=1;versions.set(key,versions.get(key)!+1)
+  }
+  for(const key of spec.construction_keys){
+   const row=seed.find(row=>row.key===key),def=structuredClone(row.definition),edit=def.parameters.properties.solution_edit.anyOf[0]
+   if(JSON.stringify(sortKeys(edit.properties.changes.items))!==JSON.stringify(sortKeys(spec.construction_old_items)))throw new Error('bob_typed_concept_unexpected_schema '+key)
+   edit.properties.changes.items=spec.items
+   row.definition=def;publishAs(row,'bob-typed-concept-items-v1');row.metadata.typed_concept_version=1;versions.set(key,versions.get(key)!+1)
+  }
+ }
+ if(/\$bob_handover_readiness\$/.test(source)){
+  const row=seed.find(row=>row.key==='bob.tools')
+  if(row.definition.build_workers_version!==1)throw new Error('bob_handover_readiness_unexpected_tools')
+  row.definition={...row.definition,handover_readiness_version:1};publishAs(row,'bob-handover-readiness-v1');versions.set(row.key,versions.get(row.key)!+1)
+ }
+ const descriptionRole=source.match(/\$bob_description_role_spec\$([\s\S]+?)\$bob_description_role_spec\$/)
+ if(descriptionRole){
+  const spec=JSON.parse(descriptionRole[1]),row=seed.find(row=>row.key===spec.key)
+  if(row.definition.description.split(spec.old).length!==2)throw new Error('bob_description_role_unexpected_description')
+  row.definition={...row.definition,description:row.definition.description.replace(spec.old,()=>spec.new)}
+  publishAs(row,'bob-description-role-v1');row.metadata.description_role_version=1;versions.set(row.key,versions.get(row.key)!+1)
+ }
  if(/\$bob_mini_trial\$/.test(source)){
   const base=seed.find(row=>row.key==='profile.ask-bob')
   seed.push({key:'profile.ask-bob-mini',kind:'execution_profile',content:'',definition:{...base.definition,tier:'mini'},variables:[],metadata:{publication:'bob-mini-trial-v1'}});versions.set('profile.ask-bob-mini',1)

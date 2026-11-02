@@ -77,7 +77,10 @@ try{
         if(loseSend){loseSend=false;return respond({status:503,json:{error:'unavailable'}})}
         const illustration=crypto.randomUUID(),source=images.get(v.imageIds[0])
         images.set(illustration,{...source,id:illustration,object_path:`A/${illustration}`,title:'Build in the place',source_kind:'ai_generated',purpose:'proposal',state:'ready'})
-        const evidence={kind:'ai_assessment',sources:[],partial:false,writes:[{projectId:'A',dataset:'media',recordId:illustration,label:'Build in the place',operation:'updated',savedAt:new Date().toISOString()}]}
+        // Bob also opened the owner's attachment and an earlier saved sketch: only the sketch is shown again.
+        const earlier=crypto.randomUUID();images.set(earlier,{...source,id:earlier,object_path:`A/${earlier}`,title:'Earlier sketch',source_kind:'ai_generated',purpose:'proposal',state:'ready'})
+        const opened=id=>({projectId:'A',dataset:'image_pixels',recordId:id,label:'Image opened',truth:'unknown',updatedAt:null,retrievedAt:new Date().toISOString()})
+        const evidence={kind:'ai_assessment',sources:[opened(v.imageIds[0]),opened(earlier)],partial:false,writes:[{projectId:'A',dataset:'media',recordId:illustration,label:'Build in the place',operation:'updated',savedAt:new Date().toISOString()}]}
         const thread=threads.get(v.projectId)
         thread.messages.push({role:'user',text:v.message,turn_id:v.clientTurnId,image_ids:v.imageIds,seq:1,delivery_state:'completed'},
           {role:'assistant',text:'Here is the mockup.',evidence,turn_id:v.clientTurnId,seq:2,delivery_state:'completed'})
@@ -126,6 +129,10 @@ try{
     await drawer.getByRole('button',{name:'Open attached image 1'}).locator('img').waitFor()
     await drawer.getByRole('button',{name:'Open project illustration 1'}).scrollIntoViewIfNeeded()
     await drawer.getByRole('button',{name:'Open project illustration 1'}).locator('img').waitFor()
+    await drawer.getByRole('button',{name:'Open image bob looked at 1'}).scrollIntoViewIfNeeded()
+    await drawer.getByRole('button',{name:'Open image bob looked at 1'}).locator('img').waitFor()
+    assert.equal(await drawer.getByRole('button',{name:'Open image bob looked at 2'}).count(),0,'the owner attachment is not repeated')
+    await drawer.getByText('Earlier image Bob looked at',{exact:true}).waitFor()
     const sendBox=await drawer.getByRole('button',{name:'Send',exact:true}).boundingBox()
     assert(sendBox&&sendBox.height>=44&&sendBox.x+sendBox.width<=viewport.width)
     assert(await drawer.evaluate(el=>el.scrollWidth<=el.clientWidth),'no horizontal overflow')

@@ -49,6 +49,10 @@ A large Project can remain useful as one shared container for team, events, acce
 
 Project phase is **not** silently rolled up from the most advanced, least advanced or majority Area. The user owns the overall Project phase; Bob/UI may recommend a transition from Area/readiness signals but do not auto-change it.
 
+## Project description per phase
+
+Owner decision 2026-11-02: the **project description** says what is being built, for whom and why, its character and where the project stands in its current phase. It holds **no measurements**; those live in measurements and the selected solution, so a decision changes one place only. The description is rewritten when the project moves to a new phase. Runtime: `edit_project_record` contract (publication `bob-description-role-v1`).
+
 ## Why Area is the workstream seam — current-code audit
 
 Current runtime already makes `Area` the strongest fit for this responsibility:

@@ -112,7 +112,7 @@ test('every concept prose field rejects internal codes through whole-model edits
   const snapshot: EditSnapshot = { project_id: 'A', key: 'sol1', resource: 'solutions', scope_label: 'Project', record, measurements: [], target: null }
   const edits = createProjectEdits({ projectId: 'A', writer, hasAccess: async () => true, unlimitedWork: true, read: async () => ({ data: [snapshot], error: null }) })
   const [{ edit_ref }] = (await edits.execute('read_project_edit_context', { resource: 'solutions', query: null, next_ref: null })).entries
-  const save = (value: unknown) => edits.execute('edit_project_record', { edit_ref, changes: [{ op: 'set', path: '/design_intent/model', value_json: JSON.stringify(value) }], reason: 'Owner requested a concept', request_quote: 'Spara uppgiften' })
+  const save = (value: unknown) => edits.execute('edit_project_record', { edit_ref, changes: [{ op: 'set_concept_model', model: value }], reason: 'Owner requested a concept', request_quote: 'Spara uppgiften' })
   const paths = WRITE_TOOL_PROSE.save_project_solution.filter(path => path.startsWith('design_intent.model.'))
   for (const [path] of proseFields({ design_intent: intent }, paths)) {
     const changed: any = structuredClone(model), keys = path.split('.').slice(2)

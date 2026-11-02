@@ -10,7 +10,7 @@ import type { ProjectSource } from '../../../src/data/provenance.ts'
 const object = (properties: Record<string, unknown>) => ({ type: 'object', additionalProperties: false, properties, required: Object.keys(properties) })
 const text = { type: 'string' }
 const tool = (name: string, description: string, properties: Record<string, unknown>) => ({ type: 'function' as const, function: { name, description, parameters: object(properties), strict: true } })
-export const CONCEPT_EDIT_GUIDE = ' Early 2D design uses optional /design_intent/model on this same Solution, before target selection. Initialize once with {version:1,frame:{origin,x,y,z} (plain axis descriptions),nodes,components,views,constraints,unsupported:[]}. Nodes reuse CAD parameters: {id,role:decision|estimate,value,unit:mm|scalar,reason}, {id,role:unknown,unit,reason}, or {id,role:derived,operation:add_v1|subtract_v1|multiply_v1|divide_v1,operands:[id,id],rounding:exact|half_away_6}. No measured/source nodes. Components: {id,label,kind:solid|space|opening,active:true,position:[node,node,node],size:[node,node,node],features:[feature_id],choices:[choice_id]}. Views: {id,label,plane:XY|XZ|YZ,kind:projection|section,at:null|node}; include an XY projection and a profile; section at names the perpendicular coordinate. Constraints: {id,label,relation:equal|at_most,left:node,right:node,feature:null|feature_id}. View requirements use constraints {id,label,relation:view_plane,view:view_id,plane:XY|XZ|YZ,feature:null|feature_id}. Use returned concept_links. IDs are local letters/digits/underscore/hyphen, start with a letter, max 32. Subsequent changes set /design_intent/model/<nodes|components|views|constraints>/<index>/<field>, append at /-, or set frame/unsupported. Node content may be replaced at its index with the SAME id. Components deactivate via active=false; do not replace lists or identities. Unknowns/conflicts stay saved and visible. Every view derives from this model; openings are annotated volumes, not boolean cuts. Unsupported forms belong in unsupported. Saving is not construction or safety approval.'
+export const CONCEPT_EDIT_GUIDE = ' Early 2D design uses an optional concept model on this same Solution, before target selection. Start it once with set_concept_model; extend it with add_concept_node, add_concept_component, add_concept_view or add_concept_constraint; replace a node with replace_concept_node at its index, keeping the same id. No measured/source nodes. Include an XY projection and a profile view; a section names its perpendicular coordinate in at. Components and constraints link features and choices through the returned concept_links. Change single fields at /design_intent/model/<nodes|components|views|constraints>/<index>/<field>, or set /design_intent/model/frame or /design_intent/model/unsupported. Components deactivate via active=false; do not replace lists or identities. Unknowns/conflicts stay saved and visible. Every view derives from this model; openings are annotated volumes, not boolean cuts. Unsupported forms belong in unsupported. Saving is not construction or safety approval.'
 // New design features and choices have fixed, typed shapes. They are their own
 // change operations so a strict tool schema decides the shape before the call,
 // instead of a guessed value_json that the server can only reject afterwards
@@ -32,17 +32,48 @@ export const DESIGN_CHOICE_ITEM = object({
   decision_basis: { type: 'string' },
   deferral: { anyOf: [object({ scope: { type: 'string', enum: ['illustration', 'concept'] }, reason: { type: 'string' } }), { type: 'null' }], description: 'Only when deferred; otherwise null.' },
 })
+const conceptId = { type: 'string', description: 'Local id: letters, digits, underscore or hyphen, starting with a letter, max 32.' }
+const conceptUnit = { type: 'string', enum: ['mm', 'scalar'] }
+const plane = { type: 'string', enum: ['XY', 'XZ', 'YZ'] }
+const nullableText = { type: ['string', 'null'] }
+export const CONCEPT_NODE_ITEM = { anyOf: [
+  object({ id: conceptId, role: { type: 'string', enum: ['decision', 'estimate'] }, value: { type: 'number' }, unit: conceptUnit, reason: text }),
+  object({ id: conceptId, role: { type: 'string', enum: ['unknown'] }, unit: conceptUnit, reason: text }),
+  object({ id: conceptId, role: { type: 'string', enum: ['derived'] }, operation: { type: 'string', enum: ['add_v1', 'subtract_v1', 'multiply_v1', 'divide_v1'] }, operands: { type: 'array', minItems: 2, maxItems: 2, items: text }, rounding: { type: 'string', enum: ['exact', 'half_away_6'] } }),
+] }
+const nodeTriple = { type: 'array', minItems: 3, maxItems: 3, items: text, description: 'Node ids for x, y and z.' }
+export const CONCEPT_COMPONENT_ITEM = object({ id: conceptId, label: text, kind: { type: 'string', enum: ['solid', 'space', 'opening'] }, active: { type: 'boolean' }, position: nodeTriple, size: nodeTriple, features: { type: 'array', items: text, description: 'Feature ids from concept_links.' }, choices: { type: 'array', items: text, description: 'Choice ids from concept_links.' } })
+export const CONCEPT_VIEW_ITEM = object({ id: conceptId, label: text, plane, kind: { type: 'string', enum: ['projection', 'section'] }, at: { ...nullableText, description: 'Node id of the perpendicular coordinate for a section; null for a projection.' } })
+export const CONCEPT_CONSTRAINT_ITEM = { anyOf: [
+  object({ id: conceptId, label: text, relation: { type: 'string', enum: ['equal', 'at_most'] }, left: text, right: text, feature: nullableText }),
+  object({ id: conceptId, label: text, relation: { type: 'string', enum: ['view_plane'] }, view: text, plane, feature: nullableText }),
+] }
+export const CONCEPT_MODEL_ITEM = object({
+  version: { type: 'integer', enum: [1] },
+  frame: object({ origin: text, x: text, y: text, z: text }),
+  nodes: { type: 'array', minItems: 1, maxItems: 64, items: CONCEPT_NODE_ITEM },
+  components: { type: 'array', minItems: 1, maxItems: 48, items: CONCEPT_COMPONENT_ITEM },
+  views: { type: 'array', minItems: 2, maxItems: 6, items: CONCEPT_VIEW_ITEM },
+  constraints: { type: 'array', maxItems: 24, items: CONCEPT_CONSTRAINT_ITEM },
+  unsupported: { type: 'array', maxItems: 12, items: text },
+})
 export const CONTENT_CHANGE_ITEM = { anyOf: [
   object({ op: { type: 'string', enum: ['set', 'append_text', 'remove'] }, path: text, value_json: { type: ['string', 'null'], description: 'JSON-encoded new value. null only for remove. append_text appends the decoded string verbatim.' } }),
   object({ op: { type: 'string', enum: ['add_feature'] }, feature: DESIGN_FEATURE_ITEM }),
   object({ op: { type: 'string', enum: ['add_choice'] }, choice: DESIGN_CHOICE_ITEM }),
+  object({ op: { type: 'string', enum: ['set_concept_model'] }, model: CONCEPT_MODEL_ITEM }),
+  object({ op: { type: 'string', enum: ['add_concept_node'] }, node: CONCEPT_NODE_ITEM }),
+  object({ op: { type: 'string', enum: ['replace_concept_node'] }, index: { type: 'integer' }, node: CONCEPT_NODE_ITEM }),
+  object({ op: { type: 'string', enum: ['add_concept_component'] }, component: CONCEPT_COMPONENT_ITEM }),
+  object({ op: { type: 'string', enum: ['add_concept_view'] }, view: CONCEPT_VIEW_ITEM }),
+  object({ op: { type: 'string', enum: ['add_concept_constraint'] }, constraint: CONCEPT_CONSTRAINT_ITEM }),
 ] }
 export const PROJECT_EDIT_TOOLS = [
   tool('read_project_edit_context', 'Read complete editable project descriptions or solutions. Returns server-bound edit_ref selections and content; never construct a database identity or version. selected_solutions includes each selected scope separately. Use next_ref unchanged for the next page. Re-read after a conflict and reconsider the intended change.', {
     resource: { type: 'string', enum: ['project_description', 'selected_solutions', 'solutions'] },
     query: { type: ['string', 'null'] }, next_ref: { type: ['string', 'null'] },
   }),
-  tool('edit_project_record', 'Revise the record returned by read_project_edit_context using only the requested changes. Never creates an alternative. Existing fields, measurements, image links and nested decisions are preserved. Editing a selected solution also advances that same selection atomically. Changes use content paths and JSON-encoded values. Text fields: /description, /title, /assumptions, /tradeoffs. Design fields: /design_intent/summary or /design_intent/purpose; features and choices use zero-based indices from the read. Add a new feature or choice with op add_feature or add_choice; the server assigns its identity and source link. Replace individual content fields; remove a feature/choice explicitly. Identity and source-link edits are unavailable here. A null design_intent can be initialized by setting its summary (purpose defaults to concept). Changes reset alignment to draft unless /design_intent/alignment is explicitly set with an honest status and basis. A failed edit must never be replaced with a create.', {
+  tool('edit_project_record', 'Revise the record returned by read_project_edit_context using only the requested changes. Never creates an alternative. Existing fields, measurements, image links and nested decisions are preserved. Editing a selected solution also advances that same selection atomically. Changes use content paths and JSON-encoded values. Text fields: /description, /title, /assumptions, /tradeoffs. The project description tells what is being built, for whom and why, its character and where the project stands in its current phase; it holds no measurements, which live in measurements and the selected solution. Rewrite it when the project moves to a new phase. Design fields: /design_intent/summary or /design_intent/purpose; features and choices use zero-based indices from the read. Add a new feature or choice with op add_feature or add_choice; the server assigns its identity and source link. Replace individual content fields; remove a feature/choice explicitly. Identity and source-link edits are unavailable here. A null design_intent can be initialized by setting its summary (purpose defaults to concept). Changes reset alignment to draft unless /design_intent/alignment is explicitly set with an honest status and basis. A failed edit must never be replaced with a create.', {
     edit_ref: text,
     changes: { type: 'array', minItems: 1, maxItems: 40, items: CONTENT_CHANGE_ITEM },
     reason: text, request_quote: text,
@@ -85,17 +116,28 @@ type ContentChange = { op: 'set' | 'append_text' | 'remove'; path: string; value
 /** One supplied change in the internal path form. Typed add operations are the
  * only way to append a design feature or choice. */
 function readChange(change: any): ContentChange {
-  if (change?.op === 'add_feature' || change?.op === 'add_choice') {
-    const list = change.op === 'add_feature' ? 'features' : 'choices'
-    const field = list === 'features' ? 'feature' : 'choice'
-    if (!exact(change, ['op', field])) throw new Error('Invalid change shape.')
-    return { op: 'set', path: '/design_intent/' + list + '/-', value: change[field] }
+  const typed = TYPED_CHANGES[change?.op as keyof typeof TYPED_CHANGES]
+  if (typed) {
+    const keys = typed.index ? ['op', 'index', typed.field] : ['op', typed.field]
+    if (!exact(change, keys) || typed.index && (!Number.isSafeInteger(change.index) || change.index < 0)) throw new Error('Invalid change shape.')
+    return { op: 'set', path: typed.path + (typed.index ? change.index : ''), value: change[typed.field] }
   }
   if (!exact(change, ['op', 'path', 'value_json']) || !['set', 'append_text', 'remove'].includes(change.op) || !safeText(change.path, 160)) throw new Error('Invalid change shape.')
   if (change.op === 'remove' ? change.value_json !== null : !safeText(change.value_json, 16000, true)) throw new Error('Supply a JSON value; remove uses null.')
   if (/^\/design_intent\/(features|choices)\/-$/.test(change.path)) throw new Error('Add a new design feature or choice with op add_feature or add_choice.')
+  if (/^\/design_intent\/model(\/(nodes|components|views|constraints)\/-|\/nodes\/[0-9]+)?$/.test(change.path) && change.op === 'set') throw new Error('Start, extend or replace concept model items with their typed op (set_concept_model, add_concept_*, replace_concept_node).')
   return { op: change.op, path: change.path, value: change.op === 'remove' ? undefined : JSON.parse(change.value_json) }
 }
+const TYPED_CHANGES = {
+  add_feature: { field: 'feature', path: '/design_intent/features/-' },
+  add_choice: { field: 'choice', path: '/design_intent/choices/-' },
+  set_concept_model: { field: 'model', path: '/design_intent/model' },
+  add_concept_node: { field: 'node', path: '/design_intent/model/nodes/-' },
+  add_concept_component: { field: 'component', path: '/design_intent/model/components/-' },
+  add_concept_view: { field: 'view', path: '/design_intent/model/views/-' },
+  add_concept_constraint: { field: 'constraint', path: '/design_intent/model/constraints/-' },
+  replace_concept_node: { field: 'node', path: '/design_intent/model/nodes/', index: true },
+} as const satisfies Record<string, { field: string; path: string; index?: true }>
 
 /** Clone the pinned read, never a newly fetched head. Paths deliberately cannot
  * address IDs, parents, versions, evidence links or arbitrary object properties. */

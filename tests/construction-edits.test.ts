@@ -95,7 +95,9 @@ test('bounded construction edits preserve canonical data, receipts and authority
   // 2026-11-01 (bob-konrad-lean-v1): chosen joint fasteners and auto-zero wording on top.
   const former={path:(CAD_PARAMETERS_SCHEMA.properties.bindings as any).items.properties.path.description,arrays:CAD_ARRAYS_SCHEMA.description}
   const textEdit=withConstructionText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL)).function.parameters
-  assert.deepEqual(preKonradLeanCatalogFixture().tool('edit_construction_parts').function.parameters,textEdit)
+  // Typed solution_edit items arrived later (bob-typed-design-items-v1, bob-typed-concept-items-v1).
+  const untyped=(parameters:any)=>{const p=structuredClone(parameters),edit=p.properties.solution_edit.anyOf[0];edit.properties.changes.items=edit.properties.changes.items.anyOf[0];return p}
+  assert.deepEqual(preKonradLeanCatalogFixture().tool('edit_construction_parts').function.parameters,untyped(textEdit))
   assert.deepEqual(current.tool('edit_construction_parts').function.parameters,withDefaultZeroText(withChosenJointFasteners(textEdit),former))
   const options={message,writer:writer(),constructionTools:tools(),lookup:createProjectLookup(project,async()=>({data:[],error:null}),async()=>({data:[],error:null})),readPolicy:seedToolPolicy}
   const old=createBobToolSession({...options,aiCatalog:preConstructionEditsCatalogFixture()})

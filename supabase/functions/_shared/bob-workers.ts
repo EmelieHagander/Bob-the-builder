@@ -303,3 +303,28 @@ export function catalogConstructionAutoCheck(catalog: AiCatalogSession): boolean
 export function catalogReportReadback(catalog: AiCatalogSession): boolean {
   return catalog.definition('bob.tools', 'tool_contract').definition.report_readback_version === 1
 }
+
+/** Owner decision 2026-11-02 (Ladan): Konrad wrote a whole first construction
+ * (40k output tokens) although the selected solution did not yet pass the
+ * construction check, so the save was refused and the work thrown away. A first
+ * construction now starts only when the solution passes; otherwise the hand-over
+ * returns the check to Bob, who resolves it in the solution first. */
+export function catalogHandoverReadiness(catalog: AiCatalogSession): boolean {
+  return catalog.definition('bob.tools', 'tool_contract').definition.handover_readiness_version === 1
+}
+const constructionRead = (view: string, extra: Record<string, unknown> = {}) =>
+  ({ artifact_id: null, revision: null, view, ids: [], after: null, section: null, result_id: null, work_kind: null, step_id: null, ...extra })
+export async function handoverReadinessBlock(session: { prepare(): Promise<unknown>; execute(name: string, args: unknown): Promise<any> }): Promise<Record<string, unknown> | null> {
+  // The worker's own session offers its reads first, exactly as its first step would.
+  await session.prepare()
+  const overview = await session.execute('read_construction_draft', constructionRead('overview'))
+  if (overview?.status !== 'ok' || !Array.isArray(overview.items) || overview.items.length) return null
+  const work = await session.execute('read_construction_draft', constructionRead('work', { work_kind: 'parts' }))
+  const state = work?.creation_state
+  if (typeof state !== 'string' || ['ready', 'unavailable'].includes(state) || work.scoped_refinement_available === true) return null
+  const governing = Array.isArray(work.items) ? work.items.find((item: any) => item?.collection === 'governing_sources')?.value : undefined
+  const issues = Array.isArray(governing?.preparation?.issues)
+    ? governing.preparation.issues.map((issue: any) => ({ code: issue?.code ?? null, message: issue?.message ?? null })) : []
+  return { status: 'not_started', reason: 'solution_not_ready_for_construction', creation_state: state, issues,
+    message: 'The structure colleague was not started: the selected solution does not yet pass the construction check. Resolve these issues in the solution, then hand the construction over again.' }
+}
