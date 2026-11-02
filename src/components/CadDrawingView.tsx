@@ -23,7 +23,8 @@ function CadSheet({src,label,title,file}:{src:string;label:string;title:string;f
 export function CadDrawingView({value,title,projectId,artifactId,revision,sourceStatus}:{value:Pick<CadDrawing,'files'|'recipe'|'source_changed'> & Partial<Pick<CadDrawing,'manifest'>> & {build_guide?:Record<string,any>|null};title:string;projectId?:string;artifactId?:string;revision?:number;sourceStatus?:DrawingSourceStatus}){
  const [interactive,setInteractive]=useState(false),[notice,setNotice]=useState('')
  const fallback=useCallback((message:string)=>{setInteractive(false);setNotice(message)},[])
- const names:Record<string,string>={front:'Front',back:'Back',left:'Left',right:'Right',top:'Top',bottom:'Bottom',isometric:'Overview',isometric_front_left:'Overview front-left',isometric_back_left:'Overview back-left',isometric_back_right:'Overview back-right'}
+ // Overviews first: a flat side of a large build is mostly one panel, so it says little about what the build is.
+ const names:Record<string,string>={isometric:'Overview',isometric_front_left:'Overview front-left',isometric_back_left:'Overview back-left',isometric_back_right:'Overview back-right',front:'Front',back:'Back',left:'Left',right:'Right',top:'Top',bottom:'Bottom'}
  const checks=value.manifest?.checks,markers=cadPartMarkers(value.manifest)
  if(sourceStatus?.source_state==='unavailable')return <section aria-label={`${title} CAD drawings`}>
   <p className="solution-attention">Current-use drawing preview is withheld until source access and freshness can be checked. This saved revision remains part of the project history.</p>

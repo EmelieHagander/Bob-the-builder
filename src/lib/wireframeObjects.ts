@@ -15,15 +15,37 @@ export function pointBounds(points: number[][]): WireBounds {
   return { min, max }
 }
 
+/** Parts-picker value that hides cladding so the load-bearing frame is readable. */
+export const FRAME_ONLY = '*frame'
+const SKIN_THIN_MM = 25, SKIN_EDGE_MM = 50, SKIN_LARGE_MM = 600
+
+/** A skin part is a thin, large board lying on the outer face of the build (panel, plywood side, top sheet). */
+export function frameInstances(value: CadWireframe) {
+  const defs = new Map(value.definitions.map(d => [d.id, d.positions]))
+  const { min, max } = value.bounds
+  return value.instances.filter(i => {
+    const matrix = placementMatrix(i.placement), positions = defs.get(i.definition_id) ?? []
+    const points = []
+    for (let k = 0; k < positions.length; k += 3) points.push(transformPoint(matrix, positions.slice(k, k + 3)))
+    if (!points.length) return true
+    const b = pointBounds(points), size = b.max.map((n, a) => n - b.min[a])
+    const thin = size.indexOf(Math.min(...size))
+    const skin = size[thin] <= SKIN_THIN_MM && Math.max(...size) >= SKIN_LARGE_MM
+      && (b.min[thin] - min[thin] <= SKIN_EDGE_MM || max[thin] - b.max[thin] <= SKIN_EDGE_MM)
+    return !skin
+  })
+}
+
 /** One selected piece at a time. Geometry is shared by all instances of a definition. */
 export function createWireframeObjects(value: CadWireframe, colour: string, outer: Mat4 = IDENTITY, instanceId = '') {
-  const instances = instanceId ? value.instances.filter(i => i.id === instanceId) : value.instances
-  if (!instances.length) throw new UserError('This part is not in the saved drawing.')
+  const frame = instanceId === FRAME_ONLY
+  const instances = frame ? frameInstances(value) : instanceId ? value.instances.filter(i => i.id === instanceId) : value.instances
+  if (!instances.length) throw new UserError(frame ? 'Every part in this drawing is cladding; there is no separate frame to show.' : 'This part is not in the saved drawing.')
   const defs = new Map(value.definitions.map(d => [d.id, d.positions]))
   const segments = instances.reduce((n, i) => n + defs.get(i.definition_id)!.length / 6, 0)
   if (segments > CAD_WIREFRAME_DRAW_SEGMENTS) throw new UserError('This piece has too many edges for the mobile view. Choose one part in Parts to show.')
   let bounds: WireBounds
-  if (!instanceId) bounds = pointBounds(corners(value.bounds).map(p => transformPoint(outer, p)))
+  if (!instanceId || frame) bounds = pointBounds(corners(value.bounds).map(p => transformPoint(outer, p)))
   else {
     const matrix = multiply(outer, placementMatrix(instances[0].placement)), positions = defs.get(instances[0].definition_id)!
     const points = []

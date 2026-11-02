@@ -143,6 +143,8 @@ def _render_preview(path:Path,preview:Path,page=1):
 # A requirement on one side is only verifiable in a view of that side.
 VIEWS=("front","back","left","right","top","bottom","isometric","isometric_front_left","isometric_back_left","isometric_back_right")
 MAX_VIEWS=6
+# Above this many parts, views leave hidden (dashed) edges out.
+HIDDEN_EDGE_PARTS=24
 
 def _camera(view,center,d):
     x,y,z=center
@@ -245,12 +247,16 @@ def render_assembly(raw:Any,output_dir:str|Path,drawing_source=None,fasteners=No
     assembly=Compound(children=children); bb=assembly.bounding_box(); size=_vec(bb.size)
     center=[(bb.min.X+bb.max.X)/2,(bb.min.Y+bb.max.Y)/2,(bb.min.Z+bb.max.Z)/2]; distance=max(max(size)*4,1000)
     out=Path(output_dir); out.mkdir(parents=True,exist_ok=True); step=out/"assembly.step"; export_step(assembly,str(step))
-    previews={};annotations={}
+    previews={};annotations={};hidden_edges=len(rows)<=HIDDEN_EDGE_PARTS
     exports={"step":{"file":step.name,"sha256":_hash(step)}}
     for view in req["views"]:
         origin,up=_camera(view,center,distance); visible,hidden=assembly.project_to_viewport(origin,viewport_up=up,look_at=center)
-        path=out/f"{view}.svg"; svg=ExportSVG(unit=Unit.MM,scale=1,margin=10,precision=6); svg.add_layer("Visible"); svg.add_layer("Hidden",line_type=LineType.ISO_DOT); svg.add_shape(visible,layer="Visible"); svg.add_shape(hidden,layer="Hidden"); svg.write(str(path))
-        annotations[view]=annotate(path,req,rows,{"min":_vec(bb.min),"max":_vec(bb.max),"size":size},view,origin,up,center,drawing_source,fasteners)
+        path=out/f"{view}.svg"; svg=ExportSVG(unit=Unit.MM,scale=1,margin=10,precision=6); svg.add_layer("Visible"); svg.add_layer("Hidden",line_type=LineType.ISO_DOT); svg.add_shape(visible,layer="Visible")
+        # 2026-11-02 (bunk bed, 70 parts): every hidden edge drawn dashed turned
+        # each view into an unreadable grid. Large assemblies show what is seen.
+        if hidden_edges: svg.add_shape(hidden,layer="Hidden")
+        svg.write(str(path))
+        annotations[view]=annotate(path,req,rows,{"min":_vec(bb.min),"max":_vec(bb.max),"size":size},view,origin,up,center,drawing_source,fasteners,hidden_edges)
         # Rasterize the exact exported SVG, never an independently generated image.
         for page in range(1,math.ceil(len(rows)/PARTS_PER_PAGE)+1):
             key=view if page==1 else f'{view}.sheet{page}'

@@ -120,7 +120,7 @@ def fastener_lines(fasteners):
     if flagged: lines.append(('note',f"Rule warnings (short or narrow contact, short screw) on {_plural(flagged,'joint','joints')} - check before building."))
     return lines
 
-def annotate(path, req, rows, bounds, view, camera, up, center, source=None, fasteners=None):
+def annotate(path, req, rows, bounds, view, camera, up, center, source=None, fasteners=None, hidden_edges=True):
     tree=ET.parse(path); root=tree.getroot()
     left,top,width,height=map(float,root.attrib['viewBox'].split())
     fit_width,fit_height=(560,500) if view in VIEW_AXES else (610,550)
@@ -168,7 +168,8 @@ def annotate(path, req, rows, bounds, view, camera, up, center, source=None, fas
             text(tip[0]+ux*8,tip[1]+uy*14+5,label,13,'start' if ux>0.3 else 'end' if ux<-0.3 else 'middle')
         # Line key: the same solid and dashed strokes as the geometry layers.
         line([COLUMN_X,218],[COLUMN_X+28,218],stroke='#111',width=1.25);text(COLUMN_X+36,222,'Solid line: edge you can see',12)
-        line([COLUMN_X,236],[COLUMN_X+28,236],dash=True,stroke='#111',width=0.8);text(COLUMN_X+36,240,'Dashed line: edge hidden behind',12)
+        if hidden_edges: line([COLUMN_X,236],[COLUMN_X+28,236],dash=True,stroke='#111',width=0.8);text(COLUMN_X+36,240,'Dashed line: edge hidden behind',12)
+        else: text(COLUMN_X,240,'Edges hidden behind are left out',12)
         if marks:
             text(COLUMN_X,262,'Scales: mm measured from the 0 mark',12)
             if hidden: text(COLUMN_X,277,f'{_plural(hidden,"mark","marks")} too close together to number',12)
