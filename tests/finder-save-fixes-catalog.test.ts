@@ -15,7 +15,7 @@ const mattias=(session:ReturnType<typeof catalogFixture>)=>(catalogWorkers(sessi
 
 test('Mattias reads with the finder and keeps catalog search and read; pinned manifests keep his former reads',()=>{
  const now=mattias(catalogFixture()),pinned=mattias(preMaterialFinderTeamCatalogFixture())
- assert.deepEqual(now.reads,[...pinned.reads,'find_catalog_materials'])
+ assert.deepEqual(now.reads,[...pinned.reads,'find_catalog_materials','read_build_tree'])
  assert.deepEqual(now.tools,pinned.tools)
  for(const name of ['search_material_catalog','read_material_catalog'])assert(now.tools.includes(name),name)
  assert(!pinned.reads.includes('find_catalog_materials'))

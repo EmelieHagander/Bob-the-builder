@@ -118,7 +118,7 @@ test('Bob asks Konrad in plain words; Konrad has his own tools, the project in h
   assert(String(first.systemMessage).includes(catalog.text('worker.team')))
   const { knowledge, request: sent } = tail(catalog, first, 'structure-worker')
   assert.equal(sent, request)
-  assert.deepEqual(Object.keys(knowledge), ['selected_solutions', 'measurements', 'images', 'constructions'])
+  assert.deepEqual(Object.keys(knowledge), ['selected_solutions', 'measurements', 'images', 'constructions', 'build_map'])
   assert.deepEqual(knowledge.constructions.drafts, [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }])
   assert.equal(constructionCalls[0].name, 'read_construction_draft'); assert.equal(constructionCalls[0].args.view, 'overview')
   // His save ran through the same session and Bob got the report.
@@ -213,7 +213,7 @@ test('Rita draws with a fixed tool list: the save is offered from the start and 
   assert.equal(early.status, 'missing_context')
   assert(ran.some(r => r.name === 'design_project_cad'))
   assert.deepEqual(names(second), names(first)); assert.deepEqual(names(third), names(first), 'the same tools in the same order in every step')
-  assert.deepEqual(Object.keys(tail(catalog, first, 'drawing-worker').knowledge), ['constructions', 'drawing_requests', 'plan', 'selected_solutions'])
+  assert.deepEqual(Object.keys(tail(catalog, first, 'drawing-worker').knowledge), ['constructions', 'drawing_requests', 'plan', 'selected_solutions', 'build_map'])
 })
 
 test('Mattias works the same way: a plain request and his project knowledge', async () => {
@@ -224,7 +224,7 @@ test('Mattias works the same way: a plain request and his project knowledge', as
   assert.equal(first.catalogRoleKey, 'materials-worker')
   assert.match(String(first.systemMessage), /Lådan/); assert(String(first.systemMessage).includes(catalog.text('worker.team')))
   const { knowledge, request: sent } = tail(catalog, first, 'materials-worker')
-  assert.equal(sent, request); assert.deepEqual(Object.keys(knowledge), ['materials', 'constructions'])
+  assert.equal(sent, request); assert.deepEqual(Object.keys(knowledge), ['materials', 'constructions', 'build_map'])
   assert.equal(catalog.definition('tools.ask_materials_worker', 'tool_contract').definition.envelope.schema_version, 2)
   assert.equal(toolOutput(bob[1]).status, 'ok')
 })

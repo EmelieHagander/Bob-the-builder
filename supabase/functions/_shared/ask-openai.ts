@@ -1,6 +1,7 @@
 import { drawingErrorCode } from './drawing-errors.ts'
 import { createPlanLinks } from './project-plan-links.ts'
 import { buildingLinkFact, createBuildingScope } from './project-building-scope.ts'
+import { createBuildTree } from './build-tree.ts'
 import { projectFactsPacket } from './project-facts.ts'
 import { createWorkRecords } from './project-work-records.ts'
 import { createSolutionActions } from './project-solution-actions.ts'
@@ -496,6 +497,11 @@ export async function answerWithOpenAi(opts: {
   })
   const buildingScope = createBuildingScope({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
     read: input => rpc('read_bob_building_scope_context', { p_project: opts.projectId, p_resource: input.resource, p_building: input.building, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
+  })
+  // The build tree (2026-11-01): read whole and zoomed in code; placements through one command.
+  const buildTree = createBuildTree({ projectId: opts.projectId, hasAccess,
+    read: () => rpc('read_build_tree', { p_project: opts.projectId }, AbortSignal.timeout(12000)),
+    place: (build, subBuild, room) => writeRpc('place_build', { p_project: opts.projectId, p_artifact: build, p_parent: subBuild, p_space: room }),
   })
   const workRecords = createWorkRecords({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
     readSnapshot: input => rpc('read_bob_work_snapshot', { p_project: opts.projectId, p_resource: input.resource, p_id: input.key }, AbortSignal.timeout(12000)),
@@ -1049,7 +1055,7 @@ export async function answerWithOpenAi(opts: {
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
-    ...opts, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
+    ...opts, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
     readToolPolicy,
     checkpoint: answerCheckpoint,
     // Older in-flight journals keep their recorded post-rollover requests.
