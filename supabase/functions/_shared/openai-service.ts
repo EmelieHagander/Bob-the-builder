@@ -2,7 +2,7 @@ import { responseMessageContent, hasImageContent, prepareResponseImages, readRes
 import { AIBackgroundPending, AIBackgroundStorageError, backgroundResponse, type BackgroundCall } from './ai-background.ts';
 import { validateAiCall, type ResolvedAiRole, type AiVariables } from './ai-catalog.ts';
 import { schemaIssues } from './schema-issues.ts';
-import { callAnthropicMessages } from './anthropic-service.ts';
+import { ANTHROPIC_ENABLED, callAnthropicMessages } from './anthropic-service.ts';
 /**
  * The ONE OpenAI service, shared by every app in this Supabase project.
  * Canonical copy — keep byte-identical across repos.
@@ -496,9 +496,9 @@ export async function callOpenAIResponses<T = unknown>(
   
   // Provider seam (Launchpad pattern): the pinned catalog model names its
   // provider; a non-OpenAI model goes to its own adapter and returns this
-  // same response shape. Off unless the owner sets AI_ANTHROPIC_ENABLED=true.
+  // same response shape. Off unless ANTHROPIC_ENABLED is true in anthropic-service.ts.
   if (catalogRole?.model.provider === 'anthropic') {
-    if (Deno.env.get('AI_ANTHROPIC_ENABLED') !== 'true') {
+    if (!ANTHROPIC_ENABLED) {
       return { success: false, data: null, usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, model: currentModel, error: 'ai_provider_disabled: anthropic' };
     }
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');

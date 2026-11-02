@@ -48,6 +48,11 @@ context, execution and completed results before adding behavioural rules.
 - High-consequence AI output is a proposal/assessment unless the product contract explicitly says otherwise and provenance is preserved.
 - **Nothing costs money without the owner's explicit OK.** No workflow, deploy, live check, model call or paid AI flow starts automatically or on an agent's own judgement; every GitHub workflow is manual-only. Run only focused local tests; the full suite (`npm test`) and CI run only on the owner's direct request.
 
+## AI providers
+
+- OpenAI is the live provider. Claude (Anthropic) is wired but **off**: the switch is `ANTHROPIC_ENABLED` in `supabase/functions/_shared/anthropic-service.ts`. Flip it only with the owner's OK, by PR and Edge deploy. The catalog binding a tier to a Claude model is the second lock.
+- The catalog model row picks the provider (Launchpad pattern); details in `supabase/README.md`. Never call a provider outside its adapter module.
+
 ## Steward routing
 
 - **Vera** — Frontend & UX Steward. Owns rendered UI quality, reuse, responsive behavior, accessibility, honest UI state and design-system consistency. Start at `.claude/agents/vera.md`.

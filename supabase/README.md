@@ -86,10 +86,15 @@ per provider, chosen by the pinned catalog model's `provider` and
 is the only module that builds or parses an Anthropic request; it returns the
 same response shape, so tool loops, budgets and the usage ledger are unchanged.
 Claude serves text tiers only (`anthropic-messages-v1`); images and embeddings
-stay on OpenAI. Two locks keep it off until the owner approves: the Edge
-secret `AI_ANTHROPIC_ENABLED` must be `true` (with `ANTHROPIC_API_KEY` set),
-and the database catalog publish check still accepts only OpenAI models, so a
+stay on OpenAI. Two locks keep it off until the owner approves: the code
+switch `ANTHROPIC_ENABLED` in `_shared/anthropic-service.ts` must be `true`
+(flipped by a PR and an Edge deploy; `ANTHROPIC_API_KEY` must be set), and
+the database catalog publish check still accepts only OpenAI models, so a
 migration must widen it and bind a tier to an active Claude model row.
+Other apps sharing the `shared` schema are not affected by the switch: only
+this repo's functions carry the adapter. When a Claude row is added to
+`shared.ai_models`, keep `is_default=false`, because other apps' legacy
+settings path picks from all active rows and cannot call Claude.
 Known limits: no provider background mode (a Claude call runs synchronously in
 the worker), no `previous_response_id`, forced `tool_choice` falls back to
 `auto` unless the model row declares `forced_tool_choice`, and history

@@ -10,7 +10,7 @@
  * the usage ledger do not know which provider answered.
  *
  * Dormant by default. Two locks must both be opened by the owner:
- *   1. `AI_ANTHROPIC_ENABLED=true` in the Edge secrets (checked by the caller);
+ *   1. `ANTHROPIC_ENABLED` below (a code switch, flipped by a PR + deploy);
  *   2. a catalog publish that binds a tier to an active Anthropic model row
  *      (the database publish check still refuses non-OpenAI providers).
  *
@@ -23,6 +23,11 @@
  * Pure module: no Supabase import, no env reads. The caller passes the key,
  * the pinned model row and the ledger writer.
  */
+
+/** THE Claude on/off switch for this repo. Off until the owner approves.
+ * Only this repo's Edge functions carry this module, so other apps sharing
+ * the database are unaffected by flipping it. */
+export const ANTHROPIC_ENABLED = false
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { OpenAIResponseItem } from './openai-content.ts'
 import { schemaIssues } from './schema-issues.ts'

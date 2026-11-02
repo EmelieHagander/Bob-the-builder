@@ -109,7 +109,7 @@ test('the catalog binds Claude to text tiers only, without OpenAI-only parameter
   assert.throws(() => catalog(wrong).role('ask-bob'), /provider adapter/)
 })
 
-test('the shared service keeps Claude off unless AI_ANTHROPIC_ENABLED is true', async () => {
+test('the shared service keeps Claude off unless the ANTHROPIC_ENABLED code switch is true', async () => {
   const g = globalThis as any, oldFetch = g.fetch, oldDeno = g.Deno
   const env: Record<string, string> = { SUPABASE_URL: 'https://fixture.invalid', SUPABASE_SERVICE_ROLE_KEY: 'x', OPENAI_API_KEY: 'x', ANTHROPIC_API_KEY: 'a' }
   const urls: string[] = [], ledger: any[] = []
@@ -124,16 +124,21 @@ test('the shared service keeps Claude off unless AI_ANTHROPIC_ENABLED is true', 
     { type: 'content_block_start', index: 0, content_block: { type: 'text', text: 'Hej' } }, { type: 'content_block_stop', index: 0 },
     { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } }) }
   try {
-    let source = await readFile(new URL('../supabase/functions/_shared/openai-service.ts', import.meta.url), 'utf8')
-    source = source.replace(/import \{ createClient, SupabaseClient \} from "https:[^\n]+/, 'const createClient = (globalThis as any).__claudeClient;')
-    for (const file of ['openai-content', 'ai-background', 'ai-catalog', 'schema-issues', 'anthropic-service']) source = source.replace(`'./${file}.ts'`, JSON.stringify(new URL(`../supabase/functions/_shared/${file}.ts`, import.meta.url).href))
-    const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
-    const { callOpenAIResponses: call } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'))
+    const shared = (file: string) => new URL(`../supabase/functions/_shared/${file}.ts`, import.meta.url)
+    const asModule = (code: string) => 'data:text/javascript;base64,' + Buffer.from(ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString('base64')
+    const adapterSource = (await readFile(shared('anthropic-service'), 'utf8')).replace("'./schema-issues.ts'", JSON.stringify(shared('schema-issues').href))
+    assert.match(adapterSource, /export const ANTHROPIC_ENABLED = false\n/, 'the committed switch is off')
+    const load = async (enabled: boolean) => {
+      let source = await readFile(shared('openai-service'), 'utf8')
+      source = source.replace(/import \{ createClient, SupabaseClient \} from "https:[^\n]+/, 'const createClient = (globalThis as any).__claudeClient;')
+      for (const file of ['openai-content', 'ai-background', 'ai-catalog', 'schema-issues']) source = source.replace(`'./${file}.ts'`, JSON.stringify(shared(file).href))
+      source = source.replace("'./anthropic-service.ts'", JSON.stringify(asModule(adapterSource.replace('ANTHROPIC_ENABLED = false', 'ANTHROPIC_ENABLED = ' + enabled))))
+      return (await import(asModule(source))).callOpenAIResponses
+    }
     const aiDefinition = catalog(claudeManifest()).role('ask-bob')
-    const off = await call({ ...base, prompt: 'Hej', aiDefinition })
+    const off = await (await load(false))({ ...base, prompt: 'Hej', aiDefinition })
     assert.equal(off.success, false); assert.equal(off.error, 'ai_provider_disabled: anthropic'); assert.equal(urls.length, 0, 'no provider call while off')
-    env.AI_ANTHROPIC_ENABLED = 'true'
-    const on = await call({ ...base, prompt: 'Hej', aiDefinition })
+    const on = await (await load(true))({ ...base, prompt: 'Hej', aiDefinition })
     assert.equal(on.data, 'Hej'); assert.deepEqual(urls, ['https://api.anthropic.com/v1/messages'])
     assert.equal(ledger.length, 1); assert.equal(ledger[0].model, 'claude-opus-5-5'); assert.equal(ledger[0].app, 'bob')
   } finally { g.fetch = oldFetch; g.Deno = oldDeno; delete g.__claudeClient }
