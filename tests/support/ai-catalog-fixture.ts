@@ -403,6 +403,21 @@ for(const migration of migrations){
   const persona=seed.find(row=>row.key==='bob.persona')
   persona.content=persona.content+'\n\n'+plainWords[1];publishAs(persona,'bob-plain-words-v1');persona.metadata.plain_words_version=1;versions.set(persona.key,versions.get(persona.key)!+1)
  }
+ const projectLead=source.match(/\$bob_project_lead_spec\$([\s\S]+?)\$bob_project_lead_spec\$/)
+ if(projectLead){
+  const spec=JSON.parse(projectLead[1]),bump=(row:any)=>{publishAs(row,'bob-project-lead-v1');row.metadata.project_lead_version=1;versions.set(row.key,versions.get(row.key)!+1)}
+  const persona=seed.find(row=>row.key==='bob.persona');persona.content=spec.persona;bump(persona)
+  const role=seed.find(row=>row.key==='role.ask-bob')
+  role.definition={...role.definition,prompt_keys:role.definition.prompt_keys.filter((key:string)=>key!==spec.role.drop_prompt_key),title:spec.role.title,purpose:spec.role.purpose};bump(role)
+  for(const key of new Set<string>(spec.edits.map((edit:any)=>edit.key))){
+   const row=seed.find(row=>row.key===key)
+   for(const edit of spec.edits.filter((edit:any)=>edit.key===key)){
+    if(row.content.split(edit.old).length!==2)throw new Error(`bob_project_lead_unexpected_${key}`)
+    row.content=row.content.replace(edit.old,()=>edit.new)
+   }
+   bump(row)
+  }
+ }
  if(/\$bob_mini_trial\$/.test(source)){
   const base=seed.find(row=>row.key==='profile.ask-bob')
   seed.push({key:'profile.ask-bob-mini',kind:'execution_profile',content:'',definition:{...base.definition,tier:'mini'},variables:[],metadata:{publication:'bob-mini-trial-v1'}});versions.set('profile.ask-bob-mini',1)
