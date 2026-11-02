@@ -19,7 +19,7 @@ const snapshot: EditSnapshot = { project_id: 'A', resource: 'selected_solutions'
   record: { id: solution, revision: 1, title: 'Bunk bed', description: 'Existing bed', assumptions: 'Unverified wall', tradeoffs: 'Existing tradeoff', source_media_id: null, design_intent: designIntent() },
   measurements: [{ id: measurement, revision: 1 }], target: { area_id: null, revision: 1, solution_id: solution, solution_revision: 1 } }
 const set = (path: string, value: unknown) => ({ op: 'set', path, value_json: JSON.stringify(value) })
-const delta = [set('/description', 'Existing bed with back panel'), set('/design_intent/features/-', { description: 'Back panel behind bookcase', basis: 'user_request' })]
+const delta = [set('/description', 'Existing bed with back panel'), { op: 'add_feature', feature: { description: 'Back panel behind bookcase', basis: 'user_request' } }]
 const targetReceipt = { projectId:'A',dataset:'target',recordId:'A',label:'Selected project target',operation:'updated',savedAt:'2026-10-14T10:00:00Z',revision:2,record:{id:'A',solution_id:solution,solution_revision:2,revision:2} }
 
 test('deltas preserve sources and old decisions; new item identity is deterministic and alignment becomes draft', async () => {
@@ -36,13 +36,25 @@ test('identity, source, parent, prototype and whole-list replacements are reject
   for (const path of ['/id', '/revision', '/area_id', '/measurements', '/source_media_id', '/design_intent', '/design_intent/features', '/design_intent/features/0/id', '/design_intent/features/0/source_ref', '/__proto__/polluted']) {
     await assert.rejects(applyProjectDelta(snapshot, [set(path, 'changed')], 'Reason'))
   }
-  await assert.rejects(applyProjectDelta(snapshot, [set('/design_intent/features/-', { id: 'made_up', description: 'Panel', basis: 'user_request' })], 'Reason'))
+  await assert.rejects(applyProjectDelta(snapshot, [{ op: 'add_feature', feature: { id: 'made_up', description: 'Panel', basis: 'user_request' } }], 'Reason'))
   await assert.rejects(applyProjectDelta(snapshot, [set('/design_intent/choices/0/status', 'open')], 'Reason'), /inconsistent/)
 })
-test('a guessed item shape is rejected with the exact fields to use', async () => {
-  await assert.rejects(applyProjectDelta(snapshot, [set('/design_intent/features/-', { title: 'Gambrel', description: 'Brutet tak' })], 'Reason'),
-    /A new design feature has exactly description \(text\) and basis \(user_request, project_record or working_assumption\)/)
-  await assert.rejects(applyProjectDelta(snapshot, [set('/design_intent/choices/-', { question: 'Vilken gavel?' })], 'Reason'), /A new design choice has exactly question/)
+test('new features and choices are typed operations; a raw append path names them', async () => {
+  for (const path of ['/design_intent/features/-', '/design_intent/choices/-'])
+    await assert.rejects(applyProjectDelta(snapshot, [set(path, { description: 'Brutet tak', basis: 'user_request' })], 'Reason'), /op add_feature or add_choice/)
+  await assert.rejects(applyProjectDelta(snapshot, [{ op: 'add_feature', feature: { title: 'Gambrel', description: 'Brutet tak' } }], 'Reason'), /A new design feature has exactly description/)
+  await assert.rejects(applyProjectDelta(snapshot, [{ op: 'add_feature', feature: { description: 'Brutet tak', basis: 'user_request' }, path: '/x' }], 'Reason'), /Invalid change shape/)
+  const choice = { question: 'Vilken gavel?', alternatives: ['Vänster', 'Höger'], recommendation: 'Vänster', basis: 'Utsikt', consequences: 'Dörren flyttas', geometry_dependency: false, status: 'open', selected_direction: null, decision_authority: 'owner', decision_basis: '', deferral: null }
+  const saved = await applyProjectDelta(snapshot, [{ op: 'add_choice', choice }], 'Reason')
+  assert.deepEqual({ ...saved.design_intent.choices.at(-1), id: undefined }, { ...choice, id: undefined })
+})
+test('the strict edit schema offers exactly the typed feature and choice shapes', () => {
+  const edit = PROJECT_EDIT_TOOLS[1].function
+  assert.equal(edit.strict, true)
+  const [, feature, choice] = (edit.parameters.properties.changes as any).items.anyOf
+  assert.deepEqual(feature.properties.feature.required, ['description', 'basis'])
+  assert.deepEqual(feature.properties.feature.properties.basis.enum, ['user_request', 'project_record', 'working_assumption'])
+  assert.equal(choice.properties.choice.additionalProperties, false)
 })
 
 let pg: Awaited<ReturnType<typeof projectSchema>>
@@ -171,7 +183,11 @@ test('published model contract has no database IDs, concurrency fields or quote;
   }
   for(const tool of PROJECT_EDIT_TOOLS){
     const row=live.definitions.find((r:any)=>r.prompt_key==='tools.'+tool.function.name)
-    assert.deepEqual(row.definition.parameters,tool.function.parameters)
+    // This schema stops at the 2026-10-14 publication; typed add_feature/add_choice
+    // items arrived with bob-typed-design-items-v1 (checked in its own test).
+    const parameters=structuredClone(tool.function.parameters) as any
+    if(parameters.properties.changes)parameters.properties.changes.items=parameters.properties.changes.items.anyOf[0]
+    assert.deepEqual(row.definition.parameters,parameters)
     assert.deepEqual(row.metadata.server_fields,tool.function.name==='edit_project_record'?['request_quote']:[])
   }
   const catalog=catalogFixture()

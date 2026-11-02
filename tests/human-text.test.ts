@@ -206,7 +206,7 @@ test('project edits and solution actions reject coded prose in content, reasons 
   const actions = createSolutionActions({ projectId: 'A', writer, hasAccess: async () => true, unlimitedWork: true, read: async () => ({ data: [], error: null }) })
   const select = await actions.execute('select_solution_alternative', { solution_ref: 'x', scope_ref: 'y', reason: `Valde ${id}`, request_quote: 'Spara uppgiften' })
   assert.deepEqual(select.validation, { code: 'human_text', fields: ['reason'] })
-  const created = await actions.execute('create_solution_alternative', { scope_ref: 'y', base_ref: null, changes: [set('/design_intent/choices/-', { question: 'Vilken gavel?', alternatives: ['left_gable'] })], reason: 'Ägaren bad', request_quote: 'Spara uppgiften' })
+  const created = await actions.execute('create_solution_alternative', { scope_ref: 'y', base_ref: null, changes: [{ op: 'add_choice', choice: { question: 'Vilken gavel?', alternatives: ['left_gable'] } }], reason: 'Ägaren bad', request_quote: 'Spara uppgiften' })
   assert.deepEqual(created.validation, { code: 'human_text', fields: ['design_intent.choices.-.alternatives.0'] })
   const clean = await actions.execute('select_solution_alternative', { solution_ref: 'x', scope_ref: 'y', reason: 'Ägaren valde', request_quote: 'Spara uppgiften' })
   assert.equal(clean.status, 'invalid'); assert.equal(clean.validation, undefined, 'clean prose reaches the ordinary checks')

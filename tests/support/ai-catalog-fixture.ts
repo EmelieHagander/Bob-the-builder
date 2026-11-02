@@ -41,6 +41,7 @@ let preKonradLeanRows:any[]|undefined,preKonradLeanVersions:Map<string,number>|u
 let preMaterialFinderTeamRows:any[]|undefined,preMaterialFinderTeamVersions:Map<string,number>|undefined
 let preMemoryStairRows:any[]|undefined,preMemoryStairVersions:Map<string,number>|undefined
 // SQL publications drop the seed markers and name themselves, as `(prior.metadata-'seed_version'-'source_revision')||publication`.
+const sortKeys=(v:any):any=>Array.isArray(v)?v.map(sortKeys):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,sortKeys(v[k])])):v
 const publishAs=(row:any,publication:string)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication}}
 // Materialise the explicit immutable publication patches in migration order.
 // The historical seed stays available for pinned-manifest compatibility tests.
@@ -422,6 +423,20 @@ for(const migration of migrations){
     row.content=row.content.replace(edit.old,()=>edit.new)
    }
    bump(row)
+  }
+ }
+ const typedItems=source.match(/\$bob_typed_items_spec\$([\s\S]+?)\$bob_typed_items_spec\$/)
+ if(typedItems){
+  const spec=JSON.parse(typedItems[1])
+  for(const key of spec.keys){
+   const row=seed.find(row=>row.key===key),def=structuredClone(row.definition)
+   if(JSON.stringify(sortKeys(def.parameters.properties.changes.items))!==JSON.stringify(sortKeys(spec.old_items)))throw new Error('bob_typed_items_unexpected_schema '+key)
+   def.parameters.properties.changes.items=spec.items;def.strict=true
+   if(key===spec.description.key){
+    if(def.description.split(spec.description.old).length!==2)throw new Error('bob_typed_items_unexpected_description')
+    def.description=def.description.replace(spec.description.old,()=>spec.description.new)
+   }
+   row.definition=def;publishAs(row,'bob-typed-design-items-v1');row.metadata.typed_items_version=1;versions.set(key,versions.get(key)!+1)
   }
  }
  if(/\$bob_mini_trial\$/.test(source)){

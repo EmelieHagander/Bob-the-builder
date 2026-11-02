@@ -9,16 +9,42 @@ import type { ProjectSource } from '../../../src/data/provenance.ts'
 
 const object = (properties: Record<string, unknown>) => ({ type: 'object', additionalProperties: false, properties, required: Object.keys(properties) })
 const text = { type: 'string' }
-const tool = (name: string, description: string, properties: Record<string, unknown>) => ({ type: 'function' as const, function: { name, description, parameters: object(properties) } })
+const tool = (name: string, description: string, properties: Record<string, unknown>) => ({ type: 'function' as const, function: { name, description, parameters: object(properties), strict: true } })
 export const CONCEPT_EDIT_GUIDE = ' Early 2D design uses optional /design_intent/model on this same Solution, before target selection. Initialize once with {version:1,frame:{origin,x,y,z} (plain axis descriptions),nodes,components,views,constraints,unsupported:[]}. Nodes reuse CAD parameters: {id,role:decision|estimate,value,unit:mm|scalar,reason}, {id,role:unknown,unit,reason}, or {id,role:derived,operation:add_v1|subtract_v1|multiply_v1|divide_v1,operands:[id,id],rounding:exact|half_away_6}. No measured/source nodes. Components: {id,label,kind:solid|space|opening,active:true,position:[node,node,node],size:[node,node,node],features:[feature_id],choices:[choice_id]}. Views: {id,label,plane:XY|XZ|YZ,kind:projection|section,at:null|node}; include an XY projection and a profile; section at names the perpendicular coordinate. Constraints: {id,label,relation:equal|at_most,left:node,right:node,feature:null|feature_id}. View requirements use constraints {id,label,relation:view_plane,view:view_id,plane:XY|XZ|YZ,feature:null|feature_id}. Use returned concept_links. IDs are local letters/digits/underscore/hyphen, start with a letter, max 32. Subsequent changes set /design_intent/model/<nodes|components|views|constraints>/<index>/<field>, append at /-, or set frame/unsupported. Node content may be replaced at its index with the SAME id. Components deactivate via active=false; do not replace lists or identities. Unknowns/conflicts stay saved and visible. Every view derives from this model; openings are annotated volumes, not boolean cuts. Unsupported forms belong in unsupported. Saving is not construction or safety approval.'
+// New design features and choices have fixed, typed shapes. They are their own
+// change operations so a strict tool schema decides the shape before the call,
+// instead of a guessed value_json that the server can only reject afterwards
+// (2026-11-02: ten rejected feature saves in Ladan).
+export const DESIGN_FEATURE_ITEM = object({
+  description: { type: 'string' },
+  basis: { type: 'string', enum: ['user_request', 'project_record', 'working_assumption'] },
+})
+export const DESIGN_CHOICE_ITEM = object({
+  question: { type: 'string' },
+  alternatives: { type: 'array', maxItems: 4, items: { type: 'string' } },
+  recommendation: { type: 'string' },
+  basis: { type: 'string' },
+  consequences: { type: 'string' },
+  geometry_dependency: { type: 'boolean' },
+  status: { type: 'string', enum: ['open', 'resolved', 'deferred'] },
+  selected_direction: { type: ['string', 'null'], description: 'The chosen alternative when resolved; otherwise null.' },
+  decision_authority: { type: 'string', enum: ['owner', 'bob'] },
+  decision_basis: { type: 'string' },
+  deferral: { anyOf: [object({ scope: { type: 'string', enum: ['illustration', 'concept'] }, reason: { type: 'string' } }), { type: 'null' }], description: 'Only when deferred; otherwise null.' },
+})
+export const CONTENT_CHANGE_ITEM = { anyOf: [
+  object({ op: { type: 'string', enum: ['set', 'append_text', 'remove'] }, path: text, value_json: { type: ['string', 'null'], description: 'JSON-encoded new value. null only for remove. append_text appends the decoded string verbatim.' } }),
+  object({ op: { type: 'string', enum: ['add_feature'] }, feature: DESIGN_FEATURE_ITEM }),
+  object({ op: { type: 'string', enum: ['add_choice'] }, choice: DESIGN_CHOICE_ITEM }),
+] }
 export const PROJECT_EDIT_TOOLS = [
   tool('read_project_edit_context', 'Read complete editable project descriptions or solutions. Returns server-bound edit_ref selections and content; never construct a database identity or version. selected_solutions includes each selected scope separately. Use next_ref unchanged for the next page. Re-read after a conflict and reconsider the intended change.', {
     resource: { type: 'string', enum: ['project_description', 'selected_solutions', 'solutions'] },
     query: { type: ['string', 'null'] }, next_ref: { type: ['string', 'null'] },
   }),
-  tool('edit_project_record', 'Revise the record returned by read_project_edit_context using only the requested changes. Never creates an alternative. Existing fields, measurements, image links and nested decisions are preserved. Editing a selected solution also advances that same selection atomically. Changes use content paths and JSON-encoded values. Text fields: /description, /title, /assumptions, /tradeoffs. Design fields: /design_intent/summary or /design_intent/purpose; features and choices use zero-based indices from the read. Append a feature or choice at /design_intent/features/- or /design_intent/choices/- without id (feature source_ref is server-owned). Replace individual content fields; remove a feature/choice explicitly. Identity and source-link edits are unavailable here. A null design_intent can be initialized by setting its summary (purpose defaults to concept). Changes reset alignment to draft unless /design_intent/alignment is explicitly set with an honest status and basis. A failed edit must never be replaced with a create.', {
+  tool('edit_project_record', 'Revise the record returned by read_project_edit_context using only the requested changes. Never creates an alternative. Existing fields, measurements, image links and nested decisions are preserved. Editing a selected solution also advances that same selection atomically. Changes use content paths and JSON-encoded values. Text fields: /description, /title, /assumptions, /tradeoffs. Design fields: /design_intent/summary or /design_intent/purpose; features and choices use zero-based indices from the read. Add a new feature or choice with op add_feature or add_choice; the server assigns its identity and source link. Replace individual content fields; remove a feature/choice explicitly. Identity and source-link edits are unavailable here. A null design_intent can be initialized by setting its summary (purpose defaults to concept). Changes reset alignment to draft unless /design_intent/alignment is explicitly set with an honest status and basis. A failed edit must never be replaced with a create.', {
     edit_ref: text,
-    changes: { type: 'array', minItems: 1, maxItems: 40, items: object({ op: { type: 'string', enum: ['set', 'append_text', 'remove'] }, path: text, value_json: { type: ['string', 'null'], description: 'JSON-encoded new value. null only for remove. append_text appends the decoded string verbatim.' } }) },
+    changes: { type: 'array', minItems: 1, maxItems: 40, items: CONTENT_CHANGE_ITEM },
     reason: text, request_quote: text,
   }),
 ]
@@ -49,12 +75,27 @@ const fail = (message: string): WriteResult => ({ status: 'invalid', message: 'N
  * path), plus the saved reason. Unchanged saved text is never re-checked. */
 export function changeProseRejection(changes: unknown, reason: unknown): HumanTextRejection | null {
   const fields: [string, unknown][] = Array.isArray(changes) ? changes.flatMap(change => {
-    if (!change || typeof change !== 'object' || typeof change.path !== 'string' || typeof change.value_json !== 'string') return []
-    try { return proseFields(JSON.parse(change.value_json), SOLUTION_PROSE, change.path.split('/').slice(1)) } catch { return [] }
+    try { const { path, value } = readChange(change); return value === undefined ? [] : proseFields(value, SOLUTION_PROSE, path.split('/').slice(1)) } catch { return [] }
   }) : []
   return humanTextRejection([...fields, ['reason', reason]])
 }
 const safeText = (v: unknown, max: number, empty = false): v is string => typeof v === 'string' && v.length <= max && (empty || !!v.trim())
+
+type ContentChange = { op: 'set' | 'append_text' | 'remove'; path: string; value: any }
+/** One supplied change in the internal path form. Typed add operations are the
+ * only way to append a design feature or choice. */
+function readChange(change: any): ContentChange {
+  if (change?.op === 'add_feature' || change?.op === 'add_choice') {
+    const list = change.op === 'add_feature' ? 'features' : 'choices'
+    const field = list === 'features' ? 'feature' : 'choice'
+    if (!exact(change, ['op', field])) throw new Error('Invalid change shape.')
+    return { op: 'set', path: '/design_intent/' + list + '/-', value: change[field] }
+  }
+  if (!exact(change, ['op', 'path', 'value_json']) || !['set', 'append_text', 'remove'].includes(change.op) || !safeText(change.path, 160)) throw new Error('Invalid change shape.')
+  if (change.op === 'remove' ? change.value_json !== null : !safeText(change.value_json, 16000, true)) throw new Error('Supply a JSON value; remove uses null.')
+  if (/^\/design_intent\/(features|choices)\/-$/.test(change.path)) throw new Error('Add a new design feature or choice with op add_feature or add_choice.')
+  return { op: change.op, path: change.path, value: change.op === 'remove' ? undefined : JSON.parse(change.value_json) }
+}
 
 /** Clone the pinned read, never a newly fetched head. Paths deliberately cannot
  * address IDs, parents, versions, evidence links or arbitrary object properties. */
@@ -63,10 +104,7 @@ export async function applyProjectDelta(snapshot: EditSnapshot, changes: unknown
   const record = structuredClone(snapshot.record)
   let explicitAlignment = false
   for (const [index, change] of changes.entries()) {
-    if (!exact(change, ['op', 'path', 'value_json']) || !['set', 'append_text', 'remove'].includes(change.op) || !safeText(change.path, 160)) throw new Error('Invalid change shape.')
-    const { op, path } = change
-    if (op === 'remove' ? change.value_json !== null : !safeText(change.value_json, 16000, true)) throw new Error('Supply a JSON value; remove uses null.')
-    const value = op === 'remove' ? undefined : JSON.parse(change.value_json)
+    const { op, path, value } = readChange(change)
     const fields = path.split('/').slice(1)
     if (!path.startsWith('/') || fields.some((f: string) => ['__proto__', 'constructor', 'prototype'].includes(f))) throw new Error('Unsupported content path.')
     const plain = snapshot.resource === 'project_description' ? ['description'] : ['title', 'description', 'assumptions', 'tradeoffs']
@@ -166,7 +204,7 @@ export function displayEditSnapshot(snapshot: EditSnapshot) {
     intent.references = intent.references.map(({ image_id: _id, ...content }: any) => content)
   }
   return snapshot.resource === 'project_description' ? { description: r.description } : {
-    edit_paths: { summary: '/design_intent/summary', purpose: '/design_intent/purpose', alignment: '/design_intent/alignment', append_feature: '/design_intent/features/-', append_choice: '/design_intent/choices/-' },
+    edit_paths: { summary: '/design_intent/summary', purpose: '/design_intent/purpose', alignment: '/design_intent/alignment' },
     title: r.title, description: r.description, assumptions: r.assumptions, tradeoffs: r.tradeoffs, design_intent: intent,
     preserved_sources: { measurements: snapshot.measurements.length, source_image: !!r.source_media_id },
     measurements: snapshot.measurement_evidence ?? [],
