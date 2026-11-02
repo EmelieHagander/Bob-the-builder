@@ -35,7 +35,7 @@ const tail = (catalog: AiCatalogSession, o: OpenAIServiceOptions, prefix: string
 const ask = (tool: string, request: unknown) => () => ({ success: true, model: 'fixture', usage, responseId: 'b1', toolCalls: [call('c1', tool, request)] })
 const toolOutput = (o: OpenAIServiceOptions) => JSON.parse(String(o.messages!.find(m => m.role === 'tool')!.content))
 
-async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>) {
+async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>, readDraft?: (args: any) => unknown) {
   const projectId = 'p', message = 'Rita lådan', hasAccess = async () => true
   const lookup = createProjectLookup(projectId, async (_project, input) => ({ data: { records: input.dataset === 'project' ? [{ id: projectId, name: 'Lådan', description: 'Saved project' }] : [], related: [], truncated: false }, error: null }) as any, undefined, undefined, undefined, { unlimitedWork: true })
   const writer = createProjectWriter(projectId, message, async () => { throw Error('No write requested') }, async () => ({ data: [], error: null }), async () => ({ data: [], error: null }))
@@ -45,7 +45,7 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
   const constructionTools = { ...real, tools: real.tools, get remaining() { return real.remaining }, execute: async (name: string, args: any) => {
     constructionCalls.push({ name, args })
     if (name === 'save_construction_draft') pendingImage = true // stands in for a worker opening an image
-    if (name === 'read_construction_draft') return { status: 'ok', drafts: [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }] }
+    if (name === 'read_construction_draft') return readDraft ? readDraft(args) : { status: 'ok', drafts: [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }] }
     if (name === 'edit_construction_parts') return { status: 'invalid', validation: { code: 'unknown_part', fields: ['changes.0.part_id'] } }
     if (name === 'check_construction_draft') return { status: 'checked', artifact_id: 'c1', revision: 3 }
     // A writer save, as production returns it: the receipt is nested.
@@ -250,4 +250,25 @@ test('manifests before the publication keep construction and drawing with Bob, a
   assert(!names(bob[0]).includes('ask_structure_worker') && !names(bob[0]).includes('ask_drawing_worker'))
   assert(pickerInputs[0].candidates.some((c: any) => c.name === 'save_construction_draft'))
   assert.equal(catalogRetiredTools(pinned).size, 0); assert.deepEqual(catalogCheckReads(pinned), [])
+})
+
+test('a first construction is not handed to Konrad while the solution fails the construction check', async () => {
+  const notReady = (args: any) => args.view === 'overview' ? { status: 'ok', items: [], next_cursor: null }
+    : { status: 'ok', creation_state: 'needs_data', scoped_refinement_available: false,
+      items: [{ collection: 'governing_sources', id: 'sources', value: { preparation: { issues: [{ code: 'missing_design_features', message: 'Describe the recognizable form.' }] } } }] }
+  const catalog = catalogFixture()
+  const { bob, workers, constructionCalls } = await turn(catalog, [ask('ask_structure_worker', { request: 'Konrad, konstruera ladan.' })], {}, notReady)
+  assert.equal(workers['structure-worker'].length, 0, 'Konrad never starts')
+  assert.deepEqual(constructionCalls.map(c => c.args.view), ['overview', 'work'])
+  const output = toolOutput(bob[1])
+  assert.equal(output.status, 'not_started'); assert.equal(output.creation_state, 'needs_data')
+  assert.deepEqual(output.issues, [{ code: 'missing_design_features', message: 'Describe the recognizable form.' }])
+  const ready = await turn(catalog, [ask('ask_structure_worker', { request: 'Konrad, konstruera ladan.' })], {},
+    (args: any) => args.view === 'overview' ? { status: 'ok', items: [], next_cursor: null } : { status: 'ok', creation_state: 'ready', items: [] })
+  assert.equal(ready.workers['structure-worker'].length > 0, true, 'a passing solution starts Konrad')
+  const existing = await turn(catalog, [ask('ask_structure_worker', { request: 'Konrad, ändra ladan.' })], {},
+    (args: any) => args.view === 'overview' ? { status: 'ok', items: [{ artifact_id: 'c1' }], next_cursor: null } : notReady(args))
+  assert.equal(existing.workers['structure-worker'].length > 0, true, 'work on an existing construction is not gated')
+  const pinned = await turn(catalogFixture(m => { const row = m.definitions.find(d => d.prompt_key === 'bob.tools')!; delete (row.definition as any).handover_readiness_version }), [ask('ask_structure_worker', { request: 'Konrad, konstruera ladan.' })], {}, notReady)
+  assert.equal(pinned.workers['structure-worker'].length > 0, true, 'manifests before the publication keep the old hand-over')
 })

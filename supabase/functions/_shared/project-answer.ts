@@ -22,7 +22,7 @@ import { humanTextIssues } from './human-text.ts'
 import { answerTextFragments, type AnswerTextOutcome } from './answer-text.ts'
 import { toolRejection } from './tool-rejection.ts'
 import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
-import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogReportReadback, catalogConstructionAutoCheck, readbackReads, workerOwnedTools, parseWorkerJob, runWorker, validWorkerProgress, type WorkerProgress } from './bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogReportReadback, catalogConstructionAutoCheck, catalogHandoverReadiness, handoverReadinessBlock, readbackReads, workerOwnedTools, parseWorkerJob, runWorker, validWorkerProgress, type WorkerProgress } from './bob-workers.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
@@ -406,6 +406,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const checkReads = workers ? catalogCheckReads(opts.aiCatalog) : []
   const reportReadback = !!workers && catalogReportReadback(opts.aiCatalog)
   const constructionAutoCheck = !!workers && catalogConstructionAutoCheck(opts.aiCatalog)
+  const handoverReadiness = !!workers && catalogHandoverReadiness(opts.aiCatalog)
   // Retired tools are hidden from Bob the same way (new manifests only).
   const workerOwned = new Set([...workerOwnedTools(workers), ...catalogRetiredTools(opts.aiCatalog)])
   // Never picker candidates: the workers' own tools, and the hand-overs Bob always has.
@@ -448,6 +449,10 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         workerSessions.set(key, session)
       }
       if (resume?.projectName !== undefined) projectName = resume.projectName
+      if (!resume && handoverReadiness && worker.tools.includes('save_construction_draft')) {
+        const blocked = await handoverReadinessBlock(session)
+        if (blocked) return blocked
+      }
       const stair = opts.context?.stair
       const history = stair ? stairConversation(opts.aiCatalog, stair) : (opts.context?.recent.slice(0, -1) ?? []).map(m => ({ role: m.role, content: m.text }))
       const workerStep = currentStep, workerIndex = currentIndex

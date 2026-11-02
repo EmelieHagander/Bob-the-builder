@@ -471,6 +471,11 @@ for(const migration of migrations){
    row.definition=def;publishAs(row,'bob-typed-concept-items-v1');row.metadata.typed_concept_version=1;versions.set(key,versions.get(key)!+1)
   }
  }
+ if(/\$bob_handover_readiness\$/.test(source)){
+  const row=seed.find(row=>row.key==='bob.tools')
+  if(row.definition.build_workers_version!==1)throw new Error('bob_handover_readiness_unexpected_tools')
+  row.definition={...row.definition,handover_readiness_version:1};publishAs(row,'bob-handover-readiness-v1');versions.set(row.key,versions.get(row.key)!+1)
+ }
  if(/\$bob_mini_trial\$/.test(source)){
   const base=seed.find(row=>row.key==='profile.ask-bob')
   seed.push({key:'profile.ask-bob-mini',kind:'execution_profile',content:'',definition:{...base.definition,tier:'mini'},variables:[],metadata:{publication:'bob-mini-trial-v1'}});versions.set('profile.ask-bob-mini',1)
