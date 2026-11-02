@@ -52,7 +52,9 @@ test('zoom shows the path above, the summary and what is directly inside; search
 
 test('the tools read through one call, place through one command and report refusals with their code', async () => {
   const placed: unknown[] = []
+  const created: unknown[] = []
   const tools = createBuildTree({ projectId: 'A', hasAccess: async () => true, read: async () => ({ data: flat, error: null }),
+    create: async (...args) => { created.push(args); return { data: { status: 'saved', id: u(20), kind: 'sub_build', revision: 1, parent_id: null, space_id: args[3], place: 'room' }, error: null } },
     place: async (...args) => { placed.push(args); return args[0] === u(20) ? { data: null, error: { message: 'build_nesting_limit' } } : { data: { status: 'saved', id: args[0], kind: 'construction', parent_id: args[1], space_id: args[2], place: 'sub_build' }, error: null } } })
   assert.equal((await tools.execute('read_build_tree', { focus: null })).status, 'invalid')
   const saved = await tools.execute('place_build', { build_id: u(23), sub_build_id: u(21), room_id: null })
@@ -60,7 +62,12 @@ test('the tools read through one call, place through one command and report refu
   const refused = await tools.execute('place_build', { build_id: u(20), sub_build_id: u(21), room_id: null })
   assert.deepEqual([refused.status, refused.code], ['invalid', 'build_nesting_limit'])
   assert.deepEqual(placed, [[u(23), u(21), null], [u(20), u(21), null]])
-  const broken = createBuildTree({ projectId: 'A', hasAccess: async () => true, read: async () => ({ data: { version: 1 }, error: null }), place: async () => ({ data: null, error: null }) })
+  // An empty sub-build is made in its room, with its path read back.
+  const made = await tools.execute('create_sub_build', { title: ' Bedroom furniture ', description: 'Beds and the ladder', sub_build_id: null, room_id: u(11) })
+  assert.deepEqual([made.status, made.path], ['saved', 'House › Upper floor › Children room › Bedroom furniture'])
+  assert.deepEqual(created, [['Bedroom furniture', 'Beds and the ladder', null, u(11)]])
+  assert.equal((await tools.execute('create_sub_build', { title: '', description: 'x', sub_build_id: null, room_id: null })).status, 'invalid')
+  const broken = createBuildTree({ projectId: 'A', hasAccess: async () => true, read: async () => ({ data: { version: 1 }, error: null }), place: async () => ({ data: null, error: null }), create: async () => ({ data: null, error: null }) })
   assert.equal((await broken.execute('read_build_tree', { focus: null, query: null })).status, 'unavailable'); assert.equal(broken.partial, true)
 })
 
@@ -73,6 +80,21 @@ test('the catalog publishes both tools, keeps placing with Bob and gives every c
   for (const worker of Object.values(workers)) {
     assert(worker.reads.includes('read_build_tree'))
     assert.deepEqual(worker.knowledge!.find(k => k.label === 'build_map'), { label: 'build_map', tool: 'read_build_tree', arguments: { focus: null, query: null } })
-    assert(!worker.tools.includes('place_build'), 'Bob places builds; colleagues read the tree')
+    assert(!worker.tools.includes('place_build'), 'placing is never owned by one colleague, so Bob keeps it')
   }
+})
+
+test('owner decision 2026-11-02: Bob gives a build its place, Konrad splits it inside and places his parts', () => {
+  const catalog = catalogFixture(), workers = catalogWorkers(catalog)!
+  assert.equal(catalog.definition('tools.create_sub_build', 'tool_contract').metadata.publication, 'build-split-v1')
+  assert(workers.structure.reads.includes('create_sub_build') && workers.structure.reads.includes('place_build'))
+  assert(!workers.drawing.reads.includes('place_build') && !workers.materials.reads.includes('place_build'))
+  const persona = catalog.manifest().definitions.find(d => d.prompt_key === 'structure-worker.persona')!.content
+  assert.match(persona, /Var bygget hör hemma bestämmer Bob/)
+  const handover = catalog.definition('tools.ask_structure_worker', 'tool_contract').definition as any
+  assert.match(handover.additional_description, /give it its place/)
+  assert.doesNotMatch(handover.additional_description, /A large build may come back/)
+  const box = catalog.definition('bob.tools', 'tool_contract').definition as any
+  assert.match(box.catalog.find((p: any) => p.name === 'ask_structure_worker').how_to, /create_sub_build/)
+  assert(box.shelves.find((s: any) => s.label === 'Building and site').tools.includes('create_sub_build'))
 })

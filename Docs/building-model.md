@@ -233,6 +233,15 @@ A project must also remain valid with **no building association** when physical-
 
 A project that creates a new structure may begin at Site scope and produce a new Building as part of its accepted/as-built outcome.
 
+## 2.8 Build tree — owner decisions 2026-11-01 and 2026-11-02
+
+A project's builds form one tree that follows the house: building › level › room › sub-build › construction or drawing.
+
+- A **sub-build** is a shell artifact. It holds constructions and drawings, nests at most two levels, and belongs to a room. It may start empty (`bob.create_sub_build`); pieces are still added with `bob.cad_shell_command`.
+- A build placed nowhere shows in **Snickeriet**, a view and not a row. Areas stay a filter, not a tree level.
+- One placement row per artifact (`bob.build_placements`) says where it sits. `bob.place_build` is the one write path for Bob and the app; `bob.read_build_tree` returns flat rows and code builds the levels and counts (`supabase/functions/_shared/build-tree.ts`).
+- **Roles:** Bob decides *where* a build belongs and makes its sub-build in the room. Konrad (structure worker) decides *how* it is split into constructions and saves each one into that sub-build. Counts and summaries come from code, so Bob keeps the overview without reading every part. The owner can move things later in the UI.
+
 ---
 
 # 3. Geometry and drawings

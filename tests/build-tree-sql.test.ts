@@ -101,6 +101,26 @@ test('builds are placed in rooms and sub-builds through one command, and read ba
  assert.deepEqual(await place(ladder,null,null),{status:'saved',id:ladder,kind:'construction',parent_id:null,space_id:null,place:'workshop'})
  assert.equal((await pg.query('select count(*)::int n from bob.build_placements where artifact_id=$1',[ladder])).rows[0].n,0)
 
+ // Owner decision 2026-11-02: a sub-build can start empty, so Bob makes the place before Konrad builds in it.
+ const made=await call(owner,'bob.create_sub_build',[project,'Våningssäng','Bunk bed for the children',null,kids])
+ assert.deepEqual([made.status,made.kind,made.space_id,made.place],['saved','sub_build',kids,'room'])
+ const again=await call(owner,'bob.create_sub_build',[project,' våningssäng ','Same request again',null,kids])
+ assert.deepEqual([again.status,again.id],['exists',made.id],'the same title in the same place is not made twice')
+ assert.equal((await call(owner,'bob.read_cad_shell',[project,made.id,null])).components.length,0)
+ const inner=await call(owner,'bob.create_sub_build',[project,'Stege','Ladder and rails',made.id,null])
+ assert.deepEqual([inner.status,inner.parent_id,inner.place],['saved',made.id,'sub_build'])
+ await place(ladder,inner.id,null)
+ await assert.rejects(call(owner,'bob.create_sub_build',[project,'Too deep','Third level',inner.id,null]),/build_nesting_limit/)
+ assert.equal((await pg.query('select count(*)::int n from bob.artifacts a join bob.artifact_revisions r on r.artifact_id=a.id where r.title=$1',['Too deep'])).rows[0].n,1,'only the earlier fixture shell; the refused one rolled back')
+ await assert.rejects(call(owner,'bob.create_sub_build',[project,'','No title',null,kids]),/build_invalid/)
+ await assert.rejects(call(outsider,'bob.create_sub_build',[project,'Intruder','Not a member',null,null]),/project_denied/)
+ // Pieces are still added through the shell command; an empty sub-build takes its first.
+ const withPiece=await call(owner,'bob.cad_shell_command',[project,'add',made.id,(await pg.query('select current_revision from bob.artifacts where id=$1',[made.id])).rows[0].current_revision,
+  json({component:{component_key:'sketch',child_artifact_id:sketch,child_revision:null,x_mm:0,y_mm:0,z_mm:0,rz:0,placement_basis:'shared_origin',reason:'The bed drawing'}})])
+ assert.deepEqual(withPiece.components.map((c:any)=>c.component_key),['sketch'])
+ tree=await call(owner,'bob.read_build_tree',[project])
+ assert.deepEqual([at('Stege').parent_id,at('Ladder').parent_id],[made.id,inner.id])
+
  // An archived build leaves the tree and cannot be placed.
  const deepRevision=(await pg.query('select current_revision from bob.artifacts where id=$1',[deep])).rows[0].current_revision
  await call(owner,'bob.artifact_command',[project,'archive',deep,deepRevision,'{}'])

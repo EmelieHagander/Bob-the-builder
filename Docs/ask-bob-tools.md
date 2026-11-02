@@ -720,6 +720,10 @@ joint schema and journal sequence.
 The rule and its limits are owned by
 [Artifacts](artifacts.md#joint-fasteners--owner-decisions-2026-10-26).
 
+## Build tree tools — 2026-11-01 and 2026-11-02
+
+Shelf "Building and site" holds `read_build_tree {focus, query}`, `place_build {build_id, sub_build_id, room_id}` and `create_sub_build {title, description, sub_build_id, room_id}`. Read zooms one node (path, code-counted summary, children) and searches with matches returned with their path up. `create_sub_build` returns the existing sub-build for the same title in the same place instead of a twin. The structure worker gets `read_build_tree`, `create_sub_build` and `place_build` as shared reads (not owned), so Bob keeps them too. Publication `build-split-v1` adds the tool and states the split of roles; the data contract is in [building model §2.8](building-model.md#28-build-tree--owner-decisions-2026-11-01-and-2026-11-02). All three run with the caller's JWT.
+
 ## Construction roles and continued changes — release D
 
 Three versioned catalog tools extend the existing Drawings/CAD shelf: `change_construction_roles`, `read_construction_changes` and `continue_construction_change`. [Artifact](artifacts.md#instance-roles-and-affected-outputs--release-d) owns roles and output-history semantics, [material](material-planning.md#role-aware-manufacturing-and-continuation--release-d) owns deterministic quantity/layout reuse, and [CAD](cad-adapter.md#reference-geometry-and-exact-role-versions--release-d) owns exact rendering. Full construction saves also expose nullable versioned `instance_policy`. Older pinned schemas may omit it; the runtime preserves uncertainty/inheritance and never assigns default manufacturing roles.
