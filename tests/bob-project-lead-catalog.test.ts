@@ -5,16 +5,19 @@ import { catalogFixture } from './support/ai-catalog-fixture.ts'
 
 const migration = readFileSync(new URL('../supabase/migrations/20261102100000_bob_project_lead_catalog.sql', import.meta.url), 'utf8')
 const spec = JSON.parse(migration.match(/\$bob_project_lead_spec\$([\s\S]+?)\$bob_project_lead_spec\$/)![1])
+// bob-drive-outcome-v1 (2026-11-02) later revised some of these texts; expect them as revised.
+const drive = JSON.parse(readFileSync(new URL('../supabase/migrations/20261102183000_bob_drive_outcome_catalog.sql', import.meta.url), 'utf8').match(/\$bob_drive_outcome_spec\$([\s\S]+?)\$bob_drive_outcome_spec\$/)![1])
+const revised = (key: string, text: string) => drive.filter((e: any) => e.key === key).reduce((t: string, e: any) => t.replace(e.old, () => e.new), ' ' + text).trim()
 
 test('Bob is introduced as the project lead in one story, without the duplicated mandate fences', () => {
   const catalog = catalogFixture(), system = catalog.role('ask-bob').systemMessage
-  assert(system.includes(spec.persona), 'the persona story reaches Bob whole')
+  assert(system.includes(revised('bob.persona', spec.persona)), 'the persona story reaches Bob whole')
   assert(!system.includes('Du driver uppdraget'))
   assert(!system.includes('med det viktigaste och nästa steg nära slutet'), 'communication.concise is absorbed by the story')
   for (const edit of spec.edits) {
     const text = catalog.text(edit.key)
     assert(!text.includes(edit.old) || edit.new.includes(edit.old), `${edit.key} no longer says: ${edit.old}`)
-    if (edit.new) assert(text.includes(edit.new), `${edit.key} says: ${edit.new}`)
+    if (edit.new && revised(edit.key, edit.new)) assert(text.includes(revised(edit.key, edit.new)), `${edit.key} says: ${edit.new}`)
   }
   assert(catalog.text('bob.contract').includes('Do not imply that work runs while the owner is away.'), 'the honesty fence stays')
 })
