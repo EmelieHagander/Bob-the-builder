@@ -50,7 +50,7 @@ context, execution and completed results before adding behavioural rules.
 
 ## AI providers
 
-- OpenAI is the live provider. Claude (Anthropic) is wired but **off**: the switch is `ANTHROPIC_ENABLED` in `supabase/functions/_shared/anthropic-service.ts`. Flip it only with the owner's OK, by PR and Edge deploy. The catalog binding a tier to a Claude model is the second lock.
+- OpenAI is the live provider. Claude (Anthropic) is wired; its switch is `ANTHROPIC_ENABLED` in `supabase/functions/_shared/anthropic-service.ts` (on since 2026-11-02, owner's OK). Change it only with the owner's OK, by PR and Edge deploy. Claude is used only where the catalog binds a tier to a Claude model.
 - The catalog model row picks the provider (Launchpad pattern); details in `supabase/README.md`. Never call a provider outside its adapter module.
 
 ## Steward routing

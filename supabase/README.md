@@ -80,13 +80,13 @@ Domain reads and writes still use the caller JWT; the derived cache grants no
 geometry, requirement, decision or delivery authority.
 `OPENAI_API_KEY` is read only by the shared service and its background worker.
 
-**Claude (Anthropic) provider — off.** Same pattern as Launchpad: one adapter
+**Claude (Anthropic) provider.** Same pattern as Launchpad: one adapter
 per provider, chosen by the pinned catalog model's `provider` and
 `capabilities.provider_adapter`, never by a caller. `_shared/anthropic-service.ts`
 is the only module that builds or parses an Anthropic request; it returns the
 same response shape, so tool loops, budgets and the usage ledger are unchanged.
 Claude serves text tiers only (`anthropic-messages-v1`); images and embeddings
-stay on OpenAI. Two locks keep it off until the owner approves: the code
+stay on OpenAI. Two locks gate it: the code
 switch `ANTHROPIC_ENABLED` in `_shared/anthropic-service.ts` must be `true`
 (flipped by a PR and an Edge deploy; `ANTHROPIC_API_KEY` must be set), and
 the database catalog publish check still accepts only OpenAI models, so a
