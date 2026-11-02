@@ -95,6 +95,12 @@ test('preparing the stair writes each chunk once with its range; a failed summar
   const degraded = await prepareMemoryStair({ projectId: 'p', userId: 'u', threadId: 't', generation: 1, message: 'Fortsätt', store: failing.store,
     hasAccess: async () => true, deadline: Date.now() + 60000, callModel: async () => ({ success: false, model: 'fixture', error: 'unavailable' }) as any })
   assert.match(degraded.stair!.summaries[0].text, /Meddelanden 1–\d+ är inte sammanfattade/)
+  // A summary over budget_tokens but within the 3000-character schema is kept,
+  // as live summaries of ~800–1000 tokens were all discarded before.
+  const long = memoryStore(raw, current), longText = ('Beställaren valde 3 x 6 m och två loft över ändarna. ').repeat(50).slice(0, 2990).trim()
+  const kept = await prepareMemoryStair({ projectId: 'p', userId: 'u', threadId: 't', generation: 1, message: 'Fortsätt', store: long.store,
+    hasAccess: async () => true, deadline: Date.now() + 60000, callModel: async () => ({ success: true, model: 'fixture', usage, data: JSON.stringify({ summary: longText }) }) as any })
+  assert.equal(kept.stair!.summaries[0].text, longText)
   // Access ends: nothing is written.
   const denied = memoryStore(raw, current)
   await assert.rejects(prepareMemoryStair({ projectId: 'p', userId: 'u', threadId: 't', generation: 1, message: 'Fortsätt', store: denied.store,
