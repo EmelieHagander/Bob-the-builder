@@ -87,7 +87,9 @@ test('materialised callers include concise guidance and keep Bob’s expert role
   assert(persona.trim().split(/\s+/).length <= 250)
   assert(persona.startsWith('Du är Bob,'))
   assert.doesNotMatch(persona, /ALDRIG|ALLTID|NEVER|ALWAYS/)
-  for (const role of ['ask-bob', 'cad-reviewer', 'plan-compiler', 'plan-reviewer']) {
+  // Bob's reply guidance lives in his persona story since the project-lead publication (2026-11-02).
+  assert(!catalog.role('ask-bob').systemMessage.includes(catalog.text('communication.concise')))
+  for (const role of ['cad-reviewer', 'plan-compiler', 'plan-reviewer']) {
     assert(catalog.role(role,{stage:'layout',remaining_calls:2,first_layout_instruction:'',repair_instruction:'',remaining_reads:1,input_corrections:'',renders:0,requirement_keys:''}).systemMessage.includes(catalog.text('communication.concise')))
   }
   assert.notEqual(legacyCatalogFixture().text('bob.persona'), persona)
