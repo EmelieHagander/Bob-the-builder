@@ -476,6 +476,13 @@ for(const migration of migrations){
   if(row.definition.build_workers_version!==1)throw new Error('bob_handover_readiness_unexpected_tools')
   row.definition={...row.definition,handover_readiness_version:1};publishAs(row,'bob-handover-readiness-v1');versions.set(row.key,versions.get(row.key)!+1)
  }
+ const descriptionRole=source.match(/\$bob_description_role_spec\$([\s\S]+?)\$bob_description_role_spec\$/)
+ if(descriptionRole){
+  const spec=JSON.parse(descriptionRole[1]),row=seed.find(row=>row.key===spec.key)
+  if(row.definition.description.split(spec.old).length!==2)throw new Error('bob_description_role_unexpected_description')
+  row.definition={...row.definition,description:row.definition.description.replace(spec.old,()=>spec.new)}
+  publishAs(row,'bob-description-role-v1');row.metadata.description_role_version=1;versions.set(row.key,versions.get(row.key)!+1)
+ }
  if(/\$bob_mini_trial\$/.test(source)){
   const base=seed.find(row=>row.key==='profile.ask-bob')
   seed.push({key:'profile.ask-bob-mini',kind:'execution_profile',content:'',definition:{...base.definition,tier:'mini'},variables:[],metadata:{publication:'bob-mini-trial-v1'}});versions.set('profile.ask-bob-mini',1)

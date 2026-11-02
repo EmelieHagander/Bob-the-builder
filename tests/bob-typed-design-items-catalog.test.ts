@@ -38,3 +38,9 @@ test('the concept publication carries the server schema and builds on the typed 
   assert.match(conceptMigration, /typed_concept_version'='1' then continue/)
   assert.equal((conceptMigration.match(/activate_ai_catalog/g) ?? []).length, 1)
 })
+
+test('the project description holds no measurements and is rewritten per phase, in the catalog and the code', () => {
+  const spec = JSON.parse(readFileSync(new URL('../supabase/migrations/20261102194500_bob_description_role_catalog.sql', import.meta.url), 'utf8').match(/\$bob_description_role_spec\$([\s\S]+?)\$bob_description_role_spec\$/)![1])
+  assert(catalogFixture().tool('edit_project_record').function.description.includes(spec.new))
+  assert(PROJECT_EDIT_TOOLS[1].function.description.includes(spec.new))
+})
