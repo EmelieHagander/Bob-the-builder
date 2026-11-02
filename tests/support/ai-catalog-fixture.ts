@@ -395,6 +395,8 @@ for(const migration of migrations){
   const contract=seed.find(row=>row.key==='agent-contract.ask-bob')
   publishAs(contract,'bob-memory-stair-v1');contract.metadata.memory_stair_version=1;contract.metadata.prompt_tiers_version=1;versions.set(contract.key,versions.get(contract.key)!+1)
  }
+ const descriptionWeigher=source.match(/\$description_weigher_additions\$([\s\S]+?)\$description_weigher_additions\$/)
+ if(descriptionWeigher)for(const addition of JSON.parse(descriptionWeigher[1])){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-description-weigher-v1'}});versions.set(addition.key,1)}
  for(const [tag,profile,publication] of [['bob_mini_routing_trial','profile.ask-bob-mini','bob-mini-routing-trial-v1'],['bob_mini_routing_trial_end','profile.ask-bob','bob-mini-routing-trial-end-v1']] as const)if(new RegExp('\\$'+tag+'\\$').test(source)){
   const routing=seed.find(row=>row.key==='routing.ask-bob')
   routing.definition={...routing.definition,default_profile_key:profile};publishAs(routing,publication);versions.set(routing.key,versions.get(routing.key)!+1)
