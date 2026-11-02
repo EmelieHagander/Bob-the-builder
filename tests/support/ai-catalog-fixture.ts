@@ -403,6 +403,12 @@ for(const migration of migrations){
   const persona=seed.find(row=>row.key==='bob.persona')
   persona.content=persona.content+'\n\n'+plainWords[1];publishAs(persona,'bob-plain-words-v1');persona.metadata.plain_words_version=1;versions.set(persona.key,versions.get(persona.key)!+1)
  }
+ const memoryGist2=source.match(/\$bob_memory_gist_spec\$([\s\S]+?)\$bob_memory_gist_spec\$/)
+ if(memoryGist2){
+  const spec=JSON.parse(memoryGist2[1]),row=seed.find(row=>row.key===spec.key)
+  if(row.content!==spec.old)throw new Error('bob_memory_gist_unexpected_content')
+  row.content=spec.new;publishAs(row,'bob-memory-gist-v1');row.metadata.memory_gist_version=1;versions.set(row.key,versions.get(row.key)!+1)
+ }
  const projectLead=source.match(/\$bob_project_lead_spec\$([\s\S]+?)\$bob_project_lead_spec\$/)
  if(projectLead){
   const spec=JSON.parse(projectLead[1]),bump=(row:any)=>{publishAs(row,'bob-project-lead-v1');row.metadata.project_lead_version=1;versions.set(row.key,versions.get(row.key)!+1)}
