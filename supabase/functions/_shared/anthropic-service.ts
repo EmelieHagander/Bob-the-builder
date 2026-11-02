@@ -35,6 +35,7 @@ import { schemaIssues } from './schema-issues.ts'
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 // Pinned so a wire-shape change is a deliberate code edit.
 const ANTHROPIC_VERSION = '2023-06-01'
+const ANTHROPIC_BETA = 'thinking-binding-controls-2026-08-01'
 const MAX_RETRIES = 2
 // 5-minute cache writes cost 1.25x the base input price.
 const CACHE_WRITE_MULTIPLIER = 1.25
@@ -93,11 +94,12 @@ const SCHEMA_LISTS = ['anyOf','allOf','prefixItems']
  * same shape OpenAI strict mode needs; nullable types carry optionality. */
 export function strictSchema(schema: Json, strict = true): Json {
   if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return schema
-  const out: Json = {}
+  const out: Json = {}, limits: string[] = []
+  const note = (key: string, value: unknown) => { if (typeof value !== 'object') limits.push(key + ': ' + JSON.stringify(value)) }
   for (const [key, value] of Object.entries(schema)) {
-    if (UNSUPPORTED_KEYWORDS.has(key)) continue
-    if (key === 'format' && !(typeof value === 'string' && SUPPORTED_FORMATS.has(value))) continue
-    if (key === 'minItems' && !(value === 0 || value === 1)) continue
+    if (UNSUPPORTED_KEYWORDS.has(key)) { note(key, value); continue }
+    if (key === 'format' && !(typeof value === 'string' && SUPPORTED_FORMATS.has(value))) { note(key, value); continue }
+    if (key === 'minItems' && !(value === 0 || value === 1)) { note(key, value); continue }
     if (key === 'oneOf') { out.anyOf = (value as Json[]).map(v => strictSchema(v, strict)); continue }
     if (SCHEMA_MAPS.includes(key) && value && typeof value === 'object') {
       out[key] = Object.fromEntries(Object.entries(value as Json).map(([k, v]) => [k, strictSchema(v as Json, strict)])); continue
@@ -106,6 +108,8 @@ export function strictSchema(schema: Json, strict = true): Json {
     if (key === 'items') { out.items = Array.isArray(value) ? value.map(v => strictSchema(v as Json, strict)) : strictSchema(value as Json, strict); continue }
     out[key] = value
   }
+  // The model still sees each dropped bound, as the Anthropic SDKs do.
+  if (limits.length) out.description = [typeof out.description === 'string' ? out.description : '', '{' + limits.join(', ') + '}'].filter(Boolean).join(' ')
   const isObject = out.type === 'object' || (Array.isArray(out.type) && out.type.includes('object'))
   if (isObject && out.properties && typeof out.properties === 'object') {
     out.required = Array.from(new Set([...(Array.isArray(out.required) ? out.required as string[] : []), ...Object.keys(out.properties as Json)]))
@@ -210,7 +214,10 @@ export async function anthropicRequestBody(options: OpenAIServiceOptions, ctx: A
     max_tokens: ctx.maxOutputTokens,
     messages: await anthropicMessages(options, ctx),
     // Adaptive thinking: Claude decides how much to think; effort sets depth.
-    thinking: { type: 'adaptive' },
+    // Bob rebuilds context on purpose (tool picks per turn, result windows,
+    // handoffs), so a replayed thinking block can belong to another prefix.
+    // Drop it instead of failing the turn (live 400, 2026-11-02 21:23).
+    thinking: { type: 'adaptive', block_binding: { prefix_mismatch_behavior: 'drop_block' } },
     // Automatic prompt caching of the longest stable prefix.
     cache_control: { type: 'ephemeral' },
     stream: true,
@@ -221,9 +228,10 @@ export async function anthropicRequestBody(options: OpenAIServiceOptions, ctx: A
   const tools = options.tools ?? []
   if (tools.length) {
     body.tools = tools.map(tool => ({ name: tool.function.name, description: tool.function.description,
-      // Only strict tools are constrained; others keep their full schema.
-      input_schema: tool.function.strict === true ? strictSchema(tool.function.parameters, true) : tool.function.parameters,
-      ...(tool.function.strict === true ? { strict: true } : {}) }))
+      // No strict tools on Claude: Bob's large tool schemas exceed its grammar
+      // limit (live 400 "compiled grammar is too large", 2026-11-02 21:30).
+      // Each tool keeps its full schema, and Bob's validators check every call.
+      input_schema: tool.function.parameters }))
     const parallel = (options.aiDefinition?.providerParameters as Json | undefined)?.parallel_tool_calls
     const choice = options.tool_choice
     // Forced tool choice is rejected by current Claude models unless the
@@ -341,7 +349,7 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
     let response: Response | null = null
     for (let attempt = 0; ; attempt++) {
       response = await doFetch(ANTHROPIC_URL, { method: 'POST', signal: controller.signal, body: JSON.stringify(body),
-        headers: { 'x-api-key': ctx.apiKey, 'anthropic-version': ANTHROPIC_VERSION, 'content-type': 'application/json' } })
+        headers: { 'x-api-key': ctx.apiKey, 'anthropic-version': ANTHROPIC_VERSION, 'anthropic-beta': ANTHROPIC_BETA, 'content-type': 'application/json' } })
       if (response.ok) break
       const retryable = response.status === 429 || response.status === 529 || response.status >= 500
       if (!retryable || attempt >= MAX_RETRIES) {

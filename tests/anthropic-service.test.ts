@@ -25,9 +25,11 @@ test('request maps system, effort, strict tools, schemas, images and native repl
       { role: 'tool', tool_call_id: 'toolu_1', content: 'ok' },
       { role: 'tool', tool_call_id: 'toolu_2', content: 'ok' },
     ] }, ctx({ resolveImage: async () => 'data:image/png;base64,AAAA' }))
-  assert.equal(body.system, 'Du är Bob.'); assert.equal(body.max_tokens, 16000); assert.deepEqual(body.thinking, { type: 'adaptive' })
+  assert.equal(body.system, 'Du är Bob.'); assert.equal(body.max_tokens, 16000); 
   assert.deepEqual(body.output_config, { effort: 'high' }); assert.equal(body.stream, true)
-  assert.deepEqual(body.tools[0].input_schema.required, ['text']); assert.equal(body.tools[0].input_schema.additionalProperties, false); assert.equal(body.tools[0].strict, true)
+  // Tools go non-strict with their own schema (grammar limit); replayed thinking may be dropped, never fatal.
+  assert.deepEqual(body.tools[0].input_schema, tool.function.parameters); assert.equal(body.tools[0].strict, undefined)
+  assert.deepEqual(body.thinking, { type: 'adaptive', block_binding: { prefix_mismatch_behavior: 'drop_block' } })
   assert.deepEqual(body.tool_choice, { type: 'auto' }, 'forced choice needs a declared model capability')
   assert.equal(body.messages.length, 3)
   assert.deepEqual(body.messages[0].content[1], { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } })
@@ -171,5 +173,5 @@ test('every strict Bob tool and response schema translates to the keyword subset
   }
   assert.ok(count > 10, 'checked ' + count)
   const sample = strictSchema({ type: 'object', properties: { tags: { type: 'array', maxItems: 3, minItems: 2, items: { type: 'string', maxLength: 9, format: 'json' } }, id: { type: 'string', format: 'uuid' } } }, true)
-  assert.deepEqual(sample, { type: 'object', properties: { tags: { type: 'array', items: { type: 'string' } }, id: { type: 'string', format: 'uuid' } }, required: ['tags', 'id'], additionalProperties: false })
+  assert.deepEqual(sample, { type: 'object', properties: { tags: { type: 'array', items: { type: 'string', description: '{maxLength: 9, format: "json"}' }, description: '{maxItems: 3, minItems: 2}' }, id: { type: 'string', format: 'uuid' } }, required: ['tags', 'id'], additionalProperties: false })
 })
