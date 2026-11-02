@@ -24,6 +24,8 @@ export const BUILD_TREE_TOOLS = [
     { focus: nullable, query: nullable }),
   tool('place_build', 'Place a sub-build, construction or drawing in the tree: inside a sub-build (sub_build_id) or in a room (room_id), using ids from read_build_tree. Inside a sub-build it belongs to that sub-build\'s room. Sub-builds nest two levels: one inside another, never deeper. Both null moves it back to Snickeriet.',
     { build_id: { type: 'string' }, sub_build_id: nullable, room_id: nullable }),
+  tool('create_sub_build', 'Make an empty sub-build, the place a build is collected in, inside a sub-build (sub_build_id) or in a room (room_id), using ids from read_build_tree. Its constructions and drawings are saved and placed in it afterwards. The same title in the same place returns the existing sub-build.',
+    { title: { type: 'string' }, description: { type: 'string' }, sub_build_id: nullable, room_id: nullable }),
 ]
 
 const object = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v)
@@ -135,6 +137,7 @@ export function createBuildTree(opts: {
   projectId: string; hasAccess: () => Promise<boolean>
   read: () => PromiseLike<{ data: unknown; error: unknown }>
   place: (build: string, subBuild: string | null, room: string | null) => PromiseLike<{ data: unknown; error: unknown }>
+  create: (title: string, description: string, subBuild: string | null, room: string | null) => PromiseLike<{ data: unknown; error: unknown }>
 }) {
   let partial = false
   const load = async () => {
@@ -154,11 +157,17 @@ export function createBuildTree(opts: {
         const tree = await load()
         return tree ? zoom(tree, value.focus, value.query) : { status: 'unavailable' }
       }
-      if (name === 'place_build') {
-        if (!exact(value, ['build_id', 'sub_build_id', 'room_id']) || !id(value.build_id) || !(value.sub_build_id === null || id(value.sub_build_id)) || !(value.room_id === null || id(value.room_id)))
-          return { status: 'invalid', message: 'Use ids from read_build_tree: build_id, and sub_build_id or room_id (null when unused).' }
+      if (name === 'place_build' || name === 'create_sub_build') {
+        const creating = name === 'create_sub_build'
+        if (creating ? !exact(value, ['title', 'description', 'sub_build_id', 'room_id']) || !text(value.title, 200) || !text(value.description, 2000)
+          : !exact(value, ['build_id', 'sub_build_id', 'room_id']) || !id(value.build_id)) return { status: 'invalid', message: creating
+            ? 'Use the offered schema: title, description, and sub_build_id or room_id from read_build_tree (null when unused).'
+            : 'Use ids from read_build_tree: build_id, and sub_build_id or room_id (null when unused).' }
+        if (!(value.sub_build_id === null || id(value.sub_build_id)) || !(value.room_id === null || id(value.room_id)))
+          return { status: 'invalid', message: 'sub_build_id and room_id are ids from read_build_tree, or null.' }
         let saved: { data: unknown; error: unknown }
-        try { saved = await opts.place(value.build_id, value.sub_build_id, value.room_id) } catch (error) { rethrowContinuation(error); saved = { data: null, error } }
+        try { saved = await (creating ? opts.create(value.title.trim(), value.description.trim(), value.sub_build_id, value.room_id) : opts.place(value.build_id, value.sub_build_id, value.room_id)) }
+        catch (error) { rethrowContinuation(error); saved = { data: null, error } }
         if (saved.error) {
           const code = /build_[a-z_]+|project_denied/.exec(String((saved.error as { message?: unknown })?.message ?? ''))?.[0]
           if (code === 'project_denied') return { status: 'denied', reason: 'access' }
@@ -166,7 +175,8 @@ export function createBuildTree(opts: {
           partial = true; return { status: 'unavailable' }
         }
         const tree = await load()
-        const path = tree ? pathTo(tree, value.build_id) : null
+        const placed = creating ? (object(saved.data) && typeof saved.data.id === 'string' ? saved.data.id : null) : value.build_id
+        const path = tree && placed ? pathTo(tree, placed) : null
         return { ...(object(saved.data) ? saved.data : { status: 'saved' }), ...(path ? { path: path.map(n => n.name).join(' › ') } : {}) }
       }
       return { status: 'not_offered' }

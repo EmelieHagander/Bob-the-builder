@@ -502,6 +502,7 @@ export async function answerWithOpenAi(opts: {
   const buildTree = createBuildTree({ projectId: opts.projectId, hasAccess,
     read: () => rpc('read_build_tree', { p_project: opts.projectId }, AbortSignal.timeout(12000)),
     place: (build, subBuild, room) => writeRpc('place_build', { p_project: opts.projectId, p_artifact: build, p_parent: subBuild, p_space: room }),
+    create: (title, description, subBuild, room) => writeRpc('create_sub_build', { p_project: opts.projectId, p_title: title, p_description: description, p_parent: subBuild, p_space: room }),
   })
   const workRecords = createWorkRecords({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
     readSnapshot: input => rpc('read_bob_work_snapshot', { p_project: opts.projectId, p_resource: input.resource, p_id: input.key }, AbortSignal.timeout(12000)),
