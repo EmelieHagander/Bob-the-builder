@@ -6,6 +6,7 @@ import { constructionPurpose, constructionReadiness } from './write-state.ts'
 import { SOLUTION_PROSE, type ProjectWriter, type WritePayload, type WriteResult } from './project-write.ts'
 import { humanTextRejection, proseFields, type HumanTextRejection } from './human-text.ts'
 import type { ProjectSource } from '../../../src/data/provenance.ts'
+import { PROJECT_DESCRIPTION_MAX } from '../../../src/domain/projectDescription.ts'
 
 const object = (properties: Record<string, unknown>) => ({ type: 'object', additionalProperties: false, properties, required: Object.keys(properties) })
 const text = { type: 'string' }
@@ -215,7 +216,7 @@ export async function applyProjectDelta(snapshot: EditSnapshot, changes: unknown
       parent[key] += value
     } else parent[key] = value
   }
-  for (const [field, max] of Object.entries(snapshot.resource === 'project_description' ? { description: 12000 } : { title: 200, description: 6000, assumptions: 4000, tradeoffs: 4000 })) {
+  for (const [field, max] of Object.entries(snapshot.resource === 'project_description' ? { description: PROJECT_DESCRIPTION_MAX } : { title: 200, description: 6000, assumptions: 4000, tradeoffs: 4000 })) {
     if (!safeText(record[field], max, field !== 'title')) throw new Error('Invalid or oversized ' + field + '.')
   }
   if (record.design_intent != null) {
