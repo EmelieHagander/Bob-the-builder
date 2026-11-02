@@ -185,6 +185,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   * a joint names the catalog items that hold it, in any mix, instead of a
   * method with a rule fastener. Saved as method 'butt' with that list. */
  chosenJointFasteners?:boolean;
+ /** Pinned per manifest (build_place_version 1, owner decision 2026-11-02):
+  * a save names the sub-build it belongs in, and code places it there right
+  * after the save, so a part never lands in Snickeriet by a forgotten step. */
+ placeIn?:(artifactId:string,subBuildId:string)=>Promise<Record<string,any>>;
  formRefinement?:boolean;
  formEvidence?:boolean;
  constructionSourceRefresh?:boolean;
@@ -227,7 +231,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  const baseSaveTool=opts.constructionRepeats?CONSTRUCTION_REPEAT_SAVE_TOOL:CONSTRUCTION_SAVE_TOOL
  const formSaveTool=opts.formRefinement?withFormRefinement(baseSaveTool):baseSaveTool
  const zeroText=<T,>(tool:T)=>opts.defaultZero?withDefaultZeroText(tool,{path:(CAD_PARAMETERS_SCHEMA.properties.bindings as any).items.properties.path.description,arrays:CAD_ARRAYS_SCHEMA.description}):tool
- const saveTool=(t=>opts.defaultZero&&opts.repeatStart?withRepeatStartSchema(t):t)(zeroText(opts.chosenJointFasteners?withChosenJointFasteners(formSaveTool):formSaveTool))
+ const placedSaveTool=(t=>opts.defaultZero&&opts.repeatStart?withRepeatStartSchema(t):t)(zeroText(opts.chosenJointFasteners?withChosenJointFasteners(formSaveTool):formSaveTool))
+ const saveTool=opts.placeIn?withSubBuild(placedSaveTool):placedSaveTool
  const joints=(value:unknown)=>opts.chosenJointFasteners?storedChosenJoints(value):storedJoints(value)
  const baseParameterTool=opts.constructionSourceRefresh?CONSTRUCTION_PARAMETER_REFRESH_TOOL:CONSTRUCTION_PARAMETER_TOOL
  const withText=(tool:typeof CONSTRUCTION_EDIT_TOOL)=>opts.constructionText?withConstructionText(tool):tool
@@ -654,7 +659,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(issues.length)return {status:'needs_data',issues,message:'No construction saved. Preserve the selected concept component identities, dimensions and relations, or explicitly revise that Solution before handoff.'}
    }
    if(!await opts.hasAccess())return {status:'denied'}
-   const {record_id,expected_revision,request_quote,parameter_plan,...data}=v
+   const {record_id,expected_revision,request_quote,parameter_plan,sub_build_id:_subBuild,...data}=v
    return await opts.writer.commit({kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,joints:joints(data.joints),recipe,parameters}})
   }catch(error){
    rethrowContinuation(error)
@@ -681,7 +686,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    return {status:'unavailable',message:'Could not verify construction data. Read again; a failed lookup does not mean data is absent.'}
   }
  }}
- if(!opts.writeState||!opts.coherentWork)return tools
+ if(!opts.writeState||!opts.coherentWork)return placing(tools)
  // Owner decision 2026-10-29 (write_state_version 1): a construction write
  // returns the check Bob would otherwise request next, through the same check
  // path, persistence and reuse keys. A check that cannot run stays visible.
@@ -696,8 +701,28 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    outputs:[],...(opts.formEvidence?{component_ids:[],requirement_checks:[]}:{})}))
   return {...result,checked_concept_ready:check.status==='checked'?check.concept_ready:null,check}
  }
- return tools
+ return placing(tools)
+ // A saved construction goes into the sub-build its save named. The save stands
+ // even when the placement is refused; the refusal is returned beside it.
+ function placing<T extends {execute:(name:string,raw:unknown)=>Promise<Record<string,any>>}>(t:T):T{
+  if(!opts.placeIn)return t
+  const saveOnce=t.execute.bind(t)
+  t.execute=async(name:string,raw:unknown)=>{
+   const result=await saveOnce(name,raw)
+   const sub=(raw as Record<string,unknown>|null)?.sub_build_id
+   if(name!==CONSTRUCTION_SAVE_TOOL.function.name||result?.status!=='saved'||typeof sub!=='string')return result
+   const receipt=result.receipt
+   if(receipt?.dataset!=='artifacts'||typeof receipt.recordId!=='string')return {...result,placement:{status:'unavailable'}}
+   return {...result,placement:await opts.placeIn!(receipt.recordId,sub)}
+  }
+  return t
+ }
 }
+/** The save names its sub-build (null: none yet); placement follows the save. */
+export function withSubBuild<T extends typeof CONSTRUCTION_SAVE_TOOL>(spec:T):T{return {...spec,function:{...spec.function,
+ parameters:{...spec.function.parameters,required:[...spec.function.parameters.required,'sub_build_id'],properties:{...spec.function.parameters.properties,
+  sub_build_id:{anyOf:[uuid,{type:'null'}],description:'The sub-build this construction belongs in, from read_build_tree or the request. It is placed there right after saving. null keeps its current place.'}}},
+}}}
 const CHECKED_WRITES=new Set(['save_construction_draft','edit_construction_parts','change_construction_parameters'])
 export type ConstructionTools=ReturnType<typeof createConstructionTools>
 

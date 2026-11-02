@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { catalogFixture } from './support/ai-catalog-fixture.ts'
 import { catalogWorkers } from '../supabase/functions/_shared/bob-workers.ts'
 import { buildTree, createBuildTree, summarize, zoom, type FlatTree } from '../supabase/functions/_shared/build-tree.ts'
+import { CONSTRUCTION_SAVE_TOOL, withSubBuild } from '../supabase/functions/_shared/construction-draft.ts'
 
 const u = (n: number) => '00000000-0000-4000-8000-' + String(n).padStart(12, '0')
 // House > Upper floor > Children room > Bedroom furniture > Beds > Bunk bed; a ladder and a desk in Snickeriet.
@@ -97,4 +98,14 @@ test('owner decision 2026-11-02: Bob gives a build its place, Konrad splits it i
   const box = catalog.definition('bob.tools', 'tool_contract').definition as any
   assert.match(box.catalog.find((p: any) => p.name === 'ask_structure_worker').how_to, /create_sub_build/)
   assert(box.shelves.find((s: any) => s.label === 'Building and site').tools.includes('create_sub_build'))
+})
+
+test('owner decision 2026-11-02 ("Bygg först"): Konrad\'s save names its sub-build; publication build-place-v1 matches the code schema',()=>{
+ const now=catalogFixture()
+ const row=now.manifest().definitions.find(r=>r.prompt_key==='tools.save_construction_draft')!
+ assert.equal(row.metadata?.build_place_version,1);assert.equal(row.metadata?.publication,'build-place-v1')
+ const params=now.tool('save_construction_draft').function.parameters as any
+ assert(params.required.includes('sub_build_id'));assert.deepEqual(params.properties.sub_build_id,(withSubBuild(CONSTRUCTION_SAVE_TOOL).function.parameters as any).properties.sub_build_id)
+ const persona=now.definition('structure-worker.persona') as any
+ assert.match(persona.content,/Varje del sparar du för sig, direkt i delbygget/)
 })
