@@ -212,3 +212,11 @@ test('batched compaction keeps the start of a long turn byte-identical between b
   // Measured: per step keeps the start on 2 of 8 later steps, a batch of 4 on 7 of 8.
   assert(prefixKept(batched) >= batched.length - 2 && prefixKept(batched) > prefixKept(perStep), `batched ${prefixKept(batched)} vs per step ${prefixKept(perStep)}`)
 })
+
+test('the stair summarizer is asked for the gist only, which fits its budget', async () => {
+  const { catalogFixture } = await import('./support/ai-catalog-fixture.ts')
+  const contract = catalogFixture().text('memory-stair.contract')
+  assert.match(contract, /gist/)
+  assert.match(contract, /stay in the conversation/)
+  assert.doesNotMatch(contract, /keeps every decision/)
+})
