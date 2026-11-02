@@ -176,6 +176,12 @@ export async function answerWithOpenAi(opts: {
     if (claimedServer) return resolveMediaImageFile(opts.projectId, mediaTransport, record, ref, imageFiles, AbortSignal.timeout(30000))
     return resolveMediaImage(opts.projectId, mediaTransport, record, AbortSignal.timeout(12000))
   }
+  // Pixels only, for providers that cannot read an OpenAI file id (Claude).
+  const resolveImageInline = async (ref: string) => {
+    const record = imageRefs.get(ref)
+    if (!record) throw new Error('image_not_opened')
+    return resolveMediaImage(opts.projectId, mediaTransport, record, AbortSignal.timeout(12000))
+  }
   const imageFiles: ProviderImageFiles = {
     async find(mediaId, revision, signal) {
       const { data, error } = await client.rpc('bob_image_provider_file', { p_project: opts.projectId, p_media: mediaId, p_revision: revision }).abortSignal(signal)
@@ -230,7 +236,7 @@ export async function answerWithOpenAi(opts: {
     const allowed = Math.max(1000, Math.min(timeout, wall))
     let result
     try {
-      const invoke=(recovery?:{key?:string;context?:Record<string,unknown>;expiresAt?:string;fingerprint?:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage,
+      const invoke=(recovery?:{key?:string;context?:Record<string,unknown>;expiresAt?:string;fingerprint?:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage, resolveImageInline,
         // Routing hint only, added after the journal, job and drawing-budget
         // fingerprints so recorded steps of in-flight jobs still match.
         ...(promptCacheKey && (options.catalogRoleKey ?? options.functionName) === 'ask-bob' ? { promptCacheKey } : {}),
