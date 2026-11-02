@@ -11,6 +11,7 @@ const codes = new Set([
   'drawing_budget_period_closed', 'budget_period_missing', 'budget_call_not_reserved',
   'budget_receipt_changed', 'invalid_budget_receipt', 'invalid_budget_cost',
   'budget_remaining', 'budget_outcome_unknown', 'budget_changed', 'budget_unavailable',
+  'drawing_request_too_large',
 ])
 
 export function drawingErrorCode(error: unknown): string | undefined {

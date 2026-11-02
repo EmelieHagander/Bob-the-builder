@@ -750,7 +750,10 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
    }
    if(error instanceof Error&&error.message.startsWith('drawing_request_reuse:'))return {status:'existing_request',saved:false,request_id:error.message.split(':')[1],next_action:catalogText("feedback.cad-assistant.next-action.9c82aa7ab11b")}
    const runtimeFault=error instanceof ConstructionToolContractError
-   const reason=runtimeFault?'design_runtime_error':error instanceof Error&&['provider_retry_exhausted','turn_budget_exhausted','model_output_limit','model_reasoning_only','model_unavailable','deadline','too_many_tool_calls'].includes(error.message)?error.message:'design_failed'
+   // 2026-11-02: a drawing that outgrows the stored request cannot be saved by
+   // drawing it again; say so once instead of reporting a generic outage.
+   const tooLarge=error instanceof Error&&error.message==='drawing_request_too_large'
+   const reason=runtimeFault?'design_runtime_error':tooLarge?'drawing_request_too_large':error instanceof Error&&['provider_retry_exhausted','turn_budget_exhausted','model_output_limit','model_reasoning_only','model_unavailable','deadline','too_many_tool_calls'].includes(error.message)?error.message:'design_failed'
    // 2026-10-20: a live request failed here after one render with no
    // recorded cause. Log the internal error so the next one is diagnosable.
    if(reason==='design_failed'||runtimeFault)console.error('[CAD design failed]',JSON.stringify({request_id:request?.id??null,renders:metrics.renders,
@@ -760,6 +763,8 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
    // A code/schema fault cannot be repaired by changing views or repeating the
    // same CAD call. The existing checkpoint and server reply end this turn;
    // ordinary unavailable reads retain their separate recovery path.
+   if(tooLarge)return terminalFailure={...failure,request_id:request?.id??null,retryable:false,
+    user_message:'Ritningen blev för stor för att sparas i ett stycke. Ingen ny ritning sparades. Konstruktionen finns kvar; den behöver delas i mindre delar, eller gränsen höjas, innan ritningen kan sparas.'}
    if(runtimeFault)return terminalFailure={...failure,request_id:request?.id??null,retryable:false,
     user_message:'Ett internt fel stoppade ritningsarbetet. Ingen ny ritning sparades. Det sparade konstruktionsunderlaget finns kvar, men felet behöver rättas innan ritningen kan tas fram.'}
    if(['model_output_limit','model_reasoning_only','model_unavailable','provider_retry_exhausted','turn_budget_exhausted'].includes(reason)){
