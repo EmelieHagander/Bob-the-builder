@@ -439,6 +439,18 @@ for(const migration of migrations){
    row.definition=def;publishAs(row,'bob-typed-design-items-v1');row.metadata.typed_items_version=1;versions.set(key,versions.get(key)!+1)
   }
  }
+ const driveOutcome=source.match(/\$bob_drive_outcome_spec\$([\s\S]+?)\$bob_drive_outcome_spec\$/)
+ if(driveOutcome){
+  const edits=JSON.parse(driveOutcome[1])
+  for(const key of new Set<string>(edits.map((edit:any)=>edit.key))){
+   const row=seed.find(row=>row.key===key)
+   for(const edit of edits.filter((edit:any)=>edit.key===key)){
+    if(row.content.split(edit.old).length!==2)throw new Error(`bob_drive_outcome_unexpected_${key}`)
+    row.content=row.content.replace(edit.old,()=>edit.new)
+   }
+   publishAs(row,'bob-drive-outcome-v1');row.metadata.drive_outcome_version=1;versions.set(key,versions.get(key)!+1)
+  }
+ }
  if(/\$bob_mini_trial\$/.test(source)){
   const base=seed.find(row=>row.key==='profile.ask-bob')
   seed.push({key:'profile.ask-bob-mini',kind:'execution_profile',content:'',definition:{...base.definition,tier:'mini'},variables:[],metadata:{publication:'bob-mini-trial-v1'}});versions.set('profile.ask-bob-mini',1)
