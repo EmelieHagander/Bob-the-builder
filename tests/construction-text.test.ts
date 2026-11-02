@@ -173,8 +173,10 @@ test('the publication versions two construction tools, the answer contract and t
     }
     assert.equal(now.get('agent-contract.ask-bob').metadata.answer_text_version, 1)
     assert.equal(now.get('agent-contract.ask-bob').metadata.work_completion_version, 3)
-    assert.deepEqual(fixture.tool('edit_construction_parts').function.parameters, withConstructionText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL)).function.parameters)
-    assert.deepEqual(fixture.tool('change_construction_parameters').function.parameters, withConstructionText(withConstructionWorkWrite(CONSTRUCTION_PARAMETER_REFRESH_TOOL)).function.parameters)
+    // Typed solution_edit items arrived later (bob-typed-design-items-v1, bob-typed-concept-items-v1).
+    const untyped = (parameters: any) => { const p = structuredClone(parameters), edit = p.properties.solution_edit.anyOf[0]; edit.properties.changes.items = edit.properties.changes.items.anyOf[0]; return p }
+    assert.deepEqual(fixture.tool('edit_construction_parts').function.parameters, untyped(withConstructionText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL)).function.parameters))
+    assert.deepEqual(fixture.tool('change_construction_parameters').function.parameters, untyped(withConstructionText(withConstructionWorkWrite(CONSTRUCTION_PARAMETER_REFRESH_TOOL)).function.parameters))
     assert.equal((preTextHygieneCatalogFixture().tool('edit_construction_parts').function.parameters as any).properties.text, undefined)
     await pg.exec(readFileSync(new URL('../supabase/migrations/' + publication, import.meta.url), 'utf8'))
     assert.deepEqual(await read(), current, 're-applying is a no-op')

@@ -30,11 +30,18 @@ function codeTools(session:ReturnType<typeof catalogFixture>){
   constructionViews:meta('tools.read_construction_draft').construction_view_version===1} as any).tools
 }
 
+// Typed solution_edit items arrived later (bob-typed-design-items-v1, bob-typed-concept-items-v1);
+// the older pinned catalog keeps the untyped change item.
+const typedAt=(session:any,parameters:any)=>{
+ const edit=parameters.properties.solution_edit?.anyOf?.[0]
+ if(!edit||session.definition('tools.edit_construction_parts').metadata.typed_concept_version===1)return parameters
+ const p=structuredClone(parameters);p.properties.solution_edit.anyOf[0].properties.changes.items=edit.properties.changes.items.anyOf[0];return p
+}
 test('the model reads the schema code validates: save and edit, before and after the publication',()=>{
  for(const session of [catalogFixture(),preKonradLeanCatalogFixture()]){
   const tools=codeTools(session)
   for(const name of ['save_construction_draft','edit_construction_parts'])
-   assert.deepEqual(session.tool(name).function.parameters,tools.find(t=>t.function.name===name)!.function.parameters,name)
+   assert.deepEqual(session.tool(name).function.parameters,typedAt(session,tools.find(t=>t.function.name===name)!.function.parameters),name)
  }
  const joints=(s:any)=>Object.keys(s.tool('save_construction_draft').function.parameters.properties.joints.items.properties)
  assert.deepEqual(joints(catalogFixture()),['id','first','second','reason','fasteners'])

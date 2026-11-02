@@ -106,3 +106,15 @@ test('construction handoff keeps exact component dimensions; changed, missing or
   recipe.instances[1].placement.rx = 45; assert.equal(conceptConstructionIssues(intent, recipe, new Set())[0].code, 'concept_mapping_unsupported')
   recipe.instances.pop(); assert(conceptConstructionIssues(intent, recipe, new Set()).some(i => i.code === 'concept_part_missing'))
 })
+
+test('the concept model is started, extended and its nodes replaced only through typed ops', async () => {
+  const s = snapshot('box'), model = s.record.design_intent.model
+  await assert.rejects(applyProjectDelta(s, [set('/design_intent/model/nodes/-', model.nodes[0])], 'Add'), /typed op/)
+  await assert.rejects(applyProjectDelta(s, [set('/design_intent/model/nodes/0', model.nodes[0])], 'Replace'), /typed op/)
+  const node = { id: 'extra_gap', role: 'estimate', value: 40, unit: 'mm', reason: 'Owner estimate' }
+  const added = await applyProjectDelta(s, [{ op: 'add_concept_node', node }, { op: 'add_concept_constraint', constraint: { id: 'gap_limit', label: 'Gap within the wall', relation: 'at_most', left: 'extra_gap', right: model.nodes[0].id, feature: null } }], 'Add a gap')
+  assert.deepEqual(added.design_intent.model.nodes.at(-1), node)
+  const replaced = await applyProjectDelta(s, [{ op: 'replace_concept_node', index: 0, node: { ...model.nodes[0] } }], 'Same node')
+  assert.deepEqual(replaced.design_intent.model.nodes[0], model.nodes[0])
+  await assert.rejects(applyProjectDelta(s, [{ op: 'replace_concept_node', index: -1, node: model.nodes[0] }], 'Bad index'), /Invalid change shape/)
+})

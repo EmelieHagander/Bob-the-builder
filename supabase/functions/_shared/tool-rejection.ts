@@ -27,6 +27,7 @@ export const EDIT_REJECTION_CODES: readonly (readonly [string, string])[] = [
   ['New design items contain content only', 'edit_identity'],
   ['A new design feature has exactly', 'edit_item_shape'],
   ['Add a new design feature or choice with op', 'edit_item_op'],
+  ['Start, extend or replace concept model items with their typed op', 'edit_item_op'],
   ['A new design choice has exactly', 'edit_item_shape'],
   ['Use an index from the saved concept read', 'edit_index'],
   ['Use an item index from this edit context', 'edit_index'],

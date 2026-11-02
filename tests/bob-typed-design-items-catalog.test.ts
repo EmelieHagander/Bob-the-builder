@@ -5,15 +5,16 @@ import { catalogFixture } from './support/ai-catalog-fixture.ts'
 import { CONTENT_CHANGE_ITEM, PROJECT_EDIT_TOOLS } from '../supabase/functions/_shared/project-edits.ts'
 
 const migration = readFileSync(new URL('../supabase/migrations/20261102180000_bob_typed_design_items_catalog.sql', import.meta.url), 'utf8')
+const conceptMigration = readFileSync(new URL('../supabase/migrations/20261102190000_bob_typed_concept_items_catalog.sql', import.meta.url), 'utf8')
+const concept = JSON.parse(conceptMigration.match(/\$bob_typed_concept_spec\$([\s\S]+?)\$bob_typed_concept_spec\$/)![1])
 const spec = JSON.parse(migration.match(/\$bob_typed_items_spec\$([\s\S]+?)\$bob_typed_items_spec\$/)![1])
 
 test('both Solution write tools are strict and offer the typed feature and choice changes', () => {
-  assert.deepEqual(spec.items, JSON.parse(JSON.stringify(CONTENT_CHANGE_ITEM)), 'the publication carries the server schema')
   const catalog = catalogFixture()
   for (const name of ['edit_project_record', 'create_solution_alternative']) {
     const tool = catalog.tool(name).function
     assert.equal(tool.strict, true, name)
-    assert.deepEqual(tool.parameters.properties.changes.items, spec.items, name)
+    assert.deepEqual(tool.parameters.properties.changes.items, concept.items, name)
   }
   const description = catalog.tool('edit_project_record').function.description
   assert(description.includes(spec.description.new)); assert(!description.includes('/design_intent/features/-'))
@@ -25,4 +26,15 @@ test('the publication is idempotent, guarded and activates both tools at once', 
   assert.match(migration, /bob_typed_items_unexpected_schema/)
   assert.match(migration, /bob_typed_items_unexpected_description/)
   assert.equal((migration.match(/activate_ai_catalog/g) ?? []).length, 1)
+})
+
+test('the concept publication carries the server schema and builds on the typed design items', () => {
+  assert.deepEqual(concept.items, JSON.parse(JSON.stringify(CONTENT_CHANGE_ITEM)))
+  assert.deepEqual(concept.old_items, spec.items)
+  const description = catalogFixture().tool('edit_project_record').function.description
+  assert(description.includes(concept.description.new)); assert(!description.includes('Initialize once with {version:1'))
+  for (const name of ['edit_construction_parts', 'change_construction_parameters'])
+    assert.deepEqual((catalogFixture().tool(name).function.parameters as any).properties.solution_edit.anyOf[0].properties.changes.items, concept.items, name)
+  assert.match(conceptMigration, /typed_concept_version'='1' then continue/)
+  assert.equal((conceptMigration.match(/activate_ai_catalog/g) ?? []).length, 1)
 })
