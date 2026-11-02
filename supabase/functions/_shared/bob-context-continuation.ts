@@ -401,6 +401,11 @@ export function createBobContextContinuation(opts: {
     return handoff!
   }
 
+  /** The pinned model's provider decides whether a response id can be continued. */
+  const statelessRole = (options: OpenAIServiceOptions): boolean => {
+    try { return opts.aiCatalog.role(options.catalogRoleKey ?? options.functionName, options.catalogVariables).model.provider === 'anthropic' }
+    catch { return false }
+  }
   const call: ModelCall = async (requested, beforeDispatch) => {
     // The compactor is deliberately not recursive. Other callers can use this
     // adapter without rewriting their schema, specialist loop or old journal.
@@ -564,11 +569,15 @@ export function createBobContextContinuation(opts: {
           if (surface) options = { ...options, ...surface }
           const recentOperations = [...chain.operations.values()].slice(-40).map(statusOf)
           const { previousResponseId: _previous, prompt: _prompt, ...fresh } = options
-          options = { ...fresh, messages: [...clone(chain.seed), { role: 'user', content: JSON.stringify({
+          const handoffMessage: Message = { role: 'user', content: JSON.stringify({
             context_handoff: chain.handoff, original_assignment_preserved: true,
             completed_operations: recentOperations, operation_archive: { tool: HISTORY_TOOL, list: { call_id: null, after: null } },
             ...(opts.snapshot ? { confirmed_work_state: opts.snapshot({ functionName: options.functionName, role: options.catalogRoleKey ?? options.functionName }) } : {}),
-          }) }, ...clone(chain.groups.flat())] }
+          }) }
+          options = { ...fresh, messages: [...clone(chain.seed), handoffMessage, ...clone(chain.groups.flat())] }
+          // A stateless provider is re-sent this exact request on every later
+          // call, so the handoff stays in the chain byte for byte.
+          if (statelessRole(options)) chain.groups = [[clone(handoffMessage)], ...chain.groups]
           opts.onRollover?.(rollover)
         }
       }
@@ -578,6 +587,13 @@ export function createBobContextContinuation(opts: {
         options = { ...options, tools: [...(options.tools ?? []).filter(tool => tool.function.name !== HISTORY_TOOL), history],
           ...(references ? { catalogToolParameters: { ...options.catalogToolParameters, [HISTORY_TOOL]: { card: false, include_manual: true } } } : {}),
           ...(options.catalogSchemaKey || options.schema ? { structuredToolOutput: true } : {}) }
+      }
+      // A stateless provider (Claude) keeps no conversation on its side: the
+      // continuation pointer becomes the chain this adapter already holds,
+      // sent in full with the exact native items (thinking blocks included).
+      if (!native && options.previousResponseId && statelessRole(options)) {
+        const { previousResponseId: _pointer, prompt: _prompt, ...rest } = options
+        options = { ...rest, messages: [...clone(chain.seed), ...clone(chain.groups.flat())] }
       }
       if (native) options = buildBobRequest(options, {
         seed: chain.seed, history: chain.groups.flat(), historicalImages: chain.historicalImages,
