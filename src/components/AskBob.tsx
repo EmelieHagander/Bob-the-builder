@@ -223,9 +223,14 @@ function MarkdownText({ text }: { text: string }) {
   return <div className="bob-markdown">{blocks}</div>
 }
 
-function Bubble({ msg, projectId, onAction, onOpenDrawing }: { msg: ChatMessage; projectId: string; onAction?: (action: string) => void; onOpenDrawing?: () => void }) {
+function Bubble({ msg, projectId, attachedBefore, onAction, onOpenDrawing }: { msg: ChatMessage; projectId: string; attachedBefore?: string[]; onAction?: (action: string) => void; onOpenDrawing?: () => void }) {
   const isUser = msg.from === 'user'
   const generatedImages = [...new Set(msg.evidence?.writes?.filter(r => r.dataset === 'media' && r.operation === 'updated').map(r => r.recordId) ?? [])]
+  // Saved images Bob opened this turn are what his reply is about, so the owner
+  // sees them here too (2026-11-02: an earlier image Bob described never showed).
+  // The owner's own attachments just above and new illustrations are not repeated.
+  const shown = new Set([...generatedImages, ...(attachedBefore ?? [])])
+  const viewedImages = [...new Set(msg.evidence?.sources?.filter(s => s.dataset === 'image_pixels').map(s => s.recordId) ?? [])].filter(id => !shown.has(id))
   return (
     <div className={`bob-message ${isUser ? 'bob-message-user' : 'bob-message-assistant'}`}>
       <div className="bob-bubble">
@@ -233,6 +238,8 @@ function Bubble({ msg, projectId, onAction, onOpenDrawing }: { msg: ChatMessage;
         {isUser ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : <MarkdownText text={msg.text} />}
         <BobChatImages projectId={projectId} ids={parseBobImageIds(msg.imageIds)} />
         <BobChatImages projectId={projectId} ids={generatedImages} label="Project illustration" />
+        {viewedImages.length > 0 && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 }}>Earlier {viewedImages.length === 1 ? 'image' : 'images'} Bob looked at</div>}
+        <BobChatImages projectId={projectId} ids={viewedImages} label="Image Bob looked at" />
         {isUser && msg.deliveryState === 'failed' && !msg.deliveryRecovery && <div className="foundation-hint" style={{ color: 'inherit' }}>Bob’s earlier attempt was interrupted. Your message is saved.</div>}
         {isUser && msg.deliveryRecovery === 'completed' && <div className="foundation-hint" style={{ color: 'inherit' }}>The drawing was saved after the earlier interruption.</div>}
         {msg.evidence?.currentView && <ViewEvidence view={msg.evidence.currentView} />}
@@ -894,7 +901,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
             <p>{recovering || retry ? 'Its saved page context stays with this request.' : 'Page focus only. Bob checks the saved project records when you send.'}</p>
           </details>
           {historyReady && !extra.length && !working && <Bubble projectId={project.id} msg={{ from: 'bob', text: `Ask me about ${project.name}, send a photo for a mockup, work out a build detail or request a saved update.` }} />}
-          {extra.map((m, i) => <Bubble key={`x${i}`} projectId={project.id} msg={m} onAction={handleAction} onOpenDrawing={close} />)}
+          {extra.map((m, i) => <Bubble key={`x${i}`} projectId={project.id} msg={m} attachedBefore={extra[i - 1]?.from === 'user' ? extra[i - 1].imageIds : undefined} onAction={handleAction} onOpenDrawing={close} />)}
           {historyNotice && (historyReady || historyLoadError) && <div role="status" className="bob-history-notice">{historyNotice}</div>}
         {historyReady && !extra.length && !working && <div className="bob-chips">{chips?.map(c => <button key={c} disabled={resetting} onClick={() => setDraft(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '7px 12px', fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>{c}</button>)}</div>}
         {retry && <details className="bob-retry-details">
