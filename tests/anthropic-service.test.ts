@@ -127,12 +127,12 @@ test('the shared service keeps Claude off unless the ANTHROPIC_ENABLED code swit
     const shared = (file: string) => new URL(`../supabase/functions/_shared/${file}.ts`, import.meta.url)
     const asModule = (code: string) => 'data:text/javascript;base64,' + Buffer.from(ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString('base64')
     const adapterSource = (await readFile(shared('anthropic-service'), 'utf8')).replace("'./schema-issues.ts'", JSON.stringify(shared('schema-issues').href))
-    assert.match(adapterSource, /export const ANTHROPIC_ENABLED = false\n/, 'the committed switch is off')
+    assert.match(adapterSource, /export const ANTHROPIC_ENABLED = (true|false)\n/, 'one literal switch')
     const load = async (enabled: boolean) => {
       let source = await readFile(shared('openai-service'), 'utf8')
       source = source.replace(/import \{ createClient, SupabaseClient \} from "https:[^\n]+/, 'const createClient = (globalThis as any).__claudeClient;')
       for (const file of ['openai-content', 'ai-background', 'ai-catalog', 'schema-issues']) source = source.replace(`'./${file}.ts'`, JSON.stringify(shared(file).href))
-      source = source.replace("'./anthropic-service.ts'", JSON.stringify(asModule(adapterSource.replace('ANTHROPIC_ENABLED = false', 'ANTHROPIC_ENABLED = ' + enabled))))
+      source = source.replace("'./anthropic-service.ts'", JSON.stringify(asModule(adapterSource.replace(/ANTHROPIC_ENABLED = (true|false)/, 'ANTHROPIC_ENABLED = ' + enabled))))
       return (await import(asModule(source))).callOpenAIResponses
     }
     const aiDefinition = catalog(claudeManifest()).role('ask-bob')

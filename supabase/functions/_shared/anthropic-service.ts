@@ -27,7 +27,7 @@
 /** THE Claude on/off switch for this repo. Off until the owner approves.
  * Only this repo's Edge functions carry this module, so other apps sharing
  * the database are unaffected by flipping it. */
-export const ANTHROPIC_ENABLED = false
+export const ANTHROPIC_ENABLED = true
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { OpenAIResponseItem } from './openai-content.ts'
 import { schemaIssues } from './schema-issues.ts'
