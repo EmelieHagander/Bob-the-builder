@@ -34,7 +34,7 @@ export interface AiFunctionTool {
 export interface ResolvedAiRole {
   app: string; manifestId: string; roleKey: string; roleVersionId: string;
   profileVersionId: string; tierVersionId: string; tier: AiTier;
-  model: AiCatalogModel; providerAdapter: 'openai-responses-v1' | 'openai-images-v1' | 'openai-embeddings-v1';
+  model: AiCatalogModel; providerAdapter: 'openai-responses-v1' | 'openai-images-v1' | 'openai-embeddings-v1' | 'anthropic-messages-v1';
   reasoningEffort: string | null; maxOutputTokens: number; timeoutMs?: number;
   /** Server-derived from this Bob turn's immutable contract, absent on legacy roles. */
   unlimitedWork?: true;
@@ -51,7 +51,8 @@ const string = (value: unknown): value is string => typeof value === 'string' &&
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
 function fail(code: string, detail?: string): never { throw new AiCatalogError(code, detail) }
 function validateProviderParameters(params: unknown, adapter: string): JsonObject {
-  const allowed = adapter === 'openai-images-v1' ? ['size','quality'] : adapter === 'openai-embeddings-v1' ? ['dimensions'] : ['temperature','top_p','parallel_tool_calls','verbosity']
+  // Current Claude models reject sampling parameters and have no verbosity dial.
+  const allowed = adapter === 'openai-images-v1' ? ['size','quality'] : adapter === 'openai-embeddings-v1' ? ['dimensions'] : adapter === 'anthropic-messages-v1' ? ['parallel_tool_calls'] : ['temperature','top_p','parallel_tool_calls','verbosity']
   if (!object(params) || Object.keys(params).some(name => !allowed.includes(name))) fail('ai_profile_incompatible','provider parameters')
   if (adapter === 'openai-images-v1' && (params.size === undefined || params.quality === undefined)) fail('ai_profile_incompatible','image profile parameters')
   if (adapter === 'openai-embeddings-v1' && (!Number.isSafeInteger(params.dimensions) || Number(params.dimensions) < 1)) fail('ai_profile_incompatible','embedding dimensions')
@@ -251,7 +252,11 @@ export function createAiCatalogSession(client: AiCatalogClient, options: { app: 
       const binding = bindings[0], model = manifest().models.find(m => m.model_name === binding.definition.model_name)
       if (!model) fail('ai_tier_unavailable',tier)
       const adapter = model.capabilities.provider_adapter
-      if (model.provider !== 'openai' || (adapter !== 'openai-responses-v1' && adapter !== 'openai-images-v1' && adapter !== 'openai-embeddings-v1')) fail('ai_profile_incompatible','provider adapter')
+      // One adapter per provider (Launchpad pattern). Claude serves text tiers only;
+      // calls to it stay off until the owner enables the provider at runtime.
+      const openai = model.provider === 'openai' && (adapter === 'openai-responses-v1' || adapter === 'openai-images-v1' || adapter === 'openai-embeddings-v1')
+      const anthropic = model.provider === 'anthropic' && adapter === 'anthropic-messages-v1'
+      if (!openai && !anthropic) fail('ai_profile_incompatible','provider adapter')
       const embedding = adapter === 'openai-embeddings-v1'
       if ((tier === 'image') !== (adapter === 'openai-images-v1') || (tier === 'image' && !model.supports_image_output) || (tier === 'embedding') !== embedding) fail('ai_profile_incompatible','model class')
       const effort = config.reasoning_effort ?? null
@@ -328,7 +333,8 @@ export function applyCatalogModelOptions<T extends { app: string; functionName: 
  * tools/images/output schemas even when a profile forgot to require them. */
 export function validateAiCall(role: ResolvedAiRole, input: { app: string; images?: boolean; tools?: boolean; schema?: boolean; imageOutput?: boolean; embeddings?: boolean }) {
   if (role.app !== input.app) fail('ai_profile_incompatible','app scope')
-  const adapter = input.embeddings ? 'openai-embeddings-v1' : input.imageOutput ? 'openai-images-v1' : 'openai-responses-v1'
+  const text = role.providerAdapter === 'anthropic-messages-v1' ? 'anthropic-messages-v1' : 'openai-responses-v1'
+  const adapter = input.embeddings ? 'openai-embeddings-v1' : input.imageOutput ? 'openai-images-v1' : text
   if (role.providerAdapter !== adapter || input.embeddings && (input.images || input.tools || input.schema || input.imageOutput)) fail('ai_profile_incompatible','provider adapter')
   if (input.images && !role.model.supports_images || input.tools && role.model.capabilities.supports_functions !== true || input.schema && role.model.capabilities.supports_json_schema !== true || input.imageOutput && !role.model.supports_image_output) fail('ai_profile_incompatible','call capability')
 }

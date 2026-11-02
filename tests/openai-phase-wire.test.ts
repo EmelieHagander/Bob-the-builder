@@ -24,7 +24,7 @@ test('phase-aware Responses parsing selects final text, bounds commentary and pr
   try {
     let source = await readFile(new URL('../supabase/functions/_shared/openai-service.ts', import.meta.url), 'utf8')
     source = source.replace(/import \{ createClient, SupabaseClient \} from "https:[^\n]+/, 'const createClient = (globalThis as any).__phaseClient;')
-    for (const file of ['openai-content', 'ai-background', 'ai-catalog', 'schema-issues']) source = source.replace(`'./${file}.ts'`, JSON.stringify(new URL(`../supabase/functions/_shared/${file}.ts`, import.meta.url).href))
+    for (const file of ['openai-content', 'ai-background', 'ai-catalog', 'schema-issues', 'anthropic-service']) source = source.replace(`'./${file}.ts'`, JSON.stringify(new URL(`../supabase/functions/_shared/${file}.ts`, import.meta.url).href))
     const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
     const { callOpenAIResponses: call } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'))
     const options = { app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global', prompt: 'Continue', responsePhaseMode: 'aware' }

@@ -2,6 +2,7 @@ import { responseMessageContent, hasImageContent, prepareResponseImages, readRes
 import { AIBackgroundPending, AIBackgroundStorageError, backgroundResponse, type BackgroundCall } from './ai-background.ts';
 import { validateAiCall, type ResolvedAiRole, type AiVariables } from './ai-catalog.ts';
 import { schemaIssues } from './schema-issues.ts';
+import { ANTHROPIC_ENABLED, callAnthropicMessages } from './anthropic-service.ts';
 /**
  * The ONE OpenAI service, shared by every app in this Supabase project.
  * Canonical copy — keep byte-identical across repos.
@@ -171,6 +172,9 @@ export interface OpenAIServiceOptions {
   background?: BackgroundCall;
   /** Trusted caller-scoped loader; invoked only for a fresh provider submission. */
   resolveImage?: (ref: string) => Promise<string>;
+  /** Same images as pixels (data: URL). Needed by providers that cannot read
+   * an OpenAI file id; only used when the pinned model is not OpenAI. */
+  resolveImageInline?: (ref: string) => Promise<string>;
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   images?: Array<{
     type: 'base64' | 'url';
@@ -490,6 +494,34 @@ export async function callOpenAIResponses<T = unknown>(
     effectiveSystemMessage = systemMessage || '';
   }
   
+  // Provider seam (Launchpad pattern): the pinned catalog model names its
+  // provider; a non-OpenAI model goes to its own adapter and returns this
+  // same response shape. Off unless ANTHROPIC_ENABLED is true in anthropic-service.ts.
+  if (catalogRole?.model.provider === 'anthropic') {
+    if (!ANTHROPIC_ENABLED) {
+      return { success: false, data: null, usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, model: currentModel, error: 'ai_provider_disabled: anthropic' };
+    }
+    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!anthropicKey) {
+      return { success: false, data: null, usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, model: currentModel, error: 'Missing Anthropic API key' };
+    }
+    if (hasImageContent(options.messages) && modelRow.supports_images !== true) {
+      return { success: false, data: null, usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, model: currentModel, error: 'Configured model does not support image input' };
+    }
+    const anthropicModel = catalogRole.model;
+    return callAnthropicMessages<T>(options, {
+      apiKey: anthropicKey, model: anthropicModel, systemMessage: effectiveSystemMessage,
+      // Claude requires max_tokens; unlimited Bob work gets the model's own ceiling.
+      maxOutputTokens: catalogRole.app === 'bob' && catalogRole.unlimitedWork === true ? anthropicModel.max_output_tokens : configuredMaxTokens,
+      effort: catalogRole.reasoningEffort && anthropicModel.supports_reasoning ? catalogRole.reasoningEffort : null,
+      timeoutMs, resolveImage: options.resolveImageInline ?? options.resolveImage,
+      log: (r) => logAIUsage(aiClient, { app: options.app, module, aiFunction, userId, model: r.model,
+        inputTokens: r.inputTokens, cachedInputTokens: r.cachedInputTokens, outputTokens: r.outputTokens,
+        reasoningTokens: r.reasoningTokens, totalTokens: r.totalTokens, costUsd: r.costUsd,
+        inputPricePer1m: anthropicModel.input_cost_per_1m_tokens, outputPricePer1m: anthropicModel.output_cost_per_1m_tokens, success: r.success }),
+    });
+  }
+
   try {
     if (hasImageContent(options.messages) && modelRow.supports_images !== true) {
       throw new Error('Configured model does not support image input');
@@ -508,7 +540,8 @@ export async function callOpenAIResponses<T = unknown>(
         if (msg.role === 'system') continue;
         if (msg.nativeOutput !== undefined) {
           if (options.responseItemsMode !== 'preserve' || msg.role !== 'assistant') throw new Error('native_response_replay_not_enabled');
-          inputMessages.push(...readResponseItems(msg.nativeOutput));
+          // Claude thinking blocks (provider 'anthropic') are unreadable here; drop them as on a model switch.
+          inputMessages.push(...readResponseItems(msg.nativeOutput).filter(item => item.provider !== 'anthropic'));
           continue;
         }
         
