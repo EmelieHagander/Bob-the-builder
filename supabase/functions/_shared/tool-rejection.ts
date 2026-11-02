@@ -25,6 +25,8 @@ export const EDIT_REJECTION_CODES: readonly (readonly [string, string])[] = [
   ['Concept identities and whole components cannot be replaced', 'edit_concept_replace'],
   ['A new concept item needs a new identity', 'edit_identity'],
   ['New design items contain content only', 'edit_identity'],
+  ['A new design feature has exactly', 'edit_item_shape'],
+  ['A new design choice has exactly', 'edit_item_shape'],
   ['Use an index from the saved concept read', 'edit_index'],
   ['Use an item index from this edit context', 'edit_index'],
   ['Change individual item fields', 'edit_item_operation'],

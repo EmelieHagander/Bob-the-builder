@@ -39,6 +39,11 @@ test('identity, source, parent, prototype and whole-list replacements are reject
   await assert.rejects(applyProjectDelta(snapshot, [set('/design_intent/features/-', { id: 'made_up', description: 'Panel', basis: 'user_request' })], 'Reason'))
   await assert.rejects(applyProjectDelta(snapshot, [set('/design_intent/choices/0/status', 'open')], 'Reason'), /inconsistent/)
 })
+test('a guessed item shape is rejected with the exact fields to use', async () => {
+  await assert.rejects(applyProjectDelta(snapshot, [set('/design_intent/features/-', { title: 'Gambrel', description: 'Brutet tak' })], 'Reason'),
+    /A new design feature has exactly description \(text\) and basis \(user_request, project_record or working_assumption\)/)
+  await assert.rejects(applyProjectDelta(snapshot, [set('/design_intent/choices/-', { question: 'Vilken gavel?' })], 'Reason'), /A new design choice has exactly question/)
+})
 
 let pg: Awaited<ReturnType<typeof projectSchema>>
 let beforeCatalog: any

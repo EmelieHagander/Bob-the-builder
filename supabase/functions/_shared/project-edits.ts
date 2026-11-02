@@ -113,6 +113,9 @@ export async function applyProjectDelta(snapshot: EditSnapshot, changes: unknown
         const list = intent[fields[1]]
         if (fields[2] === '-' && fields.length === 3 && op === 'set') {
           if (!value || typeof value !== 'object' || Array.isArray(value) || 'id' in value || 'source_ref' in value) throw new Error('New design items contain content only; identity and source links are server-owned.')
+          const shape = fields[1] === 'features' ? DESIGN_FEATURE_SHAPE : DESIGN_CHOICE_SHAPE
+          const keys = Object.keys(value)
+          if (keys.length !== shape.fields.length || !shape.fields.every((field) => keys.includes(field))) throw new Error(shape.message)
           const id = 'edit_' + (await fingerprint({ snapshot, changes, index })).slice(0, 24)
           list.push({ ...value, id, ...(fields[1] === 'features' ? { source_ref: null } : {}) }); continue
         }
@@ -140,6 +143,18 @@ export async function applyProjectDelta(snapshot: EditSnapshot, changes: unknown
     if (!parseDesignIntent(record.design_intent)) throw new Error('Design content is inconsistent or oversized. Preserve honest decisions and uncertainty.')
   }
   return record
+}
+
+// The item shape is stated in the rejection itself so Bob can correct a guessed
+// shape in one retry (2026-11-02: ten rejected feature saves in Ladan sent
+// title+description and only learned "inconsistent").
+const DESIGN_FEATURE_SHAPE = {
+  fields: ['description', 'basis'],
+  message: 'A new design feature has exactly description (text) and basis (user_request, project_record or working_assumption).',
+}
+const DESIGN_CHOICE_SHAPE = {
+  fields: ['question', 'alternatives', 'recommendation', 'basis', 'consequences', 'geometry_dependency', 'status', 'selected_direction', 'decision_authority', 'decision_basis', 'deferral'],
+  message: 'A new design choice has exactly question, alternatives (text list), recommendation, basis, consequences, geometry_dependency (boolean), status (open, resolved or deferred), selected_direction (text when resolved, otherwise null), decision_authority (owner or bob), decision_basis and deferral ({scope, reason} when deferred, otherwise null).',
 }
 
 export function displayEditSnapshot(snapshot: EditSnapshot) {
