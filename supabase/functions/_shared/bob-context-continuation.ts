@@ -629,6 +629,10 @@ export function createBobContextContinuation(opts: {
   }
   // Native readers are implicitly bound to their own chain. This explicit
   // server-only accessor requires the same response identity for diagnostics.
-  return { call, exportState, restoreState,
+  /** A worker that stopped (step or time budget) leaves its last chain
+   * continuable. Nothing resumes it: its full tool outputs filled half of a
+   * 2 MB checkpoint and stopped a 70-part drawing turn (2026-11-02). */
+  const release = (responseId: string): void => { chains.delete(responseId) }
+  return { call, exportState, restoreState, release,
     readOperation: (input: unknown, responseId?: string) => readArchivedOperation(input, responseId ? chains.get(responseId) : undefined) }
 }

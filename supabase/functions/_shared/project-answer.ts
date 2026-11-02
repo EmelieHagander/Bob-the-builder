@@ -284,6 +284,8 @@ export type ProjectAnswerOptions = {
   finalAnswer?: boolean;
   /** Pinned per execution (workerCheckpointVersion): a worker's place is saved after each of its steps. */
   workerCheckpoint?: boolean;
+  /** Drops a finished worker's model chain from the turn checkpoint. */
+  releaseContext?: (responseId: string) => void;
   resultReferences?: boolean;
   /** Main-role compaction epoch; loaded manuals expire on the next prepare. */
   contextEpoch?: () => number;
@@ -459,6 +461,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const report = await runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
         session, hasAccess: opts.hasAccess, deadline, ...(opts.modelTimeoutMs ? { modelTimeoutMs: opts.modelTimeoutMs } : {}),
         ...(opts.finalAnswer ? { stopAsResult: true } : {}),
+        ...(opts.releaseContext ? { releaseChain: opts.releaseContext } : {}),
         ...(opts.workerCheckpoint ? { progress: { ...(resume ? { restored: resume.progress } : {}), save: async (progress: WorkerProgress) => {
           workerState = { key, index: workerIndex, session: session!.exportState(), ...(projectName !== undefined ? { projectName } : {}), progress }
           await save(workerStep)

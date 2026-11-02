@@ -152,6 +152,8 @@ export async function runWorker(opts: {
   stopAsResult?: boolean
   /** Pinned per job (workerCheckpointVersion): the place saved after each step, and the save. */
   progress?: { restored?: WorkerProgress; save(progress: WorkerProgress): Promise<void> }
+  /** Drops the worker's model chain once it has returned; it is never continued. */
+  releaseChain?: (responseId: string) => void
 }): Promise<Record<string, unknown>> {
   const roleKey = opts.worker.role.replace(/^role\./, '')
   const allowed = new Set([...opts.worker.tools, ...opts.worker.reads])
@@ -166,6 +168,7 @@ export async function runWorker(opts: {
     return order.flatMap(name => offered.filter(spec => spec.function.name === name))
   }
   const restored = opts.progress?.restored
+  let previous: string | undefined = restored?.previous
   if (restored && !validWorkerProgress(restored, opts.worker.max_steps)) throw new Error('worker_checkpoint_invalid')
   // A resumed job already read its knowledge and holds its place; the next step offers the tools again.
   if (restored) order.push(...restored.order)
@@ -184,15 +187,17 @@ export async function runWorker(opts: {
   // Workers with knowledge: what they saved travels to Bob as receipts, in code (no AI restates ids),
   // and with the readback switch the saved records themselves, read after the job.
   const receipts: Record<string, unknown>[] = structuredClone(restored?.receipts ?? [])
+  // Last, after any server work that can yield: a resumed worker still finds its chain.
+  const release = () => { if (previous) opts.releaseChain?.(previous) }
   const finish = async (result: Record<string, unknown>) => {
-    if (!opts.readKnowledge) return result
+    if (!opts.readKnowledge) { release(); return result }
     const targets = opts.autoCheck ? uncheckedConstructions(receipts) : []
     if (targets.length) for (const checked of await opts.autoCheck!(targets))
       receipts.push({ ...saveReceipt('check_construction_draft', checked), status: String(checked.status ?? 'returned'), by: 'code' })
     const readback = opts.readback && receipts.length ? await opts.readback(receipts) : undefined
+    release()
     return { ...result, receipts, ...(readback?.length ? { readback } : {}) }
   }
-  let previous: string | undefined = restored?.previous
   for (let step = restored ? restored.step + 1 : 0; step < opts.worker.max_steps; step++) {
     if (!await opts.hasAccess()) throw new Error('project_denied')
     if (Date.now() + 15_000 >= opts.deadline) return finish({ status: 'time_budget', worker: roleKey, calls })
