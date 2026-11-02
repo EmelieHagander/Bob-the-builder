@@ -160,6 +160,11 @@ async function tableFasteners(read:((id:string,revision:number)=>Promise<unknown
   return null
  }
 }
+export function latestObservations(rows:ConstructionObservation[]){
+ const latest=new Map<string,number>()
+ for(const o of rows)latest.set(o.artifact_id,Math.max(latest.get(o.artifact_id)??0,o.revision))
+ return rows.filter(o=>o.revision===latest.get(o.artifact_id))
+}
 export type ConstructionToolsState = { version:1; used:number } | { version:2; used:number; observations:ConstructionObservation[] }
 export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;unlimitedWork?:boolean;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
@@ -286,7 +291,9 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   return result
  }
  const tools={
- exportState():ConstructionToolsState{return opts.constructionViews?{version:2,used,observations:views.exportState()}:{version:1,used}},
+ // Checkpoint keeps observations of each construction's newest revision only. Konrad's
+ // edit-check loop on a 70-part build kept every older check: 630 kB of a 2 MB limit (2026-11-02).
+ exportState():ConstructionToolsState{return opts.constructionViews?{version:2,used,observations:latestObservations(views.exportState())}:{version:1,used}},
  restoreState(state:ConstructionToolsState){if(state?.version!==(opts.constructionViews?2:1)||!Number.isSafeInteger(state.used)||state.used<0)throw new Error('construction_tools_checkpoint_invalid');if(state.version===2)views.restoreState(state.observations);used=state.used},
  tools:[readTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.readDelivery?[CONSTRUCTION_DELIVERY_TOOL]:[]),...(opts.writer?[saveTool,editTool,parameterTool,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
  async execute(name:string,raw:unknown):Promise<Record<string,any>>{
