@@ -75,17 +75,42 @@ const fail = <T>(model: string, error: string): OpenAIServiceResponse<T> =>
 
 /** Same normalisation the OpenAI path applies (all properties required,
  * closed objects when strict), so one catalog schema serves both providers. */
+// Claude's strict mode (strict tools and output_config.format) accepts a
+// subset of JSON Schema. Live 2026-11-02 every Claude turn got a 400 on
+// maxItems. The wire schema keeps types, enums, required and nesting; the
+// dropped bounds stay in the original schema, which Bob's validators check
+// (schemaIssues and the domain validators), as the SDKs do client-side.
+const UNSUPPORTED_KEYWORDS = new Set(['minimum','maximum','exclusiveMinimum','exclusiveMaximum','multipleOf',
+  'minLength','maxLength','pattern','maxItems','uniqueItems','contains','minContains','maxContains',
+  'minProperties','maxProperties','patternProperties','propertyNames','dependentRequired','dependentSchemas',
+  'if','then','else','not','unevaluatedProperties','unevaluatedItems'])
+const SUPPORTED_FORMATS = new Set(['date-time','time','date','duration','email','hostname','uri','ipv4','ipv6','uuid'])
+const SCHEMA_MAPS = ['properties','$defs','definitions']
+const SCHEMA_LISTS = ['anyOf','allOf','prefixItems']
+
+/** Translate a schema into the subset Claude's strict mode accepts. Objects
+ * close (additionalProperties false) and list every property as required, the
+ * same shape OpenAI strict mode needs; nullable types carry optionality. */
 export function strictSchema(schema: Json, strict = true): Json {
-  if (!schema || typeof schema !== 'object') return schema
-  const out: Json = { ...schema }
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return schema
+  const out: Json = {}
+  for (const [key, value] of Object.entries(schema)) {
+    if (UNSUPPORTED_KEYWORDS.has(key)) continue
+    if (key === 'format' && !(typeof value === 'string' && SUPPORTED_FORMATS.has(value))) continue
+    if (key === 'minItems' && !(value === 0 || value === 1)) continue
+    if (key === 'oneOf') { out.anyOf = (value as Json[]).map(v => strictSchema(v, strict)); continue }
+    if (SCHEMA_MAPS.includes(key) && value && typeof value === 'object') {
+      out[key] = Object.fromEntries(Object.entries(value as Json).map(([k, v]) => [k, strictSchema(v as Json, strict)])); continue
+    }
+    if (SCHEMA_LISTS.includes(key) && Array.isArray(value)) { out[key] = value.map(v => strictSchema(v as Json, strict)); continue }
+    if (key === 'items') { out.items = Array.isArray(value) ? value.map(v => strictSchema(v as Json, strict)) : strictSchema(value as Json, strict); continue }
+    out[key] = value
+  }
   const isObject = out.type === 'object' || (Array.isArray(out.type) && out.type.includes('object'))
   if (isObject && out.properties && typeof out.properties === 'object') {
-    const props = out.properties as Json
-    out.required = Array.from(new Set([...(Array.isArray(out.required) ? out.required as string[] : []), ...Object.keys(props)]))
-    if (strict && out.additionalProperties === undefined) out.additionalProperties = false
-    out.properties = Object.fromEntries(Object.entries(props).map(([k, v]) => [k, strictSchema(v as Json, strict)]))
+    out.required = Array.from(new Set([...(Array.isArray(out.required) ? out.required as string[] : []), ...Object.keys(out.properties as Json)]))
+    if (strict) out.additionalProperties = false
   }
-  if (out.type === 'array' && out.items) out.items = strictSchema(out.items as Json, strict)
   return out
 }
 
@@ -196,7 +221,9 @@ export async function anthropicRequestBody(options: OpenAIServiceOptions, ctx: A
   const tools = options.tools ?? []
   if (tools.length) {
     body.tools = tools.map(tool => ({ name: tool.function.name, description: tool.function.description,
-      input_schema: strictSchema(tool.function.parameters, true), ...(tool.function.strict === true ? { strict: true } : {}) }))
+      // Only strict tools are constrained; others keep their full schema.
+      input_schema: tool.function.strict === true ? strictSchema(tool.function.parameters, true) : tool.function.parameters,
+      ...(tool.function.strict === true ? { strict: true } : {}) }))
     const parallel = (options.aiDefinition?.providerParameters as Json | undefined)?.parallel_tool_calls
     const choice = options.tool_choice
     // Forced tool choice is rejected by current Claude models unless the
@@ -375,7 +402,8 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
   }
   let parsed: T | null = null
   try { parsed = JSON.parse(text) } catch { /* honest parse failure */ }
-  const valid = parsed !== null && (!options.structuredToolOutput || schemaIssues(options.schema!, parsed).length === 0)
+  // The wire schema drops bounds Claude cannot enforce; the original holds them.
+  const valid = parsed !== null && (!options.schema || schemaIssues(options.schema, parsed).length === 0)
   await log(valid)
   return { ...base, success: valid, data: valid ? parsed : null, ...native, ...phase,
     ...(valid ? {} : { error: options.structuredToolOutput ? 'invalid_structured_output' : 'Failed to parse JSON response' }) }

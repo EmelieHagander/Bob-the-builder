@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
-import { anthropicRequestBody, callAnthropicMessages, nativeItems, type AnthropicCallContext } from '../supabase/functions/_shared/anthropic-service.ts'
+import { anthropicRequestBody, callAnthropicMessages, nativeItems, strictSchema, type AnthropicCallContext } from '../supabase/functions/_shared/anthropic-service.ts'
 import { createAiCatalogSession, validateAiCall, type AiCatalogDefinition, type AiCatalogManifest, type AiCatalogModel } from '../supabase/functions/_shared/ai-catalog.ts'
 
 const claude = { model_name: 'claude-opus-5-5', input_cost_per_1m_tokens: 4, output_cost_per_1m_tokens: 20, cached_input_cost_per_1m_tokens: 0.2, supports_images: true, capabilities: {} }
@@ -142,4 +142,34 @@ test('the shared service keeps Claude off unless the ANTHROPIC_ENABLED code swit
     assert.equal(on.data, 'Hej'); assert.deepEqual(urls, ['https://api.anthropic.com/v1/messages'])
     assert.equal(ledger.length, 1); assert.equal(ledger[0].model, 'claude-opus-5-5'); assert.equal(ledger[0].app, 'bob')
   } finally { g.fetch = oldFetch; g.Deno = oldDeno; delete g.__claudeClient }
+})
+
+test('every strict Bob tool and response schema translates to the keyword subset Claude strict mode accepts', async () => {
+  const { catalogFixture } = await import('./support/ai-catalog-fixture.ts')
+  let manifest: any
+  catalogFixture(snapshot => { manifest = structuredClone(snapshot) })
+  const banned = /^(minimum|maximum|exclusiveMinimum|exclusiveMaximum|multipleOf|minLength|maxLength|pattern|maxItems|uniqueItems|minProperties|maxProperties|oneOf)$/
+  const check = (schema: any, where: string) => {
+    const walk = (node: any, path: string) => {
+      if (!node || typeof node !== 'object') return
+      if (Array.isArray(node)) return node.forEach((n, i) => walk(n, path + '[' + i + ']'))
+      for (const [k, v] of Object.entries(node)) {
+        const parent = path.split('.').at(-1)
+        if (parent !== 'properties' && banned.test(k)) assert.fail(where + ' keeps ' + path + '.' + k)
+        if (parent !== 'properties' && k === 'minItems') assert.ok(v === 0 || v === 1, where + ' minItems ' + v)
+        if (parent !== 'properties' && k === 'additionalProperties') assert.equal(v, false, where + ' ' + path)
+        walk(v, path + '.' + k)
+      }
+    }
+    walk(strictSchema(schema, true), '$')
+  }
+  let count = 0
+  for (const d of manifest.definitions) {
+    const body = d.definition, fn = body.function ?? body
+    if (d.definition_kind === 'tool_contract' && fn.strict === true) { check(fn.parameters, d.prompt_key); count++ }
+    if (d.definition_kind === 'response_schema' && body.strict !== false) { check(body.schema ?? body, d.prompt_key); count++ }
+  }
+  assert.ok(count > 10, 'checked ' + count)
+  const sample = strictSchema({ type: 'object', properties: { tags: { type: 'array', maxItems: 3, minItems: 2, items: { type: 'string', maxLength: 9, format: 'json' } }, id: { type: 'string', format: 'uuid' } } }, true)
+  assert.deepEqual(sample, { type: 'object', properties: { tags: { type: 'array', items: { type: 'string' } }, id: { type: 'string', format: 'uuid' } }, required: ['tags', 'id'], additionalProperties: false })
 })
