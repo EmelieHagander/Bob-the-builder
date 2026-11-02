@@ -520,3 +520,22 @@ test('a worker refreshes at the pinned specialist limit while Bob keeps his own'
   assert.equal(await run('structure-worker', 150000), 0)
   assert((await run('ask-bob', 150000)) >= 3, 'Bob keeps his own limit')
 })
+
+test('a stateless (Claude) role is sent the full local chain with its native items instead of a response pointer', async () => {
+  const sent: OpenAIServiceOptions[] = []
+  const claude = { ...catalog, role: () => ({ systemMessage: 'Catalog-owned role instructions.', model: { provider: 'anthropic' } }) } as unknown as AiCatalogSession
+  const thinking = { type: 'reasoning', provider: 'anthropic', encrypted_content: JSON.stringify({ type: 'thinking', thinking: 'plan', signature: 'sig' }) }
+  let main = 0
+  const adapter = createBobContextContinuation({ version: 1, aiCatalog: claude, callModel: async options => {
+    sent.push(structuredClone(options))
+    main++
+    return { ...response('c' + main), outputItems: [thinking] } as OpenAIServiceResponse<any>
+  } })
+  await adapter.call(seed)
+  await adapter.call({ ...seed, previousResponseId: 'c1', messages: [output('c1')] })
+  const second = sent.at(-1)!
+  assert.equal(second.previousResponseId, undefined)
+  assert.deepEqual(second.messages![0], seed.messages![0])
+  assert.deepEqual(second.messages!.find(m => m.role === 'assistant')?.nativeOutput, [thinking], 'thinking block is replayed unchanged')
+  assert.deepEqual(second.messages!.at(-1), output('c1'))
+})

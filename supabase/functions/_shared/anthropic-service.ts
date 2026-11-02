@@ -146,7 +146,9 @@ export async function anthropicMessages(options: OpenAIServiceOptions, ctx: Anth
     for (const msg of options.messages) {
       if (msg.role === 'system') continue
       if (msg.nativeOutput !== undefined) {
-        if (options.responseItemsMode !== 'preserve' || msg.role !== 'assistant') throw new Error('native_response_replay_not_enabled')
+        // Claude needs its own thinking blocks back in every tool loop, so
+        // native replay is always accepted here (unlike the OpenAI opt-in).
+        if (msg.role !== 'assistant') throw new Error('native_response_replay_not_enabled')
         push('assistant', nativeBlocks(msg.nativeOutput))
       } else if (msg.role === 'tool') {
         push('user', [{ type: 'tool_result', tool_use_id: msg.tool_call_id,
@@ -343,7 +345,8 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
   const base = { usage, model: servedBy, reasoningEffort: ctx.effort, estimatedCostUsd, responseId: typeof message.id === 'string' ? message.id : undefined }
   const phaseAware = options.responsePhaseMode === 'aware'
   const content = (message.content as Block[]).filter(Boolean)
-  const native = options.responseItemsMode === 'preserve' ? { outputItems: nativeItems(content) } : {}
+  // Always returned: a stateless provider's caller must replay these items.
+  const native = { outputItems: nativeItems(content) }
   const strict = !!(options.schema && options.schemaName)
   const text = content.filter(b => b.type === 'text' && typeof b.text === 'string').map(b => b.text as string).join('\n\n')
 
