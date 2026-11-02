@@ -234,5 +234,31 @@ test('K1 claimed tools create/read/revise the same construction; SQL authority, 
   const refused=await make().execute('save_construction_draft',{...input,key:'chosenBad',materials,joints:[{...joint,fasteners:[pick(plywood.material_id,plywood.material_revision)]}]})
   assert.equal(refused.status,'invalid');assert.equal(refused.reason,'joint_fastener_not_in_catalog',JSON.stringify(refused))
  })
+ await t.test('save into a sub-build (owner decision 2026-11-02): code places the saved construction where the save says; a refused place leaves the save',async()=>{
+  await call(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')
+  turn=randomUUID();claim=await call(null,'bob.bob_claim_turn',[project,owner,turn,message],'service_role')
+  const sqlErrors:string[]=[]
+  const placeWriter=createProjectWriter(project,message,async p=>{try{return {data:await save(p),error:null}}catch(e:any){sqlErrors.push(e.message);return {data:null,error:{code:e.code,message:e.message}}}},async()=>({data:[],error:null}),async()=>({data:[],error:null}))
+  const placed:string[][]=[]
+  const placeIn=async(id:string,sub:string)=>{placed.push([id,sub]);try{return await call(owner,'bob.place_build',[project,id,sub,null])}catch(e:any){return {status:'refused',reason:e.message}}}
+  const make=(withPlace:boolean)=>createConstructionTools({projectId:project,message,writer:placeWriter,unlimitedWork:true,hasAccess:async()=>true,...(withPlace?{placeIn}:{}),
+   read:(id,rev)=>read(id,rev),readSources:async()=>({project:new Map(),physical:new Map()}),
+   readDesignReadiness:(target,purpose,area)=>call(owner,'bob.read_design_readiness',[project,area??null,target,purpose])})
+  const schema=(withPlace:boolean)=>(make(withPlace).tools.find(x=>x.function.name==='save_construction_draft')!.function.parameters as any)
+  assert(schema(true).required.includes('sub_build_id'));assert(!('sub_build_id' in schema(false).properties),'pinned turns keep the old schema')
+  const bunk=await call(owner,'bob.create_sub_build',[project,'Våningssäng','Bunk bed for the children',null,null])
+  const materials=input.materials.map((m:any)=>({...m,material_revision:2}))
+  const frame=await make(true).execute('save_construction_draft',{...input,key:'frame',title:'Sängstomme',materials,sub_build_id:bunk.id})
+  assert.equal(frame.status,'saved',JSON.stringify({frame,sqlErrors}))
+  assert.deepEqual([frame.placement.status,frame.placement.parent_id,frame.placement.kind],['saved',bunk.id,'construction'])
+  const tree=await call(owner,'bob.read_build_tree',[project])
+  assert.equal(tree.builds.find((b:any)=>b.id===frame.receipt.recordId).parent_id,bunk.id,'the part sits in the sub-build, not in Snickeriet')
+  const loose=await make(true).execute('save_construction_draft',{...input,key:'loose',title:'Löst',materials,sub_build_id:null})
+  assert.equal(loose.status,'saved');assert(!('placement' in loose),'null keeps its place: no placement call')
+  const wrong=await make(true).execute('save_construction_draft',{...input,key:'wrong',title:'Fel',materials,sub_build_id:frame.receipt.recordId})
+  assert.equal(wrong.status,'saved','the save stands');assert.equal(wrong.placement.status,'refused');assert.match(wrong.placement.reason,/build_parent_not_sub_build/)
+  assert.deepEqual(placed.map(p=>p[1]),[bunk.id,frame.receipt.recordId])
+  assert.equal((await make(false).execute('save_construction_draft',{...input,key:'pinned',materials,sub_build_id:bunk.id})).status,'invalid','an old schema refuses the new field')
+ })
  await call(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')
 })

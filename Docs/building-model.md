@@ -241,6 +241,7 @@ A project's builds form one tree that follows the house: building › level › 
 - A build placed nowhere shows in **Snickeriet**, a view and not a row. Areas stay a filter, not a tree level.
 - One placement row per artifact (`bob.build_placements`) says where it sits. `bob.place_build` is the one write path for Bob and the app; `bob.read_build_tree` returns flat rows and code builds the levels and counts (`supabase/functions/_shared/build-tree.ts`).
 - **Roles:** Bob decides *where* a build belongs and makes its sub-build in the room. Konrad (structure worker) decides *how* it is split into constructions and saves each one into that sub-build. Counts and summaries come from code, so Bob keeps the overview without reading every part. The owner can move things later in the UI.
+- **Saving into a sub-build (2026-11-02):** `save_construction_draft` names `sub_build_id` (null keeps the current place); code places the saved construction there right after the save. A refused placement leaves the save standing and is returned beside it. Sub-build pieces in `bob.cad_shell_command` are still drawings only, so a sub-build's 3D view does not yet show its constructions together.
 
 ---
 

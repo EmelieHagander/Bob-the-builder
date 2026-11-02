@@ -680,6 +680,9 @@ export async function answerWithOpenAi(opts: {
     decimalRounding:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.decimal_rounding_version===1),
     repeatStart:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.repeat_start_version===1),
     chosenJointFasteners:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.joint_fastener_version===2),
+    // Owner decision 2026-11-02 (build_place_version 1): a save names its sub-build and code places it there.
+    ...(aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.build_place_version===1)?{
+      placeIn:(id:string,subBuild:string)=>buildTree.execute('place_build',{build_id:id,sub_build_id:subBuild,room_id:null})}:{}),
     observationTime:(input:unknown)=>memo('construction:observation',input,async()=>new Date().toISOString()),
     prepareEdit:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_edit',{...binding,p_payload:payload},AbortSignal.timeout(12000))
