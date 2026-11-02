@@ -1079,6 +1079,7 @@ export async function answerWithOpenAi(opts: {
     ...(execution.resultReferenceVersion === 1 ? { resultReferences: true } : {}),
     ...(finalAnswer ? { finalAnswer: true } : {}),
     ...(execution.workerCheckpointVersion === 1 ? { workerCheckpoint: true } : {}),
+    ...(contextContinuation ? { releaseContext: (id: string) => contextContinuation!.release(id) } : {}),
     ...(contextStrategy ? { contextEpoch: () => mainContextEpoch,
       registerContextSurface: (refresh: () => Promise<ContextSurface>) => { refreshMainContextSurface = refresh },
     } : {}),
