@@ -249,6 +249,13 @@ for(const migration of migrations){
   const row=seed.find(row=>row.key==='agent-contract.ask-bob');const{seed_version,source_revision,...rest}=row.metadata??{}
   row.metadata={...rest,publication:'bob-turn-usd-stop-v2',...JSON.parse(usdStopChange[1])};versions.set(row.key,versions.get(row.key)!+1)
  }
+ const stopRemoved=source.match(/\$bob_turn_stop_remove\$([\s\S]+?)\$bob_turn_stop_remove\$/)
+ if(stopRemoved){
+  const flags=JSON.parse(stopRemoved[1]);if(flags.remove_turn_usd_stop!==true)throw new Error('turn_usd_stop_removal_not_confirmed')
+  const row=seed.find(row=>row.key==='agent-contract.ask-bob');const{seed_version,source_revision,turn_usd_stop,...rest}=row.metadata??{}
+  if(turn_usd_stop!==4)throw new Error('turn_usd_stop_unexpected_prior')
+  row.metadata={...rest,publication:'bob-turn-usd-stop-removed-v1'};versions.set(row.key,versions.get(row.key)!+1)
+ }
  const contractFlags=source.match(/\$contract_flags_change\$([\s\S]+?)\$contract_flags_change\$/)
  if(contractFlags){
   const publication=source.match(/'publication','([a-z0-9-]+)'/)?.[1]??'contract-flags'

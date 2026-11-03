@@ -237,6 +237,8 @@ export interface BobAnswerState {
   finalCall?: boolean
   /** Worker checkpoints: the hand-over at this step and call index, and the worker's place in it. */
   worker?: { key: string; index: number; session: unknown; projectName?: string; progress: WorkerProgress }
+  /** Failed hand-overs cannot start the same worker again during this owner turn. */
+  failedWorkers?: string[]
   tools: NonNullable<OpenAIServiceOptions['tools']>
   closedByLimit: boolean; closedByCommentary: boolean
   request?: OpenAIServiceOptions
@@ -310,6 +312,8 @@ export async function runProjectAnswer(opts: ProjectAnswerOptions): Promise<Proj
       || saved.finalCall !== undefined && typeof saved.finalCall !== 'boolean'
       || saved.worker !== undefined && (saved.phase !== 'tools' || !saved.worker || typeof saved.worker.key !== 'string' || saved.worker.index !== saved.toolIndex
         || !saved.worker.session || typeof saved.worker.session !== 'object' || saved.worker.projectName !== undefined && typeof saved.worker.projectName !== 'string' || !validWorkerProgress(saved.worker.progress, 40))
+      || saved.failedWorkers !== undefined && (!Array.isArray(saved.failedWorkers) || new Set(saved.failedWorkers).size !== saved.failedWorkers.length
+        || saved.failedWorkers.some(key => typeof key !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(key)))
       || !saved.initial || !saved.toolbox || !saved.observation || !Array.isArray(saved.messages) || !Array.isArray(saved.tools) || !Array.isArray(saved.workResults)
       || (saved.phase !== 'ready' && (!saved.request || saved.request.app !== 'bob' || saved.request.aiFunction !== 'ask-bob' || saved.request.userId !== opts.userId))
       || (['response', 'tools'].includes(saved.phase) && !saved.response)
@@ -424,6 +428,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // Worker checkpoints: the saved place is used once, by the same hand-over call.
   let workerResume = opts.workerCheckpoint ? restored?.worker : undefined
   let workerState: BobAnswerState['worker']
+  const failedWorkers = new Set(restored?.failedWorkers ?? [])
   // The project's name for the workers' personas: the locked snapshot, else one read.
   let projectName: string | undefined
   const readProjectName = async () => {
@@ -444,6 +449,10 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       if (!job) return { status: 'invalid', issues: [{ path: '$', expected: plain ? 'request (text)' : 'job (text) and findings (text or null)' }] }
       const resume = workerResume && workerResume.key === key && workerResume.index === currentIndex ? workerResume : undefined
       workerResume = undefined
+      // A provider failure already exhausted the journal's bounded replay.
+      // Bob may report the failure, but not start an equally costly fresh chain
+      // for the same specialist until the owner's next message starts a new turn.
+      if (failedWorkers.has(key)) return { status: 'unavailable', worker: worker.role.replace(/^role\./, ''), reason: 'failed_earlier_this_turn', calls: [] }
       let session = workerSessions.get(key)
       if (!session || resume) {
         session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: () => [...worker.tools, ...worker.reads], offerWaiting: true, readPolicy: basePolicy })
@@ -509,6 +518,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         } })
       // The job is over: Bob's next save records its result, not a place inside it.
       workerState = undefined
+      if (report.status === 'unavailable') failedWorkers.add(key)
       return report
     } }))
   const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: turnPreload,
@@ -627,6 +637,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
       ...(finalCall ? { finalCall } : {}),
       ...(workerState ? { worker: workerState } : {}),
+      ...(failedWorkers.size ? { failedWorkers: [...failedWorkers] } : {}),
       tools, closedByLimit, closedByCommentary, request, response: pendingResponse, toolIndex }))
   }
   const answered = (text: string, responseId: string | undefined, incomplete: boolean): ProjectAnswer => ({ ok: true, answer: text, projectId: opts.projectId, providerResponseId: responseId,
