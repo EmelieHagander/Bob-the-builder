@@ -26,6 +26,7 @@ import { createBobModelBudget, bobFinalAnswerVersion, isDrawingModelCall, type D
 import { createExecutionMetrics } from './execution-metrics.ts'
 import { AIBackgroundPending } from './ai-background.ts'
 import { pinBobModelDeadline } from './bob-model-deadline.ts'
+import { CLAUDE_BACKGROUND_TIMEOUT_MS, claudeDispatchWindow, claudeJournalReserveMs } from './bob-model-timing.ts'
 import { hasImageContent } from './openai-content.ts'
 import { fingerprint, rethrowContinuation } from './bob-job-journal.ts'
 import { createKnowledgeReader } from './building-knowledge.ts'
@@ -196,10 +197,9 @@ export async function answerWithOpenAi(opts: {
       if (error) throw new Error('unavailable')
     },
   }
-  // Background workers live ~150 s. Reserve a realistic duration per role, not the
-  // full timeout, so several calls share one segment; a call cut off at the segment
-  // wall yields into a fresh segment, consuming the same bounded retry budget
-  // as other dispatched failures. Durable AI waiting does not consume retries.
+  // Background workers have a 140 s segment. Claude streams synchronously and
+  // needs a longer reservation than OpenAI's durable background-job handoff.
+  // A pre-dispatch yield does not count as a provider attempt.
   const WORKER_ROLES = new Set(['materials-worker', 'structure-worker', 'drawing-worker'])
   // 'bob-ask-<32 hex>' becomes 'bob-<role>-<32 hex>': one route per worker and project.
   const workerCacheKey = (key: string, role: string) => 'bob-' + role + '-' + key.slice('bob-ask-'.length)
@@ -220,6 +220,7 @@ export async function answerWithOpenAi(opts: {
    return modelBudget.run(async () => {
    const timeout = options.timeoutMs ?? 120000
    const asyncModels = !!(opts.background?.asyncModels && opts.background.jobId)
+   const synchronousClaude = options.aiDefinition?.providerAdapter === 'anthropic-messages-v1'
    // Localisation has its own journal stream. Existing jobs may contain the old
    // free-form drawing answer at work-router's next position; do not replay it
    // as a phrasebook or collide with its fingerprint during a release.
@@ -232,8 +233,12 @@ export async function answerWithOpenAi(opts: {
     const modelExpiresAt = asyncModels && identity && execution.modelDeadlineVersion === 1
       ? await pinBobModelDeadline(memo, identity, expiresAt) : expiresAt
     const started = performance.now()
+    // Do not spend money on a Claude request whose stream cannot finish before
+    // the next worker segment. Check again *after* contextual pre-dispatch work.
+    const window = synchronousClaude && journal ? claudeDispatchWindow(timeout, journal.remaining()) : null
+    if (window && !window.ready) throw new BobContinuation('yield')
     const wall = journal ? journal.remaining() + 8000 : Infinity
-    const allowed = Math.max(1000, Math.min(timeout, wall))
+    const allowed = window ? window.timeoutMs : Math.max(1000, Math.min(timeout, wall))
     let result
     try {
       const invoke=(recovery?:{key?:string;context?:Record<string,unknown>;expiresAt?:string;fingerprint?:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage, resolveImageInline,
@@ -264,7 +269,7 @@ export async function answerWithOpenAi(opts: {
     if (journal && !result.success && /OpenAI API error: (429|5[0-9]{2})/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_retry')
     if (journal && !result.success && /Network error/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_uncertain')
     return result
-   }, asyncModels ? (options.images?.length || hasImageContent(options.messages) ? 45000 : 25000)
+   }, synchronousClaude ? claudeJournalReserveMs(timeout) : asyncModels ? (options.images?.length || hasImageContent(options.messages) ? 45000 : 25000)
      : Math.min(timeout, RESERVE_MS[options.aiFunction] ?? 45000))}catch(error){
     if(error instanceof Error&&error.message==='provider_retry_exhausted')return {success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'provider_retry_exhausted'}
     throw error
@@ -1065,7 +1070,7 @@ export async function answerWithOpenAi(opts: {
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
-    ...opts, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
+    ...opts, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? CLAUDE_BACKGROUND_TIMEOUT_MS : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
     readToolPolicy,
     checkpoint: answerCheckpoint,
     // Older in-flight journals keep their recorded post-rollover requests.

@@ -73,6 +73,36 @@ test('streamed tool turn returns tool calls, replayable native items, usage, cos
   assert.equal(ledger.length, 1); assert.equal(ledger[0].success, true)
 })
 
+test('a locally timed-out Claude stream reports only content-free timing and progress', async () => {
+  const originalError = console.error
+  const diagnostics: string[] = []
+  const fetch = (async (_url: string, init: RequestInit) => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('event: message_start\ndata: {"type":"message_start","message":{"id":"secret-message","content":[]}}\n\n'))
+        init.signal?.addEventListener('abort', () => controller.error(new DOMException('aborted', 'AbortError')), { once: true })
+      },
+    })
+    return new Response(stream, { status: 200, headers: { 'request-id': 'req_fixture' } })
+  }) as typeof globalThis.fetch
+  console.error = (...parts: unknown[]) => { diagnostics.push(parts.map(String).join(' ')) }
+  try {
+    const result = await callAnthropicMessages({ ...base, prompt: 'private prompt' }, ctx({ fetch, timeoutMs: 40 }))
+    assert.equal(result.success, false)
+    assert.match(result.error ?? '', /^Network error:/)
+    assert.equal(diagnostics.length, 1)
+    const diagnostic = JSON.parse(diagnostics[0].slice('[Anthropic Service] Request error '.length))
+    assert.equal(diagnostic.kind, 'local_timeout')
+    assert.equal(diagnostic.timeout_ms, 40)
+    assert.equal(diagnostic.events, 1)
+    assert.equal(diagnostic.request_id, 'req_fixture')
+    assert.ok(diagnostic.first_event_ms !== null)
+    assert.ok(diagnostic.since_last_event_ms !== null)
+    assert.ok(diagnostic.elapsed_ms >= 30)
+    assert.doesNotMatch(diagnostics[0], /private prompt|secret-message/, 'no request or streamed content may enter logs')
+  } finally { console.error = originalError }
+})
+
 test('text, strict JSON, refusal and output limit outcomes are honest', async () => {
   const reply = (stop: string, text: string) => (async () => sse(
     { type: 'message_start', message: { id: 'm', model: 'claude-opus-5-5', content: [], usage: { input_tokens: 1, output_tokens: 0 } } },
