@@ -88,7 +88,8 @@ test('construction presentation and feedback retain exact source, component scop
     assert.deepEqual(await api.presentConstruction(project,saved.recordId,1,'overview'),shown)
     await assert.rejects(api.presentConstruction(project,second.recordId,1,'overview'),/could not be linked/)
     invalid=true;await assert.rejects(api.presentConstruction(project,saved.recordId,1,'overview'),/project_changed/)
-  })  await t.test('a text-only legacy Construction can be shown without manufacturing FORM consent',async()=>{
+  })
+  await t.test('a text-only legacy Construction can be shown without manufacturing FORM consent',async()=>{
     const legacySolution=randomUUID(),legacyIntent=designIntent('construction')
     await call(owner,'solution_command',[project,'create',legacySolution,0,{title:'Legacy box assembly',description:'Existing geometry without a concept model',
       assumptions:'Dimensions remain design choices',tradeoffs:'',measurements:[],design_intent:legacyIntent}])
