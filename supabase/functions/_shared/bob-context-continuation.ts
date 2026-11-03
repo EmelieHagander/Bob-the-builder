@@ -1,4 +1,4 @@
-import { applyCatalogModelOptions, type AiCatalogSession } from './ai-catalog.ts'
+import { applyCatalogModelOptions, textContinuationMode, type AiCatalogSession } from './ai-catalog.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import { contextTokenPrefix, countContextTokens, countSerializedTokens } from './bob-token-budget.ts'
 import { stableJsonValue } from './bob-job-journal.ts'
@@ -401,11 +401,9 @@ export function createBobContextContinuation(opts: {
     return handoff!
   }
 
-  /** The pinned model's provider decides whether a response id can be continued. */
-  const statelessRole = (options: OpenAIServiceOptions): boolean => {
-    try { return opts.aiCatalog.role(options.catalogRoleKey ?? options.functionName, options.catalogVariables).model.provider === 'anthropic' }
-    catch { return false }
-  }
+  /** The pinned adapter declares its wire protocol; Bob's loop is provider-neutral. */
+  const replaysMessages = (options: OpenAIServiceOptions): boolean =>
+    textContinuationMode(opts.aiCatalog.role(options.catalogRoleKey ?? options.functionName, options.catalogVariables).providerAdapter) === 'message-replay'
   const call: ModelCall = async (requested, beforeDispatch) => {
     // The compactor is deliberately not recursive. Other callers can use this
     // adapter without rewriting their schema, specialist loop or old journal.
@@ -419,6 +417,9 @@ export function createBobContextContinuation(opts: {
     for (;;) {
       const consumedResponseId = options.previousResponseId
       const native = options.responseItemsMode === 'preserve'
+      // Validate the pinned text protocol before any model dispatch; an
+      // unsupported adapter cannot silently inherit OpenAI's response cursor.
+      const replay = replaysMessages(options)
       const identity = JSON.stringify([options.app, options.coworkerId, options.functionName, options.catalogRoleKey ?? options.functionName,
         ...(native ? ['complete-request-v1'] : []), ...(references ? ['result-references-v1'] : [])])
       let chain: Chain
@@ -577,7 +578,7 @@ export function createBobContextContinuation(opts: {
           options = { ...fresh, messages: [...clone(chain.seed), handoffMessage, ...clone(chain.groups.flat())] }
           // A stateless provider is re-sent this exact request on every later
           // call, so the handoff stays in the chain byte for byte.
-          if (statelessRole(options)) chain.groups = [[clone(handoffMessage)], ...chain.groups]
+          if (!native && replay) chain.groups = [[clone(handoffMessage)], ...chain.groups]
           opts.onRollover?.(rollover)
         }
       }
@@ -588,10 +589,10 @@ export function createBobContextContinuation(opts: {
           ...(references ? { catalogToolParameters: { ...options.catalogToolParameters, [HISTORY_TOOL]: { card: false, include_manual: true } } } : {}),
           ...(options.catalogSchemaKey || options.schema ? { structuredToolOutput: true } : {}) }
       }
-      // A stateless provider (Claude) keeps no conversation on its side: the
+      // A message-replay adapter keeps no conversation on its side: the
       // continuation pointer becomes the chain this adapter already holds,
       // sent in full with the exact native items (thinking blocks included).
-      if (!native && options.previousResponseId && statelessRole(options)) {
+      if (!native && options.previousResponseId && replay) {
         const { previousResponseId: _pointer, prompt: _prompt, ...rest } = options
         options = { ...rest, messages: [...clone(chain.seed), ...clone(chain.groups.flat())] }
       }

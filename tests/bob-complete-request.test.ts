@@ -25,7 +25,7 @@ const seed: OpenAIServiceOptions = { app: 'bob', coworkerId: 'bob', module: 'glo
 const catalog = (limit = 64000) => ({
   definition: () => ({ metadata: { continuation_input_tokens: limit, context_input_ceiling_tokens: 96000, continuation_summary_tokens: 1600,
     retained_tool_exchanges: 1, continuation_retention_version: 2 } }),
-  role: () => ({ systemMessage: 'Exact catalog instructions.' }), tool,
+  role: () => ({ systemMessage: 'Exact catalog instructions.', providerAdapter: 'openai-responses-v1' }), tool,
 }) as unknown as AiCatalogSession
 
 test('40 complete requests restore exact native items and image inputs without replaying model work', async () => {

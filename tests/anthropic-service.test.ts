@@ -143,7 +143,8 @@ test('the catalog binds Claude to text tiers only, without OpenAI-only parameter
 
 test('the shared service keeps Claude off unless the ANTHROPIC_ENABLED code switch is true', async () => {
   const g = globalThis as any, oldFetch = g.fetch, oldDeno = g.Deno
-  const env: Record<string, string> = { SUPABASE_URL: 'https://fixture.invalid', SUPABASE_SERVICE_ROLE_KEY: 'x', OPENAI_API_KEY: 'x', ANTHROPIC_API_KEY: 'a' }
+  // A vendor adapter must not require another vendor's API credentials.
+  const env: Record<string, string> = { SUPABASE_URL: 'https://fixture.invalid', SUPABASE_SERVICE_ROLE_KEY: 'x', ANTHROPIC_API_KEY: 'a' }
   const urls: string[] = [], ledger: any[] = []
   g.__claudeClient = () => ({ from: (table: string) => {
     const q: any = { select: () => q, eq: () => q, in: () => q, insert: async (row: any) => { ledger.push(row); return { error: null } },

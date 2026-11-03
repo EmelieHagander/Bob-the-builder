@@ -359,19 +359,6 @@ export async function callOpenAIResponses<T = unknown>(
 
   const maxOutputTokens = options.maxOutputTokens || 4000;
 
-  const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-  
-  if (!openAIApiKey) {
-    console.error('[OpenAI Service] Missing OPENAI_API_KEY');
-    return {
-      success: false,
-      data: null,
-      usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
-      model: FALLBACK_MODEL,
-      error: 'Missing OpenAI API key'
-    };
-  }
-
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   
@@ -494,10 +481,10 @@ export async function callOpenAIResponses<T = unknown>(
     effectiveSystemMessage = systemMessage || '';
   }
   
-  // Provider seam (Launchpad pattern): the pinned catalog model names its
-  // provider; a non-OpenAI model goes to its own adapter and returns this
+  // Provider seam (Launchpad pattern): the pinned catalog selects its protocol
+  // adapter; a non-OpenAI model goes to its own adapter and returns this
   // same response shape. Off unless ANTHROPIC_ENABLED is true in anthropic-service.ts.
-  if (catalogRole?.model.provider === 'anthropic') {
+  if (catalogRole?.providerAdapter === 'anthropic-messages-v1') {
     if (!ANTHROPIC_ENABLED) {
       return { success: false, data: null, usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, model: currentModel, error: 'ai_provider_disabled: anthropic' };
     }
@@ -520,6 +507,15 @@ export async function callOpenAIResponses<T = unknown>(
         reasoningTokens: r.reasoningTokens, totalTokens: r.totalTokens, costUsd: r.costUsd,
         inputPricePer1m: anthropicModel.input_cost_per_1m_tokens, outputPricePer1m: anthropicModel.output_cost_per_1m_tokens, success: r.success }),
     });
+  }
+
+  // Vendor credentials belong to their adapter. A Claude-only deployment must
+  // not require an OpenAI secret merely to reach the Anthropic adapter.
+  const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!openAIApiKey) {
+    console.error('[OpenAI Service] Missing OPENAI_API_KEY');
+    return { success: false, data: null, usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+      model: currentModel, error: 'Missing OpenAI API key' };
   }
 
   try {

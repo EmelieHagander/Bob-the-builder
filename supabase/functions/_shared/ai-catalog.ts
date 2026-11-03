@@ -50,6 +50,14 @@ const object = (value: unknown): value is JsonObject => value !== null && typeof
 const string = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
 function fail(code: string, detail?: string): never { throw new AiCatalogError(code, detail) }
+/** Conversation continuation belongs to a protocol adapter, not a model brand.
+ * Future text adapters must declare one of these two wire contracts; image and
+ * embedding adapters must never accidentally receive a text-tool cursor. */
+export function textContinuationMode(adapter: ResolvedAiRole['providerAdapter']): 'provider-cursor' | 'message-replay' {
+  if (adapter === 'openai-responses-v1') return 'provider-cursor'
+  if (adapter === 'anthropic-messages-v1') return 'message-replay'
+  return fail('ai_profile_incompatible', 'text continuation adapter')
+}
 function validateProviderParameters(params: unknown, adapter: string): JsonObject {
   // Current Claude models reject sampling parameters and have no verbosity dial.
   const allowed = adapter === 'openai-images-v1' ? ['size','quality'] : adapter === 'openai-embeddings-v1' ? ['dimensions'] : adapter === 'anthropic-messages-v1' ? ['parallel_tool_calls'] : ['temperature','top_p','parallel_tool_calls','verbosity']

@@ -15,7 +15,7 @@ const usage = { input_tokens: 10, output_tokens: 1, total_tokens: 11 }
 const catalog = {
   definition: () => ({ metadata: { continuation_input_tokens: 100000, context_input_ceiling_tokens: 200000, continuation_summary_tokens: 1600, retained_tool_exchanges: 2,
     continuation_retention_version: 2 } }),
-  role: () => ({ systemMessage: 'Role.' }),
+  role: () => ({ systemMessage: 'Role.', providerAdapter: 'openai-responses-v1' }),
   schema: (name: string) => ({ name, schema: { type: 'object' } }),
   text: (key: string) => key,
   tool,

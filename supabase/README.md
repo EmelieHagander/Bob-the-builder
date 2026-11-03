@@ -108,15 +108,21 @@ the worker), no `previous_response_id`, forced `tool_choice` falls back to
 compaction that drops older thinking blocks may be refused by preserved-thinking
 enforcement on newer accounts.
 
-**Claude tool continuation is already handled before the provider adapter.**
+**Provider-neutral tool continuation is handled before the provider adapter.**
 For jobs pinned with `context_strategy_version=1`, `ask-openai.ts` routes Bob
 and his colleagues through `createBobContextContinuation`. The response ID held
 by `project-answer.ts` or `bob-workers.ts` is a **server-local chain key**, not
-an Anthropic API parameter. For Claude, the continuation layer rebuilds the
-whole provider input and removes that key before dispatch: main Bob's
+an Anthropic API parameter. For message-replay adapters (currently Claude), the
+continuation layer rebuilds the whole provider input and removes that key before dispatch: main Bob's
 `complete_request_version=1` path uses `buildBobRequest`, while colleagues use
-the stateless-role path. Both preserve Claude's native assistant tool uses,
+the message-replay path. Both preserve Claude's native assistant tool uses,
 signed thinking and matching tool results, including across saved checkpoints.
+`textContinuationMode` in `ai-catalog.ts` maps the validated protocol adapter
+to a continuation contract: OpenAI Responses uses its provider cursor;
+Anthropic Messages uses complete message replay. New text adapters must
+declare this contract explicitly rather than relying on the model vendor name.
+The shared service only reads `OPENAI_API_KEY` on the OpenAI route; a Claude
+request needs its own `ANTHROPIC_API_KEY` but not an unrelated vendor secret.
 Calling `anthropic-service.ts` directly with `previousResponseId` correctly
 fails closed; that rejection is not evidence that Bob's live tool loop sends
 the pointer to Claude. Local no-provider regression coverage is in
