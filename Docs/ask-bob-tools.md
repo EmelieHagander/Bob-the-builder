@@ -200,6 +200,20 @@ checks drawings. Source: `bob-workers.ts`, the toolbox setup in
 load from his first step and are never picker candidates; box run 13 cost USD 0.86
 ([record](foundation-verification.md#build-team-cost-2026-10-31)).
 
+**Konrad works in saved pieces — prepared 2026-11-03.** New claimed turns pinned
+to `worker_piece_progress_version` 1 keep Konrad's existing construction tools,
+save ledger, code check and workpad. His role now chooses one natural affected
+wall/opening or comparable workpiece at a time on the same existing Construction;
+unrelated saved posts are preserved. Code executes at most one construction
+mutation per model tool batch, answers other batch calls as deferred, then
+reopens the **exact saved current revision** before the next model step. The
+readback is returned as a tiny verified/unknown status; absent, stale, archived
+or mismatched readback pauses the job with the write receipt intact. A model
+cannot turn that receipt into proof that all requested windows exist or that
+any part is structurally approved. The existing write-state check is reused;
+the owner reviews the aggregate design through Bob, not every stud. Existing
+pinned jobs and Rita/Mattias are unchanged; no new paid model is introduced.
+
 <a id="konrad-lean"></a>
 **Konrad's lean construction — installed 2026-11-01 (owner decisions; texts
 approved by the owner; [install](foundation-verification.md#konrad-lean-install-2026-11-01)).**

@@ -290,6 +290,9 @@ export type ProjectAnswerOptions = {
   /** New claimed worker jobs only: restart Konrad's model chain after an exact
    * saved construction readback and a later private workpad update. */
   workerVerifiedRenewal?: boolean;
+  /** Pinned per new claimed turn: confirm each Konrad construction change before
+   * he starts another natural piece; never alter an in-flight worker protocol. */
+  workerPieceProgress?: boolean;
   /** Private bounded notes, enabled by the pinned workpad contract on server-claimed turns. */
   workpads?: AgentWorkpads;
   /** Drops a finished worker's model chain from the turn checkpoint. */
@@ -456,6 +459,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       // somebody else's private scratch note through an unchecked cast.
       const workpadAgent: WorkpadAgent | null = key === 'structure' || key === 'drawing' || key === 'materials' ? key : null
       const workerPads = workpadAgent ? workpads : undefined
+      if (opts.workerPieceProgress && key === 'structure' && (!workerPads || !reportReadback || !worker.knowledge))
+        throw new Error('worker_piece_progress_unavailable')
       const plain = !!worker.knowledge
       const job = parseWorkerJob(raw, plain)
       if (!job) return { status: 'invalid', issues: [{ path: '$', expected: plain ? 'request (text)' : 'job (text) and findings (text or null)' }] }
@@ -485,6 +490,12 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         ? await workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}`) : undefined
       const report = await runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
         ...(workerPads ? { workpadEnabled: true, ...(workerWorkpad ? { workpad: workerWorkpad } : {}) } : {}),
+        ...(opts.workerPieceProgress && key === 'structure' && workerPads && reportReadback && worker.knowledge
+          ? { pieceProgress: { readSaved: async (receipt: Record<string, unknown>) => {
+            const read = readbackReads([receipt])[0]
+            if (!read || !('tool' in read) || read.label !== 'construction') return { status: 'unavailable' }
+            return withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments)))
+          } } } : {}),
         ...(opts.workerVerifiedRenewal && workerPads && opts.workerCheckpoint && opts.releaseContext
           ? { verifiedRenewal: { loadWorkpad: (step: number) => workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}:renewal:${step}`) } }
           : {}),
