@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { projectSchema, asProjectUser } from './support/project-schema.ts'
 import { constructionFormFixture } from './support/construction-form-fixture.ts'
+import { designIntent } from './support/design-intent-fixture.ts'
 import { parameterPacket } from './support/cad-parameter-fixture.ts'
 import { manufacturePolicy } from './support/construction-instance-policy-fixture.ts'
 import { parseSolutionPresentation } from '../src/domain/modelFeedback.ts'
@@ -87,5 +88,26 @@ test('construction presentation and feedback retain exact source, component scop
     assert.deepEqual(await api.presentConstruction(project,saved.recordId,1,'overview'),shown)
     await assert.rejects(api.presentConstruction(project,second.recordId,1,'overview'),/could not be linked/)
     invalid=true;await assert.rejects(api.presentConstruction(project,saved.recordId,1,'overview'),/project_changed/)
+  })  await t.test('a text-only legacy Construction can be shown without manufacturing FORM consent',async()=>{
+    const legacySolution=randomUUID(),legacyIntent=designIntent('construction')
+    await call(owner,'solution_command',[project,'create',legacySolution,0,{title:'Legacy box assembly',description:'Existing geometry without a concept model',
+      assumptions:'Dimensions remain design choices',tradeoffs:'',measurements:[],design_intent:legacyIntent}])
+    const selected=await call(owner,'solution_command',[project,'select',legacySolution,0,{solution_revision:1,reason:'Review the saved geometry'}])
+    const legacyMessage='Review this saved assembly one view at a time.',legacyTurn=await turn(legacyMessage)
+    const {form_refinement:_form,...legacyData}=payload.data
+    const legacy=await legacyTurn.write({...payload,request_quote:legacyMessage,
+      data:{...legacyData,key:'legacy-geometry',title:'Legacy construction',description:'Saved geometry, no FORM components',target_revision:selected.revision}})
+    const shownLegacy=await present(legacy.recordId,1,'front')
+    assert.equal(shownLegacy.source_current,true)
+    assert.deepEqual(shownLegacy.components,[{id:'unmapped_geometry',label:'Saved geometry (FORM component mapping not yet established)'}])
+    assert.deepEqual(parseSolutionPresentation(shownLegacy,project),shownLegacy)
+    const agreed=await turn('Yes, this view matches.',screen(shownLegacy))
+    const receipt=await agreed.feedback(positive)
+    assert.deepEqual(receipt.record.feedback.component_ids,['unmapped_geometry'])
+    const exact=await call(owner,'read_construction_draft',[project,legacy.recordId,1,null])
+    assert.equal(exact.form_refinement,undefined,'visual consent cannot invent a missing mapping')
+    const readiness=await call(owner,'read_construction_readiness',[project,null,selected.revision,null])
+    assert.equal(readiness.status,'ready','legacy feedback does not substitute for a technical check')
   })
+
 })
