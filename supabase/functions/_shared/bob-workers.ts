@@ -198,6 +198,8 @@ export async function runWorker(opts: {
     readSaved(receipt: Record<string, unknown>): Promise<unknown>
     /** New v2 jobs only. Inspect exact saved FORM scope and persisted part changes in code. */
     inspectSaved?(receipt: Record<string, unknown>, toolArgs: unknown): Promise<Record<string, unknown>>
+    /** v3: a checked piece ends this hand-over for natural visual review. */
+    pauseForDesignReview?: boolean
   }
   /** Pinned only for new claimed structure jobs with durable workpads. A fresh
    * chain is allowed after a persisted note and an exact saved-record readback. */
@@ -283,6 +285,7 @@ export async function runWorker(opts: {
     if (!response.responseId) return finish({ status: 'unavailable', worker: roleKey, calls })
     previous = response.responseId; messages = []
     let pieceWriteSeen = false
+    let pieceReviewReceipt: Record<string, unknown> | null = null
     let incompletePiece: { receipt: Record<string, unknown>; reason: string } | null = null
     for (const call of response.toolCalls.slice(0, 8)) {
       if (!await opts.hasAccess()) throw new Error('project_denied')
@@ -314,6 +317,7 @@ export async function runWorker(opts: {
       }
       if (opts.pieceProgress && CONSTRUCTION_PIECE_WRITES.has(name) && status === 'saved') {
         const receipt = receipts.at(-1)!
+        pieceReviewReceipt = receipt
         let opened: unknown
         try { opened = await opts.pieceProgress.readSaved(receipt) }
         catch (error) {
@@ -390,6 +394,11 @@ export async function runWorker(opts: {
     // current revision could not be reopened. Bob can recover from this state.
     if (incompletePiece) return finish({ status: 'needs_verification', reason: incompletePiece.reason,
       worker: roleKey, saved_receipt: incompletePiece.receipt, calls })
+    if (opts.pieceProgress?.pauseForDesignReview && pieceReviewReceipt) {
+      return finish({ status: 'awaiting_design_review', reason: 'show_saved_construction',
+        worker: roleKey, saved_receipt: pieceReviewReceipt, user_feedback: 'not_recorded',
+        note: 'A saved and technically checked piece is not user approval. Show this exact construction revision and ask naturally if the visible design matches before proceeding to the next piece.', calls })
+    }
     // A new provider conversation must never inherit orphaned tool outputs or
     // unsaved geometry. Reset only after the last protocol batch was answered,
     // a later workpad note was saved, and an exact revision was read back.
