@@ -160,7 +160,7 @@ function verifiedConstructionSave(receipt: Record<string, unknown>, readback: un
     || !['save_construction_draft', 'edit_construction_parts', 'change_construction_parameters',
       'change_construction_roles', 'continue_construction_change', 'transition_legacy_drawing'].includes(String(receipt.tool))) return null
   const entry = (readback[0] as { construction?: Record<string, unknown> } | undefined)?.construction
-  return entry?.status === 'ok' && entry.artifact_id === artifact && entry.revision === revision
+  return entry?.status === 'ok' && entry.archived !== true && entry.artifact_id === artifact && entry.revision === revision
     ? { artifact_id: artifact, revision, ...(typeof entry.source_state === 'string' ? { source_state: entry.source_state } : {}) }
     : null
 }
@@ -297,39 +297,47 @@ export async function runWorker(opts: {
       && opts.worker.role === 'role.structure-worker' && response.usage.input_tokens >= 105_000
       && renewal.resets < 2 && renewal.savedReceiptIndex !== null && renewal.notedRevision !== null
       && step + 1 < opts.worker.max_steps && Date.now() + 30_000 < opts.deadline) {
-      const note = await opts.verifiedRenewal.loadWorkpad(step)
-      if (note.status === 'ok' && note.revision === renewal.notedRevision
-        && note.note?.status === 'working' && note.note.next_step.trim()) {
-        const receipt = receipts[renewal.savedReceiptIndex]
-        // A failed or shortened readback is not a verified saving boundary.
-        const readback = await opts.readback([receipt])
-        const verified = verifiedConstructionSave(receipt, readback)
-        if (verified) {
-          const nextKnowledge = await opts.readKnowledge()
-          const unreadable = Object.values(nextKnowledge).some(value =>
-            !!value && typeof value === 'object' && (value as { status?: unknown }).status === 'unavailable')
-          if (!unreadable) {
-            const fresh = buildWorkerMessages(opts.aiCatalog, { prefix: roleKey, context: opts.context, history: opts.history,
-              brief: { ...opts.job, current: null }, knowledge: nextKnowledge, workpad: note })
-            fresh.push({ role: 'user', content: JSON.stringify({ context_renewal: {
-              saved_record_read_back: verified, approval_not_implied: true,
-              original_assignment_preserved: true, continue_from_workpad_next_step: true,
-              do_not_repeat_saved_operation: true,
-            } }) })
-            // Refresh only if the exact new seed is appreciably smaller. This
-            // avoids replacing a large history with an equally large one.
-            if (countSerializedTokens(fresh) < 75_000) {
-              const old = previous!
-              previous = undefined; messages = fresh
-              renewal.resets++; renewal.savedReceiptIndex = null; renewal.notedRevision = null
-              // The previous step is already checkpointed. Releasing its chain
-              // before the replacement save keeps the new checkpoint small;
-              // a failed replacement save restores the previous persisted state.
-              opts.releaseChain(old)
-              await opts.progress.save(structuredClone({ version: 2 as const, step, previous: null, messages, calls, receipts, order, renewal }))
+      let replacement: Messages | null = null
+      try {
+        const note = await opts.verifiedRenewal.loadWorkpad(step)
+        if (note.status === 'ok' && note.revision === renewal.notedRevision
+          && note.note?.status === 'working' && note.note.next_step.trim()) {
+          const receipt = receipts[renewal.savedReceiptIndex]
+          // A failed or shortened readback is not a verified saving boundary.
+          const readback = await opts.readback([receipt])
+          const verified = verifiedConstructionSave(receipt, readback)
+          if (verified) {
+            const nextKnowledge = await opts.readKnowledge()
+            const unreadable = Object.values(nextKnowledge).some(value =>
+              !!value && typeof value === 'object' && (value as { status?: unknown }).status === 'unavailable')
+            if (!unreadable) {
+              const fresh = buildWorkerMessages(opts.aiCatalog, { prefix: roleKey, context: opts.context, history: opts.history,
+                brief: { ...opts.job, current: null }, knowledge: nextKnowledge, workpad: note })
+              fresh.push({ role: 'user', content: JSON.stringify({ context_renewal: {
+                saved_record_read_back: verified, approval_not_implied: true,
+                original_assignment_preserved: true, continue_from_workpad_next_step: true,
+                do_not_repeat_saved_operation: true,
+              } }) })
+              // An equally large seed would just create a new expensive chain.
+              if (countSerializedTokens(fresh) < 75_000) replacement = fresh
             }
           }
         }
+      } catch (error) {
+        // Optional verification is never a new failure mode for normal work.
+        // Lease/time-budget interruptions and revoked authority still propagate.
+        rethrowContinuation(error)
+        if (error instanceof Error && error.message === 'project_denied') throw error
+      }
+      if (replacement) {
+        const old = previous!
+        previous = undefined; messages = replacement
+        renewal.resets++; renewal.savedReceiptIndex = null; renewal.notedRevision = null
+        // The old step is checkpointed. Releasing its chain before saving the
+        // new position keeps checkpoints small; a failed save restores the
+        // previous persisted state and is not swallowed by the optional guard.
+        opts.releaseChain(old)
+        await opts.progress.save(structuredClone({ version: 2 as const, step, previous: null, messages, calls, receipts, order, renewal }))
       }
     }
   }
