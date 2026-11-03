@@ -16,8 +16,9 @@ const model = (id: string, calls: ReturnType<typeof call>[] = []): OpenAIService
   ...(calls.length ? { toolCalls: calls } : {}) })
 
 function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; readback?: (revision: number) => unknown;
-  checkInSave?: boolean; serverCheck?: 'checked' | 'unavailable' }) {
+  checkInSave?: boolean; serverCheck?: 'checked' | 'unavailable'; inspect?: (revision: number) => Record<string, unknown> }) {
   const commands: { name: string; revision: number | null }[] = []
+  const scopedChecks: string[][] = []
   const observed: OpenAIServiceOptions[] = [], checkpoints: WorkerProgress[] = []
   let saved = 2
   const result = runWorker({ aiCatalog: catalog, worker,
@@ -37,6 +38,7 @@ function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; r
     readback: async () => [], hasAccess: async () => true, deadline: Date.now() + 60_000, workpadEnabled: true,
     autoCheck: async targets => targets.map(t => {
       commands.push({ name: 'check_exact_revision', revision: t.revision })
+      scopedChecks.push(t.component_ids ?? [])
       return { ...t, status: opts.serverCheck ?? 'checked', concept_ready: true }
     }),
     ...(opts.enabled ? { pieceProgress: { readSaved: async (receipt: Record<string, unknown>) => {
@@ -44,10 +46,13 @@ function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; r
       commands.push({ name: 'verify_exact_revision', revision })
       return opts.readback?.(revision) ?? { status: 'ok', artifact_id: 'c1', revision,
         current_revision: revision, source_state: 'current', archived: false }
-    } } } : {}),
+    }, ...(opts.inspect ? { inspectSaved: async (receipt: Record<string, unknown>) => {
+      commands.push({ name: 'inspect_saved_form', revision: receipt.revision as number })
+      return opts.inspect!(receipt.revision as number)
+    } } : {}) } } : {}),
     progress: { save: async p => { checkpoints.push(structuredClone(p)) } },
   })
-  return { result, commands, observed, checkpoints }
+  return { result, commands, observed, checkpoints, scopedChecks }
 }
 
 test('Konrad sees one save and exact code readback before issuing the next construction change', async () => {
@@ -115,4 +120,31 @@ test('verification requires an exact current, unarchived construction revision',
   assert.equal(verifiedConstructionPiece(receipt, { ...current, revision: 3 }), null)
   assert.equal(verifiedConstructionPiece(receipt, { ...current, source_state: 'stale' }), null)
   assert.equal(verifiedConstructionPiece({ ...receipt, revision: undefined }, current), null)
+})
+
+test('v2 adds code-authored FORM evidence to Konrad and Bob receipts, then a targeted check', async () => {
+  const { result, commands, scopedChecks, observed } = harness([
+    model('one', [call('a', 'edit_construction_parts')]), model('done'),
+  ], { enabled: true, inspect: revision => ({ status: 'form_scoped', revision,
+    observed_component_changes: { count: 1, ids: ['window_west'], omitted: 0 },
+    affected_scope_complete: true, scope_check_ids: ['window_west'], verification: 'unverified' }) })
+  const report = await result
+  assert.equal(report.status, 'ok')
+  assert.deepEqual(commands.map(c => c.name), ['edit_construction_parts', 'verify_exact_revision', 'inspect_saved_form', 'check_exact_revision'])
+  assert.deepEqual(scopedChecks, [['window_west']])
+  const toolReply = JSON.parse(String(observed[1].messages![0].content))
+  assert.equal(toolReply.piece_evidence.verification, 'unverified')
+  assert.deepEqual(toolReply.piece_local_check.component_ids, ['window_west'])
+  assert.equal((report.receipts as Record<string, any>[])[0].piece_evidence.status, 'form_scoped')
+  assert.equal((report.receipts as Record<string, any>[]).some(r => r.by === 'code_local'), true)
+})
+
+test('v2 pauses before the next piece when FORM evidence cannot be reopened', async () => {
+  const { result, observed } = harness([
+    model('one', [call('a', 'edit_construction_parts')]), model('should-not-run'),
+  ], { enabled: true, inspect: () => ({ status: 'unavailable', reason: 'prior_construction_revision_missing' }) })
+  const report = await result
+  assert.deepEqual([report.status, report.reason], ['needs_verification', 'saved_form_evidence_unavailable'])
+  assert.equal(observed.length, 1)
+  assert.equal((report.saved_receipt as Record<string, any>).piece_evidence.reason, 'prior_construction_revision_missing')
 })

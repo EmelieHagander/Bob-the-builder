@@ -24,6 +24,7 @@ import { answerTextFragments, type AnswerTextOutcome } from './answer-text.ts'
 import { toolRejection } from './tool-rejection.ts'
 import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
 import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogReportReadback, catalogConstructionAutoCheck, catalogHandoverReadiness, handoverReadinessBlock, readbackReads, workerOwnedTools, parseWorkerJob, runWorker, validWorkerProgress, type WorkerProgress } from './bob-workers.ts'
+import { focusedWorkerStep, savedFormPieceEvidence } from './worker-form-piece.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
@@ -293,6 +294,12 @@ export type ProjectAnswerOptions = {
   /** Pinned per new claimed turn: confirm each Konrad construction change before
    * he starts another natural piece; never alter an in-flight worker protocol. */
   workerPieceProgress?: boolean;
+  /** New v2 jobs: caller-authorized, code-only reads of the approved Plan and
+   * exact Construction revisions, not a second planner or worker tool. */
+  workerFormPiece?: {
+    readPlan(): Promise<unknown>;
+    readConstruction(id: string, revision: number): Promise<unknown>;
+  };
   /** Private bounded notes, enabled by the pinned workpad contract on server-claimed turns. */
   workpads?: AgentWorkpads;
   /** Drops a finished worker's model chain from the turn checkpoint. */
@@ -461,6 +468,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const workerPads = workpadAgent ? workpads : undefined
       if (opts.workerPieceProgress && key === 'structure' && (!workerPads || !reportReadback || !worker.knowledge))
         throw new Error('worker_piece_progress_unavailable')
+      if (opts.workerFormPiece && key === 'structure'
+        && (!opts.workerPieceProgress || !constructionAutoCheck || !worker.tools.includes('check_construction_draft')))
+        throw new Error('worker_form_piece_unavailable')
       const plain = !!worker.knowledge
       const job = parseWorkerJob(raw, plain)
       if (!job) return { status: 'invalid', issues: [{ path: '$', expected: plain ? 'request (text)' : 'job (text) and findings (text or null)' }] }
@@ -495,7 +505,17 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
             const read = readbackReads([receipt])[0]
             if (!read || !('tool' in read) || read.label !== 'construction') return { status: 'unavailable' }
             return withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments)))
-          } } } : {}),
+          }, ...(opts.workerFormPiece ? { inspectSaved: async (receipt: Record<string, unknown>, toolArgs: unknown) => {
+            const id = typeof receipt.artifact_id === 'string' ? receipt.artifact_id : receipt.record_id
+            const revision = receipt.revision
+            if (typeof id !== 'string' || !Number.isSafeInteger(revision) || Number(revision) < 1)
+              return { status: 'unavailable', reason: 'saved_revision_identity_missing' }
+            const current = await opts.workerFormPiece!.readConstruction(id, Number(revision))
+            const previous = Number(revision) > 1 && current && typeof current === 'object'
+              && (current as { form_refinement?: unknown }).form_refinement != null
+              ? await opts.workerFormPiece!.readConstruction(id, Number(revision) - 1) : null
+            return savedFormPieceEvidence(receipt, current, previous, opts.projectId, toolArgs)
+          } } : {}) } } : {}),
         ...(opts.workerVerifiedRenewal && workerPads && opts.workerCheckpoint && opts.releaseContext
           ? { verifiedRenewal: { loadWorkpad: (step: number) => workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}:renewal:${step}`) } }
           : {}),
@@ -509,11 +529,12 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         readCurrent: async () => key === 'materials' ? opts.lookup.search({ dataset: 'materials', query: null, status: null, area_id: null, record_id: null }) : null,
         // In order, one at a time: the journal replays reads by position.
         // Auto check (2026-11-01): a saved construction left unchecked is checked by the server, in order.
-        ...(worker.knowledge && constructionAutoCheck && worker.tools.includes('check_construction_draft') ? { autoCheck: async (targets: { artifact_id: string; revision: number }[]) => {
+        ...(worker.knowledge && constructionAutoCheck && worker.tools.includes('check_construction_draft') ? { autoCheck: async (targets: { artifact_id: string; revision: number; component_ids?: string[] }[]) => {
           const results: Record<string, unknown>[] = []
           for (const target of targets) {
             let result: any
-            try { result = withoutDiagnostics(await session!.execute('check_construction_draft', { ...target, component_ids: [], requirement_checks: [], outputs: [] })) }
+            try { result = withoutDiagnostics(await session!.execute('check_construction_draft', { artifact_id: target.artifact_id,
+              revision: target.revision, component_ids: target.component_ids ?? [], requirement_checks: [], outputs: [] })) }
             catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; result = { status: 'unavailable' } }
             results.push({ ...target, ...(result && typeof result === 'object' ? result : {}), artifact_id: target.artifact_id, revision: target.revision })
             try { opts.onTool?.({ name: 'check_construction_draft', status: String(result?.status ?? 'returned'), step: currentStep + 1, index: 100 + workerToolEvents++, ms: 0 }) } catch { /* diagnostics only */ }
@@ -539,6 +560,11 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           for (const read of worker.knowledge!) {
             try { knowledge[read.label] = withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments))) }
             catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; knowledge[read.label] = { status: 'unavailable' } }
+          }
+          if (opts.workerFormPiece && key === 'structure') {
+            try { knowledge.focused_plan_step = focusedWorkerStep(await opts.workerFormPiece.readPlan(), opts.projectId) }
+            catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error;
+              knowledge.focused_plan_step = { status: 'unavailable' } }
           }
           return knowledge
         } } : {}),

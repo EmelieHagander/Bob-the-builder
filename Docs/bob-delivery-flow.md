@@ -161,6 +161,26 @@ Inför varje arbetsstycke behöver Bob dess mål, berörda krav och delar, gemen
 mått/anslutningar, exakta källversioner, kvarstående frågor och klart-villkor.
 Han sparar en begränsad ändring, läser kontrollresultatet och rättar berörda
 delar innan han fortsätter. Upprepade delar använder befintlig repetition.
+
+**FORM A/B, källimplementerat 2026-11-03; katalogaktivering och driftsättning
+återstår.** För nya Konrad-jobb läser kod även den godkända projektplanens
+fokus-Step med revisions-ID, mål och färdigvillkor i ett begränsat underlag.
+Fokus är en navigationsuppgift, **inte** ett verifierat påstående om att
+överlämningens fritext gäller just denna Step. Befintliga specialistläsningar
+ger Solution, Construction, mått, bilder och byggkarta; ingen ny planeringsmodell
+eller projektdata skapas. Efter sparning läses exakt Construction-revision samt
+föregående revision direkt med behörig projektläsare. Kod räknar sparade
+FORM-mappningar, kvarstående komponenter/val, nytillkomna mappningar och
+faktiskt ändrade namngivna instanser. Kända avgränsade komponenter kontrolleras
+med befintlig `check_construction_draft` och exakta `component_ids`, utan extra
+AI-granskare. Resultatet följer revisionskvittot tillbaka till både Konrad och
+Bob. Vid saknad/felaktig revisions- eller FORM-evidens pausas nästa ändring;
+parameterberoenden som inte går att avgränsa markeras uttryckligen okända.
+Geometri-, funktions-, sjufönster-, bärighets- och beställargodkännande följer
+**inte** av sparning eller lokal kontroll. Gamla journalförda jobb behåller v1;
+v2 kräver katalogmigrationen efter uppdaterad Edge-runtime. Visuell 2D/3D-
+återkoppling och semantisk jämförelse mot hela originaluppdraget återstår.
+
 En sammanhängande möbel kan växa inom samma Construction; separata
 Construction-poster används när de har en naturlig självständig livscykel.
 Dagens `plan_cad_pieces` köar redan färdiga konstruktionsunderlag och ersätter
