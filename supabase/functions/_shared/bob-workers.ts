@@ -367,7 +367,12 @@ export async function runWorker(opts: {
           ...(pieceEvidence ? { piece_evidence: pieceEvidence } : {}), ...(localCheck ? { piece_local_check: localCheck } : {}) }
         if (!confirmed) incompletePiece = { receipt, reason: 'saved_revision_readback_missing' }
         else if (checked?.status !== 'checked') incompletePiece = { receipt, reason: 'saved_revision_check_incomplete' }
-        else if (pieceEvidence?.status === 'unavailable') incompletePiece = { receipt, reason: 'saved_form_evidence_unavailable' }
+        else if (opts.pieceProgress.inspectSaved && pieceEvidence?.status === 'no_form_scope')
+          incompletePiece = { receipt, reason: 'saved_form_scope_missing' }
+        else if (opts.pieceProgress.inspectSaved && (pieceEvidence?.status !== 'form_scoped'
+          || pieceEvidence.affected_scope_complete !== true))
+          incompletePiece = { receipt, reason: pieceEvidence?.status === 'form_scoped'
+            ? 'saved_form_scope_unbounded' : 'saved_form_evidence_unavailable' }
         else if (localCheck && localCheck.status !== 'checked') incompletePiece = { receipt, reason: 'saved_local_check_incomplete' }
       }
       if (name === 'update_workpad' && status === 'noted' && result?.unchanged !== true
