@@ -16,7 +16,8 @@ const model = (id: string, calls: ReturnType<typeof call>[] = []): OpenAIService
   ...(calls.length ? { toolCalls: calls } : {}) })
 
 function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; readback?: (revision: number) => unknown;
-  checkInSave?: boolean; serverCheck?: 'checked' | 'unavailable'; inspect?: (revision: number) => Record<string, unknown> }) {
+  checkInSave?: boolean; serverCheck?: 'checked' | 'unavailable'; inspect?: (revision: number) => Record<string, unknown>;
+  pauseForDesignReview?: boolean }) {
   const commands: { name: string; revision: number | null }[] = []
   const scopedChecks: string[][] = []
   const observed: OpenAIServiceOptions[] = [], checkpoints: WorkerProgress[] = []
@@ -46,7 +47,7 @@ function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; r
       commands.push({ name: 'verify_exact_revision', revision })
       return opts.readback?.(revision) ?? { status: 'ok', artifact_id: 'c1', revision,
         current_revision: revision, source_state: 'current', archived: false }
-    }, ...(opts.inspect ? { inspectSaved: async (receipt: Record<string, unknown>) => {
+    }, ...(opts.pauseForDesignReview ? { pauseForDesignReview: true } : {}), ...(opts.inspect ? { inspectSaved: async (receipt: Record<string, unknown>) => {
       commands.push({ name: 'inspect_saved_form', revision: receipt.revision as number })
       return opts.inspect!(receipt.revision as number)
     } } : {}) } } : {}),
@@ -137,6 +138,30 @@ test('v2 adds code-authored FORM evidence to Konrad and Bob receipts, then a tar
   assert.deepEqual(toolReply.piece_local_check.component_ids, ['window_west'])
   assert.equal((report.receipts as Record<string, any>[])[0].piece_evidence.status, 'form_scoped')
   assert.equal((report.receipts as Record<string, any>[]).some(r => r.by === 'code_local'), true)
+})
+
+test('v3 ends Konrad after one verified, locally checked piece and returns the exact revision for natural visual review', async () => {
+  const { result, commands, observed, scopedChecks } = harness([
+    model('first', [call('a', 'edit_construction_parts'), call('b', 'edit_construction_parts')]),
+    model('must-not-run'),
+  ], { enabled: true, pauseForDesignReview: true, inspect: revision => ({ status: 'form_scoped', revision,
+    observed_component_changes: { count: 1, ids: ['wall_front'], omitted: 0 },
+    affected_scope_complete: true, scope_check_ids: ['wall_front'], verification: 'unverified' }) })
+  const report = await result
+  assert.deepEqual([report.status, report.reason, report.user_feedback],
+    ['awaiting_design_review', 'show_saved_construction', 'not_recorded'])
+  assert.deepEqual([(report.saved_receipt as any).record_id, (report.saved_receipt as any).revision], ['c1', 3])
+  assert.equal((report.saved_receipt as any).piece_evidence.verification, 'unverified')
+  assert.equal(observed.length, 1, 'Konrad must stop even when technical and FORM checks passed')
+  assert.equal(commands.filter(c => c.name === 'edit_construction_parts').length, 1)
+  assert.deepEqual(scopedChecks, [['wall_front']])
+  assert.match(String(report.note), /Show this exact construction revision/)
+})
+
+test('v3 does not request a visual review when Konrad only reads and reports', async () => {
+  const { result } = harness([model('report', [call('a', 'read_construction_draft')]), model('done')],
+    { enabled: true, pauseForDesignReview: true, inspect: () => ({ status: 'form_scoped', affected_scope_complete: true }) })
+  assert.equal((await result).status, 'ok')
 })
 
 test('v2 pauses before the next piece when FORM evidence cannot be reopened', async () => {
