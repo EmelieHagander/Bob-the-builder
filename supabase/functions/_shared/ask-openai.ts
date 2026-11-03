@@ -355,7 +355,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -386,6 +386,8 @@ export async function answerWithOpenAi(opts: {
       ...(checkpoint && contract.worker_checkpoint_version === 1 ? { workerCheckpointVersion: 1 as const } : {}),
       // Only new claimed turns with the published contract may read and replace private working notes.
       ...(claimedServer && contract.workpad_version === 1 ? { workpadVersion: 1 as const } : {}),
+      ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_checkpoint_version === 1
+        && contract.worker_verified_renewal_version === 1 ? { workerVerifiedRenewalVersion: 1 as const } : {}),
       memoryManagementVersion: contract.context_strategy_version === 1 ? 2 as const : 1 as const,
       ...(contract.context_strategy_version === 1 ? { contextStrategyVersion: 1 as const } : {}),
       // Owner decision 2026-10-30: the memory stair and the prompt ordered by how often its parts change.
@@ -397,6 +399,9 @@ export async function answerWithOpenAi(opts: {
   if (execution.specialistContinuationTokens !== undefined && !(Number.isInteger(execution.specialistContinuationTokens) && execution.specialistContinuationTokens >= 1000)) throw new Error('specialist_continuation_invalid')
   if (execution.workerCheckpointVersion !== undefined && execution.workerCheckpointVersion !== 1) throw new Error('worker_checkpoint_version_invalid')
   if (execution.workpadVersion !== undefined && execution.workpadVersion !== 1) throw new Error('workpad_version_invalid')
+  if (execution.workerVerifiedRenewalVersion !== undefined
+    && (execution.workerVerifiedRenewalVersion !== 1 || execution.workpadVersion !== 1 || execution.workerCheckpointVersion !== 1))
+    throw new Error('worker_verified_renewal_version_invalid')
   const finalAnswer = execution.finalAnswerVersion === 1 && unlimitedWork && execution.turnUsdStop !== undefined
   modelBudget = createBobModelBudget(undefined, undefined, undefined, { unlimitedWork, ...(execution.turnUsdStop !== undefined ? { usdStop: execution.turnUsdStop } : {}), ...(finalAnswer ? { finalAnswer: true } : {}) })
   if (execution.lookupObservationVersion !== undefined && execution.lookupObservationVersion !== 1) throw new Error('lookup_observation_version_invalid')
@@ -1106,6 +1111,7 @@ export async function answerWithOpenAi(opts: {
     ...(execution.resultReferenceVersion === 1 ? { resultReferences: true } : {}),
     ...(finalAnswer ? { finalAnswer: true } : {}),
     ...(execution.workerCheckpointVersion === 1 ? { workerCheckpoint: true } : {}),
+    ...(execution.workerVerifiedRenewalVersion === 1 ? { workerVerifiedRenewal: true } : {}),
     ...(workpads ? { workpads } : {}),
     ...(contextContinuation ? { releaseContext: (id: string) => contextContinuation!.release(id) } : {}),
     ...(contextStrategy ? { contextEpoch: () => mainContextEpoch,

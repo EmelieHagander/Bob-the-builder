@@ -287,6 +287,9 @@ export type ProjectAnswerOptions = {
   finalAnswer?: boolean;
   /** Pinned per execution (workerCheckpointVersion): a worker's place is saved after each of its steps. */
   workerCheckpoint?: boolean;
+  /** New claimed worker jobs only: restart Konrad's model chain after an exact
+   * saved construction readback and a later private workpad update. */
+  workerVerifiedRenewal?: boolean;
   /** Private bounded notes, enabled by the pinned workpad contract on server-claimed turns. */
   workpads?: AgentWorkpads;
   /** Drops a finished worker's model chain from the turn checkpoint. */
@@ -482,6 +485,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         ? await workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}`) : undefined
       const report = await runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
         ...(workerPads ? { workpadEnabled: true, ...(workerWorkpad ? { workpad: workerWorkpad } : {}) } : {}),
+        ...(opts.workerVerifiedRenewal && workerPads && opts.workerCheckpoint && opts.releaseContext
+          ? { verifiedRenewal: { loadWorkpad: (step: number) => workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}:renewal:${step}`) } }
+          : {}),
         session, hasAccess: opts.hasAccess, deadline, ...(opts.modelTimeoutMs ? { modelTimeoutMs: opts.modelTimeoutMs } : {}),
         ...(opts.finalAnswer ? { stopAsResult: true } : {}),
         ...(opts.releaseContext ? { releaseChain: opts.releaseContext } : {}),

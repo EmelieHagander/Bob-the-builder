@@ -1,6 +1,7 @@
 import type { AiCatalogSession } from './ai-catalog.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { WorkingContext } from './bob-working-context.ts'
+import { countSerializedTokens } from './bob-token-budget.ts'
 import { workpadFrame, type WorkpadSnapshot } from './bob-agent-workpad.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import { toolRejection, type ToolRejection } from './tool-rejection.ts'
@@ -123,17 +124,45 @@ export function buildWorkerMessages(aiCatalog: AiCatalogSession, opts: {
  * a worker job runs inside one of Bob's tool calls, so each resume replayed the
  * whole job from its first step. Jobs pinned with workerCheckpointVersion save the
  * worker's place after each finished step, and a resume continues from there. */
-export interface WorkerProgress {
-  version: 1; step: number; previous: string; messages: Messages
+interface WorkerProgressBase {
+  step: number; messages: Messages
   calls: { tool: string; status: string }[]; receipts: Record<string, unknown>[]; order: string[]
 }
+export type WorkerProgress = WorkerProgressBase & (
+  | { version: 1; previous: string }
+  | { version: 2; previous: string | null; renewal: {
+    resets: number; savedReceiptIndex: number | null; notedRevision: number | null
+  } }
+)
 export function validWorkerProgress(value: unknown, maxSteps: number): value is WorkerProgress {
   const v = value as Partial<WorkerProgress> | null
-  return !!v && typeof v === 'object' && v.version === 1 && Number.isSafeInteger(v.step) && v.step! >= 0 && v.step! < maxSteps
-    && typeof v.previous === 'string' && !!v.previous && Array.isArray(v.messages)
+  const renewal = (v as { renewal?: { resets?: unknown; savedReceiptIndex?: unknown; notedRevision?: unknown } } | null)?.renewal
+  const index = (n: unknown) => n === null || Number.isSafeInteger(n) && Number(n) >= 0
+  return !!v && typeof v === 'object' && (v.version === 1
+      ? typeof v.previous === 'string' && !!v.previous
+      : v.version === 2 && (typeof v.previous === 'string' && !!v.previous || v.previous === null && !!v.messages?.length)
+        && !!renewal && Number.isSafeInteger(renewal.resets) && Number(renewal.resets) >= 0 && Number(renewal.resets) <= 2
+        && index(renewal.savedReceiptIndex) && index(renewal.notedRevision)
+        && (v.previous !== null || Number(renewal.resets) > 0))
+    && Number.isSafeInteger(v.step) && v.step! >= 0 && v.step! < maxSteps && Array.isArray(v.messages)
     && Array.isArray(v.calls) && v.calls.every(c => !!c && typeof c.tool === 'string' && typeof c.status === 'string')
     && Array.isArray(v.receipts) && v.receipts.every(r => !!r && typeof r === 'object' && !Array.isArray(r))
     && Array.isArray(v.order) && v.order.every(name => typeof name === 'string' && NAME.test(name))
+    && (v.version !== 2 || (renewal?.savedReceiptIndex === null || Number(renewal?.savedReceiptIndex) < v.receipts.length))
+}
+
+/** A readback is authoritative only for the exact revision a tool saved. An
+ * overview is evidence of persistence, not approval of its structure. */
+function verifiedConstructionSave(receipt: Record<string, unknown>, readback: unknown[]): Record<string, unknown> | null {
+  const artifact = typeof receipt.artifact_id === 'string' ? receipt.artifact_id : receipt.record_id
+  const revision = receipt.revision
+  if (typeof artifact !== 'string' || !Number.isSafeInteger(revision) || Number(revision) < 1
+    || !['save_construction_draft', 'edit_construction_parts', 'change_construction_parameters',
+      'change_construction_roles', 'continue_construction_change', 'transition_legacy_drawing'].includes(String(receipt.tool))) return null
+  const entry = (readback[0] as { construction?: Record<string, unknown> } | undefined)?.construction
+  return entry?.status === 'ok' && entry.artifact_id === artifact && entry.revision === revision
+    ? { artifact_id: artifact, revision, ...(typeof entry.source_state === 'string' ? { source_state: entry.source_state } : {}) }
+    : null
 }
 
 export async function runWorker(opts: {
@@ -145,6 +174,9 @@ export async function runWorker(opts: {
   readKnowledge?: () => Promise<Record<string, unknown>>; variables?: Record<string, string>
   /** A note is separate from the immutable worker model/checkpoint chain. */
   workpadEnabled?: boolean; workpad?: WorkpadSnapshot
+  /** Pinned only for new claimed structure jobs with durable workpads. A fresh
+   * chain is allowed after a persisted note and an exact saved-record readback. */
+  verifiedRenewal?: { loadWorkpad(step: number): Promise<WorkpadSnapshot> }
   /** Pixels the worker opened go with the worker's own next call (not Bob's), and are confirmed after it. */
   images?: { carrier: () => Messages; confirmDelivery: () => void }
   /** Reads what the worker saved, by code, after the job (see readbackReads). */
@@ -173,8 +205,11 @@ export async function runWorker(opts: {
     return order.flatMap(name => offered.filter(spec => spec.function.name === name))
   }
   const restored = opts.progress?.restored
-  let previous: string | undefined = restored?.previous
+  let previous: string | undefined = restored?.previous ?? undefined
   if (restored && !validWorkerProgress(restored, opts.worker.max_steps)) throw new Error('worker_checkpoint_invalid')
+  if (restored && restored.version !== (opts.verifiedRenewal ? 2 : 1)) throw new Error('worker_checkpoint_invalid')
+  const renewal = restored?.version === 2 ? structuredClone(restored.renewal)
+    : { resets: 0, savedReceiptIndex: null as number | null, notedRevision: null as number | null }
   // A resumed job already read its knowledge and holds its place; the next step offers the tools again.
   if (restored) order.push(...restored.order)
   let specs = restored ? [] : await offer()
@@ -237,13 +272,66 @@ export async function runWorker(opts: {
       const status = String(result?.status ?? 'returned')
       calls.push({ tool: NAME.test(name) ? name : 'invalid_name', status })
       // A check stores its result too, so it is reported (and read back) like a save.
-      if (status === 'saved' || status === 'checked') receipts.push(saveReceipt(name, result))
+      if (status === 'saved' || status === 'checked') {
+        receipts.push(saveReceipt(name, result))
+        if (status === 'saved' && opts.verifiedRenewal) {
+          renewal.savedReceiptIndex = receipts.length - 1
+          renewal.notedRevision = null
+        }
+      }
+      if (name === 'update_workpad' && status === 'noted' && result?.unchanged !== true
+        && renewal.savedReceiptIndex !== null && Number.isSafeInteger(result?.revision))
+        renewal.notedRevision = result.revision
       const rejection = ['invalid', 'conflict'].includes(status) ? toolRejection(result) : undefined
       try { opts.onTool?.({ name: NAME.test(name) ? name : 'invalid_name', status, ms: Date.now() - began, ...(rejection ? { rejection } : {}) }) } catch { /* diagnostics only */ }
       messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) })
     }
     for (const call of response.toolCalls.slice(8)) messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ status: 'deferred' }) })
-    if (opts.progress) await opts.progress.save(structuredClone({ version: 1 as const, step, previous, messages, calls, receipts, order }))
+    if (opts.progress) await opts.progress.save(structuredClone(opts.verifiedRenewal
+      ? { version: 2 as const, step, previous: previous ?? null, messages, calls, receipts, order, renewal }
+      : { version: 1 as const, step, previous, messages, calls, receipts, order }))
+    // A new provider conversation must never inherit orphaned tool outputs or
+    // unsaved geometry. Reset only after the last protocol batch was answered,
+    // a later workpad note was saved, and an exact revision was read back.
+    if (opts.verifiedRenewal && opts.progress && opts.releaseChain && opts.readback && opts.readKnowledge
+      && opts.worker.role === 'role.structure-worker' && response.usage.input_tokens >= 105_000
+      && renewal.resets < 2 && renewal.savedReceiptIndex !== null && renewal.notedRevision !== null
+      && step + 1 < opts.worker.max_steps && Date.now() + 30_000 < opts.deadline) {
+      const note = await opts.verifiedRenewal.loadWorkpad(step)
+      if (note.status === 'ok' && note.revision === renewal.notedRevision
+        && note.note?.status === 'working' && note.note.next_step.trim()) {
+        const receipt = receipts[renewal.savedReceiptIndex]
+        // A failed or shortened readback is not a verified saving boundary.
+        const readback = await opts.readback([receipt])
+        const verified = verifiedConstructionSave(receipt, readback)
+        if (verified) {
+          const nextKnowledge = await opts.readKnowledge()
+          const unreadable = Object.values(nextKnowledge).some(value =>
+            !!value && typeof value === 'object' && (value as { status?: unknown }).status === 'unavailable')
+          if (!unreadable) {
+            const fresh = buildWorkerMessages(opts.aiCatalog, { prefix: roleKey, context: opts.context, history: opts.history,
+              brief: { ...opts.job, current: null }, knowledge: nextKnowledge, workpad: note })
+            fresh.push({ role: 'user', content: JSON.stringify({ context_renewal: {
+              saved_record_read_back: verified, approval_not_implied: true,
+              original_assignment_preserved: true, continue_from_workpad_next_step: true,
+              do_not_repeat_saved_operation: true,
+            } }) })
+            // Refresh only if the exact new seed is appreciably smaller. This
+            // avoids replacing a large history with an equally large one.
+            if (countSerializedTokens(fresh) < 75_000) {
+              const old = previous!
+              previous = undefined; messages = fresh
+              renewal.resets++; renewal.savedReceiptIndex = null; renewal.notedRevision = null
+              // The previous step is already checkpointed. Releasing its chain
+              // before the replacement save keeps the new checkpoint small;
+              // a failed replacement save restores the previous persisted state.
+              opts.releaseChain(old)
+              await opts.progress.save(structuredClone({ version: 2 as const, step, previous: null, messages, calls, receipts, order, renewal }))
+            }
+          }
+        }
+      }
+    }
   }
   return finish({ status: 'step_budget', worker: roleKey, calls })
 }

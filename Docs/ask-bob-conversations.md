@@ -422,6 +422,28 @@ continue on the compatible runtime. Neither migration nor either deployment has
 been performed by the source change. The owner has deferred test/CI runs during
 rapid development; live acceptance and context-growth measurements are open.
 
+**Verified Konrad context renewal — follow-up source change, not released.**
+The optional `worker_verified_renewal_version` 1 is pinned only on new claimed
+jobs with worker checkpoints and private workpads. Konrad retains the earlier
+150k continuation/compaction policy; an additional early renewal is possible
+after his provider input reaches 105k tokens, at most twice in one hand-over.
+It requires a real construction `saved` receipt, a *later* successful workpad
+update naming the next small step, an exact readback of that artifact/revision,
+fresh available project knowledge and a new seed under 75k content tokens.
+The new model input retains the original assignment, locked project snapshot,
+conversation and current knowledge; it includes the latest private note as an
+unverified hint and the exact readback identity as evidence of persistence,
+**not approval**. The old model chain is released only at a fully answered tool
+boundary, then the smaller next-state checkpoint is stored. If any guard fails,
+the pre-existing chain and progress checkpoint remain unchanged. Worker progress
+version 2 is pinned separately; active version-1 jobs are never reinterpreted.
+
+The release remains opt-in: merge the workpad source and its migrations first,
+deploy compatible `bob-worker` and `ask-bob`, then activate
+`20261103122000_bob_worker_verified_renewal_catalog.sql`. This extra migration
+enables only new jobs. No production migration, deployment, Actions or paid
+model run has been performed as part of the follow-up source change.
+
 *Manifests with `memory_stair_version` 1 replace the rewritten brief with the
 [memory stair](#memory-stair); this describes the pinned behavior.*
 
