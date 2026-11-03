@@ -23,6 +23,11 @@ is published and activated: editable token-bounded memory, exact/private
 hybrid recall, concise [tool and colleague cards](../Docs/ask-bob-tools.md#tool-and-colleague-cards--2026-10-18)
 and same-job context checkpoints. It preserves canonical project records, current
 authorization and old pinned execution contracts.
+The [private workpad source](../Docs/ask-bob-conversations.md#what-memory-keeps)
+adds one role-scoped, bounded working note for Bob, Konrad, Rita and Mattias.
+This is not deployed and not a replacement for the project writer or existing
+provider-chain compaction. After review, install its database migration, deploy
+both runtime closures, and only then activate the separate tool catalog migration.
 [Release evidence](../Docs/foundation-verification.md#bob-context-strategy-release--2026-10-18)
 records both installed dependency closures, Deno configuration and exact catalog
 activation; [State](../Docs/bob-delivery-flow.md#state) owns remaining ordinary owner

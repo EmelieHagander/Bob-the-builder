@@ -4,6 +4,7 @@ import type { WorkRecords } from './project-work-records.ts'
 import type { SolutionActions } from './project-solution-actions.ts'
 import type { ProjectEdits } from './project-edits.ts'
 import type { AiCatalogSession } from './ai-catalog.ts'
+import type { AgentWorkpads } from './bob-agent-workpad.ts'
 import type { ConstructionTools } from './construction-draft.ts'
 import { createDeliveryLanguage } from './delivery-language.ts'
 import type { KnowledgeReader } from './building-knowledge.ts'
@@ -50,6 +51,7 @@ export async function runClaimedProjectTurn(opts: {
   deadline?: number; resume?: boolean; beforeSettle?: () => void; modelTimeoutMs?: number; unlimitedWork?: boolean;
   finalAnswer?: boolean;
   workerCheckpoint?: boolean;
+  workpads?: AgentWorkpads;
   releaseContext?: (responseId: string) => void;
   checkpoint?: BobAnswerCheckpoint;
   commit?: (result: Extract<ProjectAnswer, { ok: true }>, generation: number) => Promise<void>;
