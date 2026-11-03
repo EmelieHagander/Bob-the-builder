@@ -17,6 +17,7 @@ import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-servi
 import type { createProjectLookup } from './project-lookup.ts'
 import { buildBobHands, buildBobCompleteHands, bobToolAvailability } from './bob-prompt.ts'
 import type { AiCatalogSession } from './ai-catalog.ts'
+import { workpadTool, workpadFrame, type AgentWorkpads, type WorkpadAgent } from './bob-agent-workpad.ts'
 import { compactReceipts, type ProjectWriter } from './project-write.ts'
 import { humanTextIssues } from './human-text.ts'
 import { answerTextFragments, type AnswerTextOutcome } from './answer-text.ts'
@@ -286,6 +287,8 @@ export type ProjectAnswerOptions = {
   finalAnswer?: boolean;
   /** Pinned per execution (workerCheckpointVersion): a worker's place is saved after each of its steps. */
   workerCheckpoint?: boolean;
+  /** Private bounded notes, enabled by the pinned workpad contract on server-claimed turns. */
+  workpads?: AgentWorkpads;
   /** Drops a finished worker's model chain from the turn checkpoint. */
   releaseContext?: (responseId: string) => void;
   resultReferences?: boolean;
@@ -339,6 +342,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const briefing = restored ? restored.initial.briefing as Awaited<ReturnType<typeof opts.lookup.search>> : await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
   if (briefing.status !== 'ok') return { ok: false, error: briefing.status === 'denied' ? 'project_denied' : 'project_unavailable' }
   const contract = opts.aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
+  const workpads = opts.workpads && contract.workpad_version === 1
+    && opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.workpad_version === 1 ? opts.workpads : undefined
   const contextStrategy = contract.context_strategy_version === 1
   const boundedOrientation = contextStrategy && contract.orientation_directory_version === 1
   if (boundedOrientation && !opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.read_project_orientation')) throw new Error('tool_catalog_unavailable')
@@ -384,7 +389,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     return { native: [...specs.filter(spec => coreTools!.includes(spec.function.name)), opts.aiCatalog.tool(USE_TOOL, { include_manual: true })],
       sheets: specs.map(spec => spec.function.name).filter(name => !coreTools!.includes(name)) }
   }
-  const turnPreload = (phase: string | null) => [...turnTools(phase), ...workerHandOverNames, ...checkReads]
+  const turnPreload = (phase: string | null) => [...turnTools(phase), ...workerHandOverNames, ...checkReads, ...(workpads ? ['update_workpad'] : [])]
   const turnTools = (phase: string | null) => {
     if (!phaseTools) return preloadTools
     if (toolPick) return [...preloadTools, ...toolPick]
@@ -444,6 +449,10 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     version: Number((opts.aiCatalog.definition('tools.' + worker.tool, 'tool_contract').definition.envelope as { schema_version?: unknown } | undefined)?.schema_version ?? 1),
     gate: (): ToolGate => 'available',
     execute: async (raw: unknown) => {
+      // A future colleague must opt in explicitly; never let a new role reuse
+      // somebody else's private scratch note through an unchecked cast.
+      const workpadAgent: WorkpadAgent | null = key === 'structure' || key === 'drawing' || key === 'materials' ? key : null
+      const workerPads = workpadAgent ? workpads : undefined
       const plain = !!worker.knowledge
       const job = parseWorkerJob(raw, plain)
       if (!job) return { status: 'invalid', issues: [{ path: '$', expected: plain ? 'request (text)' : 'job (text) and findings (text or null)' }] }
@@ -455,7 +464,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       if (failedWorkers.has(key)) return { status: 'unavailable', worker: worker.role.replace(/^role\./, ''), reason: 'failed_earlier_this_turn', calls: [] }
       let session = workerSessions.get(key)
       if (!session || resume) {
-        session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: () => [...worker.tools, ...worker.reads], offerWaiting: true, readPolicy: basePolicy })
+        session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}),
+          preloadTools: () => [...worker.tools, ...worker.reads, ...(workerPads ? ['update_workpad'] : [])], offerWaiting: true, readPolicy: basePolicy,
+          ...(workerPads ? { extraTools: [workpadTool(workerPads, workpadAgent!)] } : {}) })
         if (resume) session.restoreState(structuredClone(resume.session) as Parameters<typeof session.restoreState>[0])
         workerSessions.set(key, session)
       }
@@ -467,7 +478,10 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const stair = opts.context?.stair
       const history = stair ? stairConversation(opts.aiCatalog, stair) : (opts.context?.recent.slice(0, -1) ?? []).map(m => ({ role: m.role, content: m.text }))
       const workerStep = currentStep, workerIndex = currentIndex
+      const workerWorkpad = !resume && workerPads
+        ? await workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}`) : undefined
       const report = await runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
+        ...(workerPads ? { workpadEnabled: true, ...(workerWorkpad ? { workpad: workerWorkpad } : {}) } : {}),
         session, hasAccess: opts.hasAccess, deadline, ...(opts.modelTimeoutMs ? { modelTimeoutMs: opts.modelTimeoutMs } : {}),
         ...(opts.finalAnswer ? { stopAsResult: true } : {}),
         ...(opts.releaseContext ? { releaseChain: opts.releaseContext } : {}),
@@ -528,7 +542,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     }, exportState: () => {
       if (!orientationReader) throw new Error('context_unavailable')
       return orientationReader.exportState()
-    } } } : {}), readPolicy: bobPolicy, ...(workerHandOvers.length ? { extraTools: workerHandOvers } : {}) })
+    } } } : {}), readPolicy: bobPolicy, ...((workerHandOvers.length || workpads)
+      ? { extraTools: [...workerHandOvers, ...(workpads ? [workpadTool(workpads, 'bob')] : [])] } : {}) })
   if (restored) toolbox.restoreState(restored.toolbox)
   // The manifest is pinned before any journal operation. Do not add even an
   // undefined option or change the call sequence of an older running turn.
@@ -613,6 +628,12 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     ...(Array.isArray(drawingRequests)&&drawingRequests.length?[{role:'user' as const,content:opts.aiCatalog.text('bob.frame.outstanding')+'\n'+JSON.stringify(drawingRequests)}]:[]),
     ...(opts.context ? opts.context.recent.map(m => ({ role: m.role, content: m.text })) : [{ role: 'user' as const, content: opts.message }]),
   ]
+  if (!restored && workpads) {
+    // The current owner instruction must stay newer than a remembered intention.
+    const currentRequest = messages.findLastIndex(item => item.role === 'user' && item.content === opts.message)
+    messages.splice(currentRequest < 0 ? Math.max(0, messages.length - 1) : currentRequest, 0,
+      { role: 'user', content: workpadFrame(await workpads.load('bob', 'turn')) })
+  }
   let preparedEpoch = restored ? restored.preparedEpoch : contextStrategy ? opts.contextEpoch?.() : undefined
   const observation: TurnObservation = structuredClone(restored?.observation ?? { steps: 0, tool_calls: 0, deferred_calls: 0, completion_checks: 0, nudges: 0, end: 'failed' })
   const observe = (end: TurnObservation['end']) => { observation.end = end; opts.observe?.({ ...observation }) }

@@ -395,6 +395,33 @@ generic sequence or enlarge the assignment to finishing the entire project.
 
 ### What memory keeps
 
+**Private workpads — source implementation, 2026-11-03; not yet released.**
+Bob, Konrad, Rita and Mattias each have one small, replaceable note scoped to the
+current private project thread and role (`bob_private.bob_agent_workpads`). It
+contains a goal, next step, at most six short steps/blockers, at most twelve
+references and a working/waiting/done status. It is loaded automatically at the
+start of new role work; `update_workpad` replaces the entire note using an
+expected revision. The server binds role identity and current authorized turn;
+old pinned jobs and guest/local chat do not use this store. An equal retry is
+idempotent and a stale competing update conflicts. A new conversation gets a
+new workpad, while a resumed worker keeps its already checkpointed model input.
+
+A note is **not** a second project memory: every reference is a hint to reopen
+the exact source, and neither a note nor its `noted` response counts as a
+construction save, check, approval or verified receipt. Canonical project
+revisions and actual tool receipts stay with their current owners. The notebook
+adds no model, and no new budget. It intentionally does **not** reset an active
+specialist model chain or change the existing 150k-token continuation policy:
+doing that before a confirmed save could revive the repeated-read/unsaved-work
+regression. A measured, receipt-gated chain renewal is separate follow-up work.
+
+Source release order: apply `20261103120000_bob_agent_workpads.sql`, deploy
+compatible `bob-worker` and `ask-bob`, then activate
+`20261103121000_bob_agent_workpads_catalog.sql` when older active jobs can
+continue on the compatible runtime. Neither migration nor either deployment has
+been performed by the source change. The owner has deferred test/CI runs during
+rapid development; live acceptance and context-growth measurements are open.
+
 *Manifests with `memory_stair_version` 1 replace the rewritten brief with the
 [memory stair](#memory-stair); this describes the pinned behavior.*
 

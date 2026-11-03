@@ -1,6 +1,7 @@
 import type { AiCatalogSession } from './ai-catalog.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { WorkingContext } from './bob-working-context.ts'
+import { workpadFrame, type WorkpadSnapshot } from './bob-agent-workpad.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import { toolRejection, type ToolRejection } from './tool-rejection.ts'
 
@@ -102,7 +103,7 @@ export function parseWorkerJob(value: unknown, plain = false): { job: string; fi
  * knowledge and Bob's request, or (manifests before) Bob's brief. */
 export function buildWorkerMessages(aiCatalog: AiCatalogSession, opts: {
   prefix: string; context?: WorkingContext; history: Messages; brief: { job: string; findings: string | null; current: unknown };
-  knowledge?: Record<string, unknown>;
+  knowledge?: Record<string, unknown>; workpad?: WorkpadSnapshot;
 }): Messages {
   const stair = opts.context?.stair
   return [
@@ -111,8 +112,10 @@ export function buildWorkerMessages(aiCatalog: AiCatalogSession, opts: {
     ...opts.history,
     ...(opts.knowledge ? [
       { role: 'user' as const, content: aiCatalog.text(opts.prefix + '.knowledge') + '\n' + JSON.stringify(opts.knowledge) },
-      { role: 'user' as const, content: aiCatalog.text(opts.prefix + '.request') + '\n' + opts.brief.job },
-    ] : [{ role: 'user' as const, content: aiCatalog.text(opts.prefix + '.brief') + '\n' + JSON.stringify(opts.brief) }]),
+    ] : []),
+    ...(opts.workpad ? [{ role: 'user' as const, content: workpadFrame(opts.workpad) }] : []),
+    ...(opts.knowledge ? [{ role: 'user' as const, content: aiCatalog.text(opts.prefix + '.request') + '\n' + opts.brief.job }]
+      : [{ role: 'user' as const, content: aiCatalog.text(opts.prefix + '.brief') + '\n' + JSON.stringify(opts.brief) }]),
   ]
 }
 
@@ -140,6 +143,8 @@ export async function runWorker(opts: {
   readCurrent: () => Promise<unknown>; hasAccess: () => Promise<boolean>; deadline: number; modelTimeoutMs?: number
   /** Workers with knowledge reads: their fresh results, and the persona's variables (the project's name). */
   readKnowledge?: () => Promise<Record<string, unknown>>; variables?: Record<string, string>
+  /** A note is separate from the immutable worker model/checkpoint chain. */
+  workpadEnabled?: boolean; workpad?: WorkpadSnapshot
   /** Pixels the worker opened go with the worker's own next call (not Bob's), and are confirmed after it. */
   images?: { carrier: () => Messages; confirmDelivery: () => void }
   /** Reads what the worker saved, by code, after the job (see readbackReads). */
@@ -156,7 +161,7 @@ export async function runWorker(opts: {
   releaseChain?: (responseId: string) => void
 }): Promise<Record<string, unknown>> {
   const roleKey = opts.worker.role.replace(/^role\./, '')
-  const allowed = new Set([...opts.worker.tools, ...opts.worker.reads])
+  const allowed = new Set([...opts.worker.tools, ...opts.worker.reads, ...(opts.workpadEnabled ? ['update_workpad'] : [])])
   // The worker's session also offers tools that wait for a prerequisite (saving a
   // reviewed drawing), so the list is the same in every step and the prompt start
   // stays cached; calling one too early answers "not available yet". Prepared each
@@ -179,7 +184,8 @@ export async function runWorker(opts: {
   else if (opts.readKnowledge) knowledge = await opts.readKnowledge()
   else try { current = await opts.readCurrent() } catch (error) { rethrowContinuation(error); current = { status: 'unavailable' } }
   let messages: Messages = restored ? structuredClone(restored.messages)
-    : buildWorkerMessages(opts.aiCatalog, { prefix: roleKey, context: opts.context, history: opts.history, brief: { ...opts.job, current }, ...(knowledge ? { knowledge } : {}) })
+    : buildWorkerMessages(opts.aiCatalog, { prefix: roleKey, context: opts.context, history: opts.history, brief: { ...opts.job, current },
+      ...(knowledge ? { knowledge } : {}), ...(opts.workpad ? { workpad: opts.workpad } : {}) })
   // The worker sees full manuals: it has few tools and they are fixed for the job.
   const params = { server_quote: true, include_manual: true }
   const toolParams = () => Object.fromEntries(specs.map(spec => [spec.function.name, { card: false, include_manual: true }]))
