@@ -925,6 +925,16 @@ to [bounded writes](ask-bob-writes.md). Pages and truncation remain explicit.
 <a id="final-answer-past-stop"></a>
 ### Final answer past the spending stop — installed 2026-11-01
 
+**Supersession prepared (owner decision 2026-11-03; publication pending):**
+the `bob-turn-usd-stop-removed-v1` migration removes the temporary per-turn
+USD 4 stop. Once applied, new `work_allowance_version: 1` jobs will have no
+turn spending or model-call allotment, while all usage remains recorded. Jobs
+already pinned to the historical spending stop keep their contract. The
+final-answer compatibility pin is harmless without a stop. Worker deadlines
+and the same-turn failed-handover guard remain active; neither is a spending cap.
+
+The details below document the historical stop and its final-answer recovery.
+
 **Installed** with `bob-finder-save-fixes-v1` ([record](foundation-verification.md#finder-save-fixes-install-2026-11-01)). The final call also carries the approved closed-bench note once (`bob.note.closed`, budget "spending"; the prompt steward's call: no new text).
 
 Owner decision 2026-11-01: "Bob's final answer always gets through." The

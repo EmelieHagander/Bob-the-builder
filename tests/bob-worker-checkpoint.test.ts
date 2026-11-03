@@ -75,6 +75,25 @@ const stalls: Step = () => { throw new BobContinuation('yield', 'segment_wall') 
 const answer: Step = () => ({ ...reply(.05, ANSWER), responseId: 'b-final', outputPhase: 'final_answer' })
 const konrad = (list: OpenAIServiceOptions[]) => list.filter(o => o.functionName === 'structure-worker')
 
+test('an unavailable Konrad is not started again in the same turn, including across checkpoints', async () => {
+  const states: BobAnswerState[] = []
+  const failed: Step = () => ({ success: false, data: null, model: 'fixture', usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, error: 'Network error: The signal has been aborted' })
+  const handOverAgain: Step = () => ({ ...reply(.1), data: null, responseId: 'b2', toolCalls: [call('h2', 'ask_structure_worker', { request: 'Samma jobb igen.' })] })
+  const first = await turn({ finalAnswer: true, workerCheckpoint: true, bob: [handOver, handOverAgain, answer], konrad: [failed],
+    checkpoint: { onSave: s => { states.push(s) } } })
+  assert(first.result.ok, JSON.stringify(first.result))
+  assert.equal(konrad(first.dispatched).length, 1, 'the second hand-over must not dispatch a model')
+  const refused = first.requested.filter(o => o.functionName === 'ask-bob').at(-1)!.messages!.find(m => m.role === 'tool' && m.tool_call_id === 'h2')
+  assert.equal((JSON.parse(String(refused?.content)) as any).reason, 'failed_earlier_this_turn')
+  const afterFailure = states.find(s => s.failedWorkers?.includes('structure') && !s.result)
+  assert(afterFailure, 'the failure latch survives a segment restart')
+
+  const resumed = await turn({ finalAnswer: true, workerCheckpoint: true, bob: [handOverAgain, answer], konrad: [],
+    checkpoint: { state: structuredClone(afterFailure) } })
+  assert(resumed.result.ok, JSON.stringify(resumed.result))
+  assert.equal(konrad(resumed.dispatched).length, 0, 'restored turn must not restart the failed specialist')
+})
+
 async function interrupted(workerCheckpoint: boolean) {
   const saves_: BobAnswerState[] = []
   await assert.rejects(turn({ finalAnswer: true, workerCheckpoint, bob: [handOver], konrad: [reads(1), reads(2), stalls], checkpoint: { onSave: s => { saves_.push(s) } } }),
