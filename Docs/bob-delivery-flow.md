@@ -162,8 +162,9 @@ mått/anslutningar, exakta källversioner, kvarstående frågor och klart-villko
 Han sparar en begränsad ändring, läser kontrollresultatet och rättar berörda
 delar innan han fortsätter. Upprepade delar använder befintlig repetition.
 
-**FORM A/B, källimplementerat 2026-11-03; katalogaktivering och driftsättning
-återstår.** För nya Konrad-jobb läser kod även den godkända projektplanens
+**FORM A/B, tekniskt driftsatt 2026-11-03 enligt
+[releasebeviset](konrad-piece-progress-release-2026-11-03.md#form-ab-v2--uppfoljande-release-2026-11-03).**
+För nya Konrad-jobb läser kod även den godkända projektplanens
 fokus-Step med revisions-ID, mål och färdigvillkor i ett begränsat underlag.
 Fokus är en navigationsuppgift, **inte** ett verifierat påstående om att
 överlämningens fritext gäller just denna Step. Befintliga specialistläsningar
@@ -178,7 +179,8 @@ Bob. Vid saknad/felaktig revisions- eller FORM-evidens pausas nästa ändring;
 parameterberoenden som inte går att avgränsa markeras uttryckligen okända.
 Geometri-, funktions-, sjufönster-, bärighets- och beställargodkännande följer
 **inte** av sparning eller lokal kontroll. Gamla journalförda jobb behåller v1;
-v2 kräver katalogmigrationen efter uppdaterad Edge-runtime. Visuell 2D/3D-
+v2-katalogen aktiverades efter verifierad uppdatering av båda Edge-funktionerna.
+Verklig modell-/beställaracceptans återstår. Visuell 2D/3D-
 återkoppling och semantisk jämförelse mot hela originaluppdraget återstår.
 
 En sammanhängande möbel kan växa inom samma Construction; separata
