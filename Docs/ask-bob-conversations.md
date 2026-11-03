@@ -442,7 +442,8 @@ Activation followed the compatible runtime release via
 this behavior. No Actions or paid model runs were performed as part of the
 technical rollout. [Exact hosted versions and remaining acceptance](bob-workpad-release-2026-11-03.md).
 
-**Bounded Konrad pieces — prepared 2026-11-03, not yet live-tested.**
+**Bounded Konrad pieces — installed 2026-11-03, not yet live-model-tested**
+([deployment record](konrad-piece-progress-release-2026-11-03.md)).
 `worker_piece_progress_version` 1 pins an additional boundary only on new
 claimed worker jobs with checkpoints and workpads. Konrad chooses a natural
 wall/opening scope, uses the existing small part/parameter tools and maintains
