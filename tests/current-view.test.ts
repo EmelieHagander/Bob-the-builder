@@ -6,6 +6,7 @@ import { createBobJournal, type JournalEntry } from '../supabase/functions/_shar
 import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from './support/pglite.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
+import { isSyntheticSchemaMigration } from './support/project-schema.ts'
 
 function fixture(overrides: Partial<CurrentViewReader> = {}) {
   const calls: string[] = []
@@ -285,7 +286,7 @@ test('full-schema caller SQL reads hydrate real columns, immutable versions and 
     await pg.query("insert into bob.people(id,project_id,name,initials,role,auth_user_id) values('personA','A','Owner A','AA','Organiser',$1),('personB','B','Private person','BB','Organiser',$2)", [userA, userB])
     await setupSharedSocial(pg)
     const migrations = new URL('../supabase/migrations/', import.meta.url)
-    for (const f of (await readdir(migrations)).filter(f => f.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(f, migrations), 'utf8'))
+    for (const f of (await readdir(migrations)).filter(isSyntheticSchemaMigration).sort()) await pg.exec(await readFile(new URL(f, migrations), 'utf8'))
     await pg.exec("insert into bob.areas(id,project_id,slug,name) values('areaA','A','area','Real area A'),('areaB','B','area','FOREIGN SECRET')")
     await pg.transaction(async tx => {
       await tx.exec("insert into bob.project_plans(project_id) values('A')")

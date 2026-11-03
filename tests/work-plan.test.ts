@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from './support/pglite.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
+import { isSyntheticSchemaMigration } from './support/project-schema.ts'
 
 const pg = new PGlite()
 const ownerA = '00000000-0000-0000-0000-000000000601'
@@ -64,7 +65,7 @@ before(async () => {
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('owner-a','A','Alice','AL',$1),('owner-b','B','Bob','BO',$2)", [ownerA, ownerB])
   await setupSharedSocial(pg)
   const migrations = new URL('../supabase/migrations/', import.meta.url)
-  for (const file of (await readdir(migrations)).filter(file => file.endsWith('.sql')).sort()) {
+  for (const file of (await readdir(migrations)).filter(isSyntheticSchemaMigration).sort()) {
     await pg.exec(await readFile(new URL(file, migrations), 'utf8'))
   }
   await pg.exec("insert into bob.areas(id,project_id,slug,name,phase) values('a1','A','work','Work','build'),('a2','A','design','Design','design'),('b1','B','private','Private','build')")

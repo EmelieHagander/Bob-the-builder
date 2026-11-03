@@ -198,6 +198,8 @@ export async function runWorker(opts: {
     readSaved(receipt: Record<string, unknown>): Promise<unknown>
     /** New v2 jobs only. Inspect exact saved FORM scope and persisted part changes in code. */
     inspectSaved?(receipt: Record<string, unknown>, toolArgs: unknown): Promise<Record<string, unknown>>
+    /** v4: database-enforced, exact-revision facade hold for legacy/no-FORM geometry. */
+    readBoundedReview?(receipt: Record<string, unknown>): Promise<Record<string, unknown>>
     /** v3: a checked piece ends this hand-over for natural visual review. */
     pauseForDesignReview?: boolean
   }
@@ -335,6 +337,19 @@ export async function runWorker(opts: {
           // cannot upgrade this to a declaration that the assignment is done.
           receipt.piece_evidence = pieceEvidence
         }
+        let boundedReview: Record<string, unknown> | undefined
+        if (confirmed && opts.pieceProgress.readBoundedReview) {
+          try { boundedReview = await opts.pieceProgress.readBoundedReview(receipt) }
+          catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error;
+            boundedReview = { status: 'unavailable' } }
+        }
+        const heldExactPiece = !!confirmed && boundedReview?.status === 'awaiting_review'
+          && boundedReview.artifact_id === confirmed.artifact_id && boundedReview.saved_revision === confirmed.revision
+          && ['front','back','left','right','top'].includes(String(boundedReview.pending_view))
+        if (heldExactPiece) receipt.construction_review_boundary = {
+          status: 'awaiting_review', artifact_id: confirmed.artifact_id, revision: confirmed.revision,
+          view_id: boundedReview!.pending_view, verification: 'unverified', form_mapping_not_inferred: true,
+        }
         let checked = result?.check
         let checkedByAuto = false
         // The write-state wrapper already checks ordinary saves and part edits.
@@ -368,13 +383,16 @@ export async function runWorker(opts: {
           ? { status: 'verified', ...confirmed, approval_not_implied: true }
           : { status: 'unverified', reason: 'saved_revision_readback_missing', approval_not_implied: true },
           piece_check: { status: checked?.status ?? 'unavailable', concept_ready: checked?.concept_ready === true },
-          ...(pieceEvidence ? { piece_evidence: pieceEvidence } : {}), ...(localCheck ? { piece_local_check: localCheck } : {}) }
+          ...(pieceEvidence ? { piece_evidence: pieceEvidence } : {}), ...(localCheck ? { piece_local_check: localCheck } : {}),
+          ...(receipt.construction_review_boundary ? { construction_review_boundary: receipt.construction_review_boundary } : {}) }
         if (!confirmed) incompletePiece = { receipt, reason: 'saved_revision_readback_missing' }
         else if (checked?.status !== 'checked') incompletePiece = { receipt, reason: 'saved_revision_check_incomplete' }
-        else if (opts.pieceProgress.inspectSaved && pieceEvidence?.status === 'no_form_scope')
+        else if (opts.pieceProgress.readBoundedReview && !heldExactPiece && boundedReview?.status !== 'not_configured')
+          incompletePiece = { receipt, reason: 'construction_review_gate_missing' }
+        else if (opts.pieceProgress.inspectSaved && pieceEvidence?.status === 'no_form_scope' && !heldExactPiece)
           incompletePiece = { receipt, reason: 'saved_form_scope_missing' }
         else if (opts.pieceProgress.inspectSaved && (pieceEvidence?.status !== 'form_scoped'
-          || pieceEvidence.affected_scope_complete !== true))
+          || pieceEvidence.affected_scope_complete !== true) && !heldExactPiece)
           incompletePiece = { receipt, reason: pieceEvidence?.status === 'form_scoped'
             ? 'saved_form_scope_unbounded' : 'saved_form_evidence_unavailable' }
         else if (localCheck && localCheck.status !== 'checked') incompletePiece = { receipt, reason: 'saved_local_check_incomplete' }
@@ -397,7 +415,7 @@ export async function runWorker(opts: {
     if (opts.pieceProgress?.pauseForDesignReview && pieceReviewReceipt) {
       return finish({ status: 'awaiting_design_review', reason: 'show_saved_construction',
         worker: roleKey, saved_receipt: pieceReviewReceipt, user_feedback: 'not_recorded',
-        note: 'A saved and technically checked piece is not user approval. Show this exact construction revision and ask naturally if the visible design matches before proceeding to the next piece.', calls })
+        note: 'A saved and technically checked piece is not user approval. Show this exact construction revision and its matching facade (if present), then ask naturally if the visible design matches before proceeding to the next piece. A spatial gate does not prove window count or FORM mapping.', calls })
     }
     // A new provider conversation must never inherit orphaned tool outputs or
     // unsaved geometry. Reset only after the last protocol batch was answered,

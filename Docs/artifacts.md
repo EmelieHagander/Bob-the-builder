@@ -1227,6 +1227,25 @@ in the concept viewer do not add a CAD kernel section operation.
 <a id="form-scoped-checks"></a>
 ### Scoped FORM progress and technical evidence — technically installed, 2026-10-27
 
+**Facadvisa arbetsstycken, förberett 2026-11-03 (ännu inte driftsatt i denna
+ändring):** Den valda projektplanens fokus-Step kan knytas till en befintlig
+Construction och ett antal konservativa, revisionsbundna 3D-vyer. En
+transaktionsspärr jämför gamla och nya lådvolymer, material, fogar och
+instansroller och stoppar en sparning som berör flera fasader, ligger utanför
+eller tvetydigt inom dem, är för stor eller spänner över en alltför lång del
+av samma fasad. Den tillåter inte nya geometriändringar innan rätt fokus-Step,
+och den blockerar ytterligare sparningar när senaste ändringen väntar på
+granskning. Ett rättelseönskemål låser följande ändring till samma fasad.
+
+Den vanliga redan behörighets- och visningsbundna 3D-återkopplingen kan släppa
+spärren först när rätt aktör faktiskt har sett **just den aktuella revisionen i
+rätt fasadvy** och godkänt helheten. Den lagrar en visuell designavstämning,
+inte en FORM-mappning, ett godkänt tekniskt kontrollresultat eller ett
+konstruktionsintyg. Flera närliggande öppningar kan fortfarande vara svåra att
+skilja med ren geometri; ingen exakt fönsterräkning eller semantisk tolkning
+påstås. Ladans sju fönster är ett planerat totalantal, inte en påhittad
+fördelning per fasad. [Riktad verifiering och driftsättningsordning](konrad-piece-progress-release-2026-11-03.md#facadgranskning-v4--förberett-2026-11-03).
+
 [The implementation plan](bob-delivery-flow.md#form-next) extends this boundary
 for incremental design. A coherent construction may grow through existing part
 edits, with [Solution refinement](solutions.md#form-refinement) preserving the

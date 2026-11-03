@@ -17,7 +17,7 @@ const model = (id: string, calls: ReturnType<typeof call>[] = []): OpenAIService
 
 function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; readback?: (revision: number) => unknown;
   checkInSave?: boolean; serverCheck?: 'checked' | 'unavailable'; inspect?: (revision: number) => Record<string, unknown>;
-  pauseForDesignReview?: boolean }) {
+  pauseForDesignReview?: boolean; boundedReview?: (revision: number) => Record<string, unknown> }) {
   const commands: { name: string; revision: number | null }[] = []
   const scopedChecks: string[][] = []
   const observed: OpenAIServiceOptions[] = [], checkpoints: WorkerProgress[] = []
@@ -50,6 +50,9 @@ function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; r
     }, ...(opts.pauseForDesignReview ? { pauseForDesignReview: true } : {}), ...(opts.inspect ? { inspectSaved: async (receipt: Record<string, unknown>) => {
       commands.push({ name: 'inspect_saved_form', revision: receipt.revision as number })
       return opts.inspect!(receipt.revision as number)
+    } } : {}), ...(opts.boundedReview ? { readBoundedReview: async (receipt: Record<string, unknown>) => {
+      commands.push({ name: 'read_construction_piece_progress', revision: receipt.revision as number })
+      return opts.boundedReview!(receipt.revision as number)
     } } : {}) } } : {}),
     progress: { save: async p => { checkpoints.push(structuredClone(p)) } },
   })
@@ -184,6 +187,36 @@ test('v2 preserves a legacy construction save but stops when no FORM scope can b
   assert.equal(observed.length, 1, 'Konrad must not start the next workpiece just because the save checked')
   assert.equal(commands.filter(c => c.name === 'edit_construction_parts').length, 1)
   assert.equal((report.saved_receipt as Record<string, any>).piece_evidence.status, 'no_form_scope')
+})
+
+test('v4 pauses for the exact spatially bounded legacy revision without inventing FORM scope or windows',async()=>{
+  const { result, observed, commands } = harness([
+    model('one',[call('a','edit_construction_parts'),call('b','edit_construction_parts')]),model('must-not-run'),
+  ],{ enabled:true,pauseForDesignReview:true,
+    inspect:revision=>({status:'no_form_scope',revision,verification:'unverified'}),
+    boundedReview:revision=>({status:'awaiting_review',artifact_id:'c1',saved_revision:revision,pending_view:'front'}) })
+  const report=await result
+  assert.equal(report.status,'awaiting_design_review')
+  assert.equal(observed.length,1)
+  assert.equal(commands.filter(c=>c.name==='edit_construction_parts').length,1)
+  assert.deepEqual((report.saved_receipt as any).construction_review_boundary,{
+    status:'awaiting_review',artifact_id:'c1',revision:3,view_id:'front',verification:'unverified',form_mapping_not_inferred:true })
+  assert.equal((report.saved_receipt as any).piece_evidence.status,'no_form_scope')
+})
+
+test('v4 refuses stale, mismatched or missing spatial review evidence',async()=>{
+  for(const returned of [
+    {status:'awaiting_review',artifact_id:'other',saved_revision:3,pending_view:'front'},
+    {status:'awaiting_review',artifact_id:'c1',saved_revision:2,pending_view:'front'},
+    {status:'ready',artifact_id:'c1',saved_revision:null,pending_view:null},
+  ]){
+    const {result,observed}=harness([model('one',[call('a','edit_construction_parts')]),model('must-not-run')],{
+      enabled:true,pauseForDesignReview:true,inspect:revision=>({status:'no_form_scope',revision}),
+      boundedReview:()=>returned })
+    const report=await result
+    assert.deepEqual([report.status,report.reason],['needs_verification','construction_review_gate_missing'])
+    assert.equal(observed.length,1)
+  }
 })
 
 test('v2 stops on incomplete mapped scope even if the overall construction check passed', async () => {
