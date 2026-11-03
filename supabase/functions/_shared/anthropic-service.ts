@@ -252,7 +252,7 @@ export async function anthropicRequestBody(options: OpenAIServiceOptions, ctx: A
 }
 
 /** Collect one streamed Messages response into the final message object. */
-export async function collectStream(response: Response): Promise<Json> {
+export async function collectStream(response: Response, onEvent?: (type: string) => void): Promise<Json> {
   if (!response.body) throw new Error('anthropic_stream_missing')
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
   const message: Json = { content: [] as Block[], usage: {} }
@@ -299,7 +299,11 @@ export async function collectStream(response: Response): Promise<Json> {
     while ((cut = buffer.indexOf('\n\n')) >= 0) {
       const frame = buffer.slice(0, cut); buffer = buffer.slice(cut + 2)
       const data = frame.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trim()).join('')
-      if (data) handle(JSON.parse(data))
+      if (data) {
+        const event = JSON.parse(data) as Json
+        onEvent?.(String(event.type ?? 'unknown'))
+        handle(event)
+      }
     }
     if (done) break
   }
@@ -345,8 +349,10 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), ctx.timeoutMs)
   let message: Json
+  let response: Response | null = null
+  const startedAt = Date.now()
+  let events = 0, firstEventAt: number | null = null, lastEventAt: number | null = null
   try {
-    let response: Response | null = null
     for (let attempt = 0; ; attempt++) {
       response = await doFetch(ANTHROPIC_URL, { method: 'POST', signal: controller.signal, body: JSON.stringify(body),
         headers: { 'x-api-key': ctx.apiKey, 'anthropic-version': ANTHROPIC_VERSION, 'anthropic-beta': ANTHROPIC_BETA, 'content-type': 'application/json' } })
@@ -362,10 +368,24 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
       await response.body?.cancel()
       await sleep(retryDelayMs(response, attempt))
     }
-    message = await collectStream(response!)
+    message = await collectStream(response!, () => {
+      const now = Date.now()
+      events++
+      if (firstEventAt === null) firstEventAt = now
+      lastEventAt = now
+    })
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Request failed'
-    console.error('[Anthropic Service] Request error:', msg)
+    // Content-free diagnostics distinguish our own deadline from a provider
+    // disconnect, and a stalled prefill from a stream that was still active.
+    console.error('[Anthropic Service] Request error', JSON.stringify({
+      kind: controller.signal.aborted ? 'local_timeout' : 'network_or_stream',
+      elapsed_ms: Date.now() - startedAt, timeout_ms: ctx.timeoutMs,
+      events, first_event_ms: firstEventAt === null ? null : firstEventAt - startedAt,
+      since_last_event_ms: lastEventAt === null ? null : Date.now() - lastEventAt,
+      request_id: response?.headers.get('request-id') ?? null,
+      error: msg.slice(0, 120),
+    }))
     return fail(model, `Network error: ${msg}`)
   } finally { clearTimeout(timer) }
 

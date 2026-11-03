@@ -925,13 +925,15 @@ to [bounded writes](ask-bob-writes.md). Pages and truncation remain explicit.
 <a id="final-answer-past-stop"></a>
 ### Final answer past the spending stop — installed 2026-11-01
 
-**Supersession prepared (owner decision 2026-11-03; publication pending):**
-the `bob-turn-usd-stop-removed-v1` migration removes the temporary per-turn
-USD 4 stop. Once applied, new `work_allowance_version: 1` jobs will have no
+**Superseded in production 2026-11-03 ([PR #417](https://github.com/EmelieHagander/Bob-the-builder/pull/417)):**
+the `20261103081632_bob_remove_turn_usd_stop` migration published contract v18,
+`bob-turn-usd-stop-removed-v1`, removing the temporary per-turn
+USD 4 stop. New `work_allowance_version: 1` jobs have no
 turn spending or model-call allotment, while all usage remains recorded. Jobs
 already pinned to the historical spending stop keep their contract. The
 final-answer compatibility pin is harmless without a stop. Worker deadlines
 and the same-turn failed-handover guard remain active; neither is a spending cap.
+The two Edge functions were deployed as `bob-worker` v184 and `ask-bob` v216.
 
 The details below document the historical stop and its final-answer recovery.
 
@@ -963,8 +965,8 @@ Jobs pinned with `final_answer_version` 1 on the same contract (execution
 
 No model-facing text changed. Source: `bob-model-budget.ts`, `bob-workers.ts`
 (`stopAsResult`), `project-answer.ts` (`finalCall`), `ask-openai.ts`; tests:
-`tests/bob-final-answer.test.ts`. **Not active:** the catalog flag is not
-published; publication, install and a paid acceptance run remain.
+`tests/bob-final-answer.test.ts`. **Historical policy only:** new work no longer
+uses this spending stop. No paid acceptance run has yet been performed.
 
 ### Bob-directed completion — 2026-09-27
 
@@ -1161,7 +1163,7 @@ The pattern follows Launchpad's async dispatch, continuation driver and resume p
 
 `pg_net` dispatches `bob-worker`; the `bob-background-turns` cron task checks queued and expired worker leases every minute, independently of any browser. A random private per-job capability authenticates this worker endpoint (`verify_jwt=false` only here). An atomic claim issues a new worker token and increments the existing conversation generation; duplicate dispatches and stale workers cannot settle the active claim or write project records. The driver maintains the conversation lock while work is active. A killed worker is recoverable after its 150-second lease.
 
-Each worker has a 140-second segment budget. Completed model responses, exact domain RPC results, CAD packets, media context and generated image bytes are checkpointed before proceeding. Re-entering the existing orchestration replays those results to rebuild loaded tools, specialist candidates and counters, then continues at the first unfinished operation. Input fingerprints stop divergent replay; domain revisions still guard new writes. If a write committed before its checkpoint was saved, the existing SQL receipt ledger reconciles the identical operation. A yield is an internal scheduling signal, never a failed user turn or invented user approval. Main model calls allow 100 seconds within a fresh segment; specialist budgets remain bounded. Transient provider errors can yield to a later attempt. Standard/high main-model settings and the canonical shared AI service are unchanged.
+Each worker has a 140-second segment budget. Completed model responses, exact domain RPC results, CAD packets, media context and generated image bytes are checkpointed before proceeding. Re-entering the existing orchestration replays those results to rebuild loaded tools, specialist candidates and counters, then continues at the first unfinished operation. Input fingerprints stop divergent replay; domain revisions still guard new writes. If a write committed before its checkpoint was saved, the existing SQL receipt ledger reconciles the identical operation. A yield is an internal scheduling signal, never a failed user turn or invented user approval. Background model calls use a role- and provider-bounded window within a fresh segment; specialist budgets remain bounded. Transient provider errors can yield to a later attempt. Standard/high main-model settings and the canonical shared AI service are unchanged.
 
 Journaled read deadlines seal either the result or the abort before checkpointing. Lookup, catalog and media readers wait for that checkpoint before delivering an outcome; a late SDK success cannot replace a timeout that Bob already saw. A pending shared AI job also pins the operation fingerprint and job identity before yielding. Changed input stops before another reservation or provider send. These markers grant no extra retry allowance, and membership, source freshness and image authority remain live checks.
 
@@ -1176,7 +1178,8 @@ Deploy `20260924120448_bob_background_jobs.sql` and `20260924120747_bob_backgrou
 ### Progress, stall detection and segment time — 2026-09-27
 
 - **Stalls, not hops.** A claim whose previous segment saved at least one journal checkpoint resets the stall count. Five consecutive segments without a checkpoint fail the job as `background_stalled`. The 20-minute wall, the caller-token expiry and a hard ceiling of 60 claims remain; the former twelve-claim cap is gone.
-- **Several calls per segment.** The journal reserves a realistic duration per model role (main Bob and the CAD designer 75 seconds, reviewer 60, plan compiler 45, others 15–30) instead of the full 100-second timeout. A call is capped at the segment's remaining time plus 8 seconds; if the segment wall cuts it off, the worker yields and the call restarts in a fresh segment without counting as a provider retry.
+- **Several calls per segment.** OpenAI background jobs reserve 25 seconds (45 with images) for provider submission and durable polling; synchronous roles reserve a bounded role-specific interval. Claude streams synchronously inside the worker and instead reserves up to 90 seconds, with eight more seconds for the journal receipt. A second check immediately before dispatch prevents a billable Claude call with too little segment time remaining. Claude may use up to 120 seconds on a fresh 140-second segment, but never past its remaining segment window minus the receipt margin. A pre-dispatch yield does not consume a retry; an interrupted dispatched call is an uncertain potentially billed outcome, and the journal permits only one uncertain re-send for that exact operation.
+- **Claude stream diagnostics (2026-11-03).** The Anthropic adapter already uses streaming SSE. Its previous absolute 100-second timeout was a separate local limit, not a non-streaming API mode. On stream failure it now records elapsed time, whether the local timer fired, SSE event counts and first/last event timing without request or response content. This makes provider stalls distinguishable from local segment truncation; it does not promise recovery of an incomplete provider stream or exactly-once billing.
 - **Live status.** Workers publish a content-free progress marker (stage, tool name, step, saved-change count) through the service-only `bob_job_progress`. `bob_job_status` returns it to the job owner while the job runs, and the chat shows a status line such as "Working on the drawings… · 2 changes saved".
 - **Token lifetime.** Before a background send, the browser refreshes an access token that would expire within 25 minutes, so a long turn is not cut short by the sender's token.
 - **Diagnostics.** `bob.execution_events` gains one `tool` row per executed tool call (tool name, status, step) and records `end_reason` on the delivery row (answered, asked, step or time budget, or the failure code). Rows stay content-free.
