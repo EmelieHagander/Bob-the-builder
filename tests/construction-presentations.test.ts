@@ -92,7 +92,7 @@ test('construction presentation and feedback retain exact source, component scop
     const legacySolution=randomUUID(),legacyIntent=designIntent('construction')
     await call(owner,'solution_command',[project,'create',legacySolution,0,{title:'Legacy box assembly',description:'Existing geometry without a concept model',
       assumptions:'Dimensions remain design choices',tradeoffs:'',measurements:[],design_intent:legacyIntent}])
-    const selected=await call(owner,'solution_command',[project,'select',legacySolution,0,{solution_revision:1,reason:'Review the saved geometry'}])
+    const selected=await call(owner,'solution_command',[project,'select',legacySolution,target.revision,{solution_revision:1,reason:'Review the saved geometry'}])
     const legacyMessage='Review this saved assembly one view at a time.',legacyTurn=await turn(legacyMessage)
     const {form_refinement:_form,...legacyData}=payload.data
     const legacy=await legacyTurn.write({...payload,request_quote:legacyMessage,
