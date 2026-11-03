@@ -7,6 +7,7 @@ import { createProjectLookup } from '../supabase/functions/_shared/project-looku
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { runProjectAnswer } from './support/bob-model-routing.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
+import { isSyntheticSchemaMigration } from './support/project-schema.ts'
 
 const pg=new PGlite()
 const owner='00000000-0000-0000-0000-000000000701'
@@ -71,7 +72,7 @@ before(async()=>{
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('ownerA','A','Owner','OW',$1),('carlA','A','Carl','CA',$2),('outB','B','Out','OU',$3)",[owner,carl,outsider])
   await setupSharedSocial(pg)
   const migrations=new URL('../supabase/migrations/',import.meta.url)
-  for(const f of (await readdir(migrations)).filter(f=>f.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(f,migrations),'utf8'))
+  for(const f of (await readdir(migrations)).filter(isSyntheticSchemaMigration).sort()) await pg.exec(await readFile(new URL(f,migrations),'utf8'))
   await pg.exec("insert into bob.areas(id,project_id,slug,name,phase) values('areaA','A','porch','Porch','planning'),('areaB','B','private','Private','planning')")
   await pg.exec("insert into bob.tasks(id,area_id,name,status,instructions) values('taskA','areaA','Control-measure opening','todo','Measure the actual opening before framing.'),('taskB','areaB','Private task','todo','Private')")
 })

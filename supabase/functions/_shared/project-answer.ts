@@ -301,6 +301,8 @@ export type ProjectAnswerOptions = {
   workerFormPiece?: {
     readPlan(): Promise<unknown>;
     readConstruction(id: string, revision: number): Promise<unknown>;
+    /** v4: authoritative spatial save/review gate; no provider metadata. */
+    readPiece?(): Promise<unknown>;
   };
   /** Private bounded notes, enabled by the pinned workpad contract on server-claimed turns. */
   workpads?: AgentWorkpads;
@@ -480,6 +482,26 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       if (!job) return { status: 'invalid', issues: [{ path: '$', expected: plain ? 'request (text)' : 'job (text) and findings (text or null)' }] }
       const resume = workerResume && workerResume.key === key && workerResume.index === currentIndex ? workerResume : undefined
       workerResume = undefined
+      let constructionPiece: Record<string, unknown> | undefined
+      if (key === 'structure' && opts.workerFormPiece?.readPiece) {
+        try {
+          const read = await opts.workerFormPiece.readPiece()
+          constructionPiece = read && typeof read === 'object' && !Array.isArray(read) ? read as Record<string, unknown> : { status: 'unavailable' }
+        } catch (error) {
+          rethrowContinuation(error)
+          if (error instanceof Error && error.message === 'project_denied') throw error
+          constructionPiece = { status: 'unavailable' }
+        }
+        if (constructionPiece.status === 'awaiting_review') return {
+          status: 'awaiting_design_review', reason: 'show_saved_construction', worker: 'structure-worker',
+          saved_revision: constructionPiece.saved_revision, artifact_id: constructionPiece.artifact_id,
+          view_id: constructionPiece.pending_view, user_feedback: 'not_recorded',
+          note: 'Show this exact saved construction and matching facade view. Ask naturally whether the placement matches before another construction edit.',
+        }
+        if (constructionPiece.status === 'plan_changed' || constructionPiece.status === 'unavailable' || constructionPiece.status === 'ambiguous') return {
+          status: 'needs_verification', reason: 'construction_piece_gate_unavailable', worker: 'structure-worker',
+        }
+      }
       // A provider failure already exhausted the journal's bounded replay.
       // Bob may report the failure, but not start an equally costly fresh chain
       // for the same specialist until the owner's next message starts a new turn.
@@ -519,7 +541,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
               && (current as { form_refinement?: unknown }).form_refinement != null
               ? await opts.workerFormPiece!.readConstruction(id, Number(revision) - 1) : null
             return savedFormPieceEvidence(receipt, current, previous, opts.projectId, toolArgs)
-          } } : {}) } } : {}),
+          }, ...(opts.workerFormPiece.readPiece ? { readBoundedReview: async () => await opts.workerFormPiece!.readPiece!() as Record<string, unknown> } : {}) } : {}) } } : {}),
         ...(opts.workerVerifiedRenewal && workerPads && opts.workerCheckpoint && opts.releaseContext
           ? { verifiedRenewal: { loadWorkpad: (step: number) => workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}:renewal:${step}`) } }
           : {}),
@@ -570,6 +592,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
             catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error;
               knowledge.focused_plan_step = { status: 'unavailable' } }
           }
+          if (constructionPiece) knowledge.construction_piece_boundary = constructionPiece
           return knowledge
         } } : {}),
         onTool: ({ name, status, ms, rejection }) => {

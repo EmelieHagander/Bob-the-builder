@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from './support/pglite.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
+import { isSyntheticSchemaMigration } from './support/project-schema.ts'
 import { parseCatalogWrite, parseCatalogRead } from '../supabase/functions/_shared/material-catalog.ts'
 
 // Actual migrated commands, including the same parser used by loaded Bob tools.
@@ -64,7 +65,7 @@ before(async () => {
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('oneA','A','One','O',$1)",[user])
   await setupSharedSocial(pg)
   const migrations = new URL('../supabase/migrations/',import.meta.url)
-  for (const file of (await readdir(migrations)).filter(f=>f.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(file,migrations),'utf8'))
+  for (const file of (await readdir(migrations)).filter(isSyntheticSchemaMigration).sort()) await pg.exec(await readFile(new URL(file,migrations),'utf8'))
 })
 after(()=>pg.close())
 

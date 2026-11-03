@@ -89,3 +89,42 @@ en äldre fixture/Claude-5.5-katalogavvikelse; detta är inte ett grönt
 end-to-end-bevis. Inga GitHub Actions, betalda modellprov eller full CI kördes.
 Prova Ladan och dess fönster stegvis; bekräfta varje sparad revision,
 helhetsritning, krav och användarens återkoppling separat.
+
+## Facadgranskning v4 — förberett 2026-11-03
+
+**Status: källkod och isolerade tester, ännu inte aktiverat i produktion.**
+Detta är nästa separata paket efter den tidigare FORM v2-installationen;
+tidigare v1/v2/v3-kontrakt får samma sparade beteende.
+
+- `20261103224500_construction_facade_piece_gate.sql` äger den generella
+  databasspärren: approved Plan Step, exakt Construction, avgränsade fasadboxar,
+  lokal maximal längd, max antal berörda delar, senaste rev och separat
+  `awaiting_review`/`correction_requested`/`accepted`. Normal autentiserad
+  klient får endast läsa ett begränsat, projektkontrollerat status-RPC.
+- `20261103224600_lada_facade_piece_configuration.sql` konfigurerar enbart
+  **Lilla ladan**, utan att skriva om dess 78 instanser. Förkontrollen kräver
+  den sparade Plan-revisionen, vald Solution, målrev och Construction rev 4.
+  Fasadgränserna utgår från befintligt koordinatsystem och är inte uppmätta
+  platsmått. Fördelningen av de sju fönstren är fortfarande okänd.
+- `20261103224700_construction_piece_review_catalog.sql` pinnar v4 för
+  **nya** jobb, och får aktiveras först efter både `ask-bob` och `bob-worker`
+  uppdaterats. Konrad får serverläst status och återkopplar exakt 3D-vy och
+  sparad revision. En gammal konstruktion utan FORM får en avgränsad
+  granskningspunkt, inte fiktiva komponentmappningar.
+- Spara/visa/granska/rätta testas genom den riktiga skrivvägen med isolerad
+  PGlite, inklusive nekad främmande medlem, flera fasader i samma ändring,
+  två skilda arbetsområden på samma fasad, fel visad vy och rättelse på fel
+  fasad. Det är **inte** ett betalt modelltest eller ett byggbarhetsbevis.
+
+**Säker installationsordning:** bekräfta att Ladan saknar aktiva jobb och att
+plan/konstruktion/mål är oförändrade; kontrollera nya SQL- och TypeScript-källor
+mot den mergade committen; tillämpa först schema och visuella äldre underlag;
+driftsätt och läs tillbaka båda Edge-funktionerna; aktivera katalog v3 och
+därefter v4 enligt exakt migrationshistorik. Kontrollera live-RPC:s status
+innan ägaren gör ett avgränsat Ladan-prov. Ingen automatisk modellkörning,
+stegväxling, site-release eller full CI ingår.
+
+**Kvar efter teknisk driftsättning:** Bob behöver faktiskt visa rätt fasadvy
+för användaren, få naturligt svar och rätta placeringen. Den första Step:en
+samordnar fortfarande gamla lösnings- och målkällor innan fönster-Step:en får
+fokus; koden ska inte hoppa över den för att ett nytt gate-RPC finns.

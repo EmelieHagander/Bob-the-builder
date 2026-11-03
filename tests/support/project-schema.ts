@@ -2,6 +2,10 @@ import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from './pglite.ts'
 import { setupSharedSocial } from './shared-social.ts'
 
+/** Operator-approved production data backfills are not schema for synthetic projects. */
+export const isSyntheticSchemaMigration = (name: string) => name.endsWith('.sql')
+  && !/_(living_plan_backfill_five_projects|lada_facade_piece_configuration)\.sql$/.test(name)
+
 /** Full Bob schema with isolated fake Auth/Storage/shared-app contracts.
  * An explicit boundary is only for testing a historical migration policy. */
 export async function projectSchema(beforeMigration?: (pg: PGlite, name: string) => Promise<void>, throughMigration?: string, omittedMigrations: readonly string[] = []) {
@@ -31,13 +35,10 @@ export async function installProjectSchema(pg: Pick<PGlite, 'exec'>, beforeMigra
   for (const directory of ['../../db/migrations/', '../../supabase/migrations/']) {
     if (directory.includes('supabase')) await setupSharedSocial(pg)
     const root = new URL(directory, import.meta.url)
-    for (const name of (await readdir(root)).filter(f => f.endsWith('.sql')).sort()) {
+    for (const name of (await readdir(root)).filter(isSyntheticSchemaMigration).sort()) {
       // Explicit omissions reproduce a known hosted installation gap. Ordinary
       // full-schema tests apply every schema migration.
       if (omittedMigrations.includes(name)) continue
-      // Owner-authorised, project-specific data repair needs real project and
-      // organiser rows. It is not a schema migration for synthetic PGlite.
-      if (name === '20261103205118_living_plan_backfill_five_projects.sql') continue
       await beforeMigration?.(pg, name)
       await pg.exec(await readFile(new URL(name, root), 'utf8'))
       if (name === throughMigration) return
