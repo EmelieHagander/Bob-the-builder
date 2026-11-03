@@ -108,6 +108,21 @@ the worker), no `previous_response_id`, forced `tool_choice` falls back to
 compaction that drops older thinking blocks may be refused by preserved-thinking
 enforcement on newer accounts.
 
+**Claude tool continuation is already handled before the provider adapter.**
+For jobs pinned with `context_strategy_version=1`, `ask-openai.ts` routes Bob
+and his colleagues through `createBobContextContinuation`. The response ID held
+by `project-answer.ts` or `bob-workers.ts` is a **server-local chain key**, not
+an Anthropic API parameter. For Claude, the continuation layer rebuilds the
+whole provider input and removes that key before dispatch: main Bob's
+`complete_request_version=1` path uses `buildBobRequest`, while colleagues use
+the stateless-role path. Both preserve Claude's native assistant tool uses,
+signed thinking and matching tool results, including across saved checkpoints.
+Calling `anthropic-service.ts` directly with `previousResponseId` correctly
+fails closed; that rejection is not evidence that Bob's live tool loop sends
+the pointer to Claude. Local no-provider regression coverage is in
+`tests/bob-claude-continuation-wire.test.ts`. This is a technical protocol
+check, **not** a successful paid Ladan/Konrad model run.
+
 Catalog-backed Bob calls use the resolved `aiDefinition`; settings prompt text
 cannot replace their catalog prompts. The shared provider service exposes this
 as a generic opt-in, preserving other apps' existing configuration path.
