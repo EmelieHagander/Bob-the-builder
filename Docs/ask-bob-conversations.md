@@ -442,6 +442,18 @@ Activation followed the compatible runtime release via
 this behavior. No Actions or paid model runs were performed as part of the
 technical rollout. [Exact hosted versions and remaining acceptance](bob-workpad-release-2026-11-03.md).
 
+**Bounded Konrad pieces — prepared 2026-11-03, not yet live-tested.**
+`worker_piece_progress_version` 1 pins an additional boundary only on new
+claimed worker jobs with checkpoints and workpads. Konrad chooses a natural
+wall/opening scope, uses the existing small part/parameter tools and maintains
+the next piece in his note. Code returns one construction write per provider
+batch and reads its exact current revision immediately; a failed readback
+returns `needs_verification` with the saved receipt instead of risking a second
+unverified change. This makes an early save useful to the existing verified
+context renewal, without weakening form-scope/whole-model checks. It does not
+infer where a window belongs or replace the owner's eventual design review.
+Older pinned jobs keep their prior batch and readback behavior.
+
 *Manifests with `memory_stair_version` 1 replace the rewritten brief with the
 [memory stair](#memory-stair); this describes the pinned behavior.*
 

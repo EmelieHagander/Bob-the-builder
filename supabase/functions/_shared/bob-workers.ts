@@ -165,6 +165,24 @@ function verifiedConstructionSave(receipt: Record<string, unknown>, readback: un
     : null
 }
 
+/** A piece is confirmed only after reopening the exact current revision. A
+ * successful save (or its automatic check) does not by itself prove persistence
+ * or that the requested design is complete. */
+export function verifiedConstructionPiece(receipt: Record<string, unknown>, opened: unknown): { artifact_id: string; revision: number } | null {
+  const id = typeof receipt.artifact_id === 'string' ? receipt.artifact_id : receipt.record_id
+  const rev = receipt.revision
+  const row = opened as Record<string, unknown> | null
+  return typeof id === 'string' && Number.isSafeInteger(rev) && Number(rev) > 0
+    && row?.status === 'ok' && row.artifact_id === id && row.revision === rev
+    && row.current_revision === rev && row.source_state === 'current' && row.archived === false
+    ? { artifact_id: id, revision: Number(rev) } : null
+}
+
+const CONSTRUCTION_PIECE_WRITES = new Set([
+  'save_construction_draft', 'edit_construction_parts', 'change_construction_parameters',
+  'change_construction_roles',
+])
+
 export async function runWorker(opts: {
   aiCatalog: AiCatalogSession; worker: WorkerDefinition; callModel: ModelCall; userId: string
   job: { job: string; findings: string | null }; context?: WorkingContext; history: Messages
@@ -174,6 +192,9 @@ export async function runWorker(opts: {
   readKnowledge?: () => Promise<Record<string, unknown>>; variables?: Record<string, string>
   /** A note is separate from the immutable worker model/checkpoint chain. */
   workpadEnabled?: boolean; workpad?: WorkpadSnapshot
+  /** New claimed Konrad jobs only: one construction mutation per model batch,
+   * followed by a code-only readback before the next piece can be attempted. */
+  pieceProgress?: { readSaved(receipt: Record<string, unknown>): Promise<unknown> }
   /** Pinned only for new claimed structure jobs with durable workpads. A fresh
    * chain is allowed after a persisted note and an exact saved-record readback. */
   verifiedRenewal?: { loadWorkpad(step: number): Promise<WorkpadSnapshot> }
@@ -257,17 +278,25 @@ export async function runWorker(opts: {
     if (!response.toolCalls?.length) return finish({ status: 'ok', worker: roleKey, report: typeof response.data === 'string' ? response.data : '', calls })
     if (!response.responseId) return finish({ status: 'unavailable', worker: roleKey, calls })
     previous = response.responseId; messages = []
+    let pieceWriteSeen = false
+    let incompletePiece: { receipt: Record<string, unknown>; reason: string } | null = null
     for (const call of response.toolCalls.slice(0, 8)) {
       if (!await opts.hasAccess()) throw new Error('project_denied')
       let args: unknown = null
       try { args = JSON.parse(call.function.arguments) } catch { /* the handler reports invalid input */ }
       const name = call.function.name, began = Date.now()
       let result: any
-      if (!allowed.has(name)) result = { status: 'not_offered' }
+      // A parallel tool batch cannot rely on a save it has not observed yet.
+      // Answer every tool_call_id, but require Konrad to see the saved revision
+      // before issuing any further calls, including an updated workpad note.
+      if (opts.pieceProgress && pieceWriteSeen) result = { status: 'deferred', reason: 'construction_piece_boundary',
+        message: 'First read the preceding construction save and its verification. Reissue this call only if still needed.' }
+      else if (!allowed.has(name)) result = { status: 'not_offered' }
       else {
         try { result = await opts.session.execute(name, args) }
         catch (error) { rethrowContinuation(error); throw error }
       }
+      if (opts.pieceProgress && allowed.has(name) && CONSTRUCTION_PIECE_WRITES.has(name) && !pieceWriteSeen) pieceWriteSeen = true
       if (result && typeof result === 'object' && 'diagnostics' in result) { const { diagnostics: _d, ...content } = result; result = content }
       const status = String(result?.status ?? 'returned')
       calls.push({ tool: NAME.test(name) ? name : 'invalid_name', status })
@@ -278,6 +307,42 @@ export async function runWorker(opts: {
           renewal.savedReceiptIndex = receipts.length - 1
           renewal.notedRevision = null
         }
+      }
+      if (opts.pieceProgress && CONSTRUCTION_PIECE_WRITES.has(name) && status === 'saved') {
+        const receipt = receipts.at(-1)!
+        let opened: unknown
+        try { opened = await opts.pieceProgress.readSaved(receipt) }
+        catch (error) {
+          rethrowContinuation(error)
+          if (error instanceof Error && error.message === 'project_denied') throw error
+          opened = { status: 'unavailable' }
+        }
+        const confirmed = verifiedConstructionPiece(receipt, opened)
+        let checked = result?.check
+        let checkedByAuto = false
+        // The write-state wrapper already checks ordinary saves and part edits.
+        // Other construction writes (for example roles) need the same server
+        // check before the next piece; no extra model review is introduced.
+        if (confirmed && checked?.status !== 'checked' && opts.autoCheck) {
+          const [fresh] = await opts.autoCheck([confirmed])
+          checked = fresh
+          if (fresh) {
+            receipts.push({ ...saveReceipt('check_construction_draft', fresh),
+              status: String(fresh.status ?? 'returned'), by: 'code' })
+            checkedByAuto = true
+          }
+        }
+        // The write-state wrapper already performed the server check on the
+        // saved revision. Record that fact, so finish() does not check it again.
+        if (confirmed && checked?.status === 'checked' && !checkedByAuto)
+          receipts.push({ ...saveReceipt('check_construction_draft', confirmed), status: 'checked', by: 'write_state' })
+        // A bounded status goes back to the model, not the full overview/table.
+        result = { ...result, piece_readback: confirmed
+          ? { status: 'verified', ...confirmed, approval_not_implied: true }
+          : { status: 'unverified', reason: 'saved_revision_readback_missing', approval_not_implied: true },
+          piece_check: { status: checked?.status ?? 'unavailable', concept_ready: checked?.concept_ready === true } }
+        if (!confirmed) incompletePiece = { receipt, reason: 'saved_revision_readback_missing' }
+        else if (checked?.status !== 'checked') incompletePiece = { receipt, reason: 'saved_revision_check_incomplete' }
       }
       if (name === 'update_workpad' && status === 'noted' && result?.unchanged !== true
         && renewal.savedReceiptIndex !== null && Number.isSafeInteger(result?.revision))
@@ -290,6 +355,10 @@ export async function runWorker(opts: {
     if (opts.progress) await opts.progress.save(structuredClone(opts.verifiedRenewal
       ? { version: 2 as const, step, previous: previous ?? null, messages, calls, receipts, order, renewal }
       : { version: 1 as const, step, previous, messages, calls, receipts, order }))
+    // Preserve the write receipt, but do not allow another piece when the exact
+    // current revision could not be reopened. Bob can recover from this state.
+    if (incompletePiece) return finish({ status: 'needs_verification', reason: incompletePiece.reason,
+      worker: roleKey, saved_receipt: incompletePiece.receipt, calls })
     // A new provider conversation must never inherit orphaned tool outputs or
     // unsaved geometry. Reset only after the last protocol batch was answered,
     // a later workpad note was saved, and an exact revision was read back.
