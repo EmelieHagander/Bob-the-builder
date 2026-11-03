@@ -10,7 +10,7 @@ const tool = (name: string) => ({ type: 'function' as const, function: { name, d
 const catalog = {
   definition: () => ({ metadata: { continuation_input_tokens: 1000, context_input_ceiling_tokens: 96000, continuation_summary_tokens: 1600, retained_tool_exchanges: 1,
     continuation_retention_version: 2 } }),
-  role: () => ({ systemMessage: 'Catalog-owned role instructions.' }),
+  role: () => ({ systemMessage: 'Catalog-owned role instructions.', providerAdapter: 'openai-responses-v1' }),
   schema: (name: string) => ({ name, schema: { type: 'object', properties: { result: { type: 'string' } } } }),
   tool,
 } as unknown as AiCatalogSession
@@ -523,7 +523,7 @@ test('a worker refreshes at the pinned specialist limit while Bob keeps his own'
 
 test('a stateless (Claude) role is sent the full local chain with its native items instead of a response pointer', async () => {
   const sent: OpenAIServiceOptions[] = []
-  const claude = { ...catalog, role: () => ({ systemMessage: 'Catalog-owned role instructions.', model: { provider: 'anthropic' } }) } as unknown as AiCatalogSession
+  const claude = { ...catalog, role: () => ({ systemMessage: 'Catalog-owned role instructions.', model: { provider: 'anthropic' }, providerAdapter: 'anthropic-messages-v1' }) } as unknown as AiCatalogSession
   const thinking = { type: 'reasoning', provider: 'anthropic', encrypted_content: JSON.stringify({ type: 'thinking', thinking: 'plan', signature: 'sig' }) }
   let main = 0
   const adapter = createBobContextContinuation({ version: 1, aiCatalog: claude, callModel: async options => {
