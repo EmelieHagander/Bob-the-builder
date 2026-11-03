@@ -395,7 +395,7 @@ generic sequence or enlarge the assignment to finishing the entire project.
 
 ### What memory keeps
 
-**Private workpads — source implementation, 2026-11-03; not yet released.**
+**Private workpads — deployed 2026-11-03; live-model acceptance pending.**
 Bob, Konrad, Rita and Mattias each have one small, replaceable note scoped to the
 current private project thread and role (`bob_private.bob_agent_workpads`). It
 contains a goal, next step, at most six short steps/blockers, at most twelve
@@ -410,19 +410,18 @@ A note is **not** a second project memory: every reference is a hint to reopen
 the exact source, and neither a note nor its `noted` response counts as a
 construction save, check, approval or verified receipt. Canonical project
 revisions and actual tool receipts stay with their current owners. The notebook
-adds no model, and no new budget. It intentionally does **not** reset an active
+adds no model, and no new budget. The workpad alone does **not** reset an active
 specialist model chain or change the existing 150k-token continuation policy:
 doing that before a confirmed save could revive the repeated-read/unsaved-work
-regression. A measured, receipt-gated chain renewal is separate follow-up work.
+regression. The separately gated, verified renewal is described below.
 
-Source release order: apply `20261103120000_bob_agent_workpads.sql`, deploy
-compatible `bob-worker` and `ask-bob`, then activate
-`20261103121000_bob_agent_workpads_catalog.sql` when older active jobs can
-continue on the compatible runtime. Neither migration nor either deployment has
-been performed by the source change. The owner has deferred test/CI runs during
-rapid development; live acceptance and context-growth measurements are open.
+Release order completed: `20261103121713_bob_agent_workpads.sql` (private table),
+matching `bob-worker` v186 and `ask-bob` v218, then
+`20261103122145_bob_agent_workpads_catalog.sql` (catalog activation).
+The owner deferred test/CI runs during rapid development; live-model acceptance
+and context-growth measurements remain open. [Release evidence](bob-workpad-release-2026-11-03.md).
 
-**Verified Konrad context renewal — follow-up source change, not released.**
+**Verified Konrad context renewal — deployed 2026-11-03; live-model acceptance pending.**
 The optional `worker_verified_renewal_version` 1 is pinned only on new claimed
 jobs with worker checkpoints and private workpads. Konrad retains the earlier
 150k continuation/compaction policy; an additional early renewal is possible
@@ -438,11 +437,10 @@ boundary, then the smaller next-state checkpoint is stored. If any guard fails,
 the pre-existing chain and progress checkpoint remain unchanged. Worker progress
 version 2 is pinned separately; active version-1 jobs are never reinterpreted.
 
-The release remains opt-in: merge the workpad source and its migrations first,
-deploy compatible `bob-worker` and `ask-bob`, then activate
-`20261103122000_bob_worker_verified_renewal_catalog.sql`. This extra migration
-enables only new jobs. No production migration, deployment, Actions or paid
-model run has been performed as part of the follow-up source change.
+Activation followed the compatible runtime release via
+`20261103122214_bob_worker_verified_renewal_catalog.sql`; new jobs alone pin
+this behavior. No Actions or paid model runs were performed as part of the
+technical rollout. [Exact hosted versions and remaining acceptance](bob-workpad-release-2026-11-03.md).
 
 *Manifests with `memory_stair_version` 1 replace the rewritten brief with the
 [memory stair](#memory-stair); this describes the pinned behavior.*
