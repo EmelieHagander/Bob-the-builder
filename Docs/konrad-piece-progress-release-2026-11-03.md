@@ -50,3 +50,42 @@ the activation is not attempted twice.
   exact readback/check and a continuation working on the next opening. Confirm
   eventual aggregate drawing and saved-window count with the owner. Jobs already
   started before activation retain their previous contract.
+
+## FORM A/B v2 — uppföljande release 2026-11-03
+
+**Status: produktionsfunktioner och v2-katalog driftsatta och verifierade; verklig
+projekt-/modellacceptans återstår.** Denna uppföljning ersätter inte det
+historiska v1-releasebeviset ovan.
+
+- Källa: [PR #424](https://github.com/EmelieHagander/Bob-the-builder/pull/424),
+  mergad till `main` som `f83e4cbe23ed9efc5c9622be5206c9d679288e7f`.
+  GitHubs `main` jämfördes och var identisk före driftsättning.
+- Mål: Supabase-projekt `yuobtgoidmmmwfqenkau`. Förkontroll och sista
+  aktiveringskontroll visade 101 avslutade, 5 avbrutna och **inga pågående jobb**.
+- `bob-worker` **v188**, `verify_jwt=false` oförändrat: 135/135 filer återlästa
+  och exakt jämförda med planerat paket. Bundle SHA-256
+  `170966deede6994e1b91ab5bef4e19fdc9cbae4eed5ac3467a0fb18dc7e40e08`.
+- `ask-bob` **v220**, `verify_jwt=true` oförändrat: 137/137 filer återlästa
+  och exakt jämförda. Bundle SHA-256
+  `5b7d11f8440a2d7f460366b9749daadb6132cfe3fc7e8a7017436c8897387ec7`.
+- Efter båda kodkontrollerna aktiverades katalogmigrationen
+  `20261103155409_konrad_form_piece_evidence_catalog.sql`; dess SQL är
+  oförändrad från det granskade källutkastet. Supabase tilldelade tidsstämpeln
+  `20261103155409` istället för utkastets `20261103152000`; filnamnet
+  synkades till den faktiska migrationshistoriken utan omkörning.
+  Slutlig liveavläsning: `agent-contract.ask-bob` **v22**, publication
+  `konrad-form-piece-evidence-v2`, `worker_piece_progress_version=2`;
+  båda Edge-funktionerna aktiva i angivna versioner.
+
+Det som nu är installerat för **nya, v2-pinnade Konrad-jobb** är en avgränsad
+planfokusuppgift med revision, kodbaserat sparat FORM-delbevis från exakt
+konstruktionsrevision, riktad kontroll där identiteten är känd och tydligt
+`unknown`/paus vid otillräckligt underlag. Ingen extra mini-/nano-modell
+infördes. Befintliga v1-jobb är bakåtkompatibla.
+
+14/14 fokuserade lokala tester, `npm run typecheck` och `git diff --check`
+passerade före merge. Ett orelaterat PGlite-integrationsfall var blockerat av
+en äldre fixture/Claude-5.5-katalogavvikelse; detta är inte ett grönt
+end-to-end-bevis. Inga GitHub Actions, betalda modellprov eller full CI kördes.
+Prova Ladan och dess fönster stegvis; bekräfta varje sparad revision,
+helhetsritning, krav och användarens återkoppling separat.
