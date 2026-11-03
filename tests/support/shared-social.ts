@@ -13,6 +13,9 @@ export async function setupSharedSocial(pg: Pick<PGlite, 'exec'>) {
     create table shared.ai_models(
       model_name text primary key,
       provider text not null default 'openai',
+      -- Real shared schema fields used by provider-neutral tier publications.
+      display_name text,
+      notes text,
       model_type shared.ai_model_type,
       is_active boolean not null default true,
       is_current_for_type boolean not null default false,
