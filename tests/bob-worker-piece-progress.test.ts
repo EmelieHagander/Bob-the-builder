@@ -148,3 +148,37 @@ test('v2 pauses before the next piece when FORM evidence cannot be reopened', as
   assert.equal(observed.length, 1)
   assert.equal((report.saved_receipt as Record<string, any>).piece_evidence.reason, 'prior_construction_revision_missing')
 })
+
+test('v2 preserves a legacy construction save but stops when no FORM scope can be proven', async () => {
+  const { result, observed, commands } = harness([
+    model('one', [call('a', 'edit_construction_parts')]), model('must-not-run'),
+  ], { enabled: true, inspect: revision => ({ status: 'no_form_scope', revision,
+    verification: 'unverified', note: 'Legacy construction without component mapping.' }) })
+  const report = await result
+  assert.deepEqual([report.status, report.reason], ['needs_verification', 'saved_form_scope_missing'])
+  assert.equal(observed.length, 1, 'Konrad must not start the next workpiece just because the save checked')
+  assert.equal(commands.filter(c => c.name === 'edit_construction_parts').length, 1)
+  assert.equal((report.saved_receipt as Record<string, any>).piece_evidence.status, 'no_form_scope')
+})
+
+test('v2 stops on incomplete mapped scope even if the overall construction check passed', async () => {
+  const { result, observed, scopedChecks } = harness([
+    model('one', [call('a', 'edit_construction_parts')]), model('must-not-run'),
+  ], { enabled: true, inspect: () => ({ status: 'form_scoped', affected_scope_complete: false,
+    affected_scope_gaps: ['changed_instances_without_form_mapping'], scope_check_ids: [],
+    verification: 'unverified' }) })
+  const report = await result
+  assert.deepEqual([report.status, report.reason], ['needs_verification', 'saved_form_scope_unbounded'])
+  assert.equal(observed.length, 1)
+  assert.deepEqual(scopedChecks, [], 'an incomplete scope is never sent to the local component checker')
+  assert.deepEqual((report.saved_receipt as Record<string, any>).piece_evidence.affected_scope_gaps,
+    ['changed_instances_without_form_mapping'])
+})
+
+test('v2 fails closed on an unfamiliar FORM status while v1 remains unchanged', async () => {
+  const { result, observed } = harness([
+    model('one', [call('a', 'edit_construction_parts')]), model('must-not-run'),
+  ], { enabled: true, inspect: () => ({ status: 'new_unreviewed_result' }) })
+  assert.deepEqual([(await result).status, (await result).reason], ['needs_verification', 'saved_form_evidence_unavailable'])
+  assert.equal(observed.length, 1)
+})
