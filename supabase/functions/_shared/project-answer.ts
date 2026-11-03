@@ -294,6 +294,8 @@ export type ProjectAnswerOptions = {
   /** Pinned per new claimed turn: confirm each Konrad construction change before
    * he starts another natural piece; never alter an in-flight worker protocol. */
   workerPieceProgress?: boolean;
+  /** v3: finish a checked piece at the owner-visible review boundary. */
+  workerDesignReview?: boolean;
   /** New v2 jobs: caller-authorized, code-only reads of the approved Plan and
    * exact Construction revisions, not a second planner or worker tool. */
   workerFormPiece?: {
@@ -471,6 +473,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       if (opts.workerFormPiece && key === 'structure'
         && (!opts.workerPieceProgress || !constructionAutoCheck || !worker.tools.includes('check_construction_draft')))
         throw new Error('worker_form_piece_unavailable')
+      if (opts.workerDesignReview && key === 'structure' && !opts.workerFormPiece)
+        throw new Error('worker_design_review_unavailable')
       const plain = !!worker.knowledge
       const job = parseWorkerJob(raw, plain)
       if (!job) return { status: 'invalid', issues: [{ path: '$', expected: plain ? 'request (text)' : 'job (text) and findings (text or null)' }] }
@@ -505,7 +509,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
             const read = readbackReads([receipt])[0]
             if (!read || !('tool' in read) || read.label !== 'construction') return { status: 'unavailable' }
             return withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments)))
-          }, ...(opts.workerFormPiece ? { inspectSaved: async (receipt: Record<string, unknown>, toolArgs: unknown) => {
+          }, ...(opts.workerDesignReview ? { pauseForDesignReview: true } : {}), ...(opts.workerFormPiece ? { inspectSaved: async (receipt: Record<string, unknown>, toolArgs: unknown) => {
             const id = typeof receipt.artifact_id === 'string' ? receipt.artifact_id : receipt.record_id
             const revision = receipt.revision
             if (typeof id !== 'string' || !Number.isSafeInteger(revision) || Number(revision) < 1)
