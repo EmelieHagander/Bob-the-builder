@@ -213,4 +213,67 @@ test('construction presentation and feedback retain exact source, component scop
     assert.equal((await call(owner,'read_construction_draft',[project,legacySaved.recordId,4,null])).form_refinement,undefined)
   })
 
+  await t.test('a local new window can fasten to an unchanged long plate without opening distant work',async()=>{
+    const placement=(x:number,z:number)=>({x,y:0,z,rx:0,ry:0,rz:0})
+    const plate={id:'plate',primitive:'box',material_ref:null,x_mm:6000,y_mm:95,z_mm:45}
+    const post={id:'post',primitive:'box',material_ref:null,x_mm:45,y_mm:95,z_mm:250}
+    const original:any={contract_version:1,units:'mm',assembly_id:'long_anchored_facade',views:['front','top'],
+      definitions:[plate,post],instances:[
+        {id:'through_plate',definition_id:'plate',placement:placement(0,0)},
+        {id:'existing_post',definition_id:'post',placement:placement(850,45)}]}
+    const message='Create an isolated long front plate for local-window verification.'
+    const reply=await turn(message)
+    const savedLong=await reply.write({kind:'construction',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,
+      data:{key:'long-anchor-fixture',title:'Long front plate',description:'Synthetic unchanged through-member',area_id:null,
+        target_revision:legacyTarget,change_note:'First synthetic checkpoint',recipe:original,
+        parameters:parameterPacket(project,original),materials:['plate','post'].map(definition_id=>({
+          definition_id,material_id:material.recordId,material_revision:1,part_id:null,part_revision:null})),
+        joints:[],instance_policy:manufacturePolicy(original),open_questions:['This synthetic frame is not approved for fabrication.']}})
+    assert.equal(savedLong.revision,1)
+    const plan=(await call(owner,'project_plan_read',[project,null])).record
+    assert.equal(plan.focus_step_id!==null,true)
+    await pg.query(`insert into bob_private.construction_piece_policies
+      (project_id,artifact_id,plan_revision,step_id,max_affected_instances,max_piece_run_mm)
+      values($1,$2,$3,$4,6,2200)`,[project,savedLong.recordId,plan.revision,plan.focus_step_id])
+    await pg.query(`insert into bob_private.construction_piece_scopes
+      (artifact_id,project_id,position,view_id,label,x_min,x_max,y_min,y_max,z_min,z_max)
+      values($1,$2,1,'front','Long front fixture',-100,6500,-100,500,-100,2500)`,[savedLong.recordId,project])
+    const near={id:'near_new',definition_id:'post',placement:placement(400,45)}
+    const far={id:'far_new',definition_id:'post',placement:placement(4500,45)}
+    const detached={id:'detached_new',definition_id:'post',placement:placement(400,500)}
+    const joint=(id:string)=>({id:'j_'+id,first:{instance_id:'through_plate',face:'z_max'},
+      second:{instance_id:id,face:'z_min'},method:'butt',reason:'Local attachment to the unmodified plate.',fasteners:[]})
+    const testRevision=async(additions:any[],attached:string[],definitions=original.definitions)=>pg.transaction(async tx=>{
+      const recipe={...original,definitions,instances:[...original.instances,...additions]}
+      await tx.query(`insert into bob.artifact_revisions
+        select (jsonb_populate_record(null::bob.artifact_revisions,to_jsonb(a)||
+          jsonb_build_object('revision',2))).* from bob.artifact_revisions a
+        where a.project_id=$1 and a.artifact_id=$2 and a.revision=1`,[project,savedLong.recordId])
+      await tx.query(`insert into bob.artifact_construction_revisions
+        select (jsonb_populate_record(null::bob.artifact_construction_revisions,to_jsonb(c)||
+          jsonb_build_object('artifact_revision',2,'recipe',$3::jsonb,'joints',$4::jsonb))).*
+        from bob.artifact_construction_revisions c
+        where c.project_id=$1 and c.artifact_id=$2 and c.artifact_revision=1`,
+        [project,savedLong.recordId,JSON.stringify(recipe),JSON.stringify(attached.map(joint))])
+      await tx.query(`insert into bob.artifact_construction_instance_policies
+        (project_id,artifact_id,artifact_revision,policy) values($1,$2,2,$3::jsonb)`,
+        [project,savedLong.recordId,JSON.stringify(manufacturePolicy(recipe))])
+      await tx.exec('set constraints bob.z_enforce_construction_piece immediate')
+    })
+    await assert.rejects(testRevision([],['existing_post']),/construction_piece_too_spread_out/,
+      'a joint only between old parts must retain the entire long span')
+    await assert.rejects(testRevision([near,far],['near_new','far_new']),/construction_piece_too_spread_out/,
+      'two distant new attachments cannot hide behind a common long member')
+    await assert.rejects(testRevision([detached],['detached_new']),/construction_piece_too_spread_out/,
+      'a new joint to a non-touching piece does not earn a local-anchor exemption')
+    await assert.rejects(testRevision([near],['near_new'],[{...plate,x_mm:6050},post]),/construction_piece_too_spread_out/,
+      'a physically altered long plate must keep its full span even when joined to a local piece')
+    assert.equal((await call(owner,'read_construction_piece_progress',[project,savedLong.recordId])).status,'ready')
+    await testRevision([near],['near_new'])
+    const review=await call(owner,'read_construction_piece_progress',[project,savedLong.recordId])
+    assert.equal(review.status,'awaiting_review')
+    assert.equal(review.pending_view,'front')
+    assert.equal(review.saved_revision,2)
+  })
+
 })
