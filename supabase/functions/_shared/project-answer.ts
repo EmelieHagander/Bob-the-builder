@@ -252,6 +252,8 @@ export interface BobAnswerState {
 export interface BobAnswerCheckpoint {
   state?: BobAnswerState
   save(state: BobAnswerState): Promise<void>
+  /** Runtime scheduling, after a saved continuing specialist step and all stop checks. */
+  afterWorkerStep?(): void
 }
 export type ProjectAnswerOptions = {
   aiCatalog: AiCatalogSession;
@@ -345,7 +347,7 @@ export async function runProjectAnswer(opts: ProjectAnswerOptions): Promise<Proj
   }
   if (saved?.result) return structuredClone(saved.result)
   let latest = saved
-  const checkpoint = opts.checkpoint ? { state: saved, save: async (state: BobAnswerState) => {
+  const checkpoint = opts.checkpoint ? { ...opts.checkpoint, state: saved, save: async (state: BobAnswerState) => {
     await opts.checkpoint!.save(state); latest = state
   } } : undefined
   const result = await runProjectAnswerFromState({ ...opts, checkpoint })
@@ -549,7 +551,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         ...(opts.workerCheckpoint ? { progress: { ...(resume ? { restored: resume.progress } : {}), save: async (progress: WorkerProgress) => {
           workerState = { key, index: workerIndex, session: session!.exportState(), ...(projectName !== undefined ? { projectName } : {}), progress }
           await save(workerStep)
-        } } } : {}),
+        }, ...(opts.checkpoint?.afterWorkerStep ? { afterStep: opts.checkpoint.afterWorkerStep } : {}) } } : {}),
         readCurrent: async () => key === 'materials' ? opts.lookup.search({ dataset: 'materials', query: null, status: null, area_id: null, record_id: null }) : null,
         // In order, one at a time: the journal replays reads by position.
         // Auto check (2026-11-01): a saved construction left unchecked is checked by the server, in order.

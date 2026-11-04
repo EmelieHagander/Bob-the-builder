@@ -24,7 +24,7 @@ type Step = (o: OpenAIServiceOptions) => OpenAIServiceResponse<string>
 const ANSWER = 'Konrad sparade lådan och servern kontrollerade den. Ritningen återstår.'
 
 async function turn(opts: { finalAnswer: boolean; bob: Step[]; konrad: Step[]; budget?: ReturnType<typeof createBobModelBudget>;
-  checkpoint?: { state?: BobAnswerState; onSave?: (state: BobAnswerState, budget: ReturnType<typeof createBobModelBudget>) => void }; yieldOnFinal?: boolean; workerCheckpoint?: boolean; journal?: BobJournal; failSave?: boolean }) {
+  checkpoint?: { state?: BobAnswerState; onSave?: (state: BobAnswerState, budget: ReturnType<typeof createBobModelBudget>) => void; afterWorkerStep?: () => void }; yieldOnFinal?: boolean; workerCheckpoint?: boolean; journal?: BobJournal; failSave?: boolean }) {
   const catalog = catalogFixture(), projectId = 'p', message = 'Konrad, gör lådan 500 mm bred.', hasAccess = async () => true
   const lookup = createProjectLookup(projectId, async (_p, input) => ({ data: { records: input.dataset === 'project' ? [{ id: projectId, name: 'Lådan' }] : [], related: [], truncated: false }, error: null }) as any, undefined, undefined, undefined, { unlimitedWork: true })
   const writer = createProjectWriter(projectId, message, async () => { throw Error('No write requested') }, async () => ({ data: [], error: null }), async () => ({ data: [], error: null }))
@@ -52,7 +52,7 @@ async function turn(opts: { finalAnswer: boolean; bob: Step[]; konrad: Step[]; b
     unlimitedWork: true, corePreload: true, readToolPolicy, completeRequest: true, deadline: Infinity, observe: v => observations.push(v),
     ...(opts.finalAnswer ? { finalAnswer: true } : {}),
     ...(opts.workerCheckpoint ? { workerCheckpoint: true } : {}),
-    ...(opts.checkpoint ? { checkpoint: { state: opts.checkpoint.state, save: async (state: BobAnswerState) => opts.checkpoint!.onSave?.(structuredClone(state), budget) } } : {}),
+    ...(opts.checkpoint ? { checkpoint: { state: opts.checkpoint.state, save: async (state: BobAnswerState) => opts.checkpoint!.onSave?.(structuredClone(state), budget), afterWorkerStep: opts.checkpoint.afterWorkerStep } } : {}),
     // The production dispatch: every call shares one budget; tool_choice 'none' marks the final answer.
     callModel: catalogCall(async options => opts.journal ? opts.journal.run('model:' + options.functionName, options, () => model(options)) : model(options), catalog) } as any)
   async function model(options: OpenAIServiceOptions): Promise<OpenAIServiceResponse<string>> {
@@ -74,6 +74,36 @@ const reports: Step = () => ({ ...reply(.1, 'Lådan är sparad.'), responseId: '
 const stalls: Step = () => { throw new BobContinuation('yield', 'segment_wall') }
 const answer: Step = () => ({ ...reply(.05, ANSWER), responseId: 'b-final', outputPhase: 'final_answer' })
 const konrad = (list: OpenAIServiceOptions[]) => list.filter(o => o.functionName === 'structure-worker')
+
+test('CPU segments resume one saved specialist step at a time without duplicate dispatches or writes', async () => {
+  const store = { entries: [] as JournalEntry[], async save(entry: JournalEntry) { this.entries.push(structuredClone(entry)) } }
+  let saved: { state: BobAnswerState; journal: ReturnType<BobJournal['exportState']> } | undefined
+  const constructionCalls: string[] = []
+  const scripts = [[reads(1)], [reads(2)], [saves], [reports]]
+  let yields = 0
+  for (let claim = 0; claim < scripts.length; claim++) {
+    const journal = createBobJournal(store, Infinity, Date.now, new Map(), { unlimitedWork: true })
+    if (saved) journal.restoreState(saved.journal)
+    const run = () => turn({ finalAnswer: true, workerCheckpoint: true, journal,
+      bob: claim === 0 ? [handOver] : [answer], konrad: scripts[claim],
+      checkpoint: { state: saved?.state,
+        onSave: state => { saved = { state: structuredClone(state), journal: journal.exportState() } },
+        afterWorkerStep: () => { yields++; throw new BobContinuation('yield', 'worker_step') } } })
+    if (claim < 3) {
+      await assert.rejects(run, e => e instanceof BobContinuation && e.message === 'worker_step')
+      assert.equal(saved!.state.worker!.progress.step, claim)
+      constructionCalls.push(saved!.state.worker!.progress.calls.at(-1)!.tool)
+    } else {
+      const done = await run()
+      assert(done.result.ok); assert.equal(done.result.answer, ANSWER)
+      assert.equal(saved!.state.worker, undefined)
+    }
+  }
+  assert.equal(yields, 3)
+  assert.deepEqual(constructionCalls, ['read_construction_draft', 'read_construction_draft', 'save_construction_draft'])
+  assert.equal(store.entries.filter(e => /^model:structure-worker:\d+$/.test(e.key)).length, 4)
+  assert.equal(store.entries.filter(e => /^model:ask-bob:\d+$/.test(e.key)).length, 2)
+})
 
 test('an unavailable Konrad is not started again in the same turn, including across checkpoints', async () => {
   const states: BobAnswerState[] = []

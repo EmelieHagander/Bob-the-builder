@@ -1070,6 +1070,10 @@ export async function answerWithOpenAi(opts: {
   }
   const answerCheckpoint = checkpoint ? {
     state: restart?.state.answer as BobAnswerState | undefined,
+    // One continuing specialist step per Edge invocation. Its saved state and
+    // journal resume the same job without replaying paid calls. The worker
+    // invokes this only after conflict/review/renewal decisions have settled.
+    afterWorkerStep: () => { throw new BobContinuation('yield', 'worker_step') },
     save: async (answer: BobAnswerState) => {
       await checkpoint.commit({ version: 1, answer,
         components: Object.fromEntries(Object.entries(components).filter((entry): entry is [string, NonNullable<typeof entry[1]>] => !!entry[1])
