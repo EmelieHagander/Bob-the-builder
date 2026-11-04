@@ -578,6 +578,8 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
+**Nästa handling efter driftkontroll 2026-11-04:** granska/merga test- och migrationssynkningen enligt [uppföljningsauditen](p25-live-window-anchor-followup-2026-11-04.md#follow-up-audit-and-remaining-acceptance), där båda riktade testfilerna nu är gröna. P2.5 är installerad, men Ladans verkliga fönster-/3D-/återkopplingsprov återstår i #438. Entréns två senaste bildturer sparade ändringar men slutade med återställda kvitton: bevara ursprunglig felkod genom återhämtningen och reproducera bildöppning → fortsatt arbete → slutsvar innan generell projekthjälp friskförklaras. Ingen ny modellkörning eller full CI startas automatiskt. Det bredare P2-uppdragets återupptagning och deduplicering är fortsatt separata acceptanskrav.
+
 **Installerat 2026-11-01 — kodkontroll efter Konrads jobb och lösningen först; lådprov 16 godkänt (`bob-worker` v164, `ask-bob` v196, [bevis](foundation-verification.md#solution-first-install-2026-11-01)):**
 Bob sparar beställarens beslut i den valda lösningen innan Konrad får jobbet, och
 koden kontrollerar en konstruktion som Konrad lämnat okontrollerad. Lådprovet
