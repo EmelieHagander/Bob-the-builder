@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicy, type ToolFollowup } from '../supabase/functions/_shared/project-tools/session.ts'
 import { projectSchema } from './support/project-schema.ts'
 
-const MIGRATION = '20261104091000_bob_p2_source_tool_followups.sql'
+const MIGRATION = '20261104085031_bob_p2_source_tool_followups.sql'
 const SQL = readFileSync(new URL('../supabase/migrations/' + MIGRATION, import.meta.url), 'utf8')
 const additionMatch = SQL.match(/additions constant jsonb := '([\s\S]*?)'::jsonb;/)
 assert(additionMatch, 'the published followup list must be data, not just a prompt')
