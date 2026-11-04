@@ -1,6 +1,6 @@
 # P2.5 — Live Ladan acceptance: long-member anchor and outer handoff stop
 
-**Current status (2026-11-04, 20:42 UTC):** PR #452 is merged and byte-verified in `bob-worker` v195 / `ask-bob` v227. Terminal specialist stops and compact working state are installed. Ladan revision 5 remains saved and unarchived. Issue #438 remains open for the next owner-initiated show/review of that saved revision and hosted CPU verification; no paid attempt was started by this implementation. Earlier numbered deployments and attempts below are historical evidence.
+**Current status (2026-11-04, 21:11 UTC):** PR #455 is merged and byte-verified in `bob-worker` v196 / `ask-bob` v228. O1–O4 are installed, including the summary RPC and terminal-journal cleanup migration `20261104211000`; 724 old working journal rows were removed, with saved domain revisions and receipts preserved. Ladan revision 5 remains saved and unarchived. Issue #438 remains open for the next owner-initiated show/review of that saved revision and hosted CPU verification; no paid attempt was started by this implementation. Earlier numbered deployments and attempts below are historical evidence.
 
 ## Follow-up audit and remaining acceptance
 
@@ -409,8 +409,9 @@ address a CPU problem whose expensive work is in active processing.
 
 ## O1–O4 implementation, 2026-11-04
 
-The owner authorized all four implementation items. These changes are source
-complete and locally verified; deployment evidence follows separately.
+The owner authorized all four implementation items. These changes are deployed
+and locally verified; the following release evidence distinguishes hosted source
+verification from the still-pending ordinary owner/model acceptance.
 
 - **O1:** new executions pin `workingStateVersion:1`. Construction table, detail,
   saved-result and work-packet pages fit contiguous prefixes using exponential
@@ -462,6 +463,47 @@ late-save rejection, idempotent cancel, migration drain guard and terminal-only
 backfill. Both Edge entry points typecheck with the documented local import-map
 limitation. No full CI or paid provider run was started. O5 attribution/hosted
 CPU measurement and the owner show/review of saved revision 5 remain open.
+
+### Verified O1–O4 rollout, 21:10–21:11 UTC
+
+- PR #455 merged as `96795de1238e749c4770940f62623ac1d6581313`.
+  Merge tree `9d9679cbd2e2042b8d4f6388ee2f79c1b6f2befe` equals the
+  locally reviewed/tested source tree. Eight shared runtime files changed.
+- Before migration: verified exact project `yuobtgoidmmmwfqenkau`, zero active
+  and paused jobs, **724** terminal journal rows / **5,528,848** logical value
+  bytes, **110** Artifact revisions, **745** write receipts and Ladan revision 5.
+- Applied `bob_runtime_readback_and_terminal_cleanup` once as hosted version
+  **20261104211000**. The repository filename and SQL test reference are aligned
+  to that version; SQL is unchanged. Do not apply it again under the earlier
+  CLI-created timestamp. Installed function-body MD5 equals source:
+  summary `0b80c060577f197dd6f5b480a45dda64`,
+  cleanup `89651b2cc0ab0a9ab692a1f939cadebc`.
+- The summary is invoker-only and executable by authenticated callers, not anon
+  or service_role. The private trigger helper has no direct client/service
+  execution grant. Ordinary caller/stranger/revocation behavior was exercised
+  in isolated SQL tests, not by manufacturing a production caller identity.
+- After migration and deployment: **zero** journal rows and active jobs,
+  **110** Artifact revisions, **745** receipts and Ladan revision **5**.
+  The terminal cleanup trigger is enabled. Allocated relation space may remain
+  reusable by Postgres; deleted logical values are not a disk-shrink claim.
+- `bob-worker` **v196**: all **137** retrieved files byte-match deployment
+  input; capability authentication / existing `verify_jwt=false` preserved.
+  Bundle SHA-256 `dc15d61301a8a54880cacd66f985cf291bd8797bc3b8189302df9eeb4607f5fe`.
+- `ask-bob` **v228**: all **139** retrieved files byte-match deployment input;
+  existing `verify_jwt=true` and import map preserved.
+  Bundle SHA-256 `9912a3a9c96635c436d2f82f7234dbe06fb40981b37392b854a88816358c79d7`.
+- Post-change security advisors report no finding on the new RPC/helper and no
+  Bob/Bob-private ERROR groups. Existing unrelated advisor notices were not
+  bulk-fixed or treated as performance proof. Full CI and paid runs were not run.
+- The three SQL readback/cleanup tests passed again after the migration filename
+  alignment; source SQL SHA-256 is unchanged. Both Edge entry points typechecked
+  again against the final runtime code and the documented local declarations.
+
+Rollback requires draining jobs carrying v3 tool-session state. The schema
+additions can remain during an Edge rollback; already-cleared transient journals
+are not recreated. Domain revisions, receipts and cost/recovery evidence remain
+available. O5 instrumentation and actual saved-window delivery/CPU acceptance
+remain open; successful deployment does not close #438.
 
 ## Production evidence, read-only
 

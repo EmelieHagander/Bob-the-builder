@@ -9,7 +9,7 @@ import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import {manufacturePolicy} from './support/construction-instance-policy-fixture.ts'
 
 let pg:PGlite,owner:string,stranger:string
-const migration='20261104205402_bob_runtime_readback_and_terminal_cleanup.sql'
+const migration='20261104211000_bob_runtime_readback_and_terminal_cleanup.sql'
 const call=async(uid:string|null,name:string,args:unknown[],role='authenticated'):Promise<any>=>
  (await asProjectUser(pg,uid,`select ${name}(${args.map((_,n)=>'$'+(n+1)).join(',')}) result`,args,role)).rows[0].result
 const service=(name:string,args:unknown[])=>call(null,'bob.'+name,args,'service_role')
