@@ -25,7 +25,7 @@ Inga skrivningar sker av denna mekanism. Misslyckad läsning, saknad authority, 
 ## Verifiering och release
 
 - SQL har provkörts inne i en transaktion med kontroll av aktiverat kataloginnehåll och sedan `ROLLBACK`; efterkontroll visar fortfarande produktionens ursprungliga `bob.tools` v43 med 18 övergångar.
-- Regressionstester i `tests/bob-p2-source-followups.test.ts` granskar lyckad läsning, misslyckad läsning, nästa-steg-gräns, återställd checkpoint, RLS/policy-gates, äldre manifest, schemaavvikelse och idempotent katalogpublicering. Testsuiten kräver repo/PGlite och får inte kallas godkänd förrän den verkligen körts.
+- Regressionstester i `tests/bob-p2-source-followups.test.ts` granskar lyckad läsning, misslyckad läsning, nästa-steg-gräns, återställd checkpoint, levande behörighets-/policygates, äldre manifest, schemaavvikelse och idempotent katalogpublicering. Testsuiten kräver repo/PGlite och får inte kallas godkänd förrän den verkligen körts.
 - Kontrollera att inga Bob-jobb kör, kör riktade tester och läs den mergade SQL-filen innan migrationen appliceras. Efteråt återläs aktiv `bob.tools`, exakta appended followups och migrationshistorik; synka versionsfilnamnet vid behov.
 - Nästa riktiga test mäter `describe_tool`, antal Opus-anrop, cache misses, korrekt sparade resultat, RLS, start/slut och kostnad mot de två tidigare turerna. Ingen garanterad procentuell kostnadssänkning påstås utan ny observation.
 
