@@ -1,6 +1,6 @@
 # P2.1 – Kortare verktygsväg för källavstämning (2026-11-04)
 
-**Status:** Implementerad som versionerad AI-katalogändring; verklig AI-/kostnadsacceptans återstår. Ingen ny modell, leverantör, tabell, roll, Edge-funktion eller genväg för skrivbehörighet införs.
+**Status:** Produktionsaktiverad i katalog v44; verklig AI-/kostnadsacceptans återstår. Ingen ny modell, leverantör, tabell, roll, Edge-funktion eller genväg för skrivbehörighet införs.
 
 ## Verklig baslinje (Lilla ladan)
 
@@ -25,8 +25,9 @@ Inga skrivningar sker av denna mekanism. Misslyckad läsning, saknad authority, 
 ## Verifiering och release
 
 - SQL har provkörts inne i en transaktion med kontroll av aktiverat kataloginnehåll och sedan `ROLLBACK`; efterkontroll visar fortfarande produktionens ursprungliga `bob.tools` v43 med 18 övergångar.
+- Därefter tillämpades samma mergade migration som `20261104085031_bob_p2_source_tool_followups`. Produktionens aktiva `bob.tools` är v44 med 20 övergångar, och de två nya läses tillbaka exakt. Förkontrollen och efterkontrollen visade noll aktiva Bob-jobb.
 - Regressionstester i `tests/bob-p2-source-followups.test.ts` granskar lyckad läsning, misslyckad läsning, nästa-steg-gräns, återställd checkpoint, levande behörighets-/policygates, äldre manifest, schemaavvikelse och idempotent katalogpublicering. Testsuiten kräver repo/PGlite och får inte kallas godkänd förrän den verkligen körts.
-- Kontrollera att inga Bob-jobb kör, kör riktade tester och läs den mergade SQL-filen innan migrationen appliceras. Efteråt återläs aktiv `bob.tools`, exakta appended followups och migrationshistorik; synka versionsfilnamnet vid behov.
+- Driftsättningen gjordes först efter kontroll av frånvarande aktiva jobb, verifierad SQL-källa och ett rollback-prov. Migrationsfilnamnet matchas med den faktiska databashistoriken. De nya regressionstesterna ska fortfarande köras i komplett repo-/PGlite-miljö före nästa bredare P2-ändring.
 - Nästa riktiga test mäter `describe_tool`, antal Opus-anrop, cache misses, korrekt sparade resultat, RLS, start/slut och kostnad mot de två tidigare turerna. Ingen garanterad procentuell kostnadssänkning påstås utan ny observation.
 
 **Avgränsning:** Detta är P2.1, inte en ny planerare och inte en generell lösning på all kontextkostnad. Eventuella nästa P2-steg måste baseras på mätta, icke-identiska förfrågningar och reell uppgiftskvalitet. 
