@@ -56,6 +56,44 @@ was run. Bundle SHA-256 values:
 and run the single-window Ladan acceptance. The available browser currently shows
 Bob's sign-in page. Do not manufacture an owner session through database credentials.
 
+## Owner-initiated first-window attempt, 2026-11-04 19:08 UTC
+
+**Failed acceptance: runtime CPU termination before a construction write.**
+Job `3c19c94e-55db-4434-ad00-046a974ddc06`, turn
+`5b15e19d-0bb8-48ba-a0e8-4d4c21d08146`, ran on worker v193.
+Bob delegated once to Konrad; three completed structure-worker model calls read
+the saved construction, work sources and dependencies. The last recorded model
+response requested `read_construction_draft` / `view=dependencies` on revision 4.
+No new construction revision or facade review attempt was saved.
+
+At 19:09:22.638 UTC, execution `8770432d-c7d5-49f5-ab2a-d5ecdf6fdb80`
+was terminated with **reason=CPUTime**, **cpu_time_used=2002 ms** and about
+53.7 MB total memory. The job row stayed running after the process died; no
+ordinary turn-failure diagnostic could execute. It had one claim and five
+completed model calls costing **USD 0.8024049**, all priced. This is a distinct
+runtime failure; it does not prove the P2.5 window writer rejects the geometry.
+
+Under the owner's delegated investigation authority, the failed process's job
+was explicitly finished through the existing private chat-job finalizer with
+`cpu_time_investigation`, without exposing or changing its claim credential.
+Readback: status failed, zero active Ladan jobs, construction still revision 4.
+The job was stopped before automatic recovery could repeat the work. No second
+paid attempt was started. The exact construction read was retained locally for
+reproduction, not published as a test fixture.
+
+Local probes on that 78-instance source: dependency selection ~4.7 ms wall,
+transitive work selection ~11.4 ms, and a 6000-token dependency page ~189.6 ms
+(~210 ms process CPU). Different hardware/runtime means these are diagnostic
+measurements, not hosted CPU guarantees. The dependency page alone did not
+reproduce a two-second termination. Investigate cumulative token counting,
+checkpoint serialization and segment boundaries before choosing a correction;
+do not attribute the CPU limit to one pure selector without evidence.
+
+**Next:** reproduce/profile the complete worker segment locally, then correct its
+CPU consumption or safe durable segmentation. Verify replay does not buy the same
+model result again. Only then repeat the owner-initiated single-window acceptance.
+The saved-window, exact-3D and feedback-hold acceptance is still open in #438.
+
 ## Production evidence, read-only
 
 - The live Ladan turn started 11:52 UTC, completed 12:12 UTC. It made **40 model calls**, **three `ask_structure_worker` handoffs**, cost telemetry approximately **$6.01**, and **no new Construction revision**. The saved draft remains revision **4**, 78 instances, pinned to target **29** / Solution **21**; the selected design is target **35** / Solution **27**. The correct Plan focus was saved to the facade-opening Step.
