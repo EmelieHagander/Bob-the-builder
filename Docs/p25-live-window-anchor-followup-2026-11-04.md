@@ -627,6 +627,28 @@ No browser executable is installed, so 320/390/1280 interaction, modal, image-er
 reload and project-switch browser proof remains unrun. No full CI/workflow or
 paid model/CAD run was started. New live behavioral/cost acceptance is still open.
 
-Release status: prepared for reviewed merge and Edge deployment. Web publication
-is the owner's manual `Deploy to GitHub Pages` action; its workflow was not
-started. This status is updated below after exact-source deployment readback.
+### Exact-source rollout, 22:20 UTC
+
+[PR #458](https://github.com/EmelieHagander/Bob-the-builder/pull/458) merged as
+`a7cf6bca4eeaebadaaef8f40beeef04e01f690c7`, tree
+`d195def5dec8f5fa3dd3ac61d0efd625b3efb4d4`. The remote tree exactly matched
+the locally tested implementation. Both old function hashes/versions were
+rechecked unchanged and zero queued/running jobs were verified immediately
+before deployment to project `yuobtgoidmmmwfqenkau`.
+
+| Function | Version | Files | Bundle SHA-256 | JWT |
+|---|---:|---:|---|---|
+| bob-worker | 197 | 138 | `bd6e6c25dbbdf5b8eb4edb560b25a3d76bd15f29af9fde7526619f885ae3dd3f` | false, existing capability auth |
+| ask-bob | 229 | 140 | `3a76b506107fb36bf4520991e92c46117da455ece9147df5b20a637e96888d94` | true |
+
+Each deployed dependency file was read back and compared byte-for-byte with
+its expected bundle: eight existing shared files replaced and `drawing-work.ts`
+added to each, with other files, entrypoints, import maps and JWT settings
+preserved. No schema migration, project cleanup or model/CAD call was needed.
+
+**Backend installed; frontend merged, not published.** Web publication remains
+the owner's manual `Deploy to GitHub Pages` workflow; it was not started.
+The browser/owner acceptance described above is still open. After publication,
+reopening the existing transcript can show drawing revision 3 without another
+paid Bob turn. This release does not close #438 or prove a new full-run cost/CPU
+outcome.
