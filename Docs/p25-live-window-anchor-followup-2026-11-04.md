@@ -135,6 +135,51 @@ cost and per-invocation CPU evidence. This
 mitigates cumulative work within one invocation; it does not prove that every
 individual tool/model step fits the two-second envelope or close #438.
 
+## Window saved; CPU failure during return to Bob — 19:49 UTC retry
+
+The owner-initiated retry after #448 is job
+`ef2055f8-89ab-457f-a4aa-ff8eb4018a6a`, turn
+`315fce18-4c7b-4706-aa3e-abc63c4dee51`, on worker v194.
+It made **12 completed model calls / USD 1.381521**, with no unpriced calls,
+across **10 claims**. Logs show normal `worker_step` yields and later claims;
+step scheduling is active. Several claims reuse the same runtime execution ID,
+so a new claim is not evidence of a fresh isolate or a guaranteed CPU reset.
+
+**Persisted result:** Construction `ed7c0d27-78b4-4ca6-a829-9d5580b456e7`
+advanced from revision 4 to **5** at 19:52:32 UTC, selected target **35** /
+Solution revision **27**. Recipe instances went **78 → 86**, joints **171 → 190**.
+Added parts: `hw_jl`, `hw_jr`, `hw_hdr`, `hw_hdr_b`, `hw_sill`, `hw_cr1`,
+`hw_cr2`, `hw_cr3`. SQL comparison found **zero changed or removed old instances**.
+The change note describes one 1200 × 1500 mm front hen-room opening as an
+unmeasured design choice. A persisted facade hold records `awaiting_review`,
+`view_id=front`, exact revision 5. This verifies persistence and the review gate,
+not the correct visual interpretation, complete functional meaning or strength.
+
+The code check was saved as result
+`cs_9dedfdc006d311af9f3dd8ebf615e5eb933f744b09e43f23d236a45b601f6f19`:
+`status=checked`, `concept_ready=false`, one top-level issue
+`requirement_interpretation_unverified`, and `fabrication_ready=false`.
+There is no completed Bob reply, matching 3D presentation or owner feedback
+recorded for this turn; the whole acceptance remains failed.
+
+At **19:52:35.930 UTC**, runtime execution
+`c8385509-27bb-46e5-88fe-1da35e2d22ca` terminated with **CPUTime / 2206 ms**.
+It had served an earlier claim as well. Scheduling made progress possible but did
+not remove this CPU failure. The latest saved checkpoint was revision **14**,
+with worker step **9** and the saved revision/check/review-boundary receipts.
+The checkpoint and **114 journal entries** were captured locally before terminal
+cleanup, without job credentials. The private job finalizer then recorded
+`cpu_time_after_saved_window`; readback confirms failed job, zero active Ladan
+jobs and preserved revision 5. No third paid attempt was started.
+
+**Next:** profile the captured post-save continuation and the readback/return-to-Bob
+path. Inspect interruption after a saved worker step but before terminal review
+handling: the snapshot has receipts, while local terminal variables are not stored.
+Before retrying, prove interruption cannot skip the review hold or dispatch another
+piece. Also repair specialist tool telemetry: its outer step/index keys can be
+reused across restored claims, overwriting earlier tool events; model journal keys
+remain distinct. Do not rebuild this saved window or mark #438 accepted.
+
 ## Production evidence, read-only
 
 - The live Ladan turn started 11:52 UTC, completed 12:12 UTC. It made **40 model calls**, **three `ask_structure_worker` handoffs**, cost telemetry approximately **$6.01**, and **no new Construction revision**. The saved draft remains revision **4**, 78 instances, pinned to target **29** / Solution **21**; the selected design is target **35** / Solution **27**. The correct Plan focus was saved to the facade-opening Step.
