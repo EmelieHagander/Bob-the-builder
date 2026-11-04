@@ -1,6 +1,6 @@
 # P2.4 – Safe selected-source reconciliation and Plan focus (2026-11-04)
 
-**Status:** Code and versioned catalog/migration changes on the P2.3 branch. Production migration and Edge activation must be verified separately. No production geometry was changed while developing.
+**Status:** Merged via PR #437; production active 2026-11-04. Source-only and facade semantic guards installed as migrations 20261104113252 and 20261104113311, both Edge functions verified active (ask-bob v223 / bob-worker v191), and catalog followup installed 20261104113817 (`bob.tools` v45, 21 followups). Live AI/window acceptance remains outstanding; no production geometry was changed.
 
 ## Confirmed root cause
 
