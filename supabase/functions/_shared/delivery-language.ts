@@ -28,7 +28,7 @@ export function parseDeliveryLanguage(value:unknown):DeliveryLexicon|null{
  * text carries only the notice meaning, missing results and receipt labels:
  * outcome codes and Bob's internal guidance stay in model-facing channels. */
 export interface NoticeInput { notice?: DeliveryNotice; missing?: string[]; receipts?: ProjectWriteReceipt[] }
-const receiptLabel=(r:ProjectWriteReceipt)=>r.label+(r.revision!==undefined?' · v'+r.revision:'')
+const receiptLabel=(r:ProjectWriteReceipt)=>r.label+(typeof r.revision==='number'&&Number.isSafeInteger(r.revision)?' · v'+r.revision:'')
 export function neutralDeliveryNotice(input: NoticeInput): string {
   return [...(input.notice?['⚠']:[]), ...(input.missing??[]).map(x=>'○ '+x), ...(input.receipts??[]).map(r=>'✓ '+receiptLabel(r))].join('\n')
 }
