@@ -336,6 +336,77 @@ active jobs before rollback as well. Revision 5 / 86 instances remains the next
 The deployment is technically verified. Exact facade/3D delivery, owner feedback
 and full hosted-segment CPU behavior still require the authorized owner test.
 
+## Follow-up optimization audit, 2026-11-04
+
+**Scope:** read-only production inspection and offline probes after #452/#453.
+Retrieved `bob-worker` v195 and `ask-bob` v227 still have the release hashes
+above. No Bob job has been created after that release at inspection time; hosted
+acceptance remains untested. No paid calls, production cleanup or runtime changes
+were made. Review performed directly, without an independent agent review.
+
+### Remaining findings, in implementation order
+
+| ID | Priority | Verified finding | Next change and constraint |
+|---|---|---|---|
+| O1 | P1 CPU | `construction-views.ts::page` still recounts an increasingly large complete envelope per added row. The small code readback avoids it, but ordinary table/parts/parameter reads still use it. | Reduce page-fit probes, cache immutable row work and verify the final exact envelope. Preserve token bounds, Unicode fragments, coverage and revision/selection-bound cursors; pin changed page behavior so existing replay inputs remain stable. |
+| O2 | P1 state | The captured main toolbox is 116,406 chars and the specialist session 133,485. Both carry 110 policy rows: 84 are equal; the remaining 26 differ only in `active`. Policy snapshots alone total 150,526 chars. Shelf/card descriptions add more derived copies. The pending request also duplicates the exact 19,218-char `answer.tools`. | Store one bound policy/catalog representation with per-role visibility overrides and compact session state. Regenerate derived cards/schemas deterministically. Retain the exact offered-version fence, current access checks and original pending model input; a reference must not become permission or follow a later mutable catalog. |
+| O3 | P2 reads | `readSavedSummary` returns a small value but its transport still calls `read_construction_draft`, downloading/journaling the full geometry first. Captured read results are about 130,699–149,295 chars. Generic construction reads use positional `readRpc`, whereas `lookupReuse` covers a separate lookup path. | Add a thin, caller-authorized server readback at the construction owner and bounded reuse of immutable bodies. Refresh current revision/source/archive/access separately; avoid caching the whole authoritative envelope across writes or revocation. Preserve journal ordering/version compatibility. |
+| O4 | P2 cleanup bug | Live `bob_job_steps` retains **724 rows / 5,528,848 logical value bytes** for **five cancelled jobs** dated Oct 29–Nov 1. `bob_finish_chat_job` deletes steps; installed `bob_cancel_job` does not. The job's terminal trigger deletes turn checkpoints only, not steps. | Make terminal job cleanup consistent and race-safe, then separately remove the proven leftovers after review. Preserve saved domain writes, write-idempotency receipts, costs and required recovery evidence. These old journals are not evidence of the active CPU failure. |
+| O5 | P1 measurement | Stable tool-event indices are installed, but the metrics role allow-list still maps `structure-worker`, `drawing-worker` and `materials-worker` to `other`. No per-phase whole-invocation CPU attribution establishes the remaining fatal line. | Attribute worker roles and correlate content-free phase timings, input/state sizes and token-fit counts with hosted shutdown CPU/isolate evidence. Wall time is not CPU time; do not tune scheduling or raise limits from helper benchmarks alone. |
+
+Offline instrumentation wrapped only the existing token-count function, retaining
+the current page algorithm and captured revision-5 inputs. One 6000-token page:
+
+| Read | Token-count calls | Cumulative serialized input to counting | Returned chars |
+|---|---:|---:|---:|
+| Overview table | 208 | 1,538,444 | 16,031 |
+| All parts | 108 | 954,959 | 16,943 |
+| One named part | 3 | 2,587 | 897 |
+| Parameters | 72 | 699,988 | 18,283 |
+
+These counts show repeated processing, not additional billed model tokens. Cold
+instrumented CPU timings vary substantially and include tokenizer/cache/GC
+effects; they are not substituted for Supabase's per-invocation CPU evidence.
+Code-only report readback remains small and bypasses this pager after #452.
+
+The prior ~552k terminal-state projection was reproduced with the captured job's
+actual unlimited-work policy and a successful exact saved-result reopen. Legacy
+v2 bodies are deliberately retained until that persistence proof; attempting the
+probe with the fixture's default finite budget stops at `budget_exhausted` and
+does not demonstrate reference compaction. New successful persisted checks use
+the v3 reference path directly. The projection is not a post-release live run.
+
+### Lower-priority candidates and exclusions
+
+- `importObservation` hashes/canonicalizes the report and rebuilds/copies the
+  local observations array. A fresh successful check passes through observe,
+  persistence and import. Profile and remove repeated validation of the same
+  immutable body, keeping the first hash/project/revision proof intact.
+- `ask-openai` exports all component state, `project-answer` clones answer state,
+  and commit still clones at transport/return boundaries. The returned full
+  commit snapshot is discarded by the runtime caller. The >500k warning also
+  serializes nested components on each commit. Optimize ownership/diagnostics
+  after O2, preserving isolation and the failed-save cursor behavior.
+- Token-count caches have entry-count caps (4096 message entries, 64 surfaces),
+  not byte caps. Large keys across warm-isolate jobs merit a bounded-byte policy
+  and measurement. This is a potential memory-retention risk, not a proven leak.
+- Current turn checkpoints have **zero live rows**. The 704,512-byte physical
+  relation size is allocated storage, not 704k of active memory on every run.
+  Old project revisions and receipts likewise do not automatically enter prompts.
+- Advisors report 63 Bob/Bob-private unindexed-FK candidates and 122 unused-index
+  notices. Small frequently scanned tables include `people` (~31 rows) and jobs
+  (~115 rows). These statistics do not prove a missing-index CPU root cause;
+  examine actual query plans before adding or dropping indexes. See the
+  [FK advisor](https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys)
+  and [index-use advisor](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index).
+  Security advisor notices were inspected but a full authorization audit is
+  outside this performance review; no grants/RLS were modified.
+
+**Recommended next implementation:** O1 and O2, with O5 measurement alongside;
+then O3 and the isolated O4 cleanup correction. Retain archived domain history
+and make it on-demand. Do not bulk-delete revisions, receipts or indexes to
+address a CPU problem whose expensive work is in active processing.
+
 ## Production evidence, read-only
 
 - The live Ladan turn started 11:52 UTC, completed 12:12 UTC. It made **40 model calls**, **three `ask_structure_worker` handoffs**, cost telemetry approximately **$6.01**, and **no new Construction revision**. The saved draft remains revision **4**, 78 instances, pinned to target **29** / Solution **21**; the selected design is target **35** / Solution **27**. The correct Plan focus was saved to the facade-opening Step.
