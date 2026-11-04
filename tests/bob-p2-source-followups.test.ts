@@ -39,7 +39,7 @@ function harness(followups: ToolFollowup[] = additions) {
 
 test('P2 source followups load adjacent tools only after successful, authorized reads', async () => {
   assert.deepEqual(additions, [
-    { after_tool: 'read_solution_context', statuses: ['ok'], tools: ['read_project_edit_context', 'change_solution_evidence'] },
+    { after_tool: 'read_solution_context', statuses: ['ok'], tools: ['change_solution_evidence'] },
     { after_tool: 'read_project_edit_context', statuses: ['ok'], tools: ['edit_project_record'] },
   ])
   const f = harness()
@@ -49,6 +49,10 @@ test('P2 source followups load adjacent tools only after successful, authorized 
   assert.equal((await f.session.execute('read_project_edit_context', {})).status, 'not_offered',
     'a read cannot grant another tool inside the same model batch')
   assert.equal((await f.session.execute('change_solution_evidence', {})).status, 'not_offered')
+  assert.deepEqual(offered(await f.session.prepare()), [
+    'change_solution_evidence', 'read_solution_context', 'describe_tool',
+  ], 'ordinary solution reads do not preload an unrelated editor')
+  assert.equal((await f.session.execute('describe_tool', { name: 'read_project_edit_context' })).status, 'ok')
   assert.deepEqual(offered(await f.session.prepare()), [
     'change_solution_evidence', 'read_project_edit_context', 'read_solution_context', 'describe_tool',
   ])
