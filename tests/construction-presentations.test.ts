@@ -147,6 +147,31 @@ test('construction presentation and feedback retain exact source, component scop
     const add=(source:any,id:string,x:number,y:number)=>({ ...source,
       instances:[...source.instances,{id,definition_id:'rail',placement:{x,y,z:600,rx:0,ry:0,rz:0}}] })
     const base={...legacyData,target_revision:legacyTarget}
+    await t.test('P2.4 rejects repinning an unchanged facade to a different selected design', async()=>{
+      const rejected=pg.transaction(async tx=>{
+        await tx.query(`insert into bob.artifact_revisions
+          select (jsonb_populate_record(null::bob.artifact_revisions,to_jsonb(a)||
+            jsonb_build_object('revision',2,'target_revision',$3,'solution_id',$4,
+              'solution_revision',1,'solution_title','Frame and later drawer'))).*
+          from bob.artifact_revisions a
+          where a.project_id=$1 and a.artifact_id=$2 and a.revision=1`,
+          [project,legacySaved.recordId,target.revision,solution])
+        await tx.query(`insert into bob.artifact_construction_revisions
+          select (jsonb_populate_record(null::bob.artifact_construction_revisions,to_jsonb(c)||
+            jsonb_build_object('artifact_revision',2))).*
+          from bob.artifact_construction_revisions c
+          where c.project_id=$1 and c.artifact_id=$2 and c.artifact_revision=1`,
+          [project,legacySaved.recordId])
+        await tx.query(`insert into bob.artifact_construction_instance_policies(project_id,artifact_id,artifact_revision,policy)
+          select project_id,artifact_id,2,policy from bob.artifact_construction_instance_policies
+          where project_id=$1 and artifact_id=$2 and artifact_revision=1`,
+          [project,legacySaved.recordId])
+        await tx.exec('set constraints bob.z_enforce_construction_piece immediate')
+      })
+      await assert.rejects(rejected,/construction_piece_changed_design_without_geometry/)
+      assert.equal((await status()).status,'ready')
+      assert.equal((await call(owner,'read_construction_draft',[project,legacySaved.recordId,null,null])).revision,1)
+    })
     const edit=async(key:string,revision:number,recipe:any)=>{
       const message=`Change synthetic facade piece: ${key}.`,reply=await turn(message)
       return reply.write({kind:'construction',record_id:legacySaved.recordId,expected_revision:revision,expected_updated_at:null,
