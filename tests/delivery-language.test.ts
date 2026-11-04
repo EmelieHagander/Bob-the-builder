@@ -42,7 +42,7 @@ test('recovery formats unversioned Tasks without misleading vnull labels', async
   callModel:async()=>response(lexicon)})
  const unversioned={...receipt,revision:null} as unknown as WriteReadback
  assert.equal(format.fallback({notice:'recovered',receipts:[unversioned]}),
-   lexicon.recovered+'\\n\\n'+lexicon.saved_label+'\\n• Étagère')
+   lexicon.recovered+'\n\n'+lexicon.saved_label+'\n• Étagère')
  const numbered={...receipt,revision:4} as WriteReadback
  assert.match(format.fallback({receipts:[numbered]}),/Étagère · v4/)
  assert.doesNotMatch(format.fallback({receipts:[unversioned]}),/vnull/)
