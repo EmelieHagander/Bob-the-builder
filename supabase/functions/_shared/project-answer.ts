@@ -4,6 +4,7 @@ import type { WorkRecords } from './project-work-records.ts'
 import type { SolutionActions } from './project-solution-actions.ts'
 import type { ProjectEdits } from './project-edits.ts'
 import type { ConstructionTools } from './construction-draft.ts'
+import { constructionPieceHandoffGate } from './construction-piece-handoff.ts'
 import type { KnowledgeReader } from './building-knowledge.ts'
 import type { OperationalReader } from './project-operations.ts'
 import { fingerprint, rethrowContinuation } from './bob-job-journal.ts'
@@ -492,15 +493,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           if (error instanceof Error && error.message === 'project_denied') throw error
           constructionPiece = { status: 'unavailable' }
         }
-        if (constructionPiece.status === 'awaiting_review') return {
-          status: 'awaiting_design_review', reason: 'show_saved_construction', worker: 'structure-worker',
-          saved_revision: constructionPiece.saved_revision, artifact_id: constructionPiece.artifact_id,
-          view_id: constructionPiece.pending_view, user_feedback: 'not_recorded',
-          note: 'Show this exact saved construction and matching facade view. Ask naturally whether the placement matches before another construction edit.',
-        }
-        if (constructionPiece.status === 'plan_changed' || constructionPiece.status === 'unavailable' || constructionPiece.status === 'ambiguous') return {
-          status: 'needs_verification', reason: 'construction_piece_gate_unavailable', worker: 'structure-worker',
-        }
+        const preflight = constructionPieceHandoffGate(constructionPiece)
+        if (preflight) return preflight
       }
       // A provider failure already exhausted the journal's bounded replay.
       // Bob may report the failure, but not start an equally costly fresh chain
