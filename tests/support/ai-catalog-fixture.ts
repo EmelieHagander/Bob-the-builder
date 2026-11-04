@@ -548,6 +548,12 @@ for(const migration of migrations){
    shelves:box.definition.shelves.map((shelf:any)=>shelf.label==='Drawings and CAD'?{...shelf,tools:[...policies.map(p=>p.name),...shelf.tools]}:shelf)}
   publishAs(box,publication);box.metadata.build_workers_version=1;versions.set(box.key,versions.get(box.key)!+1)
  }
+ if(source.includes('do $runtime_operation_reads$')){
+  const box=seed.find(row=>row.key==='bob.tools'),role=seed.find(row=>row.key==='role.materials-worker')
+  if(!box.definition.workers.materials.reads.includes('read_project_work'))box.definition.workers.materials.reads.push('read_project_work')
+  if(!role.definition.tool_keys.includes('tools.read_project_work'))role.definition.tool_keys.push('tools.read_project_work')
+  for(const row of [box,role]){publishAs(row,'bob-runtime-operation-reads-v1');versions.set(row.key,versions.get(row.key)!+1)}
+ }
  const checkReads=source.match(/\$bob_check_reads_list\$([\s\S]+?)\$bob_check_reads_list\$/)
  if(checkReads){
   const box=seed.find(row=>row.key==='bob.tools')

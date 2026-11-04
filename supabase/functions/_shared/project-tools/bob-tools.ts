@@ -1,3 +1,5 @@
+import {runtimeToolSpec,type RuntimeToolSurface} from '../runtime-tool-surface.ts'
+import type {WorkerOperations,OperationRole} from '../worker-operations.ts'
 import { drawingWorkerSpec } from '../drawing-work.ts'
 import { SUPERSEDED_PLAN_LINK_TOOLS, type PlanLinks } from '../project-plan-links.ts'
 import type { BuildTreeTools } from '../build-tree.ts'
@@ -90,6 +92,8 @@ export const DRAWING_CONTINUATION_PRELOAD = ['read_construction_draft', 'check_c
 
 export function createBobToolSession(opts: {
   drawingWorker?:boolean;
+  workerOperation?:{role:OperationRole;operations:WorkerOperations};
+  runtimeSurface?:()=>RuntimeToolSurface;
   aiCatalog?: AiCatalogSession;
   compactToolState?: boolean;
   /** Build guides (2026-10-30): the owner's switch. Off hides design_project_cad's assembly order. */
@@ -242,9 +246,17 @@ export function createBobToolSession(opts: {
     }] : []),
     ...(opts.extraTools ?? []),
   ]
-  return createToolSession({ definitions: registered.filter(def=>!opts.drawingWorker||!['plan_cad_pieces','compose_cad_shell','link_cad_shell_steps','link_project_drawing','link_drawing_gap','ensure_drawing_gap_task'].includes(def.spec.function.name)).map(def=>{
+  return createToolSession({ definitions: registered.filter(def=>!!opts.workerOperation||!opts.drawingWorker||!['plan_cad_pieces','compose_cad_shell','link_cad_shell_steps','link_project_drawing','link_drawing_gap','ensure_drawing_gap_task'].includes(def.spec.function.name)).map(def=>{
     // A bound drawing operation cannot escape into another CAD/destination or
     // work-link writer. Those operations need their own code-owned bindings.
+    if(opts.workerOperation){
+      const {role,operations}=opts.workerOperation,name=def.spec.function.name
+      return shelved({...def,execute:async(raw:unknown)=>{
+        const prepared=await operations.before(role,name,raw)
+        if(prepared.status!=='ready'||!prepared.args)return prepared.result??{status:prepared.status,reason:prepared.reason,saved:false}
+        return operations.observe(role,name,prepared.args,await def.execute(prepared.args))
+      }})
+    }
     if(!opts.drawingWorker||!opts.cadAssistant)return shelved(def)
     const name=def.spec.function.name
     if(!['design_project_cad','read_construction_draft','read_drawing_requests'].includes(name))return shelved(def)
@@ -262,7 +274,7 @@ export function createBobToolSession(opts: {
     ...(opts.aiCatalog ? { catalogTool: (name, parameters) => {
         const definition = opts.aiCatalog!.tool(name, parameters)
         const visible=name === 'design_project_cad' && !opts.buildGuideTools ? withoutAssemblyOrder(definition) : definition
-        return opts.drawingWorker?drawingWorkerSpec(visible):visible
+        return opts.runtimeSurface?runtimeToolSpec(definition,opts.runtimeSurface()):opts.drawingWorker?drawingWorkerSpec(visible):visible
       },
       ...(opts.toolInstructions === 'lazy' ? { catalogColleagues: (name: string) => bobColleagues(opts.aiCatalog!, [name]),
         catalogWorkflows: () => bobWorkflows(opts.aiCatalog!) } : {}),

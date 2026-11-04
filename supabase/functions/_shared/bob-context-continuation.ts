@@ -9,7 +9,7 @@ import { bobResultPage, projectBobResult, prepareBobResult, selectBobResultWindo
 type Message = NonNullable<OpenAIServiceOptions['messages']>[number]
 type ToolCall = NonNullable<OpenAIServiceResponse['toolCalls']>[number]
 type ModelCall = (options: OpenAIServiceOptions, beforeDispatch?: () => Promise<void>) => Promise<OpenAIServiceResponse<any>>
-export type ContextSurface = Pick<OpenAIServiceOptions, 'systemMessage' | 'tools' | 'catalogSchemaParameters' | 'catalogToolParameters'>
+export type ContextSurface = Pick<OpenAIServiceOptions, 'systemMessage' | 'tools' | 'catalogSchemaParameters' | 'catalogToolParameters' | 'catalogRuntimeSurface'>
 type Handoff = { summary: string; open_questions: string[]; next_steps: string[]; source_refs: string[] }
 type Operation = BobArchivedOperation
 type Chain = {

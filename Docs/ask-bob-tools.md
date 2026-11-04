@@ -1181,3 +1181,31 @@ compile/save/decision guides now agree that Task links are staged and applied
 atomically on approval, and distinguish a specific apply instruction from a
 request for proposals. The September 24/25 generic CAD integration supersedes
 the original catalog release's future-tense geometry section above.
+
+
+## Code-owned worker operations — 2026-11-04
+
+New executions pin `operationPathsVersion:1`. Construction/material jobs keep
+one exact saved source after selection. An ordinary overview or navigation
+focus is not an assignment. Where several objects are relevant, workers select
+labelled, server-issued references; code supplies real IDs, exact revisions and
+typed source/destination links. Raw identity overrides, a changed current head,
+a different source after pinning, or revoked project access stop the operation.
+Local part keys, proposed geometry and material judgements remain domain inputs.
+Automatic checks enter the same reference fence using the actual saved receipt.
+
+Rita retains single-drawing, piece-batch, shell and Step/gap-link operations.
+Each batch piece has its own Construction pin; a saved drawing destination must
+have the matching typed source. Exact unreleased piece requests are recovered
+and released without creating duplicates; changed intent or an already started
+request is not silently reused. Mattias can reopen stock, needs and cut plans
+through `read_project_work`. Existing canonical construction needs/cut plans are
+updated under their saved identities, rather than duplicated.
+
+`catalogRuntimeSurface` is a declared server restriction, reapplied after
+catalog resolution and retained through context renewal and both provider
+serializers. It carries operation references and the build-guide switch;
+`assembly_dependencies` stays absent when guides are off. It does not replace
+catalog policy or accept arbitrary schemas. Old pinned executions retain their
+previous contract. [Correction evidence](bob-runtime-path-audit-2026-11-04.md#corrections)
+separates local verification, installation and owner acceptance.

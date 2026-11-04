@@ -436,7 +436,7 @@ test('rollover atomically refreshes the tool surface and retains it through inte
   let main = 0, refreshed = 0
   const adapter = createBobContextContinuation({ version: 1, aiCatalog: surfaceCatalog,
     refreshSurface: async () => { refreshed++; return { systemMessage: 'Fresh compact role and directory.', tools: [tool('describe_tool')],
-      catalogSchemaParameters: { include_manual: false }, catalogToolParameters: undefined } },
+      catalogSchemaParameters: { include_manual: false }, catalogToolParameters: undefined, catalogRuntimeSurface:{version:1,buildGuides:false} } },
     callModel: async options => {
       sent.push(structuredClone(options))
       if (options.catalogRoleKey === 'context-compactor') return handoff(options)
@@ -455,6 +455,7 @@ test('rollover atomically refreshes the tool surface and retains it through inte
     assert.equal(request.systemMessage, 'Fresh compact role and directory.')
     assert.deepEqual(request.tools?.map(value => value.function.name), ['describe_tool', 'get_work_history'])
     assert.deepEqual(request.catalogSchemaParameters, { include_manual: false })
+    assert.deepEqual(request.catalogRuntimeSurface,{version:1,buildGuides:false})
   }
 })
 

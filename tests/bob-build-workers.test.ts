@@ -1,3 +1,5 @@
+import {createWorkerOperations,type WorkerOperations} from '../supabase/functions/_shared/worker-operations.ts'
+import {PLAN_CAD_PIECES_TOOL} from '../supabase/functions/_shared/cad-pieces.ts'
 import {boundDrawingArguments} from '../supabase/functions/_shared/drawing-work.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -45,7 +47,7 @@ const pieceCatalog = () => catalogFixture(manifest => {
   toolbox.definition = { ...toolbox.definition, workpad_version: 1 }
 })
 
-async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>, readDraft?: (args: any) => unknown, piecePreflight?: Record<string, unknown>, editResult?: Record<string, unknown>, boundDrawing?:{binding:any;seen:any[]}) {
+async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>, readDraft?: (args: any) => unknown, piecePreflight?: Record<string, unknown>, editResult?: Record<string, unknown>, boundDrawing?:{binding:any;seen:any[]},operationTest?:{operations:WorkerOperations;seen:any[]}) {
   const projectId = 'p', message = 'Rita lådan', hasAccess = async () => true
   const lookup = createProjectLookup(projectId, async (_project, input) => ({ data: { records: input.dataset === 'project' ? [{ id: projectId, name: 'Lådan', description: 'Saved project' }] : [], related: [], truncated: false }, error: null }) as any, undefined, undefined, undefined, { unlimitedWork: true })
   const writer = createProjectWriter(projectId, message, async () => { throw Error('No write requested') }, async () => ({ data: [], error: null }), async () => ({ data: [], error: null }))
@@ -93,9 +95,10 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
     cadAssistant.readBoundRequest=async()=>({status:'ok',requests:[],binding:boundDrawing.binding})
     cadAssistant.consult=async(args:any)=>{boundDrawing.seen.push({args});return {status:'needs_data',reason:'fixture_only'}}
   }
+  if(operationTest){cadAssistant.lifecycleTools=[PLAN_CAD_PIECES_TOOL];cadAssistant.lifecycleRemaining=Infinity;cadAssistant.lifecycle=async(name:string,args:any)=>{operationTest.seen.push({name,args});return {status:'queued',pieces:args.pieces.map((p:any)=>({piece_key:p.piece_key,status:'queued'}))}}}
   const bob: OpenAIServiceOptions[] = [], pickerInputs: any[] = [], ran: { name: string; status: string; rejection?: unknown }[] = []
   const workers: Record<string, OpenAIServiceOptions[]> = { 'structure-worker': [], 'drawing-worker': [], 'materials-worker': [] }
-  const result = await runProjectAnswer({ projectId, userId: 'owner', message, lookup, writer, hasAccess, constructionTools, solutionActions, projectContext, cadAssistant,...(boundDrawing?{boundDrawingWork:true}:{}),
+  const result = await runProjectAnswer({ projectId, userId: 'owner', message, lookup, writer, hasAccess, constructionTools, solutionActions, projectContext, cadAssistant,...(boundDrawing?{boundDrawingWork:true}:{}),...(operationTest?{workerOperations:operationTest.operations}:{}),
     ...(piecePreflight ? { workerPieceProgress: true, workerDesignReview: true,
       workerFormPiece: {
         readPiece: async () => piecePreflight,
@@ -349,4 +352,24 @@ test('Bob hands exact server-read identity to Rita; native tools and automatic k
  const knowledge=tail(catalogFixture(),workers['drawing-worker'][0],'drawing-worker').knowledge
  assert.deepEqual(knowledge.drawing_work,binding);assert.equal(knowledge.constructions.artifact_id,id)
  assert(constructionCalls.filter(c=>c.name==='read_construction_draft').every(c=>c.args.artifact_id===id&&c.args.revision===5))
+})
+
+
+test('ordinary Bob handover reaches Rita piece planning through the final catalog schema and code-owned source tuples',async()=>{
+ const seen:any[]=[],operations=createWorkerOperations({projectId:'p',hasAccess:async()=>true,
+  load:async()=>({status:'ready',source:null,entries:[{kind:'construction',id:'source-a',revision:2,label:'Frame'},{kind:'construction',id:'source-b',revision:5,label:'Roof'}]}),
+  validateMany:async()=>true,prepareDrawing:async()=>{throw Error('A piece batch must not take the single-source route')},drawingArguments:()=>null,drawingWork:()=>undefined})
+ const result=await turn(catalogFixture(),[ask('ask_drawing_worker',{request:'Rita, draw frame and roof as separate pieces.'})],{
+  'drawing-worker':[o=>{
+   const tool=o.tools!.find(t=>t.function.name==='plan_cad_pieces');assert(tool,'Rita can reach the larger flow')
+   const fields:any=tool.function.parameters;assert(!('area_id'in fields.properties));assert(!('artifact_id'in fields.properties.pieces.items.properties))
+   assert(o.catalogRuntimeSurface?.operation,'binding metadata reaches actual catalog call')
+   const sources=operations.exportState().scopes[0].entries
+   return{success:true,model:'fixture',usage,responseId:'piece-plan',toolCalls:[call('piece-call','plan_cad_pieces',{
+    assembly_title:'Barn',assembly_brief:'Frame and roof in common axes',pieces:sources.map(e=>({piece_key:e.label.toLowerCase(),brief:e.label,source_ref:e.ref,handoff:{}}))})]}
+  }]
+ },undefined,undefined,undefined,undefined,{operations,seen})
+ assert.equal(seen.length,1);assert.deepEqual(seen[0].args.pieces.map((p:any)=>[p.artifact_id,p.construction_revision]),[['source-a',2],['source-b',5]])
+ assert.equal(seen[0].args.area_id,null);assert.equal(result.workers['drawing-worker'].length,2)
+ assert(!names(result.bob[0]).includes('plan_cad_pieces'),'the coordinator retains the same owner boundary')
 })

@@ -1,3 +1,4 @@
+import type {WorkerOperations,OperationRole} from './worker-operations.ts'
 import { validConstructionRef, type ConstructionRef } from './drawing-work.ts'
 import type { PlanLinks } from './project-plan-links.ts'
 import type { BuildingScope } from './project-building-scope.ts'
@@ -264,6 +265,7 @@ export type ProjectAnswerOptions = {
   aiCatalog: AiCatalogSession;
   /** Pinned per execution; Rita receives server-owned source/destination identity. */
   boundDrawingWork?:boolean;
+  workerOperations?:WorkerOperations;
   /** Build guides (2026-10-30): the owner's switch. Off hides design_project_cad's assembly order. */
   buildGuideTools?: boolean;
   projectId: string; userId: string; message: string;
@@ -370,9 +372,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const restored = opts.checkpoint?.state
   const drawingSources:ConstructionRef[]=structuredClone(restored?.drawingSources??[])
   const rememberDrawingSource=(result:any)=>{
-    if(!opts.boundDrawingWork||result?.status!=='ok'||result.projectId!==opts.projectId||!validConstructionRef({artifact_id:result.artifact_id,revision:result.revision}))return
+    if(!(opts.boundDrawingWork||opts.workerOperations)||result?.status!=='ok'||result.projectId!==opts.projectId||!validConstructionRef({artifact_id:result.artifact_id,revision:result.revision}))return
     const ref={artifact_id:result.artifact_id,revision:result.revision},at=drawingSources.findIndex(r=>r.artifact_id===ref.artifact_id)
-    if(at<0)drawingSources.push(ref);else drawingSources[at]=ref
+    if(at>=0)drawingSources.splice(at,1);drawingSources.push(ref)
   }
   if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
   const briefing = restored ? restored.initial.briefing as Awaited<ReturnType<typeof opts.lookup.search>> : await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
@@ -522,7 +524,12 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           reason: 'construction_piece_blocked_earlier_this_turn',
           note: 'A canonical bounded-construction write was already rejected in this turn. Do not spend another specialist chain on the same blocked geometry. Keep the saved revision unchanged; report the blocker and allow a new owner turn after the source or implementation is corrected.', calls: [] }
       if (failedWorkers.has(key)) return { status: 'unavailable', worker: worker.role.replace(/^role\./, ''), reason: 'failed_earlier_this_turn', calls: [] }
-      if(key==='drawing'&&opts.boundDrawingWork&&!resume){
+      if(opts.workerOperations&&!resume&&workpadAgent){
+        const drawing=opts.currentView?.status==='ok'?opts.currentView.focus.drawing:undefined
+        const prepared=await opts.workerOperations.prepare(workpadAgent,drawingSources,drawing?{artifact_id:drawing.id,revision:drawing.revision}:undefined)
+        if(prepared.status!=='ready')return prepared
+      }
+      if(key==='drawing'&&opts.boundDrawingWork&&!opts.workerOperations&&!resume){
         if(!opts.cadAssistant)return {status:'unavailable',reason:'drawing_binding_unavailable'}
         const drawing=opts.currentView?.status==='ok'?opts.currentView.focus.drawing:undefined
         const focus=drawing?{artifact_id:drawing.id,revision:drawing.revision}:undefined
@@ -533,6 +540,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       if (!session || resume) {
         session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}),
           drawingWorker: key==='drawing'&&opts.boundDrawingWork,
+          ...(opts.workerOperations&&workpadAgent?{workerOperation:{role:workpadAgent,operations:opts.workerOperations},
+            runtimeSurface:()=>({version:1 as const,buildGuides:!!opts.buildGuideTools,operation:opts.workerOperations!.surface(workpadAgent)})}:{}),
           preloadTools: () => [...worker.tools, ...worker.reads, ...(workerPads ? ['update_workpad'] : [])], offerWaiting: true, readPolicy: basePolicy,
           ...(workerPads ? { extraTools: [workpadTool(workerPads, workpadAgent!)] } : {}) })
         if (resume) session.restoreState(structuredClone(resume.session) as Parameters<typeof session.restoreState>[0])
@@ -540,7 +549,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       }
       if (resume?.projectName !== undefined) projectName = resume.projectName
       if (!resume && handoverReadiness && worker.tools.includes('save_construction_draft')) {
-        const blocked = await handoverReadinessBlock(session)
+        const blocked = await handoverReadinessBlock(opts.workerOperations&&workpadAgent?{prepare:()=>session!.prepare(),execute:(name,args)=>session!.execute(name,opts.workerOperations!.serverArgs(workpadAgent,name,args as Record<string,unknown>))}:session)
         if (blocked) return blocked
       }
       const stair = opts.context?.stair
@@ -576,6 +585,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           ? { verifiedRenewal: { loadWorkpad: (step: number) => workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}:renewal:${step}`) } }
           : {}),
         boundDrawingWork:key==='drawing'&&opts.boundDrawingWork,
+        ...(opts.workerOperations&&workpadAgent?{runtimeSurface:()=>({version:1 as const,buildGuides:!!opts.buildGuideTools,operation:opts.workerOperations!.surface(workpadAgent)})}:{}),
         session, hasAccess: opts.hasAccess, deadline, ...(opts.modelTimeoutMs ? { modelTimeoutMs: opts.modelTimeoutMs } : {}),
         ...(opts.finalAnswer ? { stopAsResult: true } : {}),
         ...(opts.releaseContext ? { releaseChain: opts.releaseContext } : {}),
@@ -590,8 +600,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           const results: Record<string, unknown>[] = []
           for (const target of targets) {
             let result: any
-            try { result = withoutDiagnostics(await session!.execute('check_construction_draft', { artifact_id: target.artifact_id,
-              revision: target.revision, component_ids: target.component_ids ?? [], requirement_checks: [], outputs: [] })) }
+            try { const args={ artifact_id: target.artifact_id,revision: target.revision, component_ids: target.component_ids ?? [], requirement_checks: [], outputs: [] };result = withoutDiagnostics(await session!.execute('check_construction_draft', opts.workerOperations&&workpadAgent?opts.workerOperations.serverArgs(workpadAgent,'check_construction_draft',args):args)) }
             catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; result = { status: 'unavailable' } }
             results.push({ ...target, ...(result && typeof result === 'object' ? result : {}), artifact_id: target.artifact_id, revision: target.revision })
             try { opts.onTool?.({ name: 'check_construction_draft', status: String(result?.status ?? 'returned'), step: currentStep + 1, index: 100 + workerToolEvents++, ms: 0 }) } catch { /* diagnostics only */ }
@@ -616,7 +625,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           const knowledge: Record<string, unknown> = {}
           for (const read of worker.knowledge!) {
             try {
-              const args=structuredClone(read.arguments)
+              const args=opts.workerOperations&&workpadAgent?opts.workerOperations.knowledgeArgs(workpadAgent,read.tool,structuredClone(read.arguments)):structuredClone(read.arguments)
               if(key==='drawing'&&opts.boundDrawingWork){
                 for(const field of read.tool==='read_construction_draft'?['artifact_id','revision']:read.tool==='read_drawing_requests'?['request_id','after_id']:[])delete args[field]
               }
@@ -629,6 +638,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
             catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error;
               knowledge.focused_plan_step = { status: 'unavailable' } }
           }
+          if(opts.workerOperations&&workpadAgent)knowledge.operation_context=opts.workerOperations.describe(workpadAgent)
           if(key==='drawing'&&opts.boundDrawingWork)knowledge.drawing_work=opts.cadAssistant?.drawingWork
           if (constructionPiece) knowledge.construction_piece_boundary = constructionPiece
           return knowledge
@@ -650,6 +660,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       return report
     } }))
   const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: turnPreload,
+    ...(opts.workerOperations?{runtimeSurface:()=>({version:1 as const,buildGuides:!!opts.buildGuideTools})}:{}),
     ...(boundedOrientation ? { orientationReader: { tools: [ORIENTATION_DIRECTORY_TOOL], execute: (raw: unknown) => {
       if (!orientationReader) throw new Error('context_unavailable')
       return orientationReader.execute(raw)
@@ -772,7 +783,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
       ...(finalCall ? { finalCall } : {}),
       ...(workerState ? { worker: workerState } : {}),
-      ...(opts.boundDrawingWork?{drawingSources}:{}),
+      ...((opts.boundDrawingWork||opts.workerOperations)?{drawingSources}:{}),
       ...(workerToolEvents ? { workerToolEvents } : {}),
       ...(failedWorkers.size ? { failedWorkers: [...failedWorkers] } : {}),
       tools, closedByLimit, closedByCommentary, request, response: pendingResponse, toolIndex }))
@@ -830,7 +841,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       // The returned provider request and its eventual handlers share this
       // refreshed fence. A new describe call remains loaded for the next step.
       return { systemMessage: [buildBobSystemMessage(opts.aiCatalog, tools, shelf, opts.completeRequest, toolSheets, promptTiers), toolbox.workflowInstructions].filter(Boolean).join('\n\n'), tools: tools.length ? tools : undefined,
-        catalogSchemaParameters: schemaParameters(), catalogToolParameters: toolbox.toolParameters() }
+        catalogSchemaParameters: schemaParameters(), catalogToolParameters: toolbox.toolParameters(),...(opts.workerOperations?{catalogRuntimeSurface:{version:1 as const,buildGuides:!!opts.buildGuideTools}}:{}) }
     })
     if (closedByLimit && step > 0 && !closedNoteSent) {
       closedNoteSent = true
@@ -858,7 +869,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (phase === 'ready') {
       request = {
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
-      userId: opts.userId, systemMessage, catalogRoleKey: 'ask-bob', catalogSchemaParameters: schemaParameters(),
+      userId: opts.userId, systemMessage, catalogRoleKey: 'ask-bob',...(opts.workerOperations?{catalogRuntimeSurface:{version:1 as const,buildGuides:!!opts.buildGuideTools}}:{}), catalogSchemaParameters: schemaParameters(),
       ...(toolbox.toolParameters() ? { catalogToolParameters: toolbox.toolParameters() } : {}),
       messages: [...messages, ...(opts.projectContext?.carrier() ?? []), ...(step === 0 && initialFooter ? [initialFooter] : []), ...(availabilityMessage ? [availabilityMessage] : []), ...(sheetMessage ? [sheetMessage] : [])], previousResponseId, tools: tools.length ? tools : undefined,
       ...(completionAware ? { responsePhaseMode: 'aware' as const } : {}),

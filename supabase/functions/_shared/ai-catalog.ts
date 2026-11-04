@@ -1,3 +1,4 @@
+import {runtimeToolSpec,type RuntimeToolSurface} from './runtime-tool-surface.ts'
 import {drawingWorkerSpec} from './drawing-work.ts'
 /** Server-only, request-scoped AI configuration. The database owns definitions;
  * this module owns their format and provider-adapter validation. It has no
@@ -327,7 +328,7 @@ export function createAiCatalogSession(client: AiCatalogClient, options: { app: 
 /** One seam for all catalog-backed text callers, including tests. Output
  * contracts replace local schemas; task-specific data goes through declared
  * binders. Dynamic system context remains the trusted app server's input. */
-export function applyCatalogModelOptions<T extends { app: string; functionName: string; aiFunction?: string; systemMessage?: string; tools?: AiFunctionTool[]; timeoutMs?: number; catalogRoleKey?: string; catalogSchemaKey?: string; catalogVariables?: AiVariables; catalogSchemaParameters?: JsonObject; catalogToolParameters?: Record<string,JsonObject>; catalogDrawingWork?:boolean }>(session: AiCatalogSession, options: T): T & { aiDefinition: ResolvedAiRole } {
+export function applyCatalogModelOptions<T extends { app: string; functionName: string; aiFunction?: string; systemMessage?: string; tools?: AiFunctionTool[]; timeoutMs?: number; catalogRoleKey?: string; catalogSchemaKey?: string; catalogVariables?: AiVariables; catalogSchemaParameters?: JsonObject; catalogToolParameters?: Record<string,JsonObject>; catalogDrawingWork?:boolean; catalogRuntimeSurface?:RuntimeToolSurface }>(session: AiCatalogSession, options: T): T & { aiDefinition: ResolvedAiRole } {
   const role = session.role(options.catalogRoleKey ?? options.functionName,options.catalogVariables)
   const result: T & { aiDefinition: ResolvedAiRole } = { ...options, aiDefinition: role, systemMessage: options.systemMessage ?? role.systemMessage }
   if (role.timeoutMs !== undefined) result.timeoutMs = Math.min(options.timeoutMs ?? Infinity,role.timeoutMs)
@@ -337,6 +338,7 @@ export function applyCatalogModelOptions<T extends { app: string; functionName: 
   }
   if (options.tools) result.tools = options.tools.map(tool => session.tool(tool.function.name,{...options.catalogSchemaParameters,...options.catalogToolParameters?.[tool.function.name]}))
   if(options.catalogDrawingWork&&result.tools)result.tools=result.tools.map(drawingWorkerSpec)
+  if(options.catalogRuntimeSurface&&result.tools)result.tools=result.tools.map(spec=>runtimeToolSpec(spec,options.catalogRuntimeSurface!))
   return result
 }
 /** Validate the actual call, too: capabilities must cover dynamically selected

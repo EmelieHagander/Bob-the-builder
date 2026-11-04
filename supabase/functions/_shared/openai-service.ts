@@ -165,6 +165,7 @@ export interface OpenAIServiceOptions {
   catalogSchemaParameters?: Record<string, unknown>;
   /** Server-pinned Rita scope; reapplied after catalog schema reconstruction. */
   catalogDrawingWork?:boolean;
+  catalogRuntimeSurface?:import('./runtime-tool-surface.ts').RuntimeToolSurface;
   catalogToolParameters?: Record<string, Record<string, unknown>>;
   maxOutputTokens?: number;
   /** Explicit per-call ceiling for bounded internal routing. Does not alter app settings. */

@@ -132,3 +132,16 @@ test('unlimited piece planning allows another checked batch while keeping scope,
  assert.equal(pieces.remaining,Infinity);assert.equal(saved.length,3)
  assert.equal((await pieces.execute(input(13)) as any).status,'invalid');assert.equal(saved.length,3)
 })
+
+test('new operation paths recover an exact stored but unreleased piece batch without creating duplicate requests',async()=>{
+ const packets=new Map<string,any>(),released:string[][]=[];let saves=0,failRelease=true
+ const store:any={list:async()=>[],load:async(id:string)=>packets.get(id),save:async(_id:any,_rev:any,status:string,payload:any,key:string)=>{
+  if(packets.has(key))throw Error('drawing_request_reuse:'+packets.get(key).id)
+  saves++;const row={id:randomUUID(),status,continuation_required:false,payload};packets.set(key,row);packets.set(row.id,row);return row
+ },releasePieces:async(ids:string[])=>{released.push(ids);if(failRelease)throw Error('offline');return{released:ids}}}
+ const make=()=>createCadPieces({unlimitedWork:true,resumeStoredPieces:true,requestStore:store,ownerRequest:'Draw these pieces',hasAccess:async()=>true})
+ const first:any=await make().execute(input(2));assert(first.pieces.every((p:any)=>p.status==='stored_not_started'));assert.equal(saves,2)
+ failRelease=false;const recovered:any=await make().execute(input(2));assert.equal(recovered.status,'queued');assert.equal(saves,2);assert.deepEqual(released[1],released[0])
+ packets.get('piece:piece_0').payload.brief.brief='Different intent';released.length=0
+ const changed:any=await make().execute(input(2));assert.equal(changed.pieces[0].status,'existing_request');assert(!released[0].includes(packets.get('piece:piece_0').id))
+})

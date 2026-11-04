@@ -32,6 +32,7 @@ export async function runClaimedProjectTurn(opts: {
   aiCatalog: AiCatalogSession;
   /** Same pinned build-guide switch that runProjectAnswer forwards into the toolbox. */
   boundDrawingWork?:boolean;
+  workerOperations?:import('./worker-operations.ts').WorkerOperations;
   buildGuideTools?: boolean;
   calculator?: ProjectCalculator;
   projectId: string; userId: string; message: string; generation?: number; previousResponseId?: string;
