@@ -287,6 +287,7 @@ export async function runWorker(opts: {
     if (!response.responseId) return finish({ status: 'unavailable', worker: roleKey, calls })
     previous = response.responseId; messages = []
     let pieceWriteSeen = false
+    let rejectedBoundedPiece: string | null = null
     let pieceReviewReceipt: Record<string, unknown> | null = null
     let incompletePiece: { receipt: Record<string, unknown>; reason: string } | null = null
     for (const call of response.toolCalls.slice(0, 8)) {
@@ -308,6 +309,12 @@ export async function runWorker(opts: {
       if (opts.pieceProgress && allowed.has(name) && CONSTRUCTION_PIECE_WRITES.has(name) && !pieceWriteSeen) pieceWriteSeen = true
       if (result && typeof result === 'object' && 'diagnostics' in result) { const { diagnostics: _d, ...content } = result; result = content }
       const status = String(result?.status ?? 'returned')
+      // A v4 spatially guarded edit whose canonical writer says conflict cannot
+      // be repaired by changing unrelated parts or reading forever in this
+      // worker chain. Return to Bob so the current Plan/source is reconciled.
+      // Older worker contracts without a bounded review stay unchanged.
+      if (opts.pieceProgress?.readBoundedReview && CONSTRUCTION_PIECE_WRITES.has(name) && status === 'conflict')
+        rejectedBoundedPiece = name
       calls.push({ tool: NAME.test(name) ? name : 'invalid_name', status })
       // A check stores its result too, so it is reported (and read back) like a save.
       if (status === 'saved' || status === 'checked') {
@@ -408,6 +415,12 @@ export async function runWorker(opts: {
     if (opts.progress) await opts.progress.save(structuredClone(opts.verifiedRenewal
       ? { version: 2 as const, step, previous: previous ?? null, messages, calls, receipts, order, renewal }
       : { version: 1 as const, step, previous, messages, calls, receipts, order }))
+    // Return a canonical conflict to Bob without another expensive provider
+    // turn. No construction was saved in the rejected call; keep existing
+    // receipts and the recorded tool rejection available for reconciliation.
+    if (rejectedBoundedPiece) return finish({ status: 'needs_verification',
+      reason: 'construction_piece_write_conflict', worker: roleKey,
+      blocked_tool: rejectedBoundedPiece, calls })
     // Preserve the write receipt, but do not allow another piece when the exact
     // current revision could not be reopened. Bob can recover from this state.
     if (incompletePiece) return finish({ status: 'needs_verification', reason: incompletePiece.reason,
