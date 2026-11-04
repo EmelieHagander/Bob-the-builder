@@ -1065,3 +1065,17 @@ compatible runtime/policy for jobs already pinned to it; preserve saved outputs.
 The [Artifact owner](../Docs/artifacts.md#construction-delivery-discovery) owns
 scope; [local evidence](../Docs/foundation-verification.md#form-delivery-readback-2026-10-27)
 distinguishes fixture recovery from real model/CAD and browser acceptance.
+
+
+### Runtime operation paths — 2026-11-04
+
+Apply `bob_runtime_operation_paths` before installing the new `ask-bob` and
+`bob-worker` bundles. It adds five authenticated, invoker read/validation RPCs
+with explicit project checks and publishes immutable catalog versions that let
+Mattias use the existing `read_project_work` reader. No project content or model
+settings are changed. Check the exact project URL, old bundles, catalog, migration
+history and absence of queued/running jobs immediately before installation;
+verify both complete deployed bundles and RPC ACLs afterwards. New jobs pin
+`operationPathsVersion:1`; existing checkpoints retain old behavior. Retain the
+read RPCs and old manifest versions for pinned jobs during any rollback.
+[Release evidence](../Docs/bob-runtime-path-audit-2026-11-04.md#corrections).

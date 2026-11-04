@@ -1447,3 +1447,17 @@ without promising another run. Content-free metrics retain allowlisted phase,
 validation and ending categories; they do not store raw SQL errors or prompt
 content. The model stays GPT-5.4/high. The owner will test the real conversation
 after [technical release](foundation-verification.md#bob-task-workflow-release-2026-10-17).
+
+
+### Worker operation checkpoints — 2026-11-04
+
+`operationPathsVersion:1` belongs to the journaled execution identity, not a
+mutable global switch. Its compact `workerOperations` component stores the role,
+project, selected source, issued references and saved drawing receipts. Restore
+rejects foreign project/unknown role or invalid reference/pin/receipt state.
+Fresh current-head and caller checks still precede operations after restart.
+Old execution identities omit this component and retain their earlier contract.
+The same version enables thin drawing-identity reads and SQL-selected CAD
+sections (24 kB payload bound); Edge no longer downloads a full CAD envelope to
+answer these particular routing/section reads. This is a transport correction,
+not a measured cure for every CPU shutdown. See the [runtime correction evidence](bob-runtime-path-audit-2026-11-04.md#corrections).

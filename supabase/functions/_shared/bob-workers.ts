@@ -233,6 +233,7 @@ export async function runWorker(opts: {
   stopAsResult?: boolean
   /** Pinned per job (workerCheckpointVersion): the place saved after each step, and the save. */
   boundDrawingWork?:boolean;
+  runtimeSurface?:()=>import('./runtime-tool-surface.ts').RuntimeToolSurface;
   progress?: { restored?: WorkerProgress; save(progress: WorkerProgress): Promise<void>; afterStep?(): void }
   /** Drops the worker's model chain once it has returned; it is never continued. */
   releaseChain?: (responseId: string) => void
@@ -317,7 +318,7 @@ export async function runWorker(opts: {
     if (step) specs = await offer()
     const images = opts.images?.carrier() ?? []
     const response = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: roleKey, aiFunction: roleKey, module: 'global', userId: opts.userId,
-      catalogRoleKey: roleKey, ...(opts.boundDrawingWork?{catalogDrawingWork:true}:{}), ...(opts.variables ? { catalogVariables: opts.variables } : {}), messages: [...messages, ...images], tools: specs, catalogSchemaParameters: params, catalogToolParameters: toolParams(),
+      catalogRoleKey: roleKey, ...(opts.runtimeSurface?{catalogRuntimeSurface:opts.runtimeSurface()}:{}), ...(opts.boundDrawingWork?{catalogDrawingWork:true}:{}), ...(opts.variables ? { catalogVariables: opts.variables } : {}), messages: [...messages, ...images], tools: specs, catalogSchemaParameters: params, catalogToolParameters: toolParams(),
       ...(previous ? { previousResponseId: previous } : {}), maxOutputTokens: 8000,
       timeoutMs: Math.max(1000, Math.min(opts.modelTimeoutMs ?? 45_000, opts.deadline - Date.now())) })
     if (!response.success) {

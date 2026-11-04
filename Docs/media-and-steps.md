@@ -492,3 +492,20 @@ Pin controls live only in the Project image gallery. Home and Project headers us
 public URLs or storage permission changes. Account reads never switch the active
 Project. Blob URLs are revoked on unmount/scope changes; failed/revoked downloads
 fall back without blocking navigation. Original uploads remain unchanged.
+
+
+## Image target recovery — 2026-11-04
+
+For executions with `operationPathsVersion:1`, the caller-authorized target is
+checked before paid generation. Generation identity includes the prompt, exact
+reference-image versions and pinned image-role/catalog configuration, excluding
+title, purpose and attachment target. The existing operation journal records
+that generation before dispatch. A successful PNG is saved privately to its
+project and finalized before linking to the requested work target. A target
+removed concurrently can therefore leave a ready project image and an honest
+partial attachment result. Repairing only the target reuses that media identity;
+a pending upload must be recovered/finalized first. Access and target relation
+are checked again; no attachment repair grants project access or CAD approval.
+The image-operation map and pending identity survive worker checkpoints without
+copying pixels into component state. These semantics do not deduplicate distinct
+owner turns globally. [Verification](bob-runtime-path-audit-2026-11-04.md#corrections).

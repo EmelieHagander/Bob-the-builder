@@ -1,8 +1,11 @@
 # Runtime path audit — 2026-11-04
 
-**Status:** audit complete; five findings remain open. No runtime fix, migration,
-workflow, live model/CAD/image generation or production data write was performed
-for this audit. This is evidence and recommended work, not a new domain contract.
+**Correction update:** all five findings have an implementation and focused local
+verification. Hosted installation is pending the final release checks below.
+The original audit and its measurements are preserved as the pre-fix snapshot;
+they are not the current implementation verdict. No paid model/CAD/image run or
+owner visual acceptance is claimed. This document records evidence, not a new
+domain contract. [Correction and rollout evidence](#corrections).
 
 Baseline: `dbb1b5986c52f7195e0ed327f6b9ee8eb2386db8` after #458/#459.
 Readback confirmed the installed `bob-worker` v197 and `ask-bob` v229 still have
@@ -196,3 +199,30 @@ exception per incident.
 The [delivery State](bob-delivery-flow.md#state) owns subsequent implementation and
 acceptance. This audit does not close the existing facade/owner visual gate or O5
 whole-run cost/CPU measurement.
+
+
+<a id="corrections"></a>
+## Corrections and verification — 2026-11-04
+
+| Finding | Implemented correction | Focused evidence |
+|---|---|---|
+| A1 | Code-owned single/batch/shell/work-link adapters restore Rita's tools; exact unreleased requests recover without duplication. | Ordinary Bob → Rita catalog/session → batch dispatch; shell/Step/gap tuple mapping; partial-release retry with changed-intent rejection. |
+| A2 | Konrad/Mattias source pins and server-issued record selections survive checkpoints; raw ID/revision overrides and source switches fail. | Two same-project constructions; stale/revoked references; own-write revision advance; canonical need/cut-plan reuse; overview does not assign an existing construction to a new job. |
+| A3 | Authenticated thin drawing identity and SQL-selected exact CAD sections. | Full-schema isolated SQL tests with 280 kB annotations and 1 MB files; metadata <1.8 kB; requested scalar returned directly; Edge full-read callback never called; foreign identity, paths and oversized envelope rejected. |
+| A4 | Target preflight precedes generation; project media save/finalization precedes attachment; generation key excludes target changes. | Stub provider stays at zero calls for invalid targets, one for attachment repair through a JSON checkpoint; version/config changes create a distinct key; pending-upload recovery does not generate again. |
+| A5 | Common declared runtime surface reapplied after catalog reconstruction and renewed context. | Guide on/off and bound/unbound worker schemas; actual OpenAI and Anthropic request serializers; rollover retains the server restriction. |
+
+Focused local validation: 95 tests passed across the affected worker, catalog,
+context, provider, image, drawing and record-reader suites; five isolated SQL
+access/projection tests passed. The subsequent complete worker/operation rerun passed 23 tests, including
+overview/new-construction and duplicate-label routing; the complete impacted
+worker/piece rerun passed 30 tests, including the full nine-test piece suite.
+These batches overlap; their counts must not be added as independent tests. Deno checks
+both Edge entrypoints using installed equivalent dependency declarations; the
+exact remote esm imports were unreachable locally. `git diff --check` passed.
+No full CI/workflow, browser or paid provider call was started.
+
+Release readback is recorded here after migration and both Edge bundles are
+installed. Owner facade/visual acceptance (#438), frontend publication and O5
+whole-run CPU/cost measurement remain separate. Ladan geometry is not changed
+by these runtime corrections.
