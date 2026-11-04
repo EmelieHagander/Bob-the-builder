@@ -118,9 +118,10 @@ type ContentChange = { op: 'set' | 'append_text' | 'remove'; path: string; value
 function readChange(change: any): ContentChange {
   const typed = TYPED_CHANGES[change?.op as keyof typeof TYPED_CHANGES]
   if (typed) {
-    const keys = typed.index ? ['op', 'index', typed.field] : ['op', typed.field]
-    if (!exact(change, keys) || typed.index && (!Number.isSafeInteger(change.index) || change.index < 0)) throw new Error('Invalid change shape.')
-    return { op: 'set', path: typed.path + (typed.index ? change.index : ''), value: change[typed.field] }
+    const hasIndex = 'index' in typed
+    const keys = hasIndex ? ['op', 'index', typed.field] : ['op', typed.field]
+    if (!exact(change, keys) || hasIndex && (!Number.isSafeInteger(change.index) || change.index < 0)) throw new Error('Invalid change shape.')
+    return { op: 'set', path: typed.path + (hasIndex ? change.index : ''), value: change[typed.field] }
   }
   if (!exact(change, ['op', 'path', 'value_json']) || !['set', 'append_text', 'remove'].includes(change.op) || !safeText(change.path, 160)) throw new Error('Invalid change shape.')
   if (change.op === 'remove' ? change.value_json !== null : !safeText(change.value_json, 16000, true)) throw new Error('Supply a JSON value; remove uses null.')

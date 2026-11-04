@@ -159,6 +159,11 @@ export function createBuildTree(opts: {
       }
       if (name === 'place_build' || name === 'create_sub_build') {
         const creating = name === 'create_sub_build'
+        // Narrow the raw call before the conditional schema check; both paths
+        // still enforce their exact keys and value validation below.
+        if (!object(value)) return { status: 'invalid', message: creating
+          ? 'Use the offered schema: title, description, and sub_build_id or room_id from read_build_tree (null when unused).'
+          : 'Use ids from read_build_tree: build_id, and sub_build_id or room_id (null when unused).' }
         if (creating ? !exact(value, ['title', 'description', 'sub_build_id', 'room_id']) || !text(value.title, 200) || !text(value.description, 2000)
           : !exact(value, ['build_id', 'sub_build_id', 'room_id']) || !id(value.build_id)) return { status: 'invalid', message: creating
             ? 'Use the offered schema: title, description, and sub_build_id or room_id from read_build_tree (null when unused).'

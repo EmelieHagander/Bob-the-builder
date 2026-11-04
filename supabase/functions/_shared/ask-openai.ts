@@ -381,7 +381,8 @@ export async function answerWithOpenAi(opts: {
       // Bob's one final answer past that stop (2026-11-01). Jobs without this pin end at the stop.
       ...bobFinalAnswerVersion(contract),
       // Specialists refresh later than Bob (2026-11-01). Jobs without this pin use Bob's limit for every role.
-      ...(Number.isInteger(contract.specialist_continuation_tokens) && contract.specialist_continuation_tokens >= 1000 ? { specialistContinuationTokens: contract.specialist_continuation_tokens } : {}),
+      ...(typeof contract.specialist_continuation_tokens === 'number' && Number.isInteger(contract.specialist_continuation_tokens) && contract.specialist_continuation_tokens >= 1000
+        ? { specialistContinuationTokens: contract.specialist_continuation_tokens } : {}),
       // A worker's place is saved after each of its steps (2026-11-01). Jobs without this pin replay the whole worker job on resume.
       ...(checkpoint && contract.worker_checkpoint_version === 1 ? { workerCheckpointVersion: 1 as const } : {}),
       // Only new claimed turns with the published contract may read and replace private working notes.
@@ -850,7 +851,7 @@ export async function answerWithOpenAi(opts: {
   let buildGuideSwitch:Promise<boolean>|null=null
   const buildGuideOn=()=>buildGuideSwitch??=buildGuideOffered?memo('cad:build_guide_switch',{},async()=>{
    const {data,error}=await internal.schema('shared').from('ai_settings').select('is_enabled').eq('app','bob').eq('coworker_id','bob')
-    .eq('function_name','cad-build-guide').eq('module_id','cad').maybeSingle().abortSignal(AbortSignal.timeout(10000))
+    .eq('function_name','cad-build-guide').eq('module_id','cad').abortSignal(AbortSignal.timeout(10000)).maybeSingle()
    return !error&&data?.is_enabled===true
   }):Promise.resolve(false)
   const cadAssistant = createCadAssistant({ unlimitedWork,
