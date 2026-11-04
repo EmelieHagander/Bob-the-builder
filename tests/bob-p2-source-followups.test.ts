@@ -68,6 +68,10 @@ test('P2 source followups load adjacent tools only after successful, authorized 
   f.rows[2].active = false
   assert(!offered(await restored.prepare()).includes('change_solution_evidence'),
     'a disabled tool must disappear even after it was loaded by a followup')
+  f.rows[2].active = true
+  f.rows[2].schema_version = 2
+  assert(!offered(await restored.prepare()).includes('change_solution_evidence'),
+    'a live contract-version mismatch cannot be bypassed by old loaded state')
 })
 
 test('P2 never autoloads after a failed read; older pinned catalogs keep the old protocol', async () => {
