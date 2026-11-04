@@ -87,7 +87,10 @@ export type CadCandidate={packet:CadPacket;title:string;description:string;assum
 
 /** Top-level tool boundaries only. In-flight review/render work resumes through
  * its operation journal; no JavaScript closure or nested stack is persisted. */
+import { boundDrawingArguments, validDrawingWork, type DrawingWork, type ConstructionRef } from './drawing-work.ts'
+
 export interface CadAssistantState {
+ drawingWork?:DrawingWork
  /** 2: the candidate's files stay in their cad:render journal step, named by
   * renderFingerprint. Version 1 carries them inline. */
  version:1|2
@@ -105,8 +108,9 @@ export interface CadAssistantState {
  renderFingerprint?:string
 }
 
-export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journaled turns read the two grounding lookups in a fixed order; a parallel pair can swap journal positions on resume (continuation_changed, 2026-10-21). */groundingReadOrder?:'serial'|'parallel';registerContextSurface?:SpecialistContextSurfaceRegistrar;allowSourceRenewal?:boolean;calculator?:ProjectCalculator;unlimitedWork?:boolean;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>,guide?:CadGuideRequest)=>Promise<CadPacket&{build_guide?:CadGuideOutcome}>;/** Build guides (2026-10-30): the owner's global switch and the server fastener schedule. Absent = no guide. */buildGuide?:{enabled:()=>Promise<boolean>;readFasteners:(id:string,revision:number)=>Promise<unknown>};readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;/** Stored FORM checks; read only by the catalog-gated targeted review. */readConstructionObservations?:(id:string,revision:number,resultId:string|null,after:string|null)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];/** Durable checkpoints: the successful cad:render results with this input fingerprint, never journaled. */loadRenderFiles?:(renderFingerprint:string)=>Promise<unknown>;deadline:number;available:boolean}){
+export function createCadAssistant(opts:{resolveDrawingWork?:(sources:ConstructionRef[],focus?:ConstructionRef)=>Promise<{status:string;binding?:DrawingWork;reason?:string}>;aiCatalog:AiCatalogSession;/** Journaled turns read the two grounding lookups in a fixed order; a parallel pair can swap journal positions on resume (continuation_changed, 2026-10-21). */groundingReadOrder?:'serial'|'parallel';registerContextSurface?:SpecialistContextSurfaceRegistrar;allowSourceRenewal?:boolean;calculator?:ProjectCalculator;unlimitedWork?:boolean;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>,guide?:CadGuideRequest)=>Promise<CadPacket&{build_guide?:CadGuideOutcome}>;/** Build guides (2026-10-30): the owner's global switch and the server fastener schedule. Absent = no guide. */buildGuide?:{enabled:()=>Promise<boolean>;readFasteners:(id:string,revision:number)=>Promise<unknown>};readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;/** Stored FORM checks; read only by the catalog-gated targeted review. */readConstructionObservations?:(id:string,revision:number,resultId:string|null,after:string|null)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];/** Durable checkpoints: the successful cad:render results with this input fingerprint, never journaled. */loadRenderFiles?:(renderFingerprint:string)=>Promise<unknown>;deadline:number;available:boolean}){
  const catalogText=(key:string,variables?:AiVariables)=>{if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable');return opts.aiCatalog.text(key,variables)}
+ let drawingWork:DrawingWork|undefined
  let lifecycleUsed=0
  let used=0,candidate:CadCandidate|null=null,partial=false,requiredTools:string[]=[]
  let savedRequest:CadAssistantState['savedRequest']=null
@@ -125,7 +129,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
  // them, and every checkpoint save rewrote them (1.2 MB snapshots, 2026-10-22).
  exportState():CadAssistantState{
   const held=!!candidate&&!!renderFingerprint&&!!opts.loadRenderFiles
-  return JSON.parse(JSON.stringify({version:held?2:1,lifecycleUsed,used,candidate:candidate?{...candidate,packet:{...candidate.packet,previews:undefined,...(held?{files:undefined}:{})}}:null,partial,requiredTools,savedRequest,terminalFailure,acceptedReview,metrics,sources,pieces:pieces.exportState(),...(held?{renderFingerprint}:{})}))
+  return JSON.parse(JSON.stringify({version:held?2:1,...(drawingWork?{drawingWork}:{}),lifecycleUsed,used,candidate:candidate?{...candidate,packet:{...candidate.packet,previews:undefined,...(held?{files:undefined}:{})}}:null,partial,requiredTools,savedRequest,terminalFailure,acceptedReview,metrics,sources,pieces:pieces.exportState(),...(held?{renderFingerprint}:{})}))
  },
  restoreState(state:CadAssistantState){
   if(state?.version!==1&&state?.version!==2||![state.lifecycleUsed,state.used].every(n=>Number.isSafeInteger(n)&&n>=0)||typeof state.partial!=='boolean'
@@ -133,15 +137,35 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
     ||!object(state.metrics)||Object.keys(metrics).some(key=>!Number.isSafeInteger((state.metrics as any)[key])||(state.metrics as any)[key]<0)
     ||![state.candidate,state.terminalFailure,state.acceptedReview].every(value=>value===null||object(value))
     ||!(state.savedRequest===null||object(state.savedRequest)&&uuid(state.savedRequest.id)&&Number.isSafeInteger(state.savedRequest.revision)&&state.savedRequest.revision>=0&&object(state.savedRequest.payload)))throw new Error('cad_assistant_checkpoint_invalid')
+  if(state.drawingWork!==undefined&&!validDrawingWork(state.drawingWork,opts.projectId))throw new Error('cad_assistant_checkpoint_invalid')
   if(state.version===2&&!(object(state.candidate)&&object(state.candidate.packet)&&state.candidate.packet.files===undefined
     &&typeof state.renderFingerprint==='string'&&/^[0-9a-f]{64}$/.test(state.renderFingerprint)))throw new Error('cad_assistant_checkpoint_invalid')
   if(state.savedRequest&&(!opts.requestStore||opts.requestStore.atomicSave)||state.version===2&&!opts.loadRenderFiles)throw new Error('cad_assistant_checkpoint_store_changed')
   const restored:CadAssistantState=JSON.parse(JSON.stringify(state))
+  drawingWork=restored.drawingWork
   pieces.restoreState(restored.pieces)
   lifecycleUsed=restored.lifecycleUsed;used=restored.used;candidate=restored.candidate;partial=restored.partial;requiredTools=restored.requiredTools
   savedRequest=restored.savedRequest;terminalFailure=restored.terminalFailure;acceptedReview=restored.acceptedReview
   renderFingerprint=restored.version===2?restored.renderFingerprint!:null
   Object.assign(metrics,restored.metrics);sources.splice(0,sources.length,...restored.sources)
+ },
+ async prepareDrawingWorker(sources:ConstructionRef[],focus?:ConstructionRef){
+  if(!opts.resolveDrawingWork)return {status:'unavailable',reason:'drawing_binding_unavailable'}
+  if(!await opts.hasAccess())throw new Error('project_denied')
+  let result:Awaited<ReturnType<NonNullable<typeof opts.resolveDrawingWork>>>
+  try{result=await opts.resolveDrawingWork(structuredClone(sources),focus)}
+  catch(error){rethrowContinuation(error);if(error instanceof Error&&error.message==='project_denied')throw error;return {status:'unavailable',reason:'drawing_binding_unavailable',saved:false}}
+  if(!await opts.hasAccess())throw new Error('project_denied')
+  if(result.status!=='ready'||!validDrawingWork(result.binding,opts.projectId))return {status:'needs_data',reason:result.reason??'drawing_binding_unavailable',saved:false}
+  drawingWork=structuredClone(result.binding)
+  return {status:'ready',binding:structuredClone(drawingWork)}
+ },
+ get drawingWork(){return drawingWork?structuredClone(drawingWork):undefined},
+ boundArguments(name:string,raw:unknown){return drawingWork?boundDrawingArguments(name,raw,drawingWork):null},
+ async readBoundRequest(){
+  if(!await opts.hasAccess())throw new Error('project_denied')
+  if(!drawingWork)return {status:'unavailable',reason:'drawing_binding_unavailable'}
+  return drawingWork.request_id?opts.requestStore?.read?.(drawingWork.request_id):{status:'ok',requests:[],next_cursor:null,binding:structuredClone(drawingWork)}
  },
  tools:[DESIGN_CAD_TOOL],lifecycleTools:opts.requestStore?.read&&opts.requestStore?.cancel?[...pieces.tools,...(opts.readShell?[READ_CAD_SHELL_TOOL]:[]),READ_REQUESTS_TOOL,CANCEL_REQUEST_TOOL,...(opts.requestStore.work&&opts.requestStore.linkGap?[REQUEST_WORK_TOOL,LINK_GAP_TOOL,...(opts.requestStore.ensureGapTask?[ENSURE_GAP_TOOL]:[])]:[]),...(opts.requestStore.restore?[RESTORE_REQUEST_TOOL]:[])]:[],get lifecycleRemaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-lifecycleUsed)},
  async lifecycle(name:string,raw:unknown){
@@ -293,7 +317,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
   const lookup=makeLookup(),groundingLookup=makeLookup(),until=opts.unlimitedWork?opts.deadline:opts.durable?opts.deadline-20000:Math.min(opts.deadline-20000,Date.now()+300000)
   const ownerRequest=[request?.payload.owner_request,opts.ownerRequest].filter(Boolean).filter((x,i,a)=>a.indexOf(x)===i).join('\n')||null
   let payload:DrawingRequest['payload']={brief:structuredClone(raw),owner_request:ownerRequest,draft:renewingConstruction?undefined:request?.payload.draft,restoration:request?.payload.restoration,dependencies:renewingConstruction?undefined:request?.payload.dependencies,...(!renewingConstruction&&request?.payload.targeted_review?{targeted_review:request.payload.targeted_review}:{}),reference_refs:[...new Set([...(request?.payload.reference_refs??[]),...opts.referenceImageRefs?.()??[]])] }
-  const persist=async(status:string,patch:Partial<DrawingRequest['payload']>={})=>{payload={...payload,...patch};if(opts.requestStore)request=await opts.requestStore.save(request?.id??null,request?.revision??0,status,payload)}
+  const persist=async(status:string,patch:Partial<DrawingRequest['payload']>={})=>{payload={...payload,...patch};if(opts.requestStore){request=await opts.requestStore.save(request?.id??null,request?.revision??0,status,payload);if(drawingWork)drawingWork.request_id=request.id}}
   const checkAuthority=async()=>{
    if(!await opts.hasAccess())return false
    if(request)await opts.requestStore?.assertActive?.(request.id)
@@ -355,12 +379,14 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
     construction=source
    }
    if(construction){
+    if(drawingWork&&(construction.artifact_id!==drawingWork.construction.artifact_id||construction.revision!==drawingWork.construction.revision))return {status:'conflict',stage:'construction',reason:'construction_binding_changed',saved:false}
     if(raw.construction_revision===null)return {status:'needs_data',stage:'construction',saved:false,reason:'construction_revision_required',artifact_id:construction.artifact_id}
     if(construction.source_kind!=='construction'||raw.construction_revision!=null&&construction.revision!==raw.construction_revision)return {status:'conflict',stage:'construction',saved:false,reason:'construction_revision_changed'}
     // Old pinned manifests lacked the new input. Capture their server-read
     // version once and persist it; subsequent resumes cannot follow a new head.
     raw.construction_revision??=construction.revision
    }else if(raw.construction_revision!=null)return {status:'invalid',stage:'construction',saved:false,reason:'construction_source_required'}
+   if(drawingWork?.drawing&&drawingArtifactId===drawingWork.drawing.artifact_id&&old.revision!==drawingWork.drawing.revision)return {status:'conflict',stage:'drawing',reason:'drawing_revision_changed',saved:false}
    expected=drawingArtifactId?old.revision:0;raw.area_id??=old.area_id??null;raw.component_id??=old.component_id??null
    // Work links may have changed independently of the geometry revision.
    raw.step_id??=Array.isArray(old.current_step_ids)
@@ -472,6 +498,10 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
    // must still verify current sources inside its actual dispatch operation.
    constructionDispatchGuard=async()=>{
     await refreshDesignReadiness(true)
+    if(drawingWork?.drawing){
+     const head=await opts.readArtifact(drawingWork.drawing.artifact_id,null,true)
+     if(!head||head.archived||head.revision!==drawingWork.drawing.revision)throw new Error('drawing_revision_changed')
+    }
     if(construction){
      const current=await refreshConstruction(true)
      if(current?.status!=='ready'){
@@ -748,7 +778,17 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
     candidate=null;acceptedReview=null;partial=true
     return {status:'stopped',saved:false,request_id:request?.id??null,reason:error.message,next_action:catalogText("feedback.cad-assistant.next-action.8837171e5549")}
    }
-   if(error instanceof Error&&error.message.startsWith('drawing_request_reuse:'))return {status:'existing_request',saved:false,request_id:error.message.split(':')[1],next_action:catalogText("feedback.cad-assistant.next-action.9c82aa7ab11b")}
+   if(error instanceof Error&&error.message==='drawing_revision_changed')return {status:'conflict',stage:'drawing',reason:'drawing_revision_changed',saved:false}
+   if(error instanceof Error&&error.message.startsWith('drawing_request_reuse:')){
+    const id=error.message.split(':')[1]
+    if(drawingWork){
+     const existing=await opts.requestStore?.load(id),brief=existing?.payload?.brief
+     if(!existing||['saved','cancelled','paused'].includes(existing.status)||brief?.artifact_id!==(drawingWork.drawing?.artifact_id??drawingWork.construction.artifact_id)
+      ||brief?.construction_revision!==drawingWork.construction.revision)return {status:'conflict',reason:'drawing_request_scope_changed',saved:false}
+     drawingWork.request_id=id
+    }
+    return {status:'existing_request',saved:false,request_id:id,next_action:catalogText("feedback.cad-assistant.next-action.9c82aa7ab11b")}
+   }
    const runtimeFault=error instanceof ConstructionToolContractError
    // 2026-11-02: a drawing that outgrows the stored request cannot be saved by
    // drawing it again; say so once instead of reporting a generic outage.

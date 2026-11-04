@@ -1,3 +1,4 @@
+import {boundDrawingArguments} from '../supabase/functions/_shared/drawing-work.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { catalogFixture, catalogCall, preBuildWorkersCatalogFixture } from './support/ai-catalog-fixture.ts'
@@ -44,7 +45,7 @@ const pieceCatalog = () => catalogFixture(manifest => {
   toolbox.definition = { ...toolbox.definition, workpad_version: 1 }
 })
 
-async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>, readDraft?: (args: any) => unknown, piecePreflight?: Record<string, unknown>, editResult?: Record<string, unknown>) {
+async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>, readDraft?: (args: any) => unknown, piecePreflight?: Record<string, unknown>, editResult?: Record<string, unknown>, boundDrawing?:{binding:any;seen:any[]}) {
   const projectId = 'p', message = 'Rita lådan', hasAccess = async () => true
   const lookup = createProjectLookup(projectId, async (_project, input) => ({ data: { records: input.dataset === 'project' ? [{ id: projectId, name: 'Lådan', description: 'Saved project' }] : [], related: [], truncated: false }, error: null }) as any, undefined, undefined, undefined, { unlimitedWork: true })
   const writer = createProjectWriter(projectId, message, async () => { throw Error('No write requested') }, async () => ({ data: [], error: null }), async () => ({ data: [], error: null }))
@@ -83,9 +84,18 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
   const cadAssistant: any = { pending: async () => [], tools: [DESIGN_CAD_TOOL], lifecycleTools: [], remaining: 4, lifecycleRemaining: 0,
     candidate: null, partial: false, failure: null, sources: [], lifecycle: async () => ({ status: 'invalid' }),
     consult: async () => { cadAssistant.candidate = { id: 'cand-1' }; return { status: 'ready', review: 'approved' } } }
+  if(boundDrawing){
+    cadAssistant.prepareDrawingWorker=async(sources:any)=>{boundDrawing.seen.push({sources});return {status:'ready',binding:boundDrawing.binding}}
+    cadAssistant.drawingWork=boundDrawing.binding
+    cadAssistant.boundArguments=(name:string,raw:unknown)=>boundDrawingArguments(name,raw,boundDrawing.binding)
+    cadAssistant.lifecycleTools=[catalog.tool('read_drawing_requests')]
+    cadAssistant.lifecycleRemaining=Infinity
+    cadAssistant.readBoundRequest=async()=>({status:'ok',requests:[],binding:boundDrawing.binding})
+    cadAssistant.consult=async(args:any)=>{boundDrawing.seen.push({args});return {status:'needs_data',reason:'fixture_only'}}
+  }
   const bob: OpenAIServiceOptions[] = [], pickerInputs: any[] = [], ran: { name: string; status: string; rejection?: unknown }[] = []
   const workers: Record<string, OpenAIServiceOptions[]> = { 'structure-worker': [], 'drawing-worker': [], 'materials-worker': [] }
-  const result = await runProjectAnswer({ projectId, userId: 'owner', message, lookup, writer, hasAccess, constructionTools, solutionActions, projectContext, cadAssistant,
+  const result = await runProjectAnswer({ projectId, userId: 'owner', message, lookup, writer, hasAccess, constructionTools, solutionActions, projectContext, cadAssistant,...(boundDrawing?{boundDrawingWork:true}:{}),
     ...(piecePreflight ? { workerPieceProgress: true, workerDesignReview: true,
       workerFormPiece: {
         readPiece: async () => piecePreflight,
@@ -322,4 +332,21 @@ test('a first construction is not handed to Konrad while the solution fails the 
   assert.equal(existing.workers['structure-worker'].length > 0, true, 'work on an existing construction is not gated')
   const pinned = await turn(catalogFixture(m => { const row = m.definitions.find(d => d.prompt_key === 'bob.tools')!; delete (row.definition as any).handover_readiness_version }), [ask('ask_structure_worker', { request: 'Konrad, konstruera ladan.' })], {}, notReady)
   assert.equal(pinned.workers['structure-worker'].length > 0, true, 'manifests before the publication keep the old hand-over')
+})
+
+
+test('Bob hands exact server-read identity to Rita; native tools and automatic knowledge use the bound scope',async()=>{
+ const id='10000000-0000-4000-8000-000000000001',drawing='20000000-0000-4000-8000-000000000001'
+ const binding={projectId:'p',construction:{artifact_id:id,revision:5},drawing:{artifact_id:drawing,revision:2},area_id:null,component_id:null,step_id:null,request_id:null}
+ const seen:any[]=[],sourceRead={artifact_id:id,revision:5,view:'overview',after:null,ids:[],result_id:null,section:null,step_id:null,work_kind:null}
+ const {workers,constructionCalls}=await turn(catalogFixture(),[
+  ask('read_construction_draft',sourceRead),ask('ask_drawing_worker',{request:'Visa fönstret från framsidan.'}),
+ ],{'drawing-worker':[
+  o=>{const spec=o.tools!.find(t=>t.function.name==='design_project_cad')!;assert(!('request_id' in (spec.function.parameters.properties as any)));assert(!names(o).includes('compose_cad_shell'))
+   return {success:true,model:'fixture',usage,responseId:'r1',toolCalls:[call('r1c','design_project_cad',{brief:'Front',handoff:null,requirement_changes:[],views:['front'],assembly_dependencies:null})]}}]},
+ args=>({status:'ok',projectId:'p',artifact_id:args.artifact_id,revision:args.revision,source_state:'current'}),undefined,undefined,{binding,seen})
+ assert.deepEqual(seen[0].sources,[binding.construction]);assert.equal(seen[1].args.artifact_id,drawing);assert.equal(seen[1].args.construction_revision,5);assert.equal(seen[1].args.request_id,null)
+ const knowledge=tail(catalogFixture(),workers['drawing-worker'][0],'drawing-worker').knowledge
+ assert.deepEqual(knowledge.drawing_work,binding);assert.equal(knowledge.constructions.artifact_id,id)
+ assert(constructionCalls.filter(c=>c.name==='read_construction_draft').every(c=>c.args.artifact_id===id&&c.args.revision===5))
 })

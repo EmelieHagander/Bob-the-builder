@@ -119,6 +119,20 @@ explicitly; they cannot silently become a new setting invented from text.
 The prompt asks the image model to preserve the photographed setting, perspective
 and existing features. The result remains an illustrative proposal.
 
+Saved CAD write receipts also have an exact-revision chat preview in the
+2026-11-04 implementation. `BobChatDrawings` reads through
+`database.getProjectDrawingPreview`: authenticated project/revision metadata,
+source status and one saved SVG view, never the STEP export or full CAD geometry.
+The saved camera order chooses the first available isometric view, otherwise a
+saved orthographic view. Reads start near the visible transcript; bytes/URLs are
+not copied into message state. Opening the shared zoom modal rechecks the source.
+Historical/archived revisions retain their labels; changed sources show a warning;
+unavailable sources withhold pixels; read/image failures have recovery and the
+existing exact drawing link remains. Displaying a saved view does not record a
+Construction presentation, owner approval or fabrication readiness. This consumes
+existing drawing revision 3 as well as future receipts; no CAD or AI regeneration
+is needed. [Verification/publication status](p25-live-window-anchor-followup-2026-11-04.md#code-owned-rita-handoff-and-inline-drawing-preview).
+
 The assistant bubble shows saved media write receipts as image previews. Originals
 open in the shared image modal and survive transcript reload. Generation continues
 to use the existing private-media reserve/upload/finalise path and project write

@@ -123,3 +123,36 @@ test('unlimited CAD inherits the root deadline without five-minute or reserved-t
   assert.equal(f.counts().models,expected==='ready'?1:0)
  }
 })
+
+test('code-owned drawing binding survives restart and the allocated request is reused without model IDs',async()=>{
+ const id='33333333-3333-4333-8333-333333333333'
+ const binding={projectId:'A',construction:{artifact_id:fixtureConstructionId,revision:1},drawing:null,area_id:null,component_id:null,step_id:null,request_id:null}
+ let stored:any,creates=0
+ const f=fixture({resolveDrawingWork:async()=>({status:'ready',binding}),requestStore:{
+  list:async()=>[],load:async()=>stored,read:async()=>({requests:[stored]}),
+  save:async(prior:any,_rev:any,status:any,payload:any)=>{if(!prior)creates++;stored={id,revision:(stored?.revision??0)+1,status,payload};return structuredClone(stored)},assertActive:async()=>{},
+ }})
+ assert.equal((await f.assistant.prepareDrawingWorker([binding.construction])).status,'ready')
+ const {request_id,artifact_id,construction_revision,area_id,component_id,step_id,...semantics}=request
+ assert.equal((await f.assistant.consult(f.assistant.boundArguments('design_project_cad',semantics))).status,'ready')
+ assert.equal(f.assistant.drawingWork?.request_id,id);assert.equal(creates,1)
+ const state=JSON.parse(JSON.stringify(f.assistant.exportState()))
+ const restored=fixture();restored.assistant.restoreState({...state,savedRequest:null})
+ assert.deepEqual(restored.assistant.drawingWork,f.assistant.drawingWork)
+ const args=restored.assistant.boundArguments('design_project_cad',{...semantics,handoff:'made-up'})!
+ assert.equal(args.request_id,id);assert.equal(args.artifact_id,fixtureConstructionId);assert.equal(args.construction_revision,1);assert.equal(args.handoff,null)
+ assert.equal(restored.assistant.boundArguments('design_project_cad',{...semantics,artifact_id:'foreign'}),null)
+ assert.throws(()=>restored.assistant.restoreState({...state,drawingWork:{...binding,projectId:'foreign'}}),/checkpoint_invalid/)
+})
+
+test('a bound drawing cannot acquire another construction with the same revision number',async()=>{
+ const drawingId='22222222-2222-4222-8222-222222222222',other='66666666-6666-4666-8666-666666666666'
+ const binding={projectId:'A',construction:{artifact_id:fixtureConstructionId,revision:1},drawing:{artifact_id:drawingId,revision:2},area_id:null,component_id:null,step_id:null,request_id:null}
+ const f=fixture({resolveDrawingWork:async()=>({status:'ready',binding}),readArtifact:async(id:string)=>id===drawingId?{revision:2,manifest:{bob_construction:{artifact_id:other,revision:1}}}:{source_kind:'construction',artifact_id:other,revision:1}})
+ await f.assistant.prepareDrawingWorker([binding.construction])
+ const {request_id,artifact_id,construction_revision,area_id,component_id,step_id,...args}=request
+ assert.equal((await f.assistant.consult(f.assistant.boundArguments('design_project_cad',args))).reason,'construction_binding_changed')
+ assert.equal(f.counts().renders,0);assert.equal(f.counts().models,0)
+ const failed=fixture({resolveDrawingWork:async()=>{throw Error('network')}})
+ assert.equal((await failed.assistant.prepareDrawingWorker([])).reason,'drawing_binding_unavailable');assert.equal(failed.counts().models,0)
+})

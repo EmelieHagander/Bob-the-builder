@@ -1,3 +1,4 @@
+import { resolveDrawingWork } from './drawing-work.ts'
 import { drawingErrorCode } from './drawing-errors.ts'
 import { createPlanLinks } from './project-plan-links.ts'
 import { buildingLinkFact, createBuildingScope } from './project-building-scope.ts'
@@ -355,11 +356,11 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
-      constructionPageVersion: 1 as const, workingStateVersion: 1 as const,
+      constructionPageVersion: 1 as const, workingStateVersion: 1 as const, drawingBindingVersion:1 as const,
       // Core reading tools loaded from the first step. Jobs without this pin keep on-demand loading.
       corePreloadVersion: 1 as const,
       // Building links read once at turn start. Jobs without this pin read nothing extra.
@@ -419,6 +420,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.completeRequestVersion !== undefined && execution.completeRequestVersion !== 1) throw new Error('complete_request_version_invalid')
   if (execution.resultReferenceVersion !== undefined && (execution.resultReferenceVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('result_reference_version_invalid')
   if (execution.resultWindowVersion !== undefined && (![1, 2].includes(execution.resultWindowVersion) || execution.resultReferenceVersion !== 1)) throw new Error('result_window_version_invalid')
+  if(execution.drawingBindingVersion!==undefined&&execution.drawingBindingVersion!==1)throw new Error('drawing_binding_version_invalid')
   if (execution.workingStateVersion !== undefined && execution.workingStateVersion !== 1) throw new Error('working_state_version_invalid')
   if (execution.constructionPageVersion !== undefined && execution.constructionPageVersion !== 1) throw new Error('construction_page_version_invalid')
   if (execution.corePreloadVersion !== undefined && execution.corePreloadVersion !== 1) throw new Error('core_preload_version_invalid')
@@ -859,7 +861,29 @@ export async function answerWithOpenAi(opts: {
     .eq('function_name','cad-build-guide').eq('module_id','cad').abortSignal(AbortSignal.timeout(10000)).maybeSingle()
    return !error&&data?.is_enabled===true
   }):Promise.resolve(false)
+  const readBoundDrawing=async(id:string,revision:number|null)=>{
+    const {data,error}=await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000))
+    if(error)throw new Error('drawing_binding_unavailable')
+    if(!data)return null
+    const links=await client.from('current_drawing_steps').select('step_id').eq('project_id',opts.projectId).eq('artifact_id',id).abortSignal(AbortSignal.timeout(10000))
+    if(links.error)throw new Error('drawing_links_unavailable')
+    return {...data,current_step_ids:links.data.map(row=>row.step_id)}
+  }
   const cadAssistant = createCadAssistant({ unlimitedWork,
+    ...(execution.drawingBindingVersion===1&&requestStore?{resolveDrawingWork:async(sources,focus)=>resolveDrawingWork(opts.projectId,sources,focus,{
+      readConstruction:(id,revision)=>constructionOptions.read(id,revision,null),readDrawing:readBoundDrawing,
+      linkedDrawings:async sourceId=>{
+        // Read current heads first. Historic drawing revisions must not grow
+        // this identity lookup or eventually exhaust its bounded page.
+        const heads=await client.from('current_artifacts').select('id,revision').eq('project_id',opts.projectId).eq('archived',false).limit(201).abortSignal(AbortSignal.timeout(10000))
+        if(heads.error||heads.data.length>=201)throw new Error('drawing_binding_unavailable')
+        if(!heads.data.length)return []
+        const pairs=heads.data.map(head=>`and(drawing_artifact_id.eq.${head.id},drawing_revision.eq.${head.revision})`).join(',')
+        const {data,error}=await client.from('artifact_construction_drawings').select('drawing_artifact_id,drawing_revision').eq('project_id',opts.projectId).eq('construction_artifact_id',sourceId).or(pairs).limit(201).abortSignal(AbortSignal.timeout(10000))
+        if(error||data.length>=201)throw new Error('drawing_binding_unavailable')
+        return data.map(row=>({artifact_id:row.drawing_artifact_id,revision:row.drawing_revision}))
+      },requests:()=>requestStore.list(),loadRequest:id=>requestStore.load(id),
+    })}:{}),
     // Same fixed grounding read order as Bob's own call: parallel reads can swap journal positions on resume.
     groundingReadOrder: execution.groundingReadOrderVersion === 1 ? 'serial' : 'parallel',
     allowSourceRenewal:execution.constructionReplayVersion===2,
@@ -1121,6 +1145,7 @@ export async function answerWithOpenAi(opts: {
     // receipt-only recovery would abandon the unfinished part of the request.
     ...opts, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? CLAUDE_BACKGROUND_TIMEOUT_MS : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
     readToolPolicy,
+    boundDrawingWork:execution.drawingBindingVersion===1,
     compactToolState: execution.workingStateVersion === 1,
     checkpoint: answerCheckpoint,
     // Older in-flight journals keep their recorded post-rollover requests.

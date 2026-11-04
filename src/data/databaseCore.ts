@@ -204,6 +204,7 @@ export const getTargetHistory = solutions.decisions
 export const editSolution = solutions.edit
 export const selectTarget = solutions.choose
 export const getProjectArtifacts = artifacts.list
+export const getProjectDrawingPreview = artifacts.chatPreview
 export const getProjectArtifactVersion = artifacts.version
 export const getProjectArtifactHistory = artifacts.history
 export const editProjectArtifact = artifacts.edit

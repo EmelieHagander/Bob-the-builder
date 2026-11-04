@@ -1,3 +1,4 @@
+import { validConstructionRef, type ConstructionRef } from './drawing-work.ts'
 import type { PlanLinks } from './project-plan-links.ts'
 import type { BuildingScope } from './project-building-scope.ts'
 import type { WorkRecords } from './project-work-records.ts'
@@ -240,6 +241,8 @@ export interface BobAnswerState {
   finalCall?: boolean
   /** Worker checkpoints: the hand-over at this step and call index, and the worker's place in it. */
   worker?: { key: string; index: number; session: unknown; projectName?: string; progress: WorkerProgress }
+  /** Exact source reads carried by code into Rita's handover. */
+  drawingSources?:ConstructionRef[]
   /** Diagnostic indices must not restart at zero on each specialist claim. */
   workerToolEvents?: number
   /** Failed hand-overs cannot start the same worker again during this owner turn. */
@@ -259,6 +262,8 @@ export interface BobAnswerCheckpoint {
 }
 export type ProjectAnswerOptions = {
   aiCatalog: AiCatalogSession;
+  /** Pinned per execution; Rita receives server-owned source/destination identity. */
+  boundDrawingWork?:boolean;
   /** Build guides (2026-10-30): the owner's switch. Off hides design_project_cad's assembly order. */
   buildGuideTools?: boolean;
   projectId: string; userId: string; message: string;
@@ -339,6 +344,7 @@ export async function runProjectAnswer(opts: ProjectAnswerOptions): Promise<Proj
       || saved.workerToolEvents !== undefined && !counter(saved.workerToolEvents)
       || saved.worker !== undefined && (saved.phase !== 'tools' || !saved.worker || typeof saved.worker.key !== 'string' || saved.worker.index !== saved.toolIndex
         || !saved.worker.session || typeof saved.worker.session !== 'object' || saved.worker.projectName !== undefined && typeof saved.worker.projectName !== 'string' || !validWorkerProgress(saved.worker.progress, 40))
+      || saved.drawingSources !== undefined && (!Array.isArray(saved.drawingSources)||saved.drawingSources.some(ref=>!validConstructionRef(ref)))
       || saved.failedWorkers !== undefined && (!Array.isArray(saved.failedWorkers) || new Set(saved.failedWorkers).size !== saved.failedWorkers.length
         || saved.failedWorkers.some(key => typeof key !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(key)))
       || !saved.initial || !saved.toolbox || !saved.observation || !Array.isArray(saved.messages) || !Array.isArray(saved.tools) || !Array.isArray(saved.workResults)
@@ -362,6 +368,12 @@ export async function runProjectAnswer(opts: ProjectAnswerOptions): Promise<Proj
 }
 async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<ProjectAnswer> {
   const restored = opts.checkpoint?.state
+  const drawingSources:ConstructionRef[]=structuredClone(restored?.drawingSources??[])
+  const rememberDrawingSource=(result:any)=>{
+    if(!opts.boundDrawingWork||result?.status!=='ok'||result.projectId!==opts.projectId||!validConstructionRef({artifact_id:result.artifact_id,revision:result.revision}))return
+    const ref={artifact_id:result.artifact_id,revision:result.revision},at=drawingSources.findIndex(r=>r.artifact_id===ref.artifact_id)
+    if(at<0)drawingSources.push(ref);else drawingSources[at]=ref
+  }
   if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
   const briefing = restored ? restored.initial.briefing as Awaited<ReturnType<typeof opts.lookup.search>> : await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
   if (briefing.status !== 'ok') return { ok: false, error: briefing.status === 'denied' ? 'project_denied' : 'project_unavailable' }
@@ -510,9 +522,17 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           reason: 'construction_piece_blocked_earlier_this_turn',
           note: 'A canonical bounded-construction write was already rejected in this turn. Do not spend another specialist chain on the same blocked geometry. Keep the saved revision unchanged; report the blocker and allow a new owner turn after the source or implementation is corrected.', calls: [] }
       if (failedWorkers.has(key)) return { status: 'unavailable', worker: worker.role.replace(/^role\./, ''), reason: 'failed_earlier_this_turn', calls: [] }
+      if(key==='drawing'&&opts.boundDrawingWork&&!resume){
+        if(!opts.cadAssistant)return {status:'unavailable',reason:'drawing_binding_unavailable'}
+        const drawing=opts.currentView?.status==='ok'?opts.currentView.focus.drawing:undefined
+        const focus=drawing?{artifact_id:drawing.id,revision:drawing.revision}:undefined
+        const bound=await opts.cadAssistant.prepareDrawingWorker(drawingSources,focus)
+        if(bound.status!=='ready')return bound
+      }
       let session = workerSessions.get(key)
       if (!session || resume) {
         session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}),
+          drawingWorker: key==='drawing'&&opts.boundDrawingWork,
           preloadTools: () => [...worker.tools, ...worker.reads, ...(workerPads ? ['update_workpad'] : [])], offerWaiting: true, readPolicy: basePolicy,
           ...(workerPads ? { extraTools: [workpadTool(workerPads, workpadAgent!)] } : {}) })
         if (resume) session.restoreState(structuredClone(resume.session) as Parameters<typeof session.restoreState>[0])
@@ -529,7 +549,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const readSavedRecord = async (read: { label: string; tool: string; arguments: Record<string, unknown> }) => {
         const { artifact_id: id, revision } = read.arguments
         if (read.label === 'construction' && opts.constructionTools && typeof id === 'string' && Number.isSafeInteger(revision))
-          return opts.constructionTools.readSavedSummary(id, Number(revision))
+          {const result=await opts.constructionTools.readSavedSummary(id, Number(revision));rememberDrawingSource(result);return result}
         return withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments)))
       }
       const workerWorkpad = !resume && workerPads
@@ -555,6 +575,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         ...(opts.workerVerifiedRenewal && workerPads && opts.workerCheckpoint && opts.releaseContext
           ? { verifiedRenewal: { loadWorkpad: (step: number) => workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}:renewal:${step}`) } }
           : {}),
+        boundDrawingWork:key==='drawing'&&opts.boundDrawingWork,
         session, hasAccess: opts.hasAccess, deadline, ...(opts.modelTimeoutMs ? { modelTimeoutMs: opts.modelTimeoutMs } : {}),
         ...(opts.finalAnswer ? { stopAsResult: true } : {}),
         ...(opts.releaseContext ? { releaseChain: opts.releaseContext } : {}),
@@ -594,7 +615,13 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         ...(worker.knowledge ? { variables: { project_name: await readProjectName() }, readKnowledge: async () => {
           const knowledge: Record<string, unknown> = {}
           for (const read of worker.knowledge!) {
-            try { knowledge[read.label] = withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments))) }
+            try {
+              const args=structuredClone(read.arguments)
+              if(key==='drawing'&&opts.boundDrawingWork){
+                for(const field of read.tool==='read_construction_draft'?['artifact_id','revision']:read.tool==='read_drawing_requests'?['request_id','after_id']:[])delete args[field]
+              }
+              knowledge[read.label] = withoutDiagnostics(await session!.execute(read.tool,args))
+            }
             catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; knowledge[read.label] = { status: 'unavailable' } }
           }
           if (opts.workerFormPiece && key === 'structure') {
@@ -602,6 +629,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
             catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error;
               knowledge.focused_plan_step = { status: 'unavailable' } }
           }
+          if(key==='drawing'&&opts.boundDrawingWork)knowledge.drawing_work=opts.cadAssistant?.drawingWork
           if (constructionPiece) knowledge.construction_piece_boundary = constructionPiece
           return knowledge
         } } : {}),
@@ -744,6 +772,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
       ...(finalCall ? { finalCall } : {}),
       ...(workerState ? { worker: workerState } : {}),
+      ...(opts.boundDrawingWork?{drawingSources}:{}),
       ...(workerToolEvents ? { workerToolEvents } : {}),
       ...(failedWorkers.size ? { failedWorkers: [...failedWorkers] } : {}),
       tools, closedByLimit, closedByCommentary, request, response: pendingResponse, toolIndex }))
@@ -935,6 +964,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
             }
           }
         }
+        if(toolName==='read_construction_draft')rememberDrawingSource(result)
         observation.tool_calls++
         // Its result carries the manual and parameters: that tool's sheet is in the conversation now.
         if (toolSheets && toolName === 'describe_tool' && result?.status === 'ok' && typeof result.name === 'string') sheetsSent.add(result.name)

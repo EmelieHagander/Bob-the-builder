@@ -1,3 +1,4 @@
+import { drawingWorkerSpec } from '../drawing-work.ts'
 import { SUPERSEDED_PLAN_LINK_TOOLS, type PlanLinks } from '../project-plan-links.ts'
 import type { BuildTreeTools } from '../build-tree.ts'
 import type { BuildingScope } from '../project-building-scope.ts'
@@ -88,6 +89,7 @@ export const DRAWING_CONTINUATION_PRELOAD = ['read_construction_draft', 'check_c
   'edit_construction_parts', 'save_cad_design']
 
 export function createBobToolSession(opts: {
+  drawingWorker?:boolean;
   aiCatalog?: AiCatalogSession;
   compactToolState?: boolean;
   /** Build guides (2026-10-30): the owner's switch. Off hides design_project_cad's assembly order. */
@@ -240,7 +242,18 @@ export function createBobToolSession(opts: {
     }] : []),
     ...(opts.extraTools ?? []),
   ]
-  return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions, ...(opts.preloadTools ? { preloadTools: opts.preloadTools } : {}), ...(opts.offerWaiting ? { offerWaiting: true } : {}),
+  return createToolSession({ definitions: registered.filter(def=>!opts.drawingWorker||!['plan_cad_pieces','compose_cad_shell','link_cad_shell_steps','link_project_drawing','link_drawing_gap','ensure_drawing_gap_task'].includes(def.spec.function.name)).map(def=>{
+    // A bound drawing operation cannot escape into another CAD/destination or
+    // work-link writer. Those operations need their own code-owned bindings.
+    if(!opts.drawingWorker||!opts.cadAssistant)return shelved(def)
+    const name=def.spec.function.name
+    if(!['design_project_cad','read_construction_draft','read_drawing_requests'].includes(name))return shelved(def)
+    return shelved({...def,spec:drawingWorkerSpec(def.spec),execute:async(raw:unknown)=>{
+      const args=opts.cadAssistant!.boundArguments(name,raw)
+      if(!args)return {status:'invalid',reason:'drawing_identity_is_server_owned',saved:false}
+      return name==='read_drawing_requests'?opts.cadAssistant!.readBoundRequest():def.execute(args)
+    }})
+  }), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions, ...(opts.preloadTools ? { preloadTools: opts.preloadTools } : {}), ...(opts.offerWaiting ? { offerWaiting: true } : {}),
     ...(opts.compactToolState&&opts.aiCatalog?{compactState:{catalogManifestId:opts.aiCatalog.manifest().manifest_id}}:{}),
     ...(opts.aiCatalog?.manifest().definitions.some(row=>row.prompt_key==='bob.tools'&&row.metadata?.construction_work_version===1)?{
       autoLoadReady:true,followups:opts.aiCatalog.definition('bob.tools','tool_contract').definition.operation_followups as import('./session.ts').ToolFollowup[],
@@ -248,7 +261,8 @@ export function createBobToolSession(opts: {
     selectiveTools: opts.aiCatalog?.manifest().definitions.some(row => row.prompt_key === 'bob.workflows' && row.metadata?.selective_tools_version === 1),
     ...(opts.aiCatalog ? { catalogTool: (name, parameters) => {
         const definition = opts.aiCatalog!.tool(name, parameters)
-        return name === 'design_project_cad' && !opts.buildGuideTools ? withoutAssemblyOrder(definition) : definition
+        const visible=name === 'design_project_cad' && !opts.buildGuideTools ? withoutAssemblyOrder(definition) : definition
+        return opts.drawingWorker?drawingWorkerSpec(visible):visible
       },
       ...(opts.toolInstructions === 'lazy' ? { catalogColleagues: (name: string) => bobColleagues(opts.aiCatalog!, [name]),
         catalogWorkflows: () => bobWorkflows(opts.aiCatalog!) } : {}),
