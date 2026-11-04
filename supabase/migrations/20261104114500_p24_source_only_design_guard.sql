@@ -12,6 +12,7 @@ begin
  old:=$old$ draft jsonb; change jsonb; node jsonb; readiness jsonb; ids text[]:='{}'; msg text;$old$;
  changed:=$new$ draft jsonb; change jsonb; node jsonb; readiness jsonb; ids text[]:='{}'; msg text;
  old_choice jsonb; new_choice jsonb; old_feature jsonb; new_feature jsonb;
+ old_model jsonb; new_model jsonb;
  old_solution uuid; new_solution uuid;$new$;
  if position(old in definition)=0 then raise exception 'p24_source_guard_declarations_changed'; end if;
  definition:=replace(definition,old,changed);
@@ -26,8 +27,9 @@ begin
    and d->'target_revision' is distinct from draft->'target_revision' then
     select o.design_intent->'choices',n.design_intent->'choices',
            o.design_intent->'features',n.design_intent->'features',
+           o.design_intent->'model',n.design_intent->'model',
            o.solution_id,n.solution_id
-      into old_choice,new_choice,old_feature,new_feature,old_solution,new_solution
+      into old_choice,new_choice,old_feature,new_feature,old_model,new_model,old_solution,new_solution
     from bob.solution_revisions o
     join bob.target_revisions t on t.project_id=p_project
        and t.revision=(d->>'target_revision')::integer
@@ -40,7 +42,8 @@ begin
       or jsonb_typeof(old_choice) is distinct from 'array' or jsonb_typeof(new_choice) is distinct from 'array'
       or jsonb_typeof(old_feature) is distinct from 'array' or jsonb_typeof(new_feature) is distinct from 'array'
       or old_choice is distinct from new_choice
-      or old_feature is distinct from new_feature then
+      or old_feature is distinct from new_feature
+      or old_model is distinct from new_model then
       return jsonb_build_object('status','needs_data',
         'reason','source_only_design_decisions_changed',
         'artifact_id',draft->'artifact_id','revision',draft->'revision',
