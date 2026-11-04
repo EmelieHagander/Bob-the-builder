@@ -28,10 +28,11 @@ begin
  for update of p;
  if not found then raise exception 'p2_source_followup_catalog_missing'; end if;
  if prior.metadata->>'p2_source_followups_version'='1' then return; end if;
- if prior.version<>43 or prior.metadata->>'construction_work_version' is distinct from '1'
+ if prior.metadata->>'construction_work_version' is distinct from '1'
   or jsonb_typeof(prior.definition->'operation_followups') is distinct from 'array'
  then raise exception 'p2_source_followup_catalog_changed'; end if;
  followups:=prior.definition->'operation_followups';
+ if jsonb_array_length(followups)<>18 then raise exception 'p2_source_followup_baseline_changed'; end if;
  if jsonb_array_length(followups)+jsonb_array_length(additions)>32 then
   raise exception 'p2_source_followup_budget_exceeded';
  end if;
