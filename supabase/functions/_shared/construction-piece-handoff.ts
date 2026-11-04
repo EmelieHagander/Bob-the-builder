@@ -26,7 +26,7 @@ export function constructionPieceHandoffGate(piece: Record<string, unknown>): Re
     required_step_id: typeof piece.step_id === 'string' ? piece.step_id : null,
     current_focus_step_id: typeof piece.focus_step_id === 'string' ? piece.focus_step_id : null,
     plan_revision: Number.isSafeInteger(piece.plan_revision) ? piece.plan_revision : null,
-    note: 'The Plan is still focused on another Step. Read its evidence and confirm it is complete, then use the authorized plan-focus flow to select the intended facade-opening Step before delegating construction again. Do not mark steps completed or change geometry merely to bypass the gate.',
+    note: 'The Plan is still focused on another Step. Read its evidence and confirm it is complete, then use the authorized plan-focus flow to select the intended facade-opening Step. Re-read the Construction and selected Solution for stale source pins before changing geometry; a focus change alone does not reconcile sources. Never mark steps completed or change geometry merely to bypass this gate.',
   }
 
   // Including unfamiliar statuses: fail closed, never pay for a specialist
