@@ -17,7 +17,7 @@ const model = (id: string, calls: ReturnType<typeof call>[] = []): OpenAIService
 
 function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; readback?: (revision: number) => unknown;
   checkInSave?: boolean; serverCheck?: 'checked' | 'unavailable'; inspect?: (revision: number) => Record<string, unknown>;
-  pauseForDesignReview?: boolean; boundedReview?: (revision: number) => Record<string, unknown> }) {
+  pauseForDesignReview?: boolean; boundedReview?: (revision: number) => Record<string, unknown>; conflict?: boolean }) {
   const commands: { name: string; revision: number | null }[] = []
   const scopedChecks: string[][] = []
   const observed: OpenAIServiceOptions[] = [], checkpoints: WorkerProgress[] = []
@@ -29,9 +29,10 @@ function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; r
     session: {
       prepare: async () => [tool('read_construction_draft'), tool('edit_construction_parts'), tool('update_workpad')],
       execute: async (name: string) => {
-        commands.push({ name, revision: name === 'edit_construction_parts' ? ++saved : null })
+        commands.push({ name, revision: name === 'edit_construction_parts' && !opts.conflict ? ++saved : null })
         return name === 'edit_construction_parts'
-          ? { status: 'saved', receipt: { dataset: 'artifacts', recordId: 'c1', revision: saved, operation: 'updated' },
+          ? opts.conflict ? { status: 'conflict', reason: 'canonical_source_changed' }
+          : { status: 'saved', receipt: { dataset: 'artifacts', recordId: 'c1', revision: saved, operation: 'updated' },
             ...(opts.checkInSave !== false ? { check: { status: 'checked', concept_ready: true } } : {}) }
           : name === 'update_workpad' ? { status: 'noted', revision: 3 } : { status: 'ok' }
       },
@@ -187,6 +188,29 @@ test('v2 preserves a legacy construction save but stops when no FORM scope can b
   assert.equal(observed.length, 1, 'Konrad must not start the next workpiece just because the save checked')
   assert.equal(commands.filter(c => c.name === 'edit_construction_parts').length, 1)
   assert.equal((report.saved_receipt as Record<string, any>).piece_evidence.status, 'no_form_scope')
+})
+
+
+test('v4 stops after one canonical construction write conflict instead of burning more model rounds', async () => {
+  const sequence = [model('rejected', [
+    call('a', 'edit_construction_parts'), call('b', 'read_construction_draft'),
+  ]), model('must-not-run')]
+  const { result, observed, commands } = harness(sequence, {
+    enabled: true, conflict: true, boundedReview: () => ({ status: 'not_focused' }),
+  })
+  const report = await result
+  assert.deepEqual([report.status, report.reason, report.blocked_tool],
+    ['needs_verification', 'construction_piece_write_conflict', 'edit_construction_parts'])
+  assert.equal(observed.length, 1, 'a rejected v4 write cannot trigger another costly model step')
+  assert.deepEqual(commands.map(c => c.name), ['edit_construction_parts'])
+  assert.deepEqual(report.receipts, [], 'no made-up revision or saved geometry')
+
+  // Older version-pinned worker calls without the v4 spatial read remain
+  // unchanged; the new early stop does not rewrite their journal semantics.
+  const old = harness([model('old', [call('x', 'edit_construction_parts')]), model('done')],
+    { enabled: true, conflict: true })
+  assert.equal((await old.result).status, 'ok')
+  assert.equal(old.observed.length, 2)
 })
 
 test('v4 pauses for the exact spatially bounded legacy revision without inventing FORM scope or windows',async()=>{
