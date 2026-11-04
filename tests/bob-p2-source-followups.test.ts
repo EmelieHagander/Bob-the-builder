@@ -96,7 +96,7 @@ test('P2 catalog release changes only the versioned Bob toolbox and is idempoten
   try {
     const current = (await pg.query<{ version: number; definition: any; metadata: any }>(statement)).rows[0]
     assert(before, 'the existing active toolbox must have been available')
-    assert.equal(before.version, 43, 'P2 migration requires the reviewed toolbox version')
+    assert.equal(before.definition.operation_followups.length, 18, 'P2 migration requires the reviewed followup baseline')
     assert.equal(current.version, before.version + 1)
     assert.deepEqual(current.definition, {
       ...before.definition,
