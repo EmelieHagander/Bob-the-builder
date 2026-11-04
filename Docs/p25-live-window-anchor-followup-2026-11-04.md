@@ -38,8 +38,21 @@ pre-dispatch continuation/validation but does not establish the original excepti
 Terminal job checkpoints/journal entries have been cleaned up, so they cannot be
 replayed as if still available. No jobs were active at the follow-up.
 
-**Acceptance still open:** deploy/read back this diagnostic change, then reproduce
-image viewing through an ordinary signed-in owner session; fix the observed cause
+**Technical release verified at 18:30 UTC:** [PR #445](https://github.com/EmelieHagander/Bob-the-builder/pull/445)
+is merged as `9fc67f39675bcf94aa0ec0aa05c8dc82eb9f05d0`. Four focused test files
+passed: images 9/9, continuation 23/23, execution metrics 12/12 (including SQL
+access checks), recovery 2/2. Both Edge entrypoints typechecked against the locally
+installed Supabase declarations via a temporary import map; the exact esm.sh
+import could not be fetched. No full CI ran. Before deployment the target was
+reconfirmed as `yuobtgoidmmmwfqenkau` and active jobs were zero. Worker first,
+then entrypoint: `bob-worker` v193 / `ask-bob` v225 ACTIVE, with prior
+JWT/capability modes retained. Readback matched all 137 worker and 139 entrypoint
+files byte for byte against the submitted bundles. No migration or paid model
+was run. Bundle SHA-256 values:
+- worker: `fa5350565701f361f1acd72658a42e4566912afc75e3c65ca0e9c436e11fa5eb`
+- entrypoint: `225f1ff02986606209c80d931b44d61f0a10074d3d3248f1ff91c185707fb636`
+
+**Acceptance still open:** reproduce image viewing through an ordinary signed-in owner session; fix the observed cause
 and run the single-window Ladan acceptance. The available browser currently shows
 Bob's sign-in page. Do not manufacture an owner session through database credentials.
 
