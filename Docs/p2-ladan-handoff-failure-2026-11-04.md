@@ -1,6 +1,6 @@
 # P2.3 — Ladan handoff failure and bounded recovery, 2026-11-04
 
-**Status:** Source fix and regression tests in PR, NOT deployed or live-accepted. No new AI jobs or geometry writes in this investigation.
+**Status:** Source fix merged via PR #437 and verified deployed in `ask-bob` v223 / `bob-worker` v191. Full repository regression suite and real AI/window acceptance are still outstanding. No new paid AI jobs or geometry writes were performed in this investigation.
 
 ## Observed latest test
 

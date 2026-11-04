@@ -100,7 +100,7 @@ test('explicit source reconciliation preserves construction identity, receipt an
   await t.test('P2.4 refuses a source-only refresh after governing design choices changed', async () => {
     // The original bounded source-only protocol remains allowed for unchanged
     // selected design choices; only a semantically changed choice is refused.
-    await pg.exec(readFileSync(new URL('../supabase/migrations/20261104114500_p24_source_only_design_guard.sql', import.meta.url), 'utf8'))
+    await pg.exec(readFileSync(new URL('../supabase/migrations/20261104113252_p24_source_only_design_guard.sql', import.meta.url), 'utf8'))
     intent.choices[0].question += ' Include a front opening in this new revision?'
     assert.equal((await revise(3)).revision, 4)
     const blocked = await tools.execute('change_construction_parameters', {

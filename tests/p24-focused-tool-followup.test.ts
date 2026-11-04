@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createToolSession, type ToolDefinition, type ToolPolicy, type ToolGate, type ToolFollowup } from '../supabase/functions/_shared/project-tools/session.ts'
 
-const sql = readFileSync(new URL('../supabase/migrations/20261104114600_p24_focus_tool_followup.sql', import.meta.url), 'utf8')
+const sql = readFileSync(new URL('../supabase/migrations/20261104113817_p24_focus_tool_followup.sql', import.meta.url), 'utf8')
 const match = sql.match(/extra jsonb:=\s*'([\s\S]*?)'::jsonb;/)
 assert(match, 'the focus tool followup must be published in the versioned catalog')
 const followups = JSON.parse(match[1]) as ToolFollowup[]
