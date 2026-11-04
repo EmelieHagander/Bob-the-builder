@@ -1,6 +1,6 @@
 # P2.2 — Plan evidence must mean completed work (2026-11-04)
 
-**Status:** implementation in GitHub; real model acceptance remains separate from code/DB verification.
+**Status:** production-migrated and checked as `20261104093214_p2_verified_plan_task_evidence`; real model acceptance remains separate from code/DB verification.
 
 ## Observed failure
 
@@ -23,6 +23,8 @@ In an isolated PostgreSQL transaction using the actual, owner-authorized Ladan d
 5. `ROLLBACK` left Ladan with its original `todo` Task, existing evidence, Construction revision 4 and 78 instances. This is *not* a real Bob/AI acceptance test.
 
 A synthetic PGlite integration regression in `tests/living-project-plan.test.ts` also covers selectors, links, reopen, the step-completion receipt, and unauthorized access; it must be run in a complete repository test environment before claiming the automated suite passed.
+
+**After production activation:** a fresh read of `bob.project_plan_briefing` for the real owner returned 1 missing / 1 satisfied. The historic Task remained `todo`, Construction revision 4 retained 78 instances, and no Bob job was queued or running. The deployed SQL is the same exact merged source tested with rollback.
 
 ## P2 scope and next acceptance
 
