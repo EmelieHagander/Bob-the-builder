@@ -35,7 +35,7 @@ const tail = (catalog: AiCatalogSession, o: OpenAIServiceOptions, prefix: string
 const ask = (tool: string, request: unknown) => () => ({ success: true, model: 'fixture', usage, responseId: 'b1', toolCalls: [call('c1', tool, request)] })
 const toolOutput = (o: OpenAIServiceOptions) => JSON.parse(String(o.messages!.find(m => m.role === 'tool')!.content))
 
-async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>, readDraft?: (args: any) => unknown) {
+async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>, readDraft?: (args: any) => unknown, piecePreflight?: Record<string, unknown>) {
   const projectId = 'p', message = 'Rita lådan', hasAccess = async () => true
   const lookup = createProjectLookup(projectId, async (_project, input) => ({ data: { records: input.dataset === 'project' ? [{ id: projectId, name: 'Lådan', description: 'Saved project' }] : [], related: [], truncated: false }, error: null }) as any, undefined, undefined, undefined, { unlimitedWork: true })
   const writer = createProjectWriter(projectId, message, async () => { throw Error('No write requested') }, async () => ({ data: [], error: null }), async () => ({ data: [], error: null }))
@@ -73,6 +73,14 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
   const bob: OpenAIServiceOptions[] = [], pickerInputs: any[] = [], ran: { name: string; status: string; rejection?: unknown }[] = []
   const workers: Record<string, OpenAIServiceOptions[]> = { 'structure-worker': [], 'drawing-worker': [], 'materials-worker': [] }
   const result = await runProjectAnswer({ projectId, userId: 'owner', message, lookup, writer, hasAccess, constructionTools, solutionActions, projectContext, cadAssistant,
+    ...(piecePreflight ? { workerPieceProgress: true, workerDesignReview: true,
+      workerFormPiece: {
+        readPiece: async () => piecePreflight,
+        readPlan: async () => ({ status: 'unavailable' }),
+        readConstruction: async () => ({ status: 'unavailable' }),
+      },
+      workpads: { load: async () => ({ status: 'ok', revision: 0, note: null }),
+        update: async () => ({ status: 'noted', revision: 1 }) } } : {}),
     aiCatalog: catalog, corePreload: true, readToolPolicy, toolPicker: true, completeRequest: true, onTool: v => ran.push({ name: v.name, status: v.status, ...(v.rejection ? { rejection: v.rejection } : {}) }),
     callModel: catalogCall(async options => {
       if (options.functionName === 'completion-gate') return { success: true, model: 'fixture', usage, data: JSON.stringify({ work_remaining: false, reason: '' }) }
@@ -85,6 +93,21 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
   assert.equal(result.ok, true, JSON.stringify(result))
   return { bob, workers, pickerInputs, ran, constructionCalls, cadAssistant, delivered: () => delivered }
 }
+
+
+test('v4 Plan focus gate prevents a paid Konrad call before the approved opening Step', async () => {
+  const piece = { status: 'not_focused', plan_revision: 2,
+    step_id: 'step-windows', focus_step_id: 'step-reconciliation', artifact_id: 'c1' }
+  const { bob, workers, constructionCalls, ran } = await turn(catalogFixture(),
+    [ask('ask_structure_worker', { request: 'Work on the first window.' })], {}, undefined, piece)
+  assert.equal(workers['structure-worker'].length, 0, 'no model request reaches the expensive specialist')
+  assert.equal(constructionCalls.length, 0, 'no geometry is read or modified in this blocked handoff')
+  assert(ran.some(entry => entry.name === 'ask_structure_worker' && entry.status === 'needs_verification'))
+  const result = toolOutput(bob[1])
+  assert.deepEqual([result.status, result.reason, result.required_step_id, result.current_focus_step_id],
+    ['needs_verification', 'construction_piece_step_not_focused', 'step-windows', 'step-reconciliation'])
+  assert.match(String(result.note), /plan-focus flow/)
+})
 
 test('Bob asks Konrad in plain words; Konrad has his own tools, the project in his persona and his project knowledge', async () => {
   const catalog = catalogFixture(), core = catalogCoreTools(catalog)!
