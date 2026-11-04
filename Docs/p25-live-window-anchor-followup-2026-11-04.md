@@ -120,9 +120,18 @@ legacy scheduling, exact-revision checks and wrong-focus gates still pass.
 Both Edge entrypoints pass Deno check using the same temporary local Supabase
 type mapping recorded for #445; the exact esm.sh import remains inaccessible.
 
-**Release pending:** review/merge, reconfirm zero jobs and target, deploy compatible
-worker/entrypoint bundles and read back exact files. Then repeat a single
-owner-initiated window test with cost and per-invocation CPU evidence. This
+**Technical release verified:** [PR #448](https://github.com/EmelieHagander/Bob-the-builder/pull/448)
+is merged as `e49af858d09b26aeecb769c41405866465c6bb25`. Target
+`yuobtgoidmmmwfqenkau` and zero active jobs were checked immediately before
+installation. `bob-worker` v194 was deployed first, then `ask-bob` v226; both
+are ACTIVE with prior authentication modes. Readback matched all 137 worker
+and 139 entrypoint files byte for byte. Bundle hashes:
+- worker: `4a42bccb177b67e5101056fd5c72accde34980eae03eb24b9f54c9ce58bd90fa`
+- entrypoint: `d8871b7e63b728ac1cf208629a811d758cad744f7d6a3e6290a0cda786ff762f`
+
+No migration, full CI or paid model run was started. Active jobs remained zero
+after installation. **Next:** repeat a single owner-initiated window test with
+cost and per-invocation CPU evidence. This
 mitigates cumulative work within one invocation; it does not prove that every
 individual tool/model step fits the two-second envelope or close #438.
 
