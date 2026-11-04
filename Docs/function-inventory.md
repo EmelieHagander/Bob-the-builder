@@ -1,5 +1,9 @@
 # bob — current capability & gap inventory
 
+## Runtime-path follow-up — audited 2026-11-04
+
+The [five open runtime-path findings](bob-runtime-path-audit-2026-11-04.md) qualify the current worker surface. In particular, #458 preserves a bound single-drawing path but leaves CAD piece/shell/work-link tools without a reachable coordinator owner for new jobs. The underlying batch implementation passing tests does not make that user path BUILT. Image-target preflight, other-worker operation bindings and final schema parity also need follow-up; [State](bob-delivery-flow.md#state) owns the repair sequence. No fix is claimed by this audit.
+
 ## Versioned instance roles and affected-output work — release D
 
 Explicit instance roles now control deterministic manufacturing lists/needs/cuts. Construction revisions record linked pending output work; normal writers recalculate the same identities, preserve commitments/performed work, and reuse receipts after interruption. Reference geometry and the exact drawn role version remain visible. Historical unknown roles require explicit classification. [Artifact](artifacts.md#instance-roles-and-affected-outputs--release-d) owns the contract; [verification](foundation-verification.md#construction-instance-roles-and-consequences--release-d) records release/installation status. Calculator implementation and actual bed/mockup/member/cost acceptance remain in [State](bob-delivery-flow.md#state).

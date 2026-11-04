@@ -217,6 +217,8 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 ## Quality / runtime
 
+- [Runtime path audit, 2026-11-04](bob-runtime-path-audit-2026-11-04.md) — five open handoff/schema/recovery findings, including the #458 multi-piece routing regression; 76 focused guard tests and five reproductions. Audit evidence, not a claim of fixes or paid acceptance.
+
 - `.claude/skills/verify/SKILL.md` — current browser-verification procedure and known interaction gotchas.
 - `package.json` — current build/typecheck commands.
 - `tests/` — local Postgres/RLS, request/tool and project-response isolation tests.
