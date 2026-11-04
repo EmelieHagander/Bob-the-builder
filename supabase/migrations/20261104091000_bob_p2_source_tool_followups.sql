@@ -14,7 +14,7 @@ declare
  followups jsonb;
  additions constant jsonb := '[
    {"after_tool":"read_solution_context","statuses":["ok"],
-    "tools":["read_project_edit_context","change_solution_evidence"]},
+    "tools":["change_solution_evidence"]},
    {"after_tool":"read_project_edit_context","statuses":["ok"],
     "tools":["edit_project_record"]}
  ]'::jsonb;
