@@ -1,6 +1,6 @@
 # P2.5 — Live Ladan acceptance: long-member anchor and outer handoff stop
 
-**Status (2026-11-04, verified after deployment):** PR #440 is merged. Production has `construction_local_joint_anchors` at migration `20261104160438`, `ask-bob` v224 and `bob-worker` v192. Issue #438 remains open: there has been no new owner/model window attempt after this deployment. The earlier evidence below predates it.
+**Current status (2026-11-04, 20:42 UTC):** PR #452 is merged and byte-verified in `bob-worker` v195 / `ask-bob` v227. Terminal specialist stops and compact working state are installed. Ladan revision 5 remains saved and unarchived. Issue #438 remains open for the next owner-initiated show/review of that saved revision and hosted CPU verification; no paid attempt was started by this implementation. Earlier numbered deployments and attempts below are historical evidence.
 
 ## Follow-up audit and remaining acceptance
 
@@ -312,6 +312,29 @@ Deployment must find zero active jobs and verify project
 migration/catalog publication is needed. Older runtimes reject v3 states: drain
 active jobs before rollback as well. Revision 5 / 86 instances remains the next
 **show/review saved result** acceptance target; window recreation is not required.
+
+### Verified release, 20:42 UTC
+
+- PR #452 merged as `300039e8f5503f7bddfc9cdf588eb756b847e44f`;
+  remote merge tree `b874950a0938f48c49b145cce4128339578019d3`
+  equals the locally reviewed/tested tree. Five shared runtime files changed.
+- Verified project URL `https://yuobtgoidmmmwfqenkau.supabase.co` and zero
+  queued/running jobs immediately before deployment. The prior versions/hashes
+  matched the investigated v194/v226 release; no concurrent runtime drift.
+- `bob-worker` **v195**: all **137** retrieved files equal the deployment input;
+  existing `verify_jwt=false` with its capability authentication is preserved.
+  Bundle SHA-256 `2d334762b3885c193f42d6ce6b0c8e5a4a7e62439c8463d7aab47123165b9bd4`.
+- `ask-bob` **v227**: all **139** retrieved files equal the deployment input;
+  `verify_jwt=true` and the original import map are preserved.
+  Bundle SHA-256 `186fc25f901543a0f624ffe73916162e09c597d7af44642a84760504497d7682`.
+- Post-deploy read: zero active jobs; Ladan Construction remains **revision 5,
+  archived=false**. No migration, catalog edit, geometry rewrite or model run.
+- The final changed cases passed **34/34** after the earlier **76/76** focused
+  pass; both Edge entry points typechecked again. These overlapping totals are
+  separate runs, not 110 distinct tests. Full CI was not run.
+
+The deployment is technically verified. Exact facade/3D delivery, owner feedback
+and full hosted-segment CPU behavior still require the authorized owner test.
 
 ## Production evidence, read-only
 
