@@ -37,8 +37,8 @@ begin
       and o.solution_id=(draft->>'solution_id')::uuid
       and o.revision=(draft->>'solution_revision')::integer;
     if not found or old_solution is distinct from new_solution
-      or jsonb_typeof(old_choice)<>'array' or jsonb_typeof(new_choice)<>'array'
-      or jsonb_typeof(old_feature)<>'array' or jsonb_typeof(new_feature)<>'array'
+      or jsonb_typeof(old_choice) is distinct from 'array' or jsonb_typeof(new_choice) is distinct from 'array'
+      or jsonb_typeof(old_feature) is distinct from 'array' or jsonb_typeof(new_feature) is distinct from 'array'
       or old_choice is distinct from new_choice
       or old_feature is distinct from new_feature then
       return jsonb_build_object('status','needs_data',
