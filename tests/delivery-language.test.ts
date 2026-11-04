@@ -40,6 +40,7 @@ test('a failed transcript commit keeps Bob\'s reply and adds a notice localised 
 test('recovery formats unversioned Tasks without misleading vnull labels', async () => {
  const format=createDeliveryLanguage({userId:'u',message:'Fortsätt.',hasAccess:async()=>true,
   callModel:async()=>response(lexicon)})
+ format.seed(lexicon)
  const unversioned={...receipt,revision:null} as unknown as WriteReadback
  assert.equal(format.fallback({notice:'recovered',receipts:[unversioned]}),
    lexicon.recovered+'\n\n'+lexicon.saved_label+'\n• Étagère')
