@@ -13,6 +13,12 @@ for a change, then the required CI gates in `.github/workflows/ci.yml`.
 
 **CI stop:** run focused tests and impacted type checks only. The full suite (`npm test`), every CI/CAD/PostgreSQL/dependency workflow and every live model check run **only on the owner's direct request**; it is too slow and costly per PR. All test and live workflows are manual-only (`workflow_dispatch`): use Actions → choose workflow → Run workflow → select the exact review branch, and verify the commit SHA and outcomes. Opening a PR, pushing a commit or merging starts nothing: every workflow, including Pages publication (`deploy.yml`) and the CAD worker deploy (`modal-cad.yml`), is manual-only. Nothing that costs money runs without the owner's explicit OK.
 
+Use **Quick CI** for an owner-requested, inexpensive preflight: vocabulary,
+Edge types, frontend build/PWA and a small set of core runtime tests
+(`npm run test:smoke`). It does not run browsers, the full test suite or live
+services, and it does **not** replace the manually requested Full CI release
+gate. Both workflows remain manual-only; the quick job has an eight-minute cap.
+
 ## Automated checks
 
 The full set below is for an explicit owner request only.

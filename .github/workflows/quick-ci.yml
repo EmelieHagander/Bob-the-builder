@@ -1,0 +1,32 @@
+name: Quick CI
+run-name: Quick CI · ${{ github.ref_name }}
+
+# Cheap preflight for everyday changes. Explicitly manual: a push, PR or
+# merge must never start a paid runner. Full CI remains the release gate.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Check generated domain vocabulary
+        run: npm run check:vocabulary
+      - name: Type-check Supabase Edge entrypoints
+        run: npm run check:edge
+      - name: Type-check and build the app
+        run: npm run build
+      - name: Check PWA build outputs
+        run: npm run verify:pwa
+      - name: Run focused runtime smoke tests
+        run: npm run test:smoke
