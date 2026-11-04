@@ -115,7 +115,7 @@ test('construction presentation and feedback retain exact source, component scop
     assert.equal(readiness.status,'ready','legacy feedback does not substitute for a technical check')
   })
 
-  await t.test('a configured facade workpiece commits atomically and requires the exact shown view before any next edit',async()=>{
+  await t.test('a configured facade workpiece commits atomically and requires the exact shown view before any next edit',async t=>{
     assert.equal((await call(owner,'read_construction_piece_progress',[project,legacySaved.recordId])).status,'not_configured')
     const contract=(await pg.query<any>(`select v.metadata->>'worker_piece_progress_version' as pin
       from shared.ai_prompts p join shared.ai_prompt_versions v on v.id=p.active_version_id
@@ -149,13 +149,16 @@ test('construction presentation and feedback retain exact source, component scop
     const base={...legacyData,target_revision:legacyTarget}
     await t.test('P2.4 rejects repinning an unchanged facade to a different selected design', async()=>{
       const rejected=pg.transaction(async tx=>{
+        await tx.query('select set_config($1,$2,true)', ['request.jwt.claims',JSON.stringify({sub:owner})])
+        const selected=(await tx.query<any>(`select bob.solution_command($1,'select',$2,$3,$4::jsonb) result`,
+          [project,solution,legacyTarget,JSON.stringify({solution_revision:1,reason:'Test a newly selected design without geometry changes'})])).rows[0].result
         await tx.query(`insert into bob.artifact_revisions
           select (jsonb_populate_record(null::bob.artifact_revisions,to_jsonb(a)||
-            jsonb_build_object('revision',2,'target_revision',$3,'solution_id',$4,
+            jsonb_build_object('revision',2,'target_revision',$3::integer,'solution_id',$4::uuid,
               'solution_revision',1,'solution_title','Frame and later drawer'))).*
           from bob.artifact_revisions a
           where a.project_id=$1 and a.artifact_id=$2 and a.revision=1`,
-          [project,legacySaved.recordId,target.revision,solution])
+          [project,legacySaved.recordId,selected.revision,solution])
         await tx.query(`insert into bob.artifact_construction_revisions
           select (jsonb_populate_record(null::bob.artifact_construction_revisions,to_jsonb(c)||
             jsonb_build_object('artifact_revision',2))).*
@@ -169,6 +172,7 @@ test('construction presentation and feedback retain exact source, component scop
         await tx.exec('set constraints bob.z_enforce_construction_piece immediate')
       })
       await assert.rejects(rejected,/construction_piece_changed_design_without_geometry/)
+      assert.equal((await pg.query<any>('select bob_private.effective_target_revision($1,null) revision',[project])).rows[0].revision,legacyTarget)
       assert.equal((await status()).status,'ready')
       assert.equal((await call(owner,'read_construction_draft',[project,legacySaved.recordId,null,null])).revision,1)
     })
