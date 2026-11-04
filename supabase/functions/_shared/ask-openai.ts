@@ -355,11 +355,11 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
-      constructionPageVersion: 1 as const,
+      constructionPageVersion: 1 as const, workingStateVersion: 1 as const,
       // Core reading tools loaded from the first step. Jobs without this pin keep on-demand loading.
       corePreloadVersion: 1 as const,
       // Building links read once at turn start. Jobs without this pin read nothing extra.
@@ -419,6 +419,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.completeRequestVersion !== undefined && execution.completeRequestVersion !== 1) throw new Error('complete_request_version_invalid')
   if (execution.resultReferenceVersion !== undefined && (execution.resultReferenceVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('result_reference_version_invalid')
   if (execution.resultWindowVersion !== undefined && (![1, 2].includes(execution.resultWindowVersion) || execution.resultReferenceVersion !== 1)) throw new Error('result_window_version_invalid')
+  if (execution.workingStateVersion !== undefined && execution.workingStateVersion !== 1) throw new Error('working_state_version_invalid')
   if (execution.constructionPageVersion !== undefined && execution.constructionPageVersion !== 1) throw new Error('construction_page_version_invalid')
   if (execution.corePreloadVersion !== undefined && execution.corePreloadVersion !== 1) throw new Error('core_preload_version_invalid')
   if (execution.memoryStairVersion !== undefined && (execution.memoryStairVersion !== 1 || execution.promptTiersVersion !== 1 || execution.contextStrategyVersion !== 1)) throw new Error('memory_stair_version_invalid')
@@ -639,6 +640,10 @@ export async function answerWithOpenAi(opts: {
     return result
   }
   const constructionOptions = {unlimitedWork,projectId:opts.projectId,message:opts.message,writer,hasAccess,
+    ...(execution.workingStateVersion === 1 ? { fastPageFit: true, readSummary: async (id:string,revision:number) => {
+      const {data,error}=await readRpc('read_construction_summary',{p_project:opts.projectId,p_artifact:id,p_revision:revision})
+      if(error)throw new Error('construction_read_unavailable');return data
+    } } : {}),
     ...(execution.constructionPageVersion === 1 ? { viewPageTokens: () => constructionViewBudget(constructionReadsInStep) } : {}),
     ...(execution.projectFactsVersion === 1 ? { constructionTable: true } : {}),
     readDesignReadiness,
@@ -1116,6 +1121,7 @@ export async function answerWithOpenAi(opts: {
     // receipt-only recovery would abandon the unfinished part of the request.
     ...opts, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? CLAUDE_BACKGROUND_TIMEOUT_MS : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
     readToolPolicy,
+    compactToolState: execution.workingStateVersion === 1,
     checkpoint: answerCheckpoint,
     // Older in-flight journals keep their recorded post-rollover requests.
     carryLoadedTools: execution.toolCarryVersion === 1,

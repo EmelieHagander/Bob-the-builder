@@ -97,7 +97,10 @@ export interface ToolboxEntry { name: string; group: string; state: 'offered' | 
 
 /** Data only: handlers and policy readers are recreated for each worker lease. */
 export interface ToolSessionState {
-  version: 1 | 2
+  version: 1 | 2 | 3
+  catalogManifestId?: string
+  sessionVersion?: 1 | 2
+  shelfDescriptions?: string[]
   workflows?: string[]
   loaded: [string, number][]
   carried: string[]
@@ -111,12 +114,14 @@ export interface ToolSessionState {
 }
 
 export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; selectiveTools?: boolean;
+  compactState?: { catalogManifestId: string };
   autoLoadReady?:boolean; followups?:ToolFollowup[];
   /** Workers (2026-10-31): offer a loaded tool that waits for a prerequisite too, so the
    * tool list stays fixed for the whole job; execution still answers "not available yet". */ offerWaiting?: boolean;
   /** Tools of work already in progress, loaded without a describe_tool round (lazy loading only). */ preloadTools?: (phase: string | null) => string[]; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; catalogWorkflows?: () => WorkflowCard[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
   const lazy = opts.toolInstructions === 'lazy'
   const selective = lazy && opts.selectiveTools === true
+  if(opts.compactState&&(!opts.compactState.catalogManifestId||!opts.catalogTool))throw new Error('tool_session_checkpoint_binding_missing')
   const workflows = new Set<string>()
   const onDemand = lazy || opts.toolInstructions === 'on_demand'
   const loaded = new Map<string, number>()
@@ -178,18 +183,38 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
   }
   return {
     exportState(): ToolSessionState {
-      return JSON.parse(JSON.stringify({ version: selective ? 2 : 1, ...(selective ? { workflows: [...workflows] } : {}), loaded: [...loaded], carried: [...carried], partial,
-        snapshot, offered: [...offered], visible: [...visible], shelf, events,
-        cards: [...cards].map(([name, description]) => [name, description ?? null]) }))
+      const compact=opts.compactState
+      return JSON.parse(JSON.stringify({ version: compact ? 3 : selective ? 2 : 1,
+        ...(compact?{catalogManifestId:compact.catalogManifestId,sessionVersion:selective?2:1,
+          shelfDescriptions:shelf.filter(row=>row.description!==undefined).map(row=>row.name)}:{}),
+        ...(selective ? { workflows: [...workflows] } : {}), loaded: [...loaded], carried: [...carried], partial,
+        // Only phase is read before refresh; prepare/execute always re-read
+        // live policy. Offered/visible versions remain the submitted fence.
+        snapshot:compact&&snapshot?{phase:snapshot.phase,tools:[]}:snapshot,
+        offered: [...offered], visible: [...visible],
+        shelf:compact?shelf.map(({description:_description,...row})=>row):shelf, events,
+        cards: compact?[]:[...cards].map(([name, description]) => [name, description ?? null]) }))
     },
     restoreState(state: ToolSessionState) {
       const versions = (rows: [string, number][]) => Array.isArray(rows) && rows.every(row => Array.isArray(row) && row.length === 2 && typeof row[0] === 'string' && Number.isSafeInteger(row[1]) && row[1] > 0)
-      if (state?.version !== (selective ? 2 : 1) || selective && (!Array.isArray(state.workflows) || state.workflows.some(name => !opts.catalogWorkflows?.().some(w => w.name === name))) || typeof state.partial !== 'boolean' || !versions(state.loaded) || !versions(state.offered) || !versions(state.visible)
+      const compact=state?.version===3
+      if ((compact?(!opts.compactState||state.catalogManifestId!==opts.compactState.catalogManifestId||state.sessionVersion!==(selective?2:1)
+          ||!Array.isArray(state.shelfDescriptions)||state.shelfDescriptions.some(name=>typeof name!=='string'||!NAME.test(name))
+          ||state.cards?.length!==0||state.snapshot!==null&&state.snapshot?.tools?.length!==0
+          ||!Array.isArray(state.shelf)||state.shelf.some(row=>!row||typeof row.name!=='string'||!NAME.test(row.name)||row.description!==undefined)
+          ||state.shelfDescriptions.some(name=>!state.shelf?.some(row=>row.name===name)))
+        :state?.version !== (selective ? 2 : 1)) || selective && (!Array.isArray(state.workflows) || state.workflows.some(name => !opts.catalogWorkflows?.().some(w => w.name === name))) || typeof state.partial !== 'boolean' || !versions(state.loaded) || !versions(state.offered) || !versions(state.visible)
         || !Array.isArray(state.carried) || state.carried.some(name => typeof name !== 'string')
         || !Array.isArray(state.shelf) || !Array.isArray(state.events) || state.events.length > 200 || !Array.isArray(state.cards)
         || state.cards.some(row => !Array.isArray(row) || row.length !== 2 || typeof row[0] !== 'string' || !(row[1] === null || typeof row[1] === 'string'))) throw new Error('tool_session_checkpoint_invalid')
       const restored: ToolSessionState = JSON.parse(JSON.stringify(state))
       const policy = restored.snapshot === null ? null : checkedToolSnapshot(restored.snapshot)
+      if(compact){
+        const names=new Set(restored.shelfDescriptions)
+        // These strings come from the job's immutable catalog, never current
+        // mutable policy. A different manifest cannot restore this checkpoint.
+        restored.shelf=restored.shelf.map(row=>names.has(row.name)?{...row,description:opts.catalogTool!(row.name,{card:true}).function.description}:row)
+      }
       loaded.clear(); for (const [name, version] of restored.loaded) loaded.set(name, version)
       workflows.clear(); for (const name of restored.workflows ?? []) workflows.add(name)
       carried.clear(); for (const name of restored.carried) carried.add(name)
@@ -197,6 +222,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
       offered = new Map(restored.offered); visible = new Map(restored.visible); shelf = restored.shelf
       events.splice(0, events.length, ...restored.events)
       cards.clear(); for (const [name, description] of restored.cards) cards.set(name, description ?? undefined)
+      if(compact)for(const row of restored.shelf)if(row.description!==undefined)cards.set(JSON.stringify([row.name,'']),row.description)
     },
     get partial() { return partial },
     get events() { return events.slice() },

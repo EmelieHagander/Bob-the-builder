@@ -69,7 +69,7 @@ test('one work read → atomic Solution/Construction change → complete check, 
   catch(e:any){return {status:e.code==='42501'?'denied':['PT409','40001'].includes(e.code)?'conflict':e.code==='22023'?'invalid':'unavailable',reason:e.message}}
  }
  let storedReads=0
- const options={projectId:project,message,writer,hasAccess:async()=>access,unlimitedWork:true,constructionViews:true,formEvidence:true,constructionSourceRefresh:true,coherentWork:true,
+ const options={projectId:project,message,writer,hasAccess:async()=>access,unlimitedWork:true,constructionViews:true,fastPageFit:true,formEvidence:true,constructionSourceRefresh:true,coherentWork:true,
   now:()=>new Date('2026-10-28T20:00:00Z'),read:(_id:string|null,revision:number|null)=>read(revision),readCurrent:()=>read(),
   readSources:async()=>({project:new Map(),physical:new Map()}),
   prepareEdit:preparation('bob.prepare_construction_edit'),prepareParameterChange:preparation('bob.prepare_construction_parameter_change'),prepareWork:preparation('bob.prepare_construction_work'),prepareSolutionEdit:edits.prepare,

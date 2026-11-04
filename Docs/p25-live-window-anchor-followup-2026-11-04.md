@@ -407,6 +407,62 @@ then O3 and the isolated O4 cleanup correction. Retain archived domain history
 and make it on-demand. Do not bulk-delete revisions, receipts or indexes to
 address a CPU problem whose expensive work is in active processing.
 
+## O1–O4 implementation, 2026-11-04
+
+The owner authorized all four implementation items. These changes are source
+complete and locally verified; deployment evidence follows separately.
+
+- **O1:** new executions pin `workingStateVersion:1`. Construction table, detail,
+  saved-result and work-packet pages fit contiguous prefixes using exponential
+  search/bisection and exact envelope token checks. Oversized rows retain exact
+  Unicode fragments. A fitting checked prefix is sufficient; no monotonic-token
+  assumption or character estimate becomes the budget boundary. The cursor
+  binds the new algorithm; old executions without the pin retain old paging.
+- **O2:** tool-session state v3 carries phase, loaded/carried tools, the offered
+  and visible version fences, workflow choices, shelf metadata and events. It
+  drops the unused policy snapshot rows and stores shelf-description references
+  bound to the exact immutable catalog manifest. On resume, descriptions and
+  their counting cache rebuild from that catalog; prepare and execute still read
+  live policy and current domain gates. Pending request/model inputs are kept.
+  Old unpinned sessions still use their original v1/v2 representations.
+- **O3:** `read_construction_summary` is a caller-authorized `SECURITY INVOKER`
+  RPC with explicit project access, exact construction/revision selection,
+  current head/archive metadata and the same source assessment as the full
+  reader. It returns counts and references without serializing/downloading the
+  geometry. New pinned code readbacks use it; older execution journals retain
+  their original full-read sequence. Full detail/model tools remain available.
+- **O4:** a private terminal-status trigger clears working journal rows on
+  completed, failed and cancelled paths, at the locked job boundary. The same
+  migration backfills terminal leftovers. Paused/active work, saved domain
+  results, write receipts, conversation/cost and drawing recovery ledgers remain.
+  A table lock and zero-queued/running guard prevent applying during active work.
+
+Offline comparison of the captured Ladan revision-5 reads:
+
+| Page | Old token-count calls | New calls | Old cumulative count-input chars | New chars |
+|---|---:|---:|---:|---:|
+| Table | 208 | 17 | 1,538,444 | 160,317 |
+| Parts | 108 | 9 | 954,959 | 41,987 |
+| One part | 3 | 3 | 2,587 | 2,587 |
+| Parameters | 72 | 9 | 699,988 | 56,253 |
+
+Both algorithms returned the same row counts and output sizes in this sample.
+All rows and exact token/fragment/cursor boundaries are separately tested; the
+algorithm does not promise identical page lengths for all possible content.
+Main toolbox state shrinks **116,406 → 11,330 chars**, specialist session
+**133,485 → 16,914** (combined **249,891 → 28,244**, about **89% smaller**).
+Restored shelves match the original captured values exactly. These are offline
+component measurements, not hosted whole-turn CPU or model-quality acceptance.
+
+Verification: **65 focused checks** across worker resume/build/tool-state,
+construction view/work and new readback/cleanup tests passed. Tests include
+ordinary-caller/cross-project/revoked/anonymous/service-role reads, historical
+archive state and counts, cancelled/failed cleanup, paused/other-job preservation,
+late-save rejection, idempotent cancel, migration drain guard and terminal-only
+backfill. Both Edge entry points typecheck with the documented local import-map
+limitation. No full CI or paid provider run was started. O5 attribution/hosted
+CPU measurement and the owner show/review of saved revision 5 remain open.
+
 ## Production evidence, read-only
 
 - The live Ladan turn started 11:52 UTC, completed 12:12 UTC. It made **40 model calls**, **three `ask_structure_worker` handoffs**, cost telemetry approximately **$6.01**, and **no new Construction revision**. The saved draft remains revision **4**, 78 instances, pinned to target **29** / Solution **21**; the selected design is target **35** / Solution **27**. The correct Plan focus was saved to the facade-opening Step.

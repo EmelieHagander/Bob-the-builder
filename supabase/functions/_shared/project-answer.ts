@@ -293,6 +293,7 @@ export type ProjectAnswerOptions = {
   finalAnswer?: boolean;
   /** Pinned per execution (workerCheckpointVersion): a worker's place is saved after each of its steps. */
   workerCheckpoint?: boolean;
+  compactToolState?: boolean;
   /** New claimed worker jobs only: restart Konrad's model chain after an exact
    * saved construction readback and a later private workpad update. */
   workerVerifiedRenewal?: boolean;
