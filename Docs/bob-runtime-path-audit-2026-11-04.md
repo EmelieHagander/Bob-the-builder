@@ -1,7 +1,8 @@
 # Runtime path audit — 2026-11-04
 
-**Correction update:** all five findings have an implementation and focused local
-verification. Hosted installation is pending the final release checks below.
+**Correction update:** all five technical findings are corrected and installed
+through [PR #461](https://github.com/EmelieHagander/Bob-the-builder/pull/461),
+with focused verification and exact hosted readback below.
 The original audit and its measurements are preserved as the pre-fix snapshot;
 they are not the current implementation verdict. No paid model/CAD/image run or
 owner visual acceptance is claimed. This document records evidence, not a new
@@ -222,7 +223,57 @@ both Edge entrypoints using installed equivalent dependency declarations; the
 exact remote esm imports were unreachable locally. `git diff --check` passed.
 No full CI/workflow, browser or paid provider call was started.
 
-Release readback is recorded here after migration and both Edge bundles are
-installed. Owner facade/visual acceptance (#438), frontend publication and O5
+The hosted installation/readback below closes A1–A5 as technical findings. Owner facade/visual acceptance (#438), frontend publication and O5
 whole-run CPU/cost measurement remain separate. Ladan geometry is not changed
 by these runtime corrections.
+
+
+### Exact installation — 2026-11-04, 23:43 UTC
+
+- Merged source: `a5750fbe76c0cfb3a01dee9e4cd90d5993d14f0f` (#461), tree
+  `548170b1dbf2c7034dbd852c2ab1e7385d48280f`. This is byte-identical
+  to the locally checked tree and the published review tree.
+- Project URL/ref was checked twice: `yuobtgoidmmmwfqenkau`.
+  Zero queued/running jobs and unchanged prior v197/v229 bundles were checked
+  immediately before release. No project reset or geometry write occurred.
+- Applied migration `20261104234159_bob_runtime_operation_paths.sql`;
+  exact SQL SHA-256 `42a1b68de3e0718b793a6e4c055430a05bddf93c49168bd2995c046b90a99369`.
+  The CLI-created file was renamed to the hosted history version; SQL is unchanged.
+- Immutable catalog manifest:
+  `6490dd53-06ad-4c36-ae15-a09e6731e2a9`. Both material worker read ownership
+  and its role key include `read_project_work`; prior versions remain available.
+
+| Consumer | Installed version | Files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 198 | 140 | existing capability authentication | `e40045447642bedc0cf47ee977a395f72bd5b92a29799904f48e7317c1445596` |
+| ask-bob | 230 | 142 | required | `ff17b1f3cda370d7a5e383a1749d1869c9f2df5272d9880b57c50de4ca3e5a78` |
+
+Every deployed file was read back and compared byte-for-byte with the prepared
+merged-source bundle, including all unchanged files, imports and entrypoints.
+Both functions are ACTIVE. Unauthenticated POST smoke checks return HTTP 401
+from both endpoints without creating a job or invoking a provider. The twelve changed shared files and two new shared
+modules are present in both closures; no unrelated bundled file was dropped.
+
+All five new RPCs are SECURITY INVOKER, fixed empty search_path, executable by
+authenticated callers and denied to anon/service_role. Existing advisor groups
+remain; no advisor finding names a new helper. This is not a clean bill of health
+for unrelated projects in the shared Supabase instance.
+
+A read-only production probe used the actual project member identity under
+`authenticated` (not an admin data read): Ladan drawing revision 3 and
+Construction revision 5 remain current; all reference checks pass, scope is
+ready with 41 small entries, and image-target preflight is ready. The identity
+projection is **477 bytes of serialized jsonb text**, omitting recipe, manifest
+and files. The requested units-section envelope is **178 bytes**. These are
+SQL projection sizes, not whole-request/provider CPU measurements. No geometry,
+private claims or pixels were printed and no model/render was dispatched.
+
+Validation batches: 95 focused runtime tests; five full-schema isolated SQL
+tests; 30 impacted worker/piece tests; final 23 worker/routing tests after the
+additional overview/record-reference corrections. Batches overlap. Both Edge
+entrypoints type-check, and the exact provider serializer tests use stub
+network/model responses. No full CI, publication workflow or paid run was started.
+
+Owner facade/visual acceptance (#438), frontend publication and O5 whole-run
+CPU/cost measurement remain open. These corrections do not approve construction
+safety or prove a complete real Bob delivery.
