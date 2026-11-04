@@ -6,7 +6,7 @@ import { projectSchema } from './support/project-schema.ts'
 
 const MIGRATION = '20261104091000_bob_p2_source_tool_followups.sql'
 const SQL = readFileSync(new URL('../supabase/migrations/' + MIGRATION, import.meta.url), 'utf8')
-const additionMatch = SQL.match(/additions constant jsonb := '([\\s\\S]*?)'::jsonb;/)
+const additionMatch = SQL.match(/additions constant jsonb := '([\s\S]*?)'::jsonb;/)
 assert(additionMatch, 'the published followup list must be data, not just a prompt')
 const additions = JSON.parse(additionMatch[1]) as ToolFollowup[]
 
@@ -50,13 +50,13 @@ test('P2 source followups load adjacent tools only after successful, authorized 
     'a read cannot grant another tool inside the same model batch')
   assert.equal((await f.session.execute('change_solution_evidence', {})).status, 'not_offered')
   assert.deepEqual(offered(await f.session.prepare()), [
-    'read_solution_context', 'read_project_edit_context', 'change_solution_evidence', 'describe_tool',
+    'change_solution_evidence', 'read_project_edit_context', 'read_solution_context', 'describe_tool',
   ])
   assert.equal((await f.session.execute('read_project_edit_context', {})).status, 'ok')
   assert.equal((await f.session.execute('edit_project_record', {})).status, 'not_offered')
   const restored = createToolSession(f.options)
   restored.restoreState(f.session.exportState())
-  assert.deepEqual(offered(await restored.prepare()), [...NAMES, 'describe_tool'])
+  assert.deepEqual(offered(await restored.prepare()), ['change_solution_evidence', 'edit_project_record', 'read_project_edit_context', 'read_solution_context', 'describe_tool'])
   assert.deepEqual(f.writes, [], 'tool discovery must not perform a write')
   f.gates.set('edit_project_record', 'not_allowed')
   assert.equal((await restored.execute('edit_project_record', {})).status, 'not_allowed',
