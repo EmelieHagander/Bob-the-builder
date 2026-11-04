@@ -12,7 +12,8 @@ begin
  old:=$old$ axis text;one_lo numeric;one_hi numeric;piece_lo numeric;piece_hi numeric;$old$;
  replacement:=$new$ axis text;one_lo numeric;one_hi numeric;piece_lo numeric;piece_hi numeric;
  old_target integer; next_target integer; old_choice jsonb; next_choice jsonb;
- old_feature jsonb; next_feature jsonb; old_solution uuid; next_solution uuid;$new$;
+ old_feature jsonb; next_feature jsonb; old_model jsonb; next_model jsonb;
+ old_solution uuid; next_solution uuid;$new$;
  if position(old in body)=0 then raise exception 'p24_piece_semantic_variables_changed';end if;
  body:=replace(body,old,replacement);
  old:=$old$ if n>0 then
@@ -23,9 +24,10 @@ begin
  if n=0 then
   select a.target_revision,b.target_revision,a.solution_id,b.solution_id,
          oa.design_intent->'choices',ob.design_intent->'choices',
-         oa.design_intent->'features',ob.design_intent->'features'
+         oa.design_intent->'features',ob.design_intent->'features',
+         oa.design_intent->'model',ob.design_intent->'model'
     into old_target,next_target,old_solution,next_solution,
-         old_choice,next_choice,old_feature,next_feature
+         old_choice,next_choice,old_feature,next_feature,old_model,next_model
   from bob.artifact_revisions a
   join bob.artifact_revisions b on b.artifact_id=a.artifact_id and b.project_id=a.project_id
      and b.revision=new.artifact_revision
@@ -43,7 +45,8 @@ begin
      or jsonb_typeof(old_feature) is distinct from 'array'
      or jsonb_typeof(next_feature) is distinct from 'array'
      or old_choice is distinct from next_choice
-     or old_feature is distinct from next_feature)
+     or old_feature is distinct from next_feature
+     or old_model is distinct from next_model)
   then raise exception 'construction_piece_changed_design_without_geometry' using errcode='PT409';end if;
  end if;
  if n>0 then
