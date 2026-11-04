@@ -94,6 +94,38 @@ CPU consumption or safe durable segmentation. Verify replay does not buy the sam
 model result again. Only then repeat the owner-initiated single-window acceptance.
 The saved-window, exact-3D and feedback-hold acceptance is still open in #438.
 
+## Specialist CPU segment correction
+
+The November 1 worker-checkpoint correction already preserves Konrad's place
+(`tests/bob-worker-checkpoint.test.ts`, historical job `da79a46e`). It did not
+force a new Edge invocation after saving that place. In the November 4 failed
+attempt, Bob and three Konrad model calls therefore shared one invocation before
+CPUTime termination. The exact CPU hot path within that invocation remains
+unproven; the local dependency-page probe alone was below the hosted threshold.
+
+The correction schedules a fresh invocation after each **continuing** specialist
+step. The callback runs after saved progress, stop/review checks and optional
+verified context renewal. Final reports, canonical conflicts and exact-revision
+review holds return normally to Bob. Existing journal and snapshot formats,
+model options, input fingerprints, authority and total work allowances are
+unchanged. No migration or catalog publication is required.
+
+Focused source verification: **36/36 tests passed** across worker checkpoint,
+piece-progress and build-worker files. The new four-claim fixture uses the real
+journal: two reads and one save are followed by the final specialist report and
+Bob's reply; exactly four specialist calls and two Bob calls are recorded, with
+no redispatch. Conflict and review tests forbid the scheduling callback from
+running before their terminal result. Existing interrupted-operation replay,
+legacy scheduling, exact-revision checks and wrong-focus gates still pass.
+Both Edge entrypoints pass Deno check using the same temporary local Supabase
+type mapping recorded for #445; the exact esm.sh import remains inaccessible.
+
+**Release pending:** review/merge, reconfirm zero jobs and target, deploy compatible
+worker/entrypoint bundles and read back exact files. Then repeat a single
+owner-initiated window test with cost and per-invocation CPU evidence. This
+mitigates cumulative work within one invocation; it does not prove that every
+individual tool/model step fits the two-second envelope or close #438.
+
 ## Production evidence, read-only
 
 - The live Ladan turn started 11:52 UTC, completed 12:12 UTC. It made **40 model calls**, **three `ask_structure_worker` handoffs**, cost telemetry approximately **$6.01**, and **no new Construction revision**. The saved draft remains revision **4**, 78 instances, pinned to target **29** / Solution **21**; the selected design is target **35** / Solution **27**. The correct Plan focus was saved to the facade-opening Step.

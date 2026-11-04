@@ -17,7 +17,7 @@ const model = (id: string, calls: ReturnType<typeof call>[] = []): OpenAIService
 
 function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; readback?: (revision: number) => unknown;
   checkInSave?: boolean; serverCheck?: 'checked' | 'unavailable'; inspect?: (revision: number) => Record<string, unknown>;
-  pauseForDesignReview?: boolean; boundedReview?: (revision: number) => Record<string, unknown>; conflict?: boolean }) {
+  pauseForDesignReview?: boolean; boundedReview?: (revision: number) => Record<string, unknown>; conflict?: boolean; afterStep?: () => void }) {
   const commands: { name: string; revision: number | null }[] = []
   const scopedChecks: string[][] = []
   const observed: OpenAIServiceOptions[] = [], checkpoints: WorkerProgress[] = []
@@ -55,7 +55,7 @@ function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; r
       commands.push({ name: 'read_construction_piece_progress', revision: receipt.revision as number })
       return opts.boundedReview!(receipt.revision as number)
     } } : {}) } } : {}),
-    progress: { save: async p => { checkpoints.push(structuredClone(p)) } },
+    progress: { save: async p => { checkpoints.push(structuredClone(p)) }, afterStep: opts.afterStep },
   })
   return { result, commands, observed, checkpoints, scopedChecks }
 }
@@ -148,7 +148,9 @@ test('v3 ends Konrad after one verified, locally checked piece and returns the e
   const { result, commands, observed, scopedChecks } = harness([
     model('first', [call('a', 'edit_construction_parts'), call('b', 'edit_construction_parts')]),
     model('must-not-run'),
-  ], { enabled: true, pauseForDesignReview: true, inspect: revision => ({ status: 'form_scoped', revision,
+  ], { enabled: true, pauseForDesignReview: true,
+    afterStep: () => { assert.fail('a review hold must report back before the scheduling boundary') },
+    inspect: revision => ({ status: 'form_scoped', revision,
     observed_component_changes: { count: 1, ids: ['wall_front'], omitted: 0 },
     affected_scope_complete: true, scope_check_ids: ['wall_front'], verification: 'unverified' }) })
   const report = await result
@@ -197,6 +199,7 @@ test('v4 stops after one canonical construction write conflict instead of burnin
   ]), model('must-not-run')]
   const { result, observed, commands } = harness(sequence, {
     enabled: true, conflict: true, boundedReview: () => ({ status: 'not_focused' }),
+    afterStep: () => { assert.fail('a conflict must report back before the scheduling boundary') },
   })
   const report = await result
   assert.deepEqual([report.status, report.reason, report.blocked_tool],

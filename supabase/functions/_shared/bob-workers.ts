@@ -217,7 +217,7 @@ export async function runWorker(opts: {
    * paused_at_limit with what it saved, instead of failing Bob's turn. */
   stopAsResult?: boolean
   /** Pinned per job (workerCheckpointVersion): the place saved after each step, and the save. */
-  progress?: { restored?: WorkerProgress; save(progress: WorkerProgress): Promise<void> }
+  progress?: { restored?: WorkerProgress; save(progress: WorkerProgress): Promise<void>; afterStep?(): void }
   /** Drops the worker's model chain once it has returned; it is never continued. */
   releaseChain?: (responseId: string) => void
 }): Promise<Record<string, unknown>> {
@@ -480,6 +480,9 @@ export async function runWorker(opts: {
         await opts.progress.save(structuredClone({ version: 2 as const, step, previous: null, messages, calls, receipts, order, renewal }))
       }
     }
+    // Only continuing work yields. Review holds, conflicts and final reports
+    // above must reach Bob before any later specialist step can be scheduled.
+    if (step + 1 < opts.worker.max_steps) opts.progress?.afterStep?.()
   }
   return finish({ status: 'step_budget', worker: roleKey, calls })
 }
