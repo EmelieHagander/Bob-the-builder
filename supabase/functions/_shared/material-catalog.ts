@@ -277,8 +277,11 @@ export function createMaterialCatalogReader(projectId: string, transport: Catalo
       const combined = !!options.lookup && input.action === 'search' && input.kind === 'material' && input.profile_code === null
         && Object.keys(input.properties as Record<string, unknown>).length === 0
       const reader = combined ? options.lookup! : transport
+      // parseCatalogRead validated these value types, but its public return
+      // type is a record because the parser serves several different actions.
       const request: Record<string, unknown> = combined
-        ? { query: input.query, categories: input.categories, after: input.after, id: null } satisfies MaterialLookupInput : input
+        ? { query: input.query as MaterialLookupInput['query'], categories: input.categories as MaterialLookupInput['categories'],
+          after: input.after as MaterialLookupInput['after'], id: null } satisfies MaterialLookupInput : input
       const controller = new AbortController()
       let timer: ReturnType<typeof setTimeout> | undefined
       try {

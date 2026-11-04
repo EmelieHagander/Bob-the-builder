@@ -34,6 +34,15 @@ const tail = (catalog: AiCatalogSession, o: OpenAIServiceOptions, prefix: string
 }
 const ask = (tool: string, request: unknown) => () => ({ success: true, model: 'fixture', usage, responseId: 'b1', toolCalls: [call('c1', tool, request)] })
 const toolOutput = (o: OpenAIServiceOptions) => JSON.parse(String(o.messages!.find(m => m.role === 'tool')!.content))
+// The general catalog fixture predates the private workpad publication. v4
+// piece tests must opt into both pinned workpad switches, just as production
+// does, or the secure worker gate correctly refuses their mock handoff.
+const pieceCatalog = () => catalogFixture(manifest => {
+  const contract = manifest.definitions.find(row => row.prompt_key === 'agent-contract.ask-bob')!
+  const toolbox = manifest.definitions.find(row => row.prompt_key === 'bob.tools')!
+  contract.metadata = { ...contract.metadata, workpad_version: 1 }
+  toolbox.definition = { ...toolbox.definition, workpad_version: 1 }
+})
 
 async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>, readDraft?: (args: any) => unknown, piecePreflight?: Record<string, unknown>, editResult?: Record<string, unknown>) {
   const projectId = 'p', message = 'Rita lådan', hasAccess = async () => true
@@ -98,7 +107,7 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
 test('v4 Plan focus gate prevents a paid Konrad call before the approved opening Step', async () => {
   const piece = { status: 'not_focused', plan_revision: 2,
     step_id: 'step-windows', focus_step_id: 'step-reconciliation', artifact_id: 'c1' }
-  const { bob, workers, constructionCalls, ran } = await turn(catalogFixture(),
+  const { bob, workers, constructionCalls, ran } = await turn(pieceCatalog(),
     [ask('ask_structure_worker', { request: 'Work on the first window.' })], {}, undefined, piece)
   assert.equal(workers['structure-worker'].length, 0, 'no model request reaches the expensive specialist')
   assert.equal(constructionCalls.length, 0, 'no geometry is read or modified in this blocked handoff')
@@ -112,7 +121,7 @@ test('v4 Plan focus gate prevents a paid Konrad call before the approved opening
 test('v4 canonical piece write conflict stops a second paid Konrad handoff in the same Bob turn', async () => {
   const ready = { status: 'ready', artifact_id: 'c1', plan_revision: 2, step_id: 'step-windows',
     focus_step_id: 'step-windows', requested_total_openings: 7 }
-  const { bob, workers, ran } = await turn(catalogFixture(), [
+  const { bob, workers, ran } = await turn(pieceCatalog(), [
     ask('ask_structure_worker', { request: 'Make the first window.' }),
     ask('ask_structure_worker', { request: 'Try the same blocked window again.' }),
   ], { 'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'w-conflict',

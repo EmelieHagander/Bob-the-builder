@@ -839,7 +839,11 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         // He is told once that the tools are closed (the approved closed-bench note).
         const note = closedNoteSent ? [] : [{ role: 'user' as const, content: opts.aiCatalog.text('bob.note.prefix') + opts.aiCatalog.text('bob.note.closed', { budget: 'spending' }) }]
         closedNoteSent = true
-        request = { ...request, tool_choice: 'none', messages: [...request.messages, ...note] }
+        // Checkpointed model requests must retain their previous messages;
+        // never replace a malformed/missing conversation with just this note.
+        const priorMessages = request.messages
+        if (!Array.isArray(priorMessages)) throw new Error('turn_checkpoint_invalid')
+        request = { ...request, tool_choice: 'none', messages: [...priorMessages, ...note] }
         pendingResponse = undefined
         await save(step)
         pendingResponse = await opts.callModel(request)
