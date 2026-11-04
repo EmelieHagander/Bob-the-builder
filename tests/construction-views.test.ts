@@ -86,6 +86,27 @@ test('large canonical draft becomes a small overview and exact late-selected fac
  const unknown=await read(query());assert.equal(unknown.counts.unknown_roles,150);assert.equal(unknown.roles_recorded,false)
 })
 
+test('code persistence readback skips the model table and fastener work, retaining exact currentness and access checks',async()=>{
+ const {draft}=fixture(150);let allowed=true,reads=0
+ const tools=createConstructionTools({projectId:project,message:'Read saved',constructionViews:true,constructionTable:true,
+  hasAccess:async()=>allowed,read:async(id,revision)=>{reads++;assert.equal(id,artifact);assert.equal(revision,1);return draft},
+  readFasteners:async()=>assert.fail('persistence verification must not build a fastener table')})
+ const summary=await tools.readSavedSummary(artifact,1)
+ assert.equal(summary.status,'ok');assert.equal(summary.counts.instances,150)
+ assert.deepEqual([summary.artifact_id,summary.revision,summary.current_revision,summary.archived,summary.source_state],
+  [artifact,1,1,false,'current'])
+ assert(JSON.stringify(summary).length<4000);assert(!('table'in summary));assert(!('recipe'in summary))
+ draft.archived=true;draft.current_revision=2;draft.source_state='changed'
+ const historical=await tools.readSavedSummary(artifact,1)
+ assert.deepEqual([historical.archived,historical.current_revision,historical.source_state],[true,2,'changed'])
+ draft.projectId='other';assert.equal((await tools.readSavedSummary(artifact,1)).status,'unavailable')
+ allowed=false;const before=reads
+ assert.equal((await tools.readSavedSummary(artifact,1)).status,'denied');assert.equal(reads,before)
+ const revoked=createConstructionTools({projectId:project,message:'Read',hasAccess:async()=>allowed,
+  read:async()=>{allowed=false;return {...draft,projectId:project}}})
+ allowed=true;assert.equal((await revoked.readSavedSummary(artifact,1)).status,'denied')
+})
+
 test('dependency view retains transitive formulas, source pins, affected bindings and adjacent physical records',async()=>{
  const {draft}=fixture()
  draft.parameters.nodes=[{id:'source',role:'source',source:{kind:'project_measurement',id:material,revision:4},normalized:{value:600,unit:'mm'},sources:[{value:'600',truth:'measured'}]},

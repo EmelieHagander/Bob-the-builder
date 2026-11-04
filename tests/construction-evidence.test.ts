@@ -97,15 +97,31 @@ test('saved result reads cross new tool sessions, retain exact sections and neve
   saveObservation:async(o:any)=>{stored.set(o.id,structuredClone(o));return o},
   readObservations:async(_id:string,_rev:number,result:string|null)=>({status:'ok',projectId:draft.projectId,artifact_id:artifact,revision:1,current_revision:1,source_state:source,archived:false,
    observation:result?stored.get(result):null,results:[...stored.values()].map(o=>({result_id:o.id,kind:o.kind,observed_at:o.observed_at})),next_after:null})}
- const checked=await createConstructionTools(opts).execute('check_construction_draft',{artifact_id:artifact,revision:1,component_ids:['frame'],requirement_checks:[span]})
+ const first=createConstructionTools(opts)
+ const checked=await first.execute('check_construction_draft',{artifact_id:artifact,revision:1,component_ids:['frame'],requirement_checks:[span]})
  assert.equal(checked.status,'checked');assert.equal(checked.persistence,'saved');assert(countSerializedTokens(checked)<2000)
+ const checkpoint=JSON.parse(JSON.stringify(first.exportState()))
+ assert.equal(checkpoint.version,3);assert.deepEqual(checkpoint.observations,[])
+ assert.equal(checkpoint.savedResults[0].id,checked.result.result_id)
+ assert(!('output'in checkpoint.savedResults[0]),'a persisted report body is not working state')
+ const bad=structuredClone(checkpoint);bad.savedResults[0].projectId='other'
+ assert.throws(()=>first.restoreState(bad),/checkpoint_invalid/)
+ assert.deepEqual(first.exportState(),checkpoint,'invalid references do not replace the current state')
+ const old=createConstructionTools(opts)
+ old.restoreState({version:2,used:1,observations:[...stored.values()]})
+ assert.equal((old.exportState() as any).observations.length,1,'legacy bodies remain until persistence is proven')
+ await old.execute('read_construction_draft',{...checked.result.read,section:'form_evidence.property_checks'})
+ assert.deepEqual(old.exportState(),{...checkpoint,used:2},'a legacy body becomes a reference after the saved result is reopened')
  const reads=catalogReads,newTurn=createConstructionTools(opts)
+ newTurn.restoreState(checkpoint)
  const query={artifact_id:artifact,revision:1,view:'results',ids:[],result_id:null,section:null,after:null}
  const history=await newTurn.execute('read_construction_draft',query)
  assert.equal(history.items[0].value.result_id,checked.result.result_id)
  const detail=await newTurn.execute('read_construction_draft',{...history.items[0].value.read,section:'form_evidence.property_checks'})
  assert.equal(detail.reuse_status,'current_for_analysis');assert.equal(detail.items[0].value.status,'passed')
  assert.equal(catalogReads,reads)
+ assert.deepEqual(newTurn.exportState().version===3?(newTurn.exportState() as any).observations:null,[],
+  'opening details on demand must not put their body back into later checkpoints')
  const many=await createConstructionTools(opts).execute('check_construction_draft',{artifact_id:artifact,revision:1,component_ids:['frame'],requirement_checks:Array.from({length:48},(_,n)=>({...span,id:'probe'+n}))})
  let pageQuery={...many.result.read,section:'form_evidence.property_checks'},rows:any[]=[]
  while(pageQuery){
@@ -123,7 +139,10 @@ test('saved result reads cross new tool sessions, retain exact sections and neve
  allowed=false
  assert.equal((await newTurn.execute('read_construction_draft',checked.result.read)).status,'denied');allowed=true
  assert.equal((await createConstructionTools({...opts,readObservations:async()=>{throw Error('cache read down')}}).execute('read_construction_draft',checked.result.read)).status,'unavailable')
- assert.equal((await createConstructionTools({...opts,saveObservation:async()=>{throw Error('storage down')}}).execute('check_construction_draft',{artifact_id:artifact,revision:1,component_ids:[],requirement_checks:[]})).status,'unavailable')
+ const unsaved=createConstructionTools({...opts,saveObservation:async()=>{throw Error('storage down')}})
+ assert.equal((await unsaved.execute('check_construction_draft',{artifact_id:artifact,revision:1,component_ids:[],requirement_checks:[]})).status,'unavailable')
+ const pending=unsaved.exportState() as any
+ assert.equal(pending.observations.length,1);assert.deepEqual(pending.savedResults,[], 'failed storage cannot turn a report into a saved reference')
  const gated=await checkedConstructionForDrawing(opts,artifact,1)
  assert.equal(gated.status,'needs_data');assert(gated.checked.issues.some((i:any)=>i.code==='form_refinement_unverified'))
 })

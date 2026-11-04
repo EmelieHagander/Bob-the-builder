@@ -160,12 +160,14 @@ async function tableFasteners(read:((id:string,revision:number)=>Promise<unknown
   return null
  }
 }
-export function latestObservations(rows:ConstructionObservation[]){
+export function latestObservations<T extends {artifact_id:string;revision:number}>(rows:T[]):T[]{
  const latest=new Map<string,number>()
  for(const o of rows)latest.set(o.artifact_id,Math.max(latest.get(o.artifact_id)??0,o.revision))
  return rows.filter(o=>o.revision===latest.get(o.artifact_id))
 }
+type SavedConstructionResult = Omit<ConstructionObservation,'output'>
 export type ConstructionToolsState = { version:1; used:number } | { version:2; used:number; observations:ConstructionObservation[] }
+ | {version:3;used:number;observations:ConstructionObservation[];savedResults:SavedConstructionResult[]}
 export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;unlimitedWork?:boolean;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
  readCurrent?:(id:string)=>Promise<unknown>;
@@ -261,7 +263,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  const reusableCheck=async(draft:Record<string,any>,key:string,today:string):Promise<ConstructionObservation|undefined>=>{
   const valid=(o:ConstructionObservation)=>o.kind==='check'&&o.artifact_id===draft.artifact_id&&o.revision===draft.revision
    &&o.output.work_check_key===key&&constructionEvidenceReuse(o,draft,today)==='current_for_analysis'
-  const local=views.exportState().find(valid)
+  const local=views.findObservation(valid)
   if(local)return local
   if(!opts.readObservations)return undefined
   try{
@@ -272,11 +274,13 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    for(const ref of (index.results??[]).filter((r:Record<string,any>)=>r.kind==='check').slice(0,4)){
     const saved=await opts.readObservations(draft.artifact_id,draft.revision,ref.result_id,null)
     const o=saved?.observation as ConstructionObservation|undefined
-    if(o&&o.projectId===opts.projectId&&valid(o)){await views.importObservation(o);return o}
+    if(o&&o.projectId===opts.projectId&&valid(o)){await views.importObservation(o);rememberSaved(o);return o}
    }
   }catch(error){rethrowContinuation(error)}
   return undefined
  }
+ const savedResults=new Map<string,SavedConstructionResult>()
+ function rememberSaved({output:_output,...ref}:ConstructionObservation){savedResults.set(ref.id,ref)}
  const present=async(kind:string,id:string,revision:number,output:Record<string,any>,observedAt?:string)=>{
   if(!opts.constructionViews)return output
   const result=await views.observe(kind,id,revision,output,observedAt)
@@ -285,16 +289,52 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    const stored=await opts.saveObservation(views.observation(result.result.result_id)!)
    if(stored.id!==result.result.result_id)throw Error('construction_observation_mismatch')
    await views.importObservation(stored)
+   rememberSaved(stored)
    if(!await opts.hasAccess())return {status:'denied'}
    return {...result,result:{...result.result,observed_at:stored.observed_at},persistence:'saved'}
   }
   return result
  }
  const tools={
- // Checkpoint keeps observations of each construction's newest revision only. Konrad's
- // edit-check loop on a 70-part build kept every older check: 630 kB of a 2 MB limit (2026-11-02).
- exportState():ConstructionToolsState{return opts.constructionViews?{version:2,used,observations:latestObservations(views.exportState())}:{version:1,used}},
- restoreState(state:ConstructionToolsState){if(state?.version!==(opts.constructionViews?2:1)||!Number.isSafeInteger(state.used)||state.used<0)throw new Error('construction_tools_checkpoint_invalid');if(state.version===2)views.restoreState(state.observations);used=state.used},
+ // Durable checks already have an exact, access-controlled result ID in the
+ // evidence store. Keep its reference, not a second full report in every save.
+ exportState():ConstructionToolsState{
+  if(!opts.constructionViews)return {version:1,used}
+  const latest=latestObservations([...views.references(),...savedResults.values()])
+  const ids=new Set(latest.map(o=>o.id))
+  const observations=views.exportState(o=>ids.has(o.id)&&!savedResults.has(o.id))
+  return opts.formEvidence?{version:3,used,observations,savedResults:[...savedResults.values()].filter(o=>ids.has(o.id)).map(o=>({...o}))}
+   :{version:2,used,observations}
+ },
+ restoreState(state:ConstructionToolsState){
+  if(!state||!Number.isSafeInteger(state.used)||state.used<0||!opts.constructionViews&&state.version!==1
+   ||opts.constructionViews&&state.version!==2&&!(opts.formEvidence&&state.version===3))throw new Error('construction_tools_checkpoint_invalid')
+  if(state.version===2||state.version===3){
+   const restoredResults=new Map<string,SavedConstructionResult>()
+   if(state.version===3){
+    if(!Array.isArray(state.savedResults))throw new Error('construction_tools_checkpoint_invalid')
+    for(const ref of state.savedResults){
+     if(!ref||!/^cs_[a-f0-9]{64}$/.test(ref.id)||restoredResults.has(ref.id)||ref.projectId!==opts.projectId||typeof ref.artifact_id!=='string'
+      ||!Number.isSafeInteger(ref.revision)||ref.revision<1||ref.kind!=='check'||typeof ref.observed_at!=='string'||!Number.isFinite(Date.parse(ref.observed_at))
+      ||Object.keys(ref).some(k=>!['id','projectId','artifact_id','revision','kind','observed_at'].includes(k)))throw new Error('construction_tools_checkpoint_invalid')
+     restoredResults.set(ref.id,{...ref})
+    }
+   }
+   views.restoreState(state.observations);savedResults.clear()
+   for(const [id,ref]of restoredResults)savedResults.set(id,ref)
+  }
+  used=state.used
+ },
+ /** Code-only persistence readback. The model's overview/table remains available
+  * on demand; proving one revision was saved does not require paginating it. */
+ async readSavedSummary(id:string,revision:number):Promise<Record<string,any>>{
+  if(!await opts.hasAccess())return {status:'denied'}
+  const draft=await opts.read(id,revision,null) as Record<string,any>
+  if(!await opts.hasAccess())return {status:'denied'}
+  if(draft?.projectId!==opts.projectId||draft.status!=='ok'||draft.artifact_id!==id||draft.revision!==revision)return {status:'unavailable'}
+  const query={artifact_id:id,revision,view:'overview',ids:[],after:null,result_id:null,section:null}
+  return await views.read(draft,query,undefined,undefined,opts.formEvidence?{saved_results_read:{...query,view:'results'}}:{})
+ },
  tools:[readTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.readDelivery?[CONSTRUCTION_DELIVERY_TOOL]:[]),...(opts.writer?[saveTool,editTool,parameterTool,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
  async execute(name:string,raw:unknown):Promise<Record<string,any>>{
   // Owner decision 2026-11-01: a value with too many decimals no longer costs a
@@ -528,6 +568,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
        message:'Saved check references for this revision. Open a result for findings and current reuse status; history grants no drawing or manufacturing permission.'}
       if(stored.observation){
        await views.importObservation(stored.observation)
+       if(stored.observation.kind==='check')rememberSaved(stored.observation)
        const current={...draft,current_revision:stored.current_revision,source_state:stored.source_state,archived:stored.archived}
        return await views.read(current,v,opts.viewPageTokens?.(),undefined,{persistence:'saved',reuse_status:constructionEvidenceReuse(stored.observation,current,(opts.now?.()??new Date()).toISOString().slice(0,10))})
       }

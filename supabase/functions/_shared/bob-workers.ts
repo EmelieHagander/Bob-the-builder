@@ -128,18 +128,33 @@ interface WorkerProgressBase {
   step: number; messages: Messages
   calls: { tool: string; status: string }[]; receipts: Record<string, unknown>[]; order: string[]
 }
+type WorkerTerminal =
+  | { status: 'awaiting_design_review'; receiptIndex: number }
+  | { status: 'needs_verification'; reason: string; receiptIndex: number }
+  | { status: 'needs_verification'; reason: 'construction_piece_write_conflict'; blockedTool: string }
 export type WorkerProgress = WorkerProgressBase & (
   | { version: 1; previous: string }
   | { version: 2; previous: string | null; renewal: {
     resets: number; savedReceiptIndex: number | null; notedRevision: number | null
   } }
+  | { version: 3; previous: null; terminal: WorkerTerminal }
 )
+function validTerminal(value: unknown, receipts: unknown[]): value is WorkerTerminal {
+  if (!value || typeof value !== 'object') return false
+  const v = value as Record<string, unknown>
+  const receipt = Number.isSafeInteger(v.receiptIndex) && Number(v.receiptIndex) >= 0 && Number(v.receiptIndex) < receipts.length
+  return v.status === 'awaiting_design_review' && receipt
+    || v.status === 'needs_verification' && typeof v.reason === 'string' && NAME.test(v.reason)
+      && (v.reason === 'construction_piece_write_conflict' ? typeof v.blockedTool === 'string' && NAME.test(v.blockedTool) : receipt)
+}
 export function validWorkerProgress(value: unknown, maxSteps: number): value is WorkerProgress {
   const v = value as Partial<WorkerProgress> | null
   const renewal = (v as { renewal?: { resets?: unknown; savedReceiptIndex?: unknown; notedRevision?: unknown } } | null)?.renewal
   const index = (n: unknown) => n === null || Number.isSafeInteger(n) && Number(n) >= 0
   return !!v && typeof v === 'object' && (v.version === 1
       ? typeof v.previous === 'string' && !!v.previous
+      : v.version === 3 ? v.previous === null && Array.isArray(v.messages) && v.messages.length === 0
+        && Array.isArray(v.receipts) && validTerminal(v.terminal, v.receipts)
       : v.version === 2 && (typeof v.previous === 'string' && !!v.previous || v.previous === null && !!v.messages?.length)
         && !!renewal && Number.isSafeInteger(renewal.resets) && Number(renewal.resets) >= 0 && Number(renewal.resets) <= 2
         && index(renewal.savedReceiptIndex) && index(renewal.notedRevision)
@@ -236,7 +251,7 @@ export async function runWorker(opts: {
   const restored = opts.progress?.restored
   let previous: string | undefined = restored?.previous ?? undefined
   if (restored && !validWorkerProgress(restored, opts.worker.max_steps)) throw new Error('worker_checkpoint_invalid')
-  if (restored && restored.version !== (opts.verifiedRenewal ? 2 : 1)) throw new Error('worker_checkpoint_invalid')
+  if (restored && restored.version !== 3 && restored.version !== (opts.verifiedRenewal ? 2 : 1)) throw new Error('worker_checkpoint_invalid')
   const renewal = restored?.version === 2 ? structuredClone(restored.renewal)
     : { resets: 0, savedReceiptIndex: null as number | null, notedRevision: null as number | null }
   // A resumed job already read its knowledge and holds its place; the next step offers the tools again.
@@ -267,6 +282,33 @@ export async function runWorker(opts: {
     const readback = opts.readback && receipts.length ? await opts.readback(receipts) : undefined
     release()
     return { ...result, receipts, ...(readback?.length ? { readback } : {}) }
+  }
+  const terminalResult = (terminal: WorkerTerminal): Record<string, unknown> => ({
+    status: terminal.status, worker: roleKey, calls,
+    ...('blockedTool' in terminal ? { reason: terminal.reason, blocked_tool: terminal.blockedTool }
+      : terminal.status === 'needs_verification' ? { reason: terminal.reason, saved_receipt: receipts[terminal.receiptIndex] }
+      : { reason: 'show_saved_construction', saved_receipt: receipts[terminal.receiptIndex], user_feedback: 'not_recorded',
+        note: 'A saved and technically checked piece is not user approval. Show this exact construction revision and its matching facade (if present), then ask naturally if the visible design matches before proceeding to the next piece. A spatial gate does not prove window count or FORM mapping.' }),
+  })
+  if (restored?.version === 3) {
+    if (!await opts.hasAccess()) throw new Error('project_denied')
+    return finish(terminalResult(restored.terminal))
+  }
+  if (restored && opts.pieceProgress?.readBoundedReview) {
+    const rejected = calls.findLast(c => CONSTRUCTION_PIECE_WRITES.has(c.tool) && c.status === 'conflict')
+    if (rejected) {
+      if (!await opts.hasAccess()) throw new Error('project_denied')
+      return finish(terminalResult({ status: 'needs_verification', reason: 'construction_piece_write_conflict', blockedTool: rejected.tool }))
+    }
+  }
+  // Old snapshots saved the step before its stop decision. Never continue a
+  // second piece from such a snapshot; recover the saved record through finish.
+  if (restored && opts.pieceProgress?.pauseForDesignReview) {
+    const index = receipts.findLastIndex(r => CONSTRUCTION_PIECE_WRITES.has(String(r.tool)))
+    if (index >= 0) {
+      if (!await opts.hasAccess()) throw new Error('project_denied')
+      return finish(terminalResult({ status: 'needs_verification', reason: 'interrupted_piece_verification', receiptIndex: index }))
+    }
   }
   for (let step = restored ? restored.step + 1 : 0; step < opts.worker.max_steps; step++) {
     if (!await opts.hasAccess()) throw new Error('project_denied')
@@ -412,24 +454,22 @@ export async function runWorker(opts: {
       messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) })
     }
     for (const call of response.toolCalls.slice(8)) messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ status: 'deferred' }) })
+    // Persist the stop itself before finishing can yield. No pending tool
+    // messages or completed provider chain belong in a terminal checkpoint.
+    const terminal: WorkerTerminal | null = rejectedBoundedPiece
+      ? { status: 'needs_verification', reason: 'construction_piece_write_conflict', blockedTool: rejectedBoundedPiece }
+      : incompletePiece ? { status: 'needs_verification', reason: incompletePiece.reason, receiptIndex: receipts.indexOf(incompletePiece.receipt) }
+      : opts.pieceProgress?.pauseForDesignReview && pieceReviewReceipt
+        ? { status: 'awaiting_design_review', receiptIndex: receipts.indexOf(pieceReviewReceipt) } : null
+    if (terminal) {
+      release()
+      if (opts.progress) await opts.progress.save(structuredClone({ version: 3 as const, step, previous: null, messages: [], calls, receipts, order, terminal }))
+      previous = undefined
+      return finish(terminalResult(terminal))
+    }
     if (opts.progress) await opts.progress.save(structuredClone(opts.verifiedRenewal
       ? { version: 2 as const, step, previous: previous ?? null, messages, calls, receipts, order, renewal }
       : { version: 1 as const, step, previous, messages, calls, receipts, order }))
-    // Return a canonical conflict to Bob without another expensive provider
-    // turn. No construction was saved in the rejected call; keep existing
-    // receipts and the recorded tool rejection available for reconciliation.
-    if (rejectedBoundedPiece) return finish({ status: 'needs_verification',
-      reason: 'construction_piece_write_conflict', worker: roleKey,
-      blocked_tool: rejectedBoundedPiece, calls })
-    // Preserve the write receipt, but do not allow another piece when the exact
-    // current revision could not be reopened. Bob can recover from this state.
-    if (incompletePiece) return finish({ status: 'needs_verification', reason: incompletePiece.reason,
-      worker: roleKey, saved_receipt: incompletePiece.receipt, calls })
-    if (opts.pieceProgress?.pauseForDesignReview && pieceReviewReceipt) {
-      return finish({ status: 'awaiting_design_review', reason: 'show_saved_construction',
-        worker: roleKey, saved_receipt: pieceReviewReceipt, user_feedback: 'not_recorded',
-        note: 'A saved and technically checked piece is not user approval. Show this exact construction revision and its matching facade (if present), then ask naturally if the visible design matches before proceeding to the next piece. A spatial gate does not prove window count or FORM mapping.', calls })
-    }
     // A new provider conversation must never inherit orphaned tool outputs or
     // unsaved geometry. Reset only after the last protocol batch was answered,
     // a later workpad note was saved, and an exact revision was read back.
