@@ -24,7 +24,7 @@ type Step = (o: OpenAIServiceOptions) => OpenAIServiceResponse<string>
 const ANSWER = 'Konrad sparade lådan och servern kontrollerade den. Ritningen återstår.'
 
 async function turn(opts: { finalAnswer: boolean; bob: Step[]; konrad: Step[]; budget?: ReturnType<typeof createBobModelBudget>;
-  checkpoint?: { state?: BobAnswerState; onSave?: (state: BobAnswerState, budget: ReturnType<typeof createBobModelBudget>) => void; afterWorkerStep?: () => void }; yieldOnFinal?: boolean; workerCheckpoint?: boolean; journal?: BobJournal; failSave?: boolean }) {
+  checkpoint?: { state?: BobAnswerState; onSave?: (state: BobAnswerState, budget: ReturnType<typeof createBobModelBudget>) => void; afterWorkerStep?: () => void }; yieldOnFinal?: boolean; workerCheckpoint?: boolean; journal?: BobJournal; failSave?: boolean; toolEvents?: any[] }) {
   const catalog = catalogFixture(), projectId = 'p', message = 'Konrad, gör lådan 500 mm bred.', hasAccess = async () => true
   const lookup = createProjectLookup(projectId, async (_p, input) => ({ data: { records: input.dataset === 'project' ? [{ id: projectId, name: 'Lådan' }] : [], related: [], truncated: false }, error: null }) as any, undefined, undefined, undefined, { unlimitedWork: true })
   const writer = createProjectWriter(projectId, message, async () => { throw Error('No write requested') }, async () => ({ data: [], error: null }), async () => ({ data: [], error: null }))
@@ -46,10 +46,11 @@ async function turn(opts: { finalAnswer: boolean; bob: Step[]; konrad: Step[]; b
     }) }
   }
   const budget = opts.budget ?? createBobModelBudget(1, 24, undefined, stopPolicy(opts.finalAnswer))
-  const requested: OpenAIServiceOptions[] = [], dispatched: OpenAIServiceOptions[] = [], observations: any[] = []
+  const requested: OpenAIServiceOptions[] = [], dispatched: OpenAIServiceOptions[] = [], observations: any[] = [], toolEvents: any[] = []
   let bobSteps = 0, konradSteps = 0
   const result = await runProjectAnswer({ projectId, userId: 'owner', message, lookup, writer, hasAccess, constructionTools, aiCatalog: catalog,
     unlimitedWork: true, corePreload: true, readToolPolicy, completeRequest: true, deadline: Infinity, observe: v => observations.push(v),
+    onTool: (v: unknown) => { toolEvents.push(v); opts.toolEvents?.push(v) },
     ...(opts.finalAnswer ? { finalAnswer: true } : {}),
     ...(opts.workerCheckpoint ? { workerCheckpoint: true } : {}),
     ...(opts.checkpoint ? { checkpoint: { state: opts.checkpoint.state, save: async (state: BobAnswerState) => opts.checkpoint!.onSave?.(structuredClone(state), budget), afterWorkerStep: opts.checkpoint.afterWorkerStep } } : {}),
@@ -65,7 +66,7 @@ async function turn(opts: { finalAnswer: boolean; bob: Step[]; konrad: Step[]; b
         return opts.bob[bobSteps++](options)
       }, options.aiFunction ?? options.functionName, undefined, options.tool_choice === 'none')
   }
-  return { result, requested, dispatched, budget, observation: observations.at(-1), constructionCalls }
+  return { result, requested, dispatched, budget, observation: observations.at(-1), constructionCalls, toolEvents }
 }
 const handOver: Step = () => ({ ...reply(.1), data: null, responseId: 'b1', toolCalls: [call('h1', 'ask_structure_worker', { request: 'Konrad, gör lådan 500 mm bred.' })] })
 const reads = (n: number): Step => () => ({ ...reply(.1), data: null, responseId: 'k' + n, toolCalls: [call('k' + n + 'c', 'read_construction_draft', { page: n })] })
@@ -81,10 +82,11 @@ test('CPU segments resume one saved specialist step at a time without duplicate 
   const constructionCalls: string[] = []
   const scripts = [[reads(1)], [reads(2)], [saves], [reports]]
   let yields = 0
+  const toolEvents: any[] = []
   for (let claim = 0; claim < scripts.length; claim++) {
     const journal = createBobJournal(store, Infinity, Date.now, new Map(), { unlimitedWork: true })
     if (saved) journal.restoreState(saved.journal)
-    const run = () => turn({ finalAnswer: true, workerCheckpoint: true, journal,
+    const run = () => turn({ finalAnswer: true, workerCheckpoint: true, journal, toolEvents,
       bob: claim === 0 ? [handOver] : [answer], konrad: scripts[claim],
       checkpoint: { state: saved?.state,
         onSave: state => { saved = { state: structuredClone(state), journal: journal.exportState() } },
@@ -100,6 +102,9 @@ test('CPU segments resume one saved specialist step at a time without duplicate 
     }
   }
   assert.equal(yields, 3)
+  const workerEventKeys = toolEvents.filter(v => v.index >= 100).map(v => `${v.step}:${v.index}`)
+  assert(workerEventKeys.length >= 3)
+  assert.equal(new Set(workerEventKeys).size, workerEventKeys.length, 'specialist diagnostic keys cannot overwrite earlier claims')
   assert.deepEqual(constructionCalls, ['read_construction_draft', 'read_construction_draft', 'save_construction_draft'])
   assert.equal(store.entries.filter(e => /^model:structure-worker:\d+$/.test(e.key)).length, 4)
   assert.equal(store.entries.filter(e => /^model:ask-bob:\d+$/.test(e.key)).length, 2)

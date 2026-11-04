@@ -51,7 +51,11 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
   const real = createConstructionTools({ projectId, message, writer, constructionSourceRefresh: true, hasAccess, read: async () => ({}), readSources: async () => ({ project: new Map(), physical: new Map() }),
     readDelivery: async () => ({ status: 'ok', records: [] }) })
   const constructionCalls: { name: string; args: any }[] = []
-  const constructionTools = { ...real, tools: real.tools, get remaining() { return real.remaining }, execute: async (name: string, args: any) => {
+  const constructionTools = { ...real, tools: real.tools, get remaining() { return real.remaining },
+    readSavedSummary: async (id: string, revision: number) => {
+      constructionCalls.push({ name: 'saved_summary', args: { artifact_id: id, revision } })
+      return { status: 'ok', artifact_id: id, revision, current_revision: revision, source_state: 'current', archived: false }
+    }, execute: async (name: string, args: any) => {
     constructionCalls.push({ name, args })
     if (name === 'save_construction_draft') pendingImage = true // stands in for a worker opening an image
     if (name === 'read_construction_draft') return readDraft ? readDraft(args) : { status: 'ok', drafts: [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }] }
@@ -178,7 +182,7 @@ test('Bob asks Konrad in plain words; Konrad has his own tools, the project in h
   assert.deepEqual(report.receipts, [{ tool: 'save_construction_draft', dataset: 'artifacts', record_id: 'c1', revision: 3, operation: 'updated' },
     { tool: 'check_construction_draft', artifact_id: 'c1', revision: 3, status: 'checked', by: 'code' }])
   // The saved construction comes back with the report, read by code (report_readback_version 1).
-  assert.deepEqual(report.readback, [{ construction: { status: 'ok', drafts: [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }] } }])
+  assert.deepEqual(report.readback, [{ construction: { status: 'ok', artifact_id: 'c1', revision: 3, current_revision: 3, source_state: 'current', archived: false } }])
   // An image he opened goes with his own next call and is confirmed there; Bob's next call does not carry it.
   const [, second] = workers['structure-worker']
   assert(texts(second).some(t => t.includes('IMAGE-PIXELS'))); assert.equal(delivered(), 1)
@@ -194,9 +198,9 @@ test('the readback reads the saved construction at its saved revision; without t
   const { bob, constructionCalls } = await turn(catalog, [ask('ask_structure_worker', { request: 'Konrad, sätt ihop lådan.' })],
     { 'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'w1', toolCalls: [call('w1c', 'save_construction_draft', {})] })] })
   const report = toolOutput(bob[1])
-  assert.deepEqual(report.readback, [{ construction: { status: 'ok', drafts: [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }] } }])
+  assert.deepEqual(report.readback, [{ construction: { status: 'ok', artifact_id: 'c1', revision: 3, current_revision: 3, source_state: 'current', archived: false } }])
   const read = constructionCalls.at(-1)!
-  assert.equal(read.name, 'read_construction_draft'); assert.equal(read.args.artifact_id, 'c1'); assert.equal(read.args.revision, 3); assert.equal(read.args.view, 'overview')
+  assert.equal(read.name, 'saved_summary'); assert.equal(read.args.artifact_id, 'c1'); assert.equal(read.args.revision, 3)
 })
 
 test('receipts are copied by code from nested and flat results; the readback reads each saved record once', () => {

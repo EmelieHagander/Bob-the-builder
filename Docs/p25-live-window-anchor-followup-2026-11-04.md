@@ -260,6 +260,59 @@ Model dispatch keys remain distinct, so the 12-call / USD 1.381521 total stands.
 The segmentation change is a scheduling mitigation. It is insufficient evidence
 that CPU consumption is stable as histories/checks/construction detail grow.
 
+## Current working state correction, 2026-11-04
+
+The owner authorized implementation of the CPU investigation's next steps.
+The correction preserves saved project results and history; it removes redundant
+active copies rather than deleting domain records or banning archives.
+
+- Worker progress v3 stores a terminal review/conflict/verification decision
+  before finishing/readback can yield. It retains exact receipts and call
+  statuses, releases the completed provider chain and saves no pending model
+  messages. Restoring it finishes without another specialist model call.
+  Older snapshots with a bounded conflict or interrupted review-piece save
+  return verification results instead of continuing to another piece.
+- Code persistence readback uses the existing caller-authorized construction
+  reader and a small overview of the exact revision. It preserves project,
+  artifact, revision, current revision, archive/source status and counts. It
+  skips fastener/parts table construction and token paging. Model-requested
+  tables remain available; saved checks have an explicit results-read reference.
+- Construction tools state v3 retains references to successfully persisted
+  checks at `construction_observations`, not their full report bodies. Exact
+  results load and hash-check through the existing access-controlled reader on
+  demand. Unsaved and turn-local list/cut reports remain in state. Old v2 bodies
+  remain until persistence is proven by a result read/save. Only each
+  construction's newest revision is carried into the next checkpoint.
+- Checkpoint commits canonicalize incoming state once, cache comparison text
+  and clone at ownership boundaries. Short receipt validation still enforces
+  job/revision/unchanged semantics; full legacy packets still validate. Journal
+  cursors, model fingerprints and write authority are unchanged.
+- The specialist tool-event counter survives checkpoints, preventing later
+  claims from overwriting earlier diagnostics. It is not a billing counter.
+
+Offline replay of the captured revision-5 state projects a terminal checkpoint
+of approximately **552 kB versus 1,116,562 characters**. Its persisted-check
+component falls from **211,914 to 306 characters** after reopening the durable
+result; the code-only summary is **1,587 characters**, without constructing the
+15,986-character table that the old report wrapper discarded. Three fresh local
+commit comparisons show reduced CPU work, with timings varying by local load.
+These are Node measurements/projections, not a full hosted segment profile or
+proof that Supabase CPUTime can no longer occur.
+
+Focused verification: 76 tests passed across the eight affected worker,
+checkpoint and construction files; subsequently changed telemetry,
+legacy-recovery and reference-validation cases were rerun separately. Both
+Edge entry points typecheck using the temporary local import map (installed
+Supabase declarations, because the exact `esm.sh` import is inaccessible here).
+No full CI or paid model attempt was run. Raw project/checkpoint captures stay
+outside the public repository.
+
+Deployment must find zero active jobs and verify project
+`yuobtgoidmmmwfqenkau`, both retrieved bundles and existing JWT modes. No schema
+migration/catalog publication is needed. Older runtimes reject v3 states: drain
+active jobs before rollback as well. Revision 5 / 86 instances remains the next
+**show/review saved result** acceptance target; window recreation is not required.
+
 ## Production evidence, read-only
 
 - The live Ladan turn started 11:52 UTC, completed 12:12 UTC. It made **40 model calls**, **three `ask_structure_worker` handoffs**, cost telemetry approximately **$6.01**, and **no new Construction revision**. The saved draft remains revision **4**, 78 instances, pinned to target **29** / Solution **21**; the selected design is target **35** / Solution **27**. The correct Plan focus was saved to the facade-opening Step.

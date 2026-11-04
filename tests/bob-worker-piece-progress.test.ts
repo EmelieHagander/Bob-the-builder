@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { runWorker, verifiedConstructionPiece, type WorkerDefinition, type WorkerProgress } from '../supabase/functions/_shared/bob-workers.ts'
+import { runWorker, validWorkerProgress, verifiedConstructionPiece, type WorkerDefinition, type WorkerProgress } from '../supabase/functions/_shared/bob-workers.ts'
+import { BobContinuation } from '../supabase/functions/_shared/bob-job-journal.ts'
 import type { AiCatalogSession } from '../supabase/functions/_shared/ai-catalog.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from '../supabase/functions/_shared/openai-service.ts'
 
@@ -17,10 +18,12 @@ const model = (id: string, calls: ReturnType<typeof call>[] = []): OpenAIService
 
 function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; readback?: (revision: number) => unknown;
   checkInSave?: boolean; serverCheck?: 'checked' | 'unavailable'; inspect?: (revision: number) => Record<string, unknown>;
-  pauseForDesignReview?: boolean; boundedReview?: (revision: number) => Record<string, unknown>; conflict?: boolean; afterStep?: () => void }) {
+  pauseForDesignReview?: boolean; boundedReview?: (revision: number) => Record<string, unknown>; conflict?: boolean; afterStep?: () => void;
+  restored?: WorkerProgress; finishReadback?: () => Promise<unknown[]>; access?: boolean }) {
   const commands: { name: string; revision: number | null }[] = []
   const scopedChecks: string[][] = []
   const observed: OpenAIServiceOptions[] = [], checkpoints: WorkerProgress[] = []
+  const released: string[] = []
   let saved = 2
   const result = runWorker({ aiCatalog: catalog, worker,
     callModel: async req => { observed.push(req); return pieces[observed.length - 1] ?? model('end') },
@@ -37,7 +40,8 @@ function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; r
           : name === 'update_workpad' ? { status: 'noted', revision: 3 } : { status: 'ok' }
       },
     },
-    readback: async () => [], hasAccess: async () => true, deadline: Date.now() + 60_000, workpadEnabled: true,
+    readback: opts.finishReadback ?? (async () => []), hasAccess: async () => opts.access !== false, deadline: Date.now() + 60_000, workpadEnabled: true,
+    releaseChain: id => { released.push(id) },
     autoCheck: async targets => targets.map(t => {
       commands.push({ name: 'check_exact_revision', revision: t.revision })
       scopedChecks.push(t.component_ids ?? [])
@@ -55,10 +59,53 @@ function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; r
       commands.push({ name: 'read_construction_piece_progress', revision: receipt.revision as number })
       return opts.boundedReview!(receipt.revision as number)
     } } : {}) } } : {}),
-    progress: { save: async p => { checkpoints.push(structuredClone(p)) }, afterStep: opts.afterStep },
+    progress: { restored: opts.restored, save: async p => { checkpoints.push(structuredClone(p)) }, afterStep: opts.afterStep },
   })
-  return { result, commands, observed, checkpoints, scopedChecks }
+  return { result, commands, observed, checkpoints, scopedChecks, released }
 }
+
+test('review, verification and write-conflict stops survive an interruption after checkpoint without another model call', async () => {
+  for (const variant of [
+    { pauseForDesignReview: true, status: 'awaiting_design_review', reason: 'show_saved_construction' },
+    { serverCheck: 'unavailable' as const, checkInSave: false, status: 'needs_verification', reason: 'saved_revision_check_incomplete' },
+    { conflict: true, boundedReview: () => ({ status: 'not_configured' }), status: 'needs_verification', reason: 'construction_piece_write_conflict' },
+  ]) {
+    const first = harness([model('one', [call('a', 'edit_construction_parts')])], { enabled: true, ...variant,
+      finishReadback: async () => { throw new BobContinuation('yield', 'finish_interrupted') } })
+    // A conflict has no saved receipts and needs no readback. Restore its
+    // captured terminal checkpoint as if interrupted before returning to Bob.
+    if (variant.conflict) await first.result
+    else await assert.rejects(first.result, e => e instanceof BobContinuation)
+    const saved = first.checkpoints.at(-1)!
+    assert.equal(saved.version, 3); assert(validWorkerProgress(saved, worker.max_steps))
+    assert.deepEqual(saved.messages, []); assert.equal(saved.previous, null)
+    assert.deepEqual(first.released, ['one'])
+    const resumed = harness([], { enabled: true, restored: JSON.parse(JSON.stringify(saved)), ...variant })
+    const report = await resumed.result
+    assert.equal(report.status, variant.status); assert.equal(report.reason, variant.reason)
+    assert.equal(resumed.observed.length, 0); assert.deepEqual(resumed.commands, [])
+    assert.deepEqual(report.receipts, saved.receipts)
+    const denied = harness([], { enabled: true, restored: saved, access: false })
+    await assert.rejects(denied.result, /project_denied/)
+    assert.equal(denied.observed.length, 0)
+    assert.equal(validWorkerProgress({ ...saved, terminal: { status: 'awaiting_design_review', receiptIndex: 999 } }, worker.max_steps), false)
+    if (variant.conflict) {
+      const { terminal: _terminal, ...base } = saved as WorkerProgress & { terminal: unknown }
+      const legacy = harness([], { enabled: true, ...variant, restored: { ...base, version: 1, previous: 'one' } })
+      assert.equal((await legacy.result).reason, variant.reason); assert.equal(legacy.observed.length, 0)
+    }
+  }
+})
+
+test('an older snapshot taken between a piece save and its stop decision cannot continue to a second piece', async () => {
+  const first = harness([model('one', [call('a', 'edit_construction_parts')])], { enabled: true, pauseForDesignReview: true })
+  await first.result
+  const { terminal: _terminal, ...base } = first.checkpoints[0] as WorkerProgress & { terminal: unknown }
+  const old = { ...base, version: 1 as const, previous: 'one', messages: [] }
+  const resumed = harness([], { enabled: true, pauseForDesignReview: true, restored: old })
+  assert.equal((await resumed.result).reason, 'interrupted_piece_verification')
+  assert.equal(resumed.observed.length, 0)
+})
 
 test('Konrad sees one save and exact code readback before issuing the next construction change', async () => {
   const steps = [model('one', [call('a', 'read_construction_draft'), call('b', 'edit_construction_parts'),

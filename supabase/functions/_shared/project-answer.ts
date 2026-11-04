@@ -240,6 +240,8 @@ export interface BobAnswerState {
   finalCall?: boolean
   /** Worker checkpoints: the hand-over at this step and call index, and the worker's place in it. */
   worker?: { key: string; index: number; session: unknown; projectName?: string; progress: WorkerProgress }
+  /** Diagnostic indices must not restart at zero on each specialist claim. */
+  workerToolEvents?: number
   /** Failed hand-overs cannot start the same worker again during this owner turn. */
   failedWorkers?: string[]
   tools: NonNullable<OpenAIServiceOptions['tools']>
@@ -333,6 +335,7 @@ export async function runProjectAnswer(opts: ProjectAnswerOptions): Promise<Proj
       || ![saved.completionChecked, saved.closedNoteSent, saved.closedByLimit, saved.closedByCommentary].every(v => typeof v === 'boolean')
       || saved.reviewedAnswer !== undefined && (typeof saved.reviewedAnswer !== 'string' || !saved.reviewedAnswer)
       || saved.finalCall !== undefined && typeof saved.finalCall !== 'boolean'
+      || saved.workerToolEvents !== undefined && !counter(saved.workerToolEvents)
       || saved.worker !== undefined && (saved.phase !== 'tools' || !saved.worker || typeof saved.worker.key !== 'string' || saved.worker.index !== saved.toolIndex
         || !saved.worker.session || typeof saved.worker.session !== 'object' || saved.worker.projectName !== undefined && typeof saved.worker.projectName !== 'string' || !validWorkerProgress(saved.worker.progress, 40))
       || saved.failedWorkers !== undefined && (!Array.isArray(saved.failedWorkers) || new Set(saved.failedWorkers).size !== saved.failedWorkers.length
@@ -449,7 +452,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const withoutDiagnostics = (result: any) => { if (result && typeof result === 'object' && 'diagnostics' in result) { const { diagnostics: _d, ...rest } = result; return rest } return result }
   const workerSessions = new Map<string, ReturnType<typeof createBobToolSession>>()
   let currentStep = restored?.step ?? 0, currentIndex = -1
-  let workerToolEvents = 0
+  let workerToolEvents = restored?.workerToolEvents ?? restored?.worker?.progress.calls.length ?? 0
   // Worker checkpoints: the saved place is used once, by the same hand-over call.
   let workerResume = opts.workerCheckpoint ? restored?.worker : undefined
   let workerState: BobAnswerState['worker']
@@ -522,6 +525,12 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const stair = opts.context?.stair
       const history = stair ? stairConversation(opts.aiCatalog, stair) : (opts.context?.recent.slice(0, -1) ?? []).map(m => ({ role: m.role, content: m.text }))
       const workerStep = currentStep, workerIndex = currentIndex
+      const readSavedRecord = async (read: { label: string; tool: string; arguments: Record<string, unknown> }) => {
+        const { artifact_id: id, revision } = read.arguments
+        if (read.label === 'construction' && opts.constructionTools && typeof id === 'string' && Number.isSafeInteger(revision))
+          return opts.constructionTools.readSavedSummary(id, Number(revision))
+        return withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments)))
+      }
       const workerWorkpad = !resume && workerPads
         ? await workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}`) : undefined
       const report = await runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
@@ -530,7 +539,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           ? { pieceProgress: { readSaved: async (receipt: Record<string, unknown>) => {
             const read = readbackReads([receipt])[0]
             if (!read || !('tool' in read) || read.label !== 'construction') return { status: 'unavailable' }
-            return withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments)))
+            return readSavedRecord(read)
           }, ...(opts.workerDesignReview ? { pauseForDesignReview: true } : {}), ...(opts.workerFormPiece ? { inspectSaved: async (receipt: Record<string, unknown>, toolArgs: unknown) => {
             const id = typeof receipt.artifact_id === 'string' ? receipt.artifact_id : receipt.record_id
             const revision = receipt.revision
@@ -573,7 +582,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           for (const read of readbackReads(receipts)) {
             if (!('tool' in read)) { records.push({ [read.label]: { status: 'not_read', reason: read.not_read } }); continue }
             let record: unknown
-            try { record = withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments))) }
+            try { record = await readSavedRecord(read) }
             catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; record = { status: 'unavailable' } }
             const text = JSON.stringify(record) ?? ''
             records.push({ [read.label]: text.length <= 8000 ? record : { status: 'too_large', note: 'Read it with your own tools.' } })
@@ -734,6 +743,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
       ...(finalCall ? { finalCall } : {}),
       ...(workerState ? { worker: workerState } : {}),
+      ...(workerToolEvents ? { workerToolEvents } : {}),
       ...(failedWorkers.size ? { failedWorkers: [...failedWorkers] } : {}),
       tools, closedByLimit, closedByCommentary, request, response: pendingResponse, toolIndex }))
   }

@@ -306,5 +306,8 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
    dependency_scope:query.view==='dependencies'?'parameter ancestors/dependents, bound parts and directly attached joints; newly reached neighboring parts may have further dependencies':'selected view; use dependencies for formulas, sources and affected parts',
    open_question_count:arr(draft.open_questions).length,notes_view:'notes'},selected.items,budget)
  }
- return {read,observe,importObservation,observation:(id:string)=>structuredClone(seen.get(id)),exportState:()=>structuredClone(observations),restoreState:restore}
+ return {read,observe,importObservation,observation:(id:string)=>structuredClone(seen.get(id)),
+  findObservation:(select:(o:ConstructionObservation)=>boolean)=>structuredClone(observations.find(select)),
+  references:()=>observations.map(({output:_output,...ref})=>({...ref})),
+  exportState:(select:(o:ConstructionObservation)=>boolean=()=>true)=>structuredClone(observations.filter(select)),restoreState:restore}
 }
