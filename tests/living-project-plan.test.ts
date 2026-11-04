@@ -405,6 +405,8 @@ test('P2: unfinished Tasks cannot satisfy plan completion by selector or resolve
     'select bob_private.project_plan_link_evidence($1,$2,$3,$4,$5,$6,$7) result',
     [project,1,linkedId,'task',taskId,null,'resolves'])).rows[0].result as any
   assert.equal(receipt.requirement_status.state,'satisfied')
+  assert.equal(receipt.step_completion.satisfied,2)
+  assert.equal(receipt.step_completion.requirements_ready,true)
   let completed=await desk()
   assert.deepEqual(completed.current_step.requirements.map((q:any)=>q.status.state),['satisfied','satisfied'])
   assert.equal(completed.completion.satisfied,2)
