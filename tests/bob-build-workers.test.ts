@@ -79,7 +79,7 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
         readPlan: async () => ({ status: 'unavailable' }),
         readConstruction: async () => ({ status: 'unavailable' }),
       },
-      workpads: { load: async () => ({ status: 'ok', revision: 0, note: null }),
+      workpads: { load: async () => ({ status: 'ok' as const, revision: 0, note: null }),
         update: async () => ({ status: 'noted', revision: 1 }) } } : {}),
     aiCatalog: catalog, corePreload: true, readToolPolicy, toolPicker: true, completeRequest: true, onTool: v => ran.push({ name: v.name, status: v.status, ...(v.rejection ? { rejection: v.rejection } : {}) }),
     callModel: catalogCall(async options => {
