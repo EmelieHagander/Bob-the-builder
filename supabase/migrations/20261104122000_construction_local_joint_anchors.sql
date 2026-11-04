@@ -59,9 +59,35 @@ begin
  end loop;
  return has_joint;
 end $$;
+
+-- The corner safety envelopes intentionally overlap. A stud beside the front
+-- window can lie within both the front and left *bounding boxes* without
+-- belonging to two facades. Prefer the unique nearest outside facade plane;
+-- true ties, unsupported geometry and a part leaving its previous facade
+-- remain unclassified (NULL), hence rejected by the original P1 gate.
+create function bob_private.construction_nearest_piece_scope(
+ p_project text,p_artifact uuid,p_instance jsonb,p_definition jsonb)
+returns integer language sql stable security invoker set search_path='' as $$
+ with candidates as (
+  select s.position,case s.view_id
+   when 'front' then abs((p_instance#>>'{placement,y}')::numeric+(p_definition->>'y_mm')::numeric/2-s.y_min)
+   when 'back' then abs(s.y_max-(p_instance#>>'{placement,y}')::numeric-(p_definition->>'y_mm')::numeric/2)
+   when 'left' then abs((p_instance#>>'{placement,x}')::numeric+(p_definition->>'x_mm')::numeric/2-s.x_min)
+   when 'right' then abs(s.x_max-(p_instance#>>'{placement,x}')::numeric-(p_definition->>'x_mm')::numeric/2)
+   when 'top' then abs(s.z_max-(p_instance#>>'{placement,z}')::numeric-(p_definition->>'z_mm')::numeric/2)
+   end as distance
+  from bob_private.construction_piece_scopes s
+  where s.project_id=p_project and s.artifact_id=p_artifact
+   and bob_private.construction_box_in_piece(p_instance,p_definition,s)
+ ), ranked as (select position,distance,min(distance) over() as best from candidates)
+ select case when count(*)=1 then min(position) else null end
+ from ranked where distance=best
+$$;
 revoke all on function bob_private.construction_boxes_contact(jsonb,jsonb,jsonb,jsonb)
  from public,anon,authenticated,service_role;
 revoke all on function bob_private.construction_only_new_local_joints(text,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb)
+ from public,anon,authenticated,service_role;
+revoke all on function bob_private.construction_nearest_piece_scope(text,uuid,jsonb,jsonb)
  from public,anon,authenticated,service_role;
 
 do $local_joint_guard$
@@ -70,8 +96,28 @@ begin
  body:=pg_get_functiondef('bob_private.enforce_construction_piece_revision()'::regprocedure);
  old:=$old$ old_solution uuid; next_solution uuid;$old$;
  replacement:=$new$ old_solution uuid; next_solution uuid;
- role_before jsonb;role_after jsonb;$new$;
+ role_before jsonb;role_after jsonb;old_position integer;new_position integer;$new$;
  if position(old in body)=0 then raise exception 'local_joint_guard_declaration_changed';end if;
+ body:=replace(body,old,replacement);
+ old:=$old$  -- A changed part must be within exactly one facade, before AND after.
+  select count(*)::integer,min(s.position) into matches,matched_position
+   from bob_private.construction_piece_scopes s
+   where s.project_id=new.project_id and s.artifact_id=new.artifact_id
+    and (old_inst is null or bob_private.construction_box_in_piece(old_inst,old_def,s))
+    and (new_inst is null or bob_private.construction_box_in_piece(new_inst,new_def,s));
+  if matches<>1 then raise exception 'construction_piece_outside_or_ambiguous_facade' using errcode='PT409';end if;$old$;
+ replacement:=$new$  -- Match the nearest physical facade separately for before and after;
+  -- a relocation from one side to another is still a multi-facade edit.
+  old_position:=case when old_inst is null then null else
+   bob_private.construction_nearest_piece_scope(new.project_id,new.artifact_id,old_inst,old_def) end;
+  new_position:=case when new_inst is null then null else
+   bob_private.construction_nearest_piece_scope(new.project_id,new.artifact_id,new_inst,new_def) end;
+  if old_inst is not null and old_position is null or new_inst is not null and new_position is null
+   then raise exception 'construction_piece_outside_or_ambiguous_facade' using errcode='PT409';end if;
+  if old_position is not null and new_position is not null and old_position<>new_position
+   then raise exception 'construction_piece_multiple_facades' using errcode='PT409';end if;
+  matched_position:=coalesce(old_position,new_position);$new$;
+ if position(old in body)=0 then raise exception 'local_joint_guard_facade_branch_changed';end if;
  body:=replace(body,old,replacement);
  old:=$old$  -- Distinct windows widely separated on the same wall are distinct workpieces.
   -- This is only a geometric bound, never proof that exactly one opening exists.

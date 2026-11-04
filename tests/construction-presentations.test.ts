@@ -237,10 +237,12 @@ test('construction presentation and feedback retain exact source, component scop
       values($1,$2,$3,$4,6,2200)`,[project,savedLong.recordId,plan.revision,plan.focus_step_id])
     await pg.query(`insert into bob_private.construction_piece_scopes
       (artifact_id,project_id,position,view_id,label,x_min,x_max,y_min,y_max,z_min,z_max)
-      values($1,$2,1,'front','Long front fixture',-100,6500,-100,500,-100,2500)`,[savedLong.recordId,project])
+      values($1,$2,1,'front','Long front fixture',-100,6500,-100,500,-100,2500),
+      ($1,$2,2,'left','Overlapping gable fixture',-100,650,-100,3500,-100,2500)`,[savedLong.recordId,project])
     const near={id:'near_new',definition_id:'post',placement:placement(400,45)}
     const far={id:'far_new',definition_id:'post',placement:placement(4500,45)}
     const detached={id:'detached_new',definition_id:'post',placement:placement(400,500)}
+    const ambiguous={id:'corner_new',definition_id:'post',placement:placement(25,45)}
     const joint=(id:string)=>({id:'j_'+id,first:{instance_id:'through_plate',face:'z_max'},
       second:{instance_id:id,face:'z_min'},method:'butt',reason:'Local attachment to the unmodified plate.',fasteners:[]})
     const testRevision=async(additions:any[],attached:string[],definitions=original.definitions)=>pg.transaction(async tx=>{
@@ -266,6 +268,8 @@ test('construction presentation and feedback retain exact source, component scop
       'two distant new attachments cannot hide behind a common long member')
     await assert.rejects(testRevision([detached],['detached_new']),/construction_piece_too_spread_out/,
       'a new joint to a non-touching piece does not earn a local-anchor exemption')
+    await assert.rejects(testRevision([ambiguous],['corner_new']),/construction_piece_outside_or_ambiguous_facade/,
+      'a true equidistant corner part stays unclassified')
     await assert.rejects(testRevision([near],['near_new'],[{...plate,x_mm:6050},post]),/construction_piece_too_spread_out/,
       'a physically altered long plate must keep its full span even when joined to a local piece')
     assert.equal((await call(owner,'read_construction_piece_progress',[project,savedLong.recordId])).status,'ready')
