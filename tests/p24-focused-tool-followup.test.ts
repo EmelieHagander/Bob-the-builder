@@ -43,7 +43,7 @@ test('P2.4 offers existing focus tools after a true not_focused Konrad preflight
   assert.deepEqual(names(await resumed.prepare()),
     ['ask_structure_worker','change_plan_focus','read_plan_link_context','describe_tool'])
   f.policies[2].active = false
-  assert.equal((await resumed.execute('change_plan_focus', {})).status, 'not_allowed',
+  assert.equal((await resumed.execute('change_plan_focus', {})).status, 'unavailable',
     'a catalog followup never overrides the live authorization fence')
   assert(!names(await resumed.prepare()).includes('change_plan_focus'))
 })
