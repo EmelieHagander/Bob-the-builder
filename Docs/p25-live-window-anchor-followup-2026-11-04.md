@@ -1,6 +1,6 @@
 # P2.5 — Live Ladan acceptance: long-member anchor and outer handoff stop
 
-**Current status (2026-11-04, 21:11 UTC):** PR #455 is merged and byte-verified in `bob-worker` v196 / `ask-bob` v228. O1–O4 are installed, including the summary RPC and terminal-journal cleanup migration `20261104211000`; 724 old working journal rows were removed, with saved domain revisions and receipts preserved. Ladan revision 5 remains saved and unarchived. Issue #438 remains open for the next owner-initiated show/review of that saved revision and hosted CPU verification; no paid attempt was started by this implementation. Earlier numbered deployments and attempts below are historical evidence.
+**Current status (2026-11-04, 21:42 UTC):** O1–O4 are installed in `bob-worker` v196 / `ask-bob` v228 with migration `20261104211000`. The owner-initiated reopen run completed: Construction 5 and its exact saved check were read successfully; drawing revision 3 now represents the unchanged Construction 5 geometry. No CPUTime match occurred in the run log window. Direct chat presentation and actual visual/owner acceptance remain open in #438. No additional paid retry was started by this monitoring session. Earlier deployments and attempts below are dated evidence.
 
 ## Follow-up audit and remaining acceptance
 
@@ -504,6 +504,52 @@ additions can remain during an Edge rollback; already-cleared transient journals
 are not recreated. Domain revisions, receipts and cost/recovery evidence remain
 available. O5 instrumentation and actual saved-window delivery/CPU acceptance
 remain open; successful deployment does not close #438.
+
+## Owner-initiated saved-window reopen, 22:34–22:41 Stockholm time
+
+**Outcome: technical access/reopen passed; complete visual delivery remains
+partially accepted.** The owner sent the prepared revision-5 reopen/show prompt.
+Job `882d34ba-4aea-4ee5-8d95-74a7ce2c521f`, turn
+`484d385d-f255-4d44-973d-b9d4ded91215`, ran 21:34:57–21:41:54 UTC
+on Nov 4 (22:34–22:41 in Sweden), completed with no job error.
+
+- The live journal pins `workingStateVersion:1`; the actual main toolbox is
+  state v3. Bob opened Construction revision **5**, its saved result index and
+  exact report `cs_9dedfdc006d311af9f3dd8ebf615e5eb933f744b09e43f23d236a45b601f6f19`,
+  then specific window parts, requirements/issues and notes. Caller reads report
+  `status=ok`, `source_state=current` for this revision. The on-demand report
+  path therefore worked in the real model run, beyond controlled tests.
+- Rita first reused an old completed drawing request (`already_saved` pointing
+  to drawing revision 2), then got `invalid_handoff` on a new request. She
+  recovered and saved **revision 3 of the same drawing identity**
+  `142f2eb3-1f26-4672-97b8-6ecc5bff6fef`.
+- `artifact_construction_drawings` binds drawing **3 → Construction 5**.
+  Its **86 instances and all definitions/placements equal the saved source**;
+  comparing complete recipes differs only in `views`. All eight `hw_*` window
+  pieces are present. Construction remains revision **5**; no new geometry was
+  saved. CAD's generic `source_artifact_id` fields are null here: the typed
+  construction/drawing relation is the relevant lineage owner.
+- The final answer states it is waiting for owner review and says the view must
+  be opened manually in project drawings. It does not deliver a verified inline
+  image/3D presentation in chat. The assistant has not inspected the rendered
+  browser view or confirmed facade orientation, and the owner has not approved
+  the window. A saved current CAD output is not visual or fabrication acceptance.
+- **22 model calls, estimated model cost USD 2.6582074**, no unpriced model rows;
+  largest model input **115,517 tokens**. This excludes any separate render-service
+  charge. The approximately seven-minute read/show workflow still has costly
+  routing/handoff work; success does not make it efficient enough by itself.
+- The worker-filtered log window 21:34:55–21:42:15 UTC contains 141 function-log
+  and 12 function-edge-log records with **zero `CPUTime` matches**. This run
+  completed without the prior shutdown symptom; it is one case, not proof of a
+  general CPU ceiling guarantee. Post-finish: zero active jobs and zero retained
+  journal/checkpoint rows for this job, with saved outputs/Construction preserved.
+
+Next: inspect the actual user-visible drawing and direct chat presentation path;
+avoid forcing a complete CAD handoff for merely showing saved geometry where the
+existing exact Construction preview suffices. Preserve technical/source gates.
+Do not create the window again. #438 remains open for actual view/feedback
+acceptance; no second paid run was started by this monitoring session. Debug
+captures remain private scratch data outside the repository.
 
 ## Production evidence, read-only
 
