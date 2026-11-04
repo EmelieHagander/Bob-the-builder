@@ -180,6 +180,86 @@ piece. Also repair specialist tool telemetry: its outer step/index keys can be
 reused across restored claims, overwriting earlier tool events; model journal keys
 remain distinct. Do not rebuild this saved window or mark #438 accepted.
 
+## Offline CPU growth analysis, 2026-11-04
+
+**Scope:** analysis of the captured retry, production source and prior commits;
+no product code, live geometry, runtime configuration or paid model changes.
+No historical infrastructure CPU-limit increase was found in available personal
+history or CPU/increase/raise/compute commit searches. That absence cannot rule
+out a manual Dashboard/support change. Confirmed code fixes include #277/#278
+(token counting/paging and replay work), #281 (active-operation checkpoints),
+#399 (specialist progress), and #448 (continuing-step scheduling). Hosted logs
+still show shutdown at 2002/2206 ms. Supabase documents a separate two-second
+active CPU limit in its [limits](https://supabase.com/docs/guides/functions/limits)
+and [CPU explanation](https://supabase.com/kb/troubleshooting/edge-function-cpu-limits).
+
+### Measured growth and avoidable work
+
+- During the retry, serialized state grew from **621,282 characters at worker
+  step 1 to 1,116,562 characters at step 9** (~1.80x). Final components include
+  ~399k context continuation, ~212k saved construction observations, ~145k worker
+  state and ~116k main toolbox. The complete 114-entry debug capture is ~5.4 MB;
+  this is **not** a claim that every invocation fetches that entire archive.
+- `bob-turn-checkpoint.ts` stable-sorts/copies whole state during validation,
+  current-state delivery and commit. A changed receipt path copies it before
+  saving, inside receipt validation and again on return; equality and SDK
+  serialization add whole-state passes. Component exports/main saves also clone.
+  A 2 MB payload fence does not establish a CPU bound below it.
+- `construction-views.ts::page` repeatedly tokenizes an increasingly large page
+  while fitting exact records into its envelope. The exact saved revision's
+  6000-token overview produced **15,986 characters**. The report wrapper in
+  `project-answer.ts` accepts at most **8000 characters**, then discards that
+  generated overview in favor of `too_large`. `bob-workers.ts::readbackReads`
+  requests this overview after an exact saved-revision read already occurred.
+  Thus page construction/tokenization can be paid in CPU without Bob receiving
+  the result. This is directly reproducible with the captured source and schedule.
+- Three fresh offline Node processes (same source, no providers/RPCs) measured
+  overview-page CPU **498.5 / 853.4 / 1338.0 ms** min/median/max. An unchanged
+  checkpoint commit cost **178.3 / 191.5 / 231.5 ms**, a changed commit
+  **206.8 / 250.4 / 275.9 ms**. Specialist next-request preparation measured
+  **165.0 / 264.5 / 340.0 ms** with cold per-invocation counting caches and
+  **10.1 / 21.2 / 21.4 ms** warm. These are Node process CPU (including its GC),
+  not hosted per-thread CPU guarantees, and do not identify the exact fatal line.
+  The profiler's large module-compilation cost is excluded from this comparison.
+- The sampled local profile attributes substantial work to `stableJsonValue`,
+  JSON/copy operations and BPE tokenization. This supports a **growing repeated
+  processing** explanation. It does not establish a memory leak, provider fault
+  or a platform limit that dynamically shrinks. New claims can reuse an isolate;
+  claim count cannot substitute for per-invocation/isolate CPU evidence.
+
+### Separate interruption and telemetry defects
+
+An offline `runWorker` probe restores the **actual step-9 progress** with its
+saved revision-5 `construction_review_boundary`. The next action is a model call
+(the mocked transport throws `OFFLINE_WOULD_CALL_MODEL`) instead of returning
+`awaiting_design_review`. No paid provider or tool executes. Terminal handling
+uses local `pieceReviewReceipt`/conflict variables **after** the progress save;
+a restored step advances the loop without reconstructing those variables.
+This proves a review-stop resumption gap, not that a second geometry write occurred.
+
+The journal has 10 successful Konrad responses requesting 13 tools, whereas
+execution telemetry retains only 4 tool events across the whole turn. Outer
+step/index event keys are reused when the nested worker event counter restarts.
+Model dispatch keys remain distinct, so the 12-call / USD 1.381521 total stands.
+
+### Recommended correction order
+
+1. Make the terminal worker result durable before an interruption can advance
+   beyond it; prove saved review/conflict/verification outcomes survive a restart
+   without another provider call or piece. Preserve exact revision 5.
+2. Use a deliberately small exact-revision readback for the report; generate no
+   full table that will be discarded. Keep large check details at their existing
+   revision-bound observation owner, with references/compact findings in state.
+3. Remove repeated whole-state canonicalization/copying and repeated page token
+   work while preserving immutability, exact receipts, journal fingerprints and
+   source/access checks. Benchmark one complete captured segment, not isolated
+   successful helpers. Fix stable specialist event identities alongside this.
+4. Run one owner-initiated **show/review saved revision 5** test after targeted
+   checks and reviewed deployment; do not ask Konrad to create the window again.
+
+The segmentation change is a scheduling mitigation. It is insufficient evidence
+that CPU consumption is stable as histories/checks/construction detail grow.
+
 ## Production evidence, read-only
 
 - The live Ladan turn started 11:52 UTC, completed 12:12 UTC. It made **40 model calls**, **three `ask_structure_worker` handoffs**, cost telemetry approximately **$6.01**, and **no new Construction revision**. The saved draft remains revision **4**, 78 instances, pinned to target **29** / Solution **21**; the selected design is target **35** / Solution **27**. The correct Plan focus was saved to the facade-opening Step.
