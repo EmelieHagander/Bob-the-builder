@@ -37,6 +37,17 @@ test('a failed transcript commit keeps Bob\'s reply and adds a notice localised 
   },fail:async()=>{},commit:async()=>{throw new Error('transport')}})
  assert(result.ok);assert.match(result.answer,/^La tâche est enregistrée\.\n\n/);assert.match(result.answer,/conversation n’a pas été synchronisée/);assert.equal(languageCalls,1);assert.equal(receipts.length,1);assert(result.evidence.partial)
 })
+test('recovery formats unversioned Tasks without misleading vnull labels', async () => {
+ const format=createDeliveryLanguage({userId:'u',message:'Fortsätt.',hasAccess:async()=>true,
+  callModel:async()=>response(lexicon)})
+ const unversioned={...receipt,revision:null} as unknown as WriteReadback
+ assert.equal(format.fallback({notice:'recovered',receipts:[unversioned]}),
+   lexicon.recovered+'\\n\\n'+lexicon.saved_label+'\\n• Étagère')
+ const numbered={...receipt,revision:4} as WriteReadback
+ assert.match(format.fallback({receipts:[numbered]}),/Étagère · v4/)
+ assert.doesNotMatch(format.fallback({receipts:[unversioned]}),/vnull/)
+})
+
 test('server message meanings cover all terminal states without a language table',()=>{
  assert.equal(Object.keys(DELIVERY_MEANINGS).length,7)
  assert(parseDeliveryLanguage(lexicon))
