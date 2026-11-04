@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { createToolSession, type ToolDefinition, type ToolPolicy, type ToolFollowup } from '../supabase/functions/_shared/project-tools/session.ts'
+import { createToolSession, type ToolDefinition, type ToolPolicy, type ToolGate, type ToolFollowup } from '../supabase/functions/_shared/project-tools/session.ts'
 
 const sql = readFileSync(new URL('../supabase/migrations/20261104114600_p24_focus_tool_followup.sql', import.meta.url), 'utf8')
 const match = sql.match(/extra jsonb:=\s*'([\s\S]*?)'::jsonb;/)
@@ -16,7 +16,7 @@ function harness(reason: string, enabled: boolean) {
   }))
   const definitions: ToolDefinition[] = policies.map(p => ({
     spec: { type: 'function', function: { name: p.name, description: p.name, parameters: { type: 'object', properties: {} } } },
-    version: 1, gate: () => 'available',
+    version: 1, gate: (): ToolGate => 'available',
     execute: async () => ({ status: 'needs_verification', reason }),
   }))
   const opts = { definitions, readPolicy: async () => ({ phase: 'design', tools: policies }),
