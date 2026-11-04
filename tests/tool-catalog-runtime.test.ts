@@ -161,11 +161,16 @@ test('printed domain/write tool syntax fails closed instead of being shown or ex
   assert.equal(f.writes,0)
 })
 
-test('every active catalog tool sits on a named shelf, and every shelf entry exists in the catalog',async()=>{
+test('active seed tools have named shelves, and shelf entries exist in seed or the published catalog',async()=>{
   const {TOOLBOX_SHELVES}=await import('../supabase/functions/_shared/project-tools/bob-tools.ts')
   const policy=await seedToolPolicy(),shelved=new Set(TOOLBOX_SHELVES.flatMap(s=>s.tools))
+  // The embedded seed is for offline callers; newly published tools can live
+  // on a named fallback shelf without being present in that historical seed.
+  const published=new Set(catalogFixture().manifest().definitions
+    .filter(row=>row.definition_kind==='tool_contract'&&row.prompt_key.startsWith('tools.'))
+    .map(row=>row.prompt_key.slice('tools.'.length)))
   assert.deepEqual(policy.tools.filter(r=>r.active&&!shelved.has(r.name)).map(r=>r.name),[])
-  assert.deepEqual([...shelved].filter(n=>!policy.tools.some(r=>r.name===n)),[])
+  assert.deepEqual([...shelved].filter(n=>!policy.tools.some(r=>r.name===n)&&!published.has(n)),[])
 })
 
 test('change provenance is the owner\'s current message: a model-supplied quote is replaced, the writer boundary is unchanged',async()=>{

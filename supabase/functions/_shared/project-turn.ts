@@ -29,6 +29,8 @@ import { compactReceipts, type ProjectWriter } from './project-write.ts'
 /** Production orchestration, injected for failure/retry tests without an AI key. */
 export async function runClaimedProjectTurn(opts: {
   aiCatalog: AiCatalogSession;
+  /** Same pinned build-guide switch that runProjectAnswer forwards into the toolbox. */
+  buildGuideTools?: boolean;
   calculator?: ProjectCalculator;
   projectId: string; userId: string; message: string; generation?: number; previousResponseId?: string;
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter; callModel: ModelCall;
