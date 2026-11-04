@@ -97,6 +97,21 @@ test('explicit source reconciliation preserves construction identity, receipt an
     assert.deepEqual(await tools.execute('change_construction_parameters', command), receipt)
     assert.equal((await tools.execute('change_construction_parameters', { ...command, target_revision: 3 })).status, 'conflict')
   })
+  await t.test('P2.4 refuses a source-only refresh after governing design choices changed', async () => {
+    // The original bounded source-only protocol remains allowed for unchanged
+    // selected design choices; only a semantically changed choice is refused.
+    await pg.exec(readFileSync(new URL('../supabase/migrations/20261104114500_p24_source_only_design_guard.sql', import.meta.url), 'utf8'))
+    intent.choices[0].question += ' Include a front opening in this new revision?'
+    assert.equal((await revise(3)).revision, 4)
+    const blocked = await tools.execute('change_construction_parameters', {
+      ...command, key: 'source-only-choice-change', expected_revision: 3, target_revision: 4, changes: [],
+    })
+    assert.equal(blocked.status, 'needs_data', JSON.stringify(blocked))
+    assert.equal(blocked.reason, 'source_only_design_decisions_changed')
+    assert.equal((await read()).revision, 3, 'failed source-only attempt does not create geometry or a revision')
+    assert.equal((await read()).target_revision, 3)
+  })
+
   await t.test('missing or wrong target, unresolved controlling inputs and cross-project callers stay blocked', async () => {
     const base = { ...command, key: 'blocked', expected_revision: 3, changes: [] }
     assert.equal((await tools.execute('change_construction_parameters', { ...base, target_revision: null })).status, 'invalid')
@@ -106,8 +121,8 @@ test('explicit source reconciliation preserves construction identity, receipt an
     await assert.rejects(prepare(payload, outsider), /project_denied|turn_not_claimed/)
     ;(intent.model.nodes.find(n => n.id === 'frame_s0') as any).role = 'unknown'
     delete (intent.model.nodes.find(n => n.id === 'frame_s0') as any).value
-    await revise(3)
-    const result = await tools.execute('change_construction_parameters', { ...base, target_revision: 4 })
+    await revise(4)
+    const result = await tools.execute('change_construction_parameters', { ...base, target_revision: 5 })
     assert.equal(result.status, 'needs_data', JSON.stringify(result))
     assert.equal((await read()).revision, 3)
     assert.deepEqual(await tools.execute('change_construction_parameters', command), receipt)
