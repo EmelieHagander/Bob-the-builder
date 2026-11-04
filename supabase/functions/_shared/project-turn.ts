@@ -25,6 +25,7 @@ import { runProjectAnswer, type BobAnswerCheckpoint, type ModelCall, type Projec
 import type { createProjectLookup } from './project-lookup.ts'
 import type { ProjectCalculator } from './project-calculator.ts'
 import { compactReceipts, type ProjectWriter } from './project-write.ts'
+import { bobTurnFailure, type BobTurnFailure, type BobTurnFailureStage } from './bob-turn-failure.ts'
 
 /** Production orchestration, injected for failure/retry tests without an AI key. */
 export async function runClaimedProjectTurn(opts: {
@@ -49,6 +50,7 @@ export async function runClaimedProjectTurn(opts: {
   registerContextSurface?: (refresh: () => Promise<ContextSurface>) => void;
   prepareContext?: () => Promise<WorkingContext>;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;
+  onFailure?: (value: BobTurnFailure) => void;
   onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string }) => void;
   onToolBatch?: (names: string[]) => void;
   deadline?: number; resume?: boolean; beforeSettle?: () => void; modelTimeoutMs?: number; unlimitedWork?: boolean;
@@ -64,15 +66,33 @@ export async function runClaimedProjectTurn(opts: {
   const fail = async () => { try { await opts.fail(generation) } catch { /* lease expiry remains a recovery path */ } }
   let result: ProjectAnswer = { ok: false, error: 'ai_unavailable' }
   let recovered = false
+  let stage: BobTurnFailureStage = 'recover'
+  const failed = (at: BobTurnFailureStage, error: unknown) => opts.onFailure?.(bobTurnFailure(at, error))
   const formatNotice=createDeliveryLanguage(opts)
   try {
     if (opts.writer) recovered = (await opts.writer.recover()).length > 0
     if (!recovered || opts.resume) {
+      stage = 'prepare_context'
       const context = opts.prepareContext ? await opts.prepareContext() : undefined
-      result = await runProjectAnswer({ ...opts, context })
+      stage = 'answer'
+      result = await runProjectAnswer({ ...opts, context,
+        callModel: async request => {
+          stage = 'model'
+          const response = await opts.callModel(request)
+          stage = 'answer'
+          return response
+        },
+        ...(opts.checkpoint ? { checkpoint: { ...opts.checkpoint, save: async state => {
+          stage = 'checkpoint'
+          await opts.checkpoint!.save(state)
+          stage = 'answer'
+        } } } : {}),
+      })
+      if (!result.ok) failed(stage, result.error)
     }
   } catch (error) {
     rethrowContinuation(error)
+    failed(stage, error)
     const code = error instanceof Error ? error.message : ''
     result = { ok: false, error: ['context_preparing', 'context_unavailable', 'context_input_too_large', 'project_denied', 'tool_catalog_unavailable', 'turn_budget_exhausted'].includes(code) ? code : 'ai_unavailable' }
   }
@@ -95,6 +115,7 @@ export async function runClaimedProjectTurn(opts: {
     try { generation = await opts.writer.settle() }
     catch (error) {
       rethrowContinuation(error)
+      failed('settle', error)
       await fail()
       if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
       return { ok: true, projectId: opts.projectId, answer: formatNotice.fallback({notice:'uncertain',receipts:opts.writer.receipts}),
@@ -118,6 +139,7 @@ export async function runClaimedProjectTurn(opts: {
   if (opts.currentView) {
     const valid = !opts.validateCurrentView || await opts.validateCurrentView()
     if (!valid) {
+      failed('current_view', 'context_unavailable')
       if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
       if (!result.evidence.writes?.length) { await fail(); return { ok: false, error: 'context_unavailable' } }
       // Preserve committed changes while withholding a reply based on a changed focus.
@@ -127,6 +149,7 @@ export async function runClaimedProjectTurn(opts: {
     } else result = { ...result, evidence: { ...result.evidence, currentView: opts.getCurrentViewEvidence?.() ?? opts.currentView } }
   }
   if (opts.projectContext && !await opts.projectContext.validate()) {
+    failed('project_context', 'context_unavailable')
     if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
     if (opts.writer?.receipts.length) {
       result = { ok: true, projectId: opts.projectId, answer: formatNotice.fallback({notice:'recovered',receipts:opts.writer.receipts}),
@@ -138,6 +161,7 @@ export async function runClaimedProjectTurn(opts: {
     try { await opts.commit(result, generation) }
     catch (error) {
       rethrowContinuation(error)
+      failed('commit', 'conversation_unavailable')
       await fail()
       if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
       if (!result.evidence.writes?.length) return { ok: false, error: 'conversation_unavailable' }

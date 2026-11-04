@@ -106,6 +106,17 @@ cost or job-duration quotas. Provider capacity, payload/schema boundaries,
 authorization, cancellation and uncertain-outcome handling remain. A payload
 boundary must not be disguised as successful completion.
 
+### Recovered replies and failure diagnostics
+
+A receipt recovery confirms saved changes; it does not prove Bob completed the
+requested explanation or image review. The claimed-turn boundary reports the
+first stopping stage and an allowlisted error code to internal delivery telemetry,
+even when the final status is `recovered`. Unknown exceptions become `unclassified`;
+private exception text, prompts and pixels are never diagnostics. Normal durable
+yields are continuation, not failures. These fields do not alter user-facing
+receipt text or start another model call. Deployment and remaining live acceptance
+are recorded in the [2026-11-04 investigation](p25-live-window-anchor-followup-2026-11-04.md).
+
 ### PR1 — resume the next operation
 
 New jobs pin an execution version at enqueue. A worker restores a current private

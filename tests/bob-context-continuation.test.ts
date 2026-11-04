@@ -5,6 +5,7 @@ import { createBobJournal, fingerprint, type JournalEntry } from '../supabase/fu
 import { countContextTokens } from '../supabase/functions/_shared/bob-token-budget.ts'
 import type { AiCatalogSession } from '../supabase/functions/_shared/ai-catalog.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from '../supabase/functions/_shared/openai-service.ts'
+import { anthropicRequestBody } from '../supabase/functions/_shared/anthropic-service.ts'
 
 const tool = (name: string) => ({ type: 'function' as const, function: { name, description: name, parameters: { type: 'object' } } })
 const catalog = {
@@ -22,6 +23,35 @@ const seed: OpenAIServiceOptions = { app: 'bob', module: 'global', functionName:
   catalogRoleKey: 'ask-bob', systemMessage: 'Exact current role. No phase-wide mandate.',
   messages: [{ role: 'user', content: 'Maybe 90 cm wide, but I must measure first. Finish the delegated drawing.' }], tools: [tool('save_record')] }
 const output = (id: string, value: unknown = { status: 'saved', saved: true, record_id: id, revision: 7 }) => ({ role: 'tool' as const, tool_call_id: id, content: JSON.stringify(value) })
+
+test('native image continuation survives a durable restore and reaches Claude with paired tool results and pixels', async () => {
+  const imageRef = 'private-image:saved-image/1'
+  const policy = { ...catalog, role: () => ({ systemMessage: 'Inspect the saved image.', providerAdapter: 'anthropic-messages-v1' }) } as unknown as AiCatalogSession
+  let dispatched = 0
+  const make = () => createBobContextContinuation({ version: 1, mainResultReferences: 1, aiCatalog: policy, callModel: async options => {
+    assert.equal(options.previousResponseId, undefined)
+    const body: any = await anthropicRequestBody(options, { apiKey: 'unused', model: { model_name: 'fixture', input_cost_per_1m_tokens: 0,
+      output_cost_per_1m_tokens: 0, cached_input_cost_per_1m_tokens: 0 }, systemMessage: 'Inspect the saved image.', maxOutputTokens: 1000,
+      effort: null, timeoutMs: 1000, log: async () => {}, resolveImage: async ref => { assert.equal(ref, imageRef); return 'data:image/png;base64,AAAA' } })
+    if (++dispatched === 1) return { ...response('r-open', [call('open-image', 'open_project_item')]),
+      outputItems: [{ type: 'function_call', call_id: 'open-image', name: 'open_project_item', arguments: '{"refs":["image:saved-image"]}' }] }
+    const blocks = body.messages.at(-1).content
+    assert(blocks.some((b: any) => b.type === 'tool_result' && b.tool_use_id === 'open-image'))
+    assert(blocks.some((b: any) => b.type === 'image' && b.source.data === 'AAAA'))
+    return { ...response('r-final', []), data: 'I have inspected the image.', outputPhase: 'final_answer' as const,
+      outputItems: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'I have inspected the image.' }] }] }
+  } })
+  const first = make()
+  const options = { ...seed, responseItemsMode: 'preserve' as const }
+  await first.call(options)
+  const resumed = make()
+  resumed.restoreState(first.exportState())
+  const result = await resumed.call({ ...options, previousResponseId: 'r-open', messages: [output('open-image', { status: 'opened' }),
+    { role: 'user', content: [{ type: 'image_url', image_url: imageRef }] }] })
+  assert.equal(result.data, 'I have inspected the image.')
+  assert.equal(dispatched, 2)
+  assert(!JSON.stringify(resumed.exportState()).includes('base64'), 'hydrated bytes never enter the durable continuation')
+})
 const handoff = (options: OpenAIServiceOptions) => {
   const source = JSON.parse(String(options.messages![0].content))
   return { success: true, model: 'mini-fixture', data: { summary: '90 cm remains an unconfirmed suggestion. Saved revision 7 exists.',
