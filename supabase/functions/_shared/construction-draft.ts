@@ -169,6 +169,8 @@ type SavedConstructionResult = Omit<ConstructionObservation,'output'>
 export type ConstructionToolsState = { version:1; used:number } | { version:2; used:number; observations:ConstructionObservation[] }
  | {version:3;used:number;observations:ConstructionObservation[];savedResults:SavedConstructionResult[]}
 export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;unlimitedWork?:boolean;
+ fastPageFit?:boolean;
+ readSummary?:(id:string,revision:number)=>Promise<unknown>;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
  readCurrent?:(id:string)=>Promise<unknown>;
  preciseEditDiagnostics?:boolean;
@@ -229,8 +231,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  readFasteners?:(id:string,revision:number)=>Promise<unknown>;
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
- const views=createConstructionViews(opts.projectId,opts.now)
- const workPackets=createConstructionWorkPackets(opts.projectId)
+ const views=createConstructionViews(opts.projectId,opts.now,opts.fastPageFit)
+ const workPackets=createConstructionWorkPackets(opts.projectId,opts.fastPageFit)
  const baseReadTool=opts.constructionViews?(opts.formEvidence?CONSTRUCTION_EVIDENCE_VIEW_TOOL:CONSTRUCTION_VIEW_TOOL):CONSTRUCTION_READ_TOOL
  const readTool=opts.coherentWork?withConstructionWorkRead(baseReadTool,opts.creationPreparation):baseReadTool
  const baseCheckTool=opts.formEvidence?CONSTRUCTION_EVIDENCE_CHECK_TOOL:CONSTRUCTION_CHECK_TOOL
@@ -329,9 +331,15 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   * on demand; proving one revision was saved does not require paginating it. */
  async readSavedSummary(id:string,revision:number):Promise<Record<string,any>>{
   if(!await opts.hasAccess())return {status:'denied'}
-  const draft=await opts.read(id,revision,null) as Record<string,any>
+  const draft=await (opts.readSummary?opts.readSummary(id,revision):opts.read(id,revision,null)) as Record<string,any>
   if(!await opts.hasAccess())return {status:'denied'}
   if(draft?.projectId!==opts.projectId||draft.status!=='ok'||draft.artifact_id!==id||draft.revision!==revision)return {status:'unavailable'}
+  if(opts.readSummary){
+   if(!Number.isSafeInteger(draft.current_revision)||draft.current_revision<1||typeof draft.archived!=='boolean'
+    ||!['current','changed','unavailable'].includes(draft.source_state)||draft.view!=='overview')return {status:'unavailable'}
+   if(opts.formEvidence)return draft
+   const {saved_results_read:_saved,...summary}=draft;return summary
+  }
   const query={artifact_id:id,revision,view:'overview',ids:[],after:null,result_id:null,section:null}
   return await views.read(draft,query,undefined,undefined,opts.formEvidence?{saved_results_read:{...query,view:'results'}}:{})
  },

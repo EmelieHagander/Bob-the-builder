@@ -42,7 +42,7 @@ export function withConstructionWorkCheck(base:Tool):Tool{
 export type ConstructionWorkSources={packet:Row;solutionEdit:Row}
 /** Cache only derived immutable rows. Governing sources and caller access are
  * still read afresh by the caller; cache loss/resume changes no journal reads. */
-export function createConstructionWorkPackets(projectId:string){
+export function createConstructionWorkPackets(projectId:string,fastFit=false){
  const rows=new Map<string,ConstructionViewItem[]>()
  return {async read(draft:Row,query:ConstructionViewQuery,sources:ConstructionWorkSources):Promise<Row>{
   const {packet,solutionEdit}=sources
@@ -66,7 +66,7 @@ export function createConstructionWorkPackets(projectId:string){
    current_revision:draft.current_revision,source_state:draft.source_state,archived:draft.archived,target_revision:draft.target_revision,
    work_operation:query.work_kind,...(draft.artifact_id===null&&packet.creation_state?{creation_state:packet.creation_state,scoped_refinement_available:packet.scoped_refinement_available===true}:{}),work_context_key:key,selection:query.ids,missing_ids:selection.missing_ids,
    source_coverage:packet.coverage,source_conflicts:packet.conflicts,
-   limits:'Exact project sources and a closed dependency selection. Missing/unreadable governing sources remain gaps. No interpretation, rendering or manufacturing approval.'},items,{work_context_key:key})
+   limits:'Exact project sources and a closed dependency selection. Missing/unreadable governing sources remain gaps. No interpretation, rendering or manufacturing approval.'},items,{work_context_key:key},undefined,fastFit)
   // Worker-local telemetry cannot influence exact page boundaries on replay.
   return {...page,diagnostics:{operation:'work_read',reused,revision:draft.revision}}
  }}

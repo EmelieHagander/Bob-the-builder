@@ -56,6 +56,7 @@ export async function runClaimedProjectTurn(opts: {
   deadline?: number; resume?: boolean; beforeSettle?: () => void; modelTimeoutMs?: number; unlimitedWork?: boolean;
   finalAnswer?: boolean;
   workerCheckpoint?: boolean;
+  compactToolState?: boolean;
   workpads?: AgentWorkpads;
   releaseContext?: (responseId: string) => void;
   checkpoint?: BobAnswerCheckpoint;

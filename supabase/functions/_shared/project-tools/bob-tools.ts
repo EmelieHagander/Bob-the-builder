@@ -89,6 +89,7 @@ export const DRAWING_CONTINUATION_PRELOAD = ['read_construction_draft', 'check_c
 
 export function createBobToolSession(opts: {
   aiCatalog?: AiCatalogSession;
+  compactToolState?: boolean;
   /** Build guides (2026-10-30): the owner's switch. Off hides design_project_cad's assembly order. */
   buildGuideTools?: boolean;
   /** Tools of work already in progress, loaded without a describe_tool round. */
@@ -240,6 +241,7 @@ export function createBobToolSession(opts: {
     ...(opts.extraTools ?? []),
   ]
   return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions, ...(opts.preloadTools ? { preloadTools: opts.preloadTools } : {}), ...(opts.offerWaiting ? { offerWaiting: true } : {}),
+    ...(opts.compactToolState&&opts.aiCatalog?{compactState:{catalogManifestId:opts.aiCatalog.manifest().manifest_id}}:{}),
     ...(opts.aiCatalog?.manifest().definitions.some(row=>row.prompt_key==='bob.tools'&&row.metadata?.construction_work_version===1)?{
       autoLoadReady:true,followups:opts.aiCatalog.definition('bob.tools','tool_contract').definition.operation_followups as import('./session.ts').ToolFollowup[],
     }:{}),
