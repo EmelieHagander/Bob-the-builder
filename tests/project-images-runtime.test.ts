@@ -8,6 +8,9 @@ import { createMediaAdapter, type MediaRow } from '../supabase/functions/_shared
 import { prepareChatImages } from '../supabase/functions/_shared/project-context/chat-images.ts'
 import { hasImageContent, responseMessageContent } from '../supabase/functions/_shared/openai-content.ts'
 import { isBobAnswerEvidence } from '../src/data/bobEvidence.ts'
+import { createExecutionMetrics, type ExecutionEvent } from '../supabase/functions/_shared/execution-metrics.ts'
+import type { BobTurnFailure } from '../supabase/functions/_shared/bob-turn-failure.ts'
+import { BobContinuation } from '../supabase/functions/_shared/bob-job-journal.ts'
 const time = '2026-09-20T12:00:00Z', id = '10000000-0000-4000-8000-000000000001'
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
 const success = (data: string) => ({ success: true, data, model: 'fixture', responseId: 'resp_final', usage })
@@ -104,4 +107,48 @@ test('image invalidation at settlement keeps committed write receipts but remove
   assert(answer.ok);assert.equal(answer.providerResponseId,undefined)
   assert.equal(answer.evidence.writes?.[0].recordId,'taskA');assert.deepEqual(answer.evidence.sources,[])
   assert.doesNotMatch(answer.answer,/Visual detail/);assert.equal(committed.providerResponseId,undefined)
+})
+
+test('a saved image followed by a failed continuation keeps its stopping cause through receipt recovery', async () => {
+  const f = fixture(); let calls = 0, committed: any, failure: BobTurnFailure | undefined
+  const events: ExecutionEvent[] = []
+  const receipt = { projectId: 'A', dataset: 'media', recordId: id, label: 'Saved image', operation: 'created', savedAt: time, record: { id } }
+  const writer = createProjectWriter('A', 'Review the saved image', async () => { throw new Error('Not called') },
+    async () => ({ data: [], error: null }), async () => ({ data: { generation: 2, receipts: [receipt] }, error: null }))
+  const answer = await runClaimedProjectTurn({ ...f.opts, writer, onFailure: value => { failure ??= value },
+    commit: async value => { committed = value }, callModel: async options => {
+      if (++calls === 1) return tool('open_project_item', { refs: [`image:${id}`] }, 1)
+      assert(hasImageContent(options.messages))
+      throw new Error('context_input_too_large')
+    } })
+  assert(answer.ok); assert.equal(calls, 2)
+  assert.equal(answer.providerResponseId, undefined)
+  assert.equal(answer.evidence.writes?.[0].recordId, id)
+  assert(!answer.evidence.sources.some(s => s.dataset === 'image_pixels'), 'opening an image is not proof that the model viewed it')
+  assert.deepEqual(failure, { stage: 'model', code: 'context_input_too_large' })
+  assert(!JSON.stringify(committed).includes('context_input_too_large'), 'internal diagnostics are not project prose')
+  const metrics = createExecutionMetrics({ runId: 'run', turnId: 'turn', startedAt: 0, write: async event => { events.push(event) } })
+  await metrics.finish({ ok: true, recovered: true, partial: true, writes: 1, failure })
+  assert.equal(events[0].status, 'recovered')
+  assert.equal(events[0].counts.failure_stage, 'model')
+  assert.equal(events[0].counts.failure_code, 'context_input_too_large')
+})
+
+test('checkpoint failures are distinguishable; durable yields are never reported as terminal failures', async () => {
+  for (const error of [new Error('turn_checkpoint_too_large'), new BobContinuation('yield', 'checkpoint_unavailable')]) {
+    const f = fixture(), failures: BobTurnFailure[] = []
+    const run = () => runClaimedProjectTurn({ ...f.opts, onFailure: failure => failures.push(failure),
+      checkpoint: { save: async () => { throw error } },
+      callModel: async () => { assert.fail('a failed checkpoint must stop before the paid call') } })
+    if (error instanceof BobContinuation) { await assert.rejects(run, e => e === error); assert.deepEqual(failures, []) }
+    else { assert(!(await run()).ok); assert.deepEqual(failures, [{ stage: 'checkpoint', code: 'turn_checkpoint_too_large' }]) }
+  }
+})
+
+test('unknown errors never put private exception text into recovery diagnostics', async () => {
+  const f = fixture(), failures: BobTurnFailure[] = []
+  const answer = await runClaimedProjectTurn({ ...f.opts, onFailure: failure => failures.push(failure),
+    callModel: async () => { throw new Error('private_customer_content') } })
+  assert(!answer.ok)
+  assert.deepEqual(failures, [{ stage: 'model', code: 'unclassified' }])
 })

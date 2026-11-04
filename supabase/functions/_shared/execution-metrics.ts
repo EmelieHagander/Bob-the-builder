@@ -3,6 +3,7 @@ import type { TurnObservation } from './project-answer.ts'
 import { TASK_WORK_VALIDATION_CODES } from './project-write.ts'
 import { ANSWER_TEXT_OUTCOMES } from './answer-text.ts'
 import { TOOL_REJECTION_CODES } from './tool-rejection.ts'
+import { bobTurnFailure, type BobTurnFailure } from './bob-turn-failure.ts'
 
 export type ExecutionEvent = {
   run_id: string; turn_id: string; event_key: string; kind: 'model' | 'delivery' | 'tool'; role: string; status: string;
@@ -85,12 +86,13 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
           ...(input.rejection?{rejection_code:code(input.rejection.code,'unspecified'),rejection_fields:input.rejection.fields.filter(f=>typeof f==='string'&&f.length<=120).slice(0,8),
             ...(typeof input.rejection.message_id==='string'&&/^m[0-9a-f]{8}$/.test(input.rejection.message_id)?{rejection_message:input.rejection.message_id}:{})}:{})}})
     },
-    async finish(input:{ok:boolean;partial?:boolean;uncertain?:boolean;recovered?:boolean;writes:number;error?:string;uncertainResends?:number;reusedModelCalls?:number;cad?:{consultations:number;renders:number;input_corrections:number;reviews:number;review_rejections:number;review_unavailable:number;review_passed:boolean}}){
+    async finish(input:{ok:boolean;partial?:boolean;uncertain?:boolean;recovered?:boolean;writes:number;error?:string;failure?:BobTurnFailure;uncertainResends?:number;reusedModelCalls?:number;cad?:{consultations:number;renders:number;input_corrections:number;reviews:number;review_rejections:number;review_unavailable:number;review_passed:boolean}}){
+      const failure=input.failure?bobTurnFailure(input.failure.stage,input.failure.code):undefined
       const end=turn?.end
       const status=!input.ok?'failed':input.uncertain?'uncertain':input.recovered?'recovered':input.partial?'partial'
         :end==='asked'?'asked':end==='step_budget'||end==='time_budget'||end==='refused'||end==='commentary_limit'?end:input.writes>0?'saved':input.cad?.review_passed?'candidate_ready':'answered'
       await write({...base(),event_key:'delivery',kind:'delivery',role:'bob',status,duration_ms:Math.max(0,now()-startedAt),input_tokens:null,output_tokens:null,cost_usd:null,
-        counts:{...phaseCounts(turn?.output_phase),end_reason:!input.ok?code(input.error,'failed'):end??null,steps:turn?.steps??null,tool_calls:turn?.tool_calls??null,deferred_calls:turn?.deferred_calls??null,
+        counts:{...phaseCounts(turn?.output_phase),...(failure?{failure_stage:failure.stage,failure_code:failure.code}:{}),end_reason:!input.ok?code(input.error,'failed'):end??null,steps:turn?.steps??null,tool_calls:turn?.tool_calls??null,deferred_calls:turn?.deferred_calls??null,
           completion_checks:turn?.completion_checks??null,nudges:turn?.nudges??null,saved_records:number(input.writes),
           cad_consultations:input.cad?.consultations??0,cad_renders:input.cad?.renders??0,cad_input_corrections:input.cad?.input_corrections??0,
           cad_reviews:input.cad?.reviews??0,cad_review_rejections:input.cad?.review_rejections??0,cad_review_unavailable:input.cad?.review_unavailable??0,cad_review_passed:input.cad?.review_passed??false,

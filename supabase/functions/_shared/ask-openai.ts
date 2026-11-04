@@ -1097,9 +1097,14 @@ export async function answerWithOpenAi(opts: {
       .then(({ data, error }) => projectFactsPacket(data, !!error, opts.projectId))
       .catch(error => { rethrowContinuation(error); return projectFactsPacket(null, true, opts.projectId) })
     : null
+  let turnFailure: import('./bob-turn-failure.ts').BobTurnFailure | undefined
   try {
   const result=await runClaimedProjectTurn({
     aiCatalog,
+    onFailure: failure => {
+      turnFailure ??= failure
+      console.warn('[Bob turn failure]', JSON.stringify({ turn_id: opts.clientTurnId, ...failure }))
+    },
     observe:value=>metrics!.observe(value), onTool:value=>metrics!.tool(value), onProgress:opts.background?.progress,
     onToolBatch:names=>{ constructionReadsInStep = names.filter(name => name === CONSTRUCTION_VIEW_TOOL.function.name).length },
     // A fresh explicit retry of a failed durable job has receipts but no old
@@ -1212,7 +1217,7 @@ export async function answerWithOpenAi(opts: {
         providerResponseId: result.providerResponseId ?? null, generation })
     } } : {}),
   })
-  await metrics.finish({ok:result.ok,error:result.ok?undefined:result.error,partial:result.ok&&result.evidence.partial,uncertain:writer?.uncertain,
+  await metrics.finish({ok:result.ok,error:result.ok?undefined:result.error,failure:turnFailure,partial:result.ok&&result.evidence.partial,uncertain:writer?.uncertain,
     recovered:result.ok&&!result.providerResponseId,writes:writer?.receipts.length??0,cad:cadAssistant.metrics,uncertainResends:journal?.uncertainResends()??0,reusedModelCalls:journal?.reusedModelCalls()??0})
   return result.ok ? { ...result, answer: withResendNotice(result.answer) } : result
   }catch(error){

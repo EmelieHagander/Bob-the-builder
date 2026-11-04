@@ -15,6 +15,34 @@
 
 **Next:** review/merge this bookkeeping/test correction; diagnose the separate recovery failure; then run one explicitly owner-initiated first-window acceptance with exact revision/check/3D/review evidence and measured total cost. No new paid calls, GitHub workflows, migrations, deploys or production geometry writes were started by this audit. A successful window test alone does not close the broader P2 assignment lifecycle.
 
+## Recovery diagnostic follow-up, 2026-11-04
+
+PR #444 was merged as `a8e2fafa11f7b6683aef6fd49fa58d8e91f0efc0`.
+The next source change preserves the first safe stopping stage/code across receipt
+recovery, including model, checkpoint, settlement and freshness failures. It adds
+no automatic retry or paid call and changes no project data or authorization.
+
+The saved-image test fixture incorrectly used receipt dataset `images`; the
+canonical writer requires `media`. Correcting the fixture proves saved image
+receipts survive a subsequent failed model call without claiming viewed pixels.
+Controlled tests also distinguish checkpoint errors from ordinary durable yields
+and discard private exception text. A separate native continuation test restores
+its durable state and reaches the actual Claude request builder with paired tool
+results and private image hydration; its provider transport is mocked.
+
+Read-only log evidence for the last entrance turn: its final checkpoints were
+526,187–591,777 characters, below the 2,000,000-character boundary. After the
+successful image open at 12:59:11 UTC there is no next `ask-bob` dispatch metric;
+only the recovery-localisation call is recorded. This narrows investigation to
+pre-dispatch continuation/validation but does not establish the original exception.
+Terminal job checkpoints/journal entries have been cleaned up, so they cannot be
+replayed as if still available. No jobs were active at the follow-up.
+
+**Acceptance still open:** deploy/read back this diagnostic change, then reproduce
+image viewing through an ordinary signed-in owner session; fix the observed cause
+and run the single-window Ladan acceptance. The available browser currently shows
+Bob's sign-in page. Do not manufacture an owner session through database credentials.
+
 ## Production evidence, read-only
 
 - The live Ladan turn started 11:52 UTC, completed 12:12 UTC. It made **40 model calls**, **three `ask_structure_worker` handoffs**, cost telemetry approximately **$6.01**, and **no new Construction revision**. The saved draft remains revision **4**, 78 instances, pinned to target **29** / Solution **21**; the selected design is target **35** / Solution **27**. The correct Plan focus was saved to the facade-opening Step.
