@@ -499,6 +499,10 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       // A provider failure already exhausted the journal's bounded replay.
       // Bob may report the failure, but not start an equally costly fresh chain
       // for the same specialist until the owner's next message starts a new turn.
+      if (opts.workerFormPiece && key === 'structure' && failedWorkers.has('structure_piece'))
+        return { status: 'needs_verification', worker: worker.role.replace(/^role\./, ''),
+          reason: 'construction_piece_blocked_earlier_this_turn',
+          note: 'A canonical bounded-construction write was already rejected in this turn. Do not spend another specialist chain on the same blocked geometry. Keep the saved revision unchanged; report the blocker and allow a new owner turn after the source or implementation is corrected.', calls: [] }
       if (failedWorkers.has(key)) return { status: 'unavailable', worker: worker.role.replace(/^role\./, ''), reason: 'failed_earlier_this_turn', calls: [] }
       let session = workerSessions.get(key)
       if (!session || resume) {
@@ -596,7 +600,13 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         } })
       // The job is over: Bob's next save records its result, not a place inside it.
       workerState = undefined
+      // P2 live acceptance 2026-11-04: inner Konrad correctly stopped on a
+      // canonical geometry conflict, but Bob handed the same blocked work back
+      // twice more in one turn (three paid chains, no new revision). Use the
+      // existing persisted per-turn failed-worker marker for this v4 boundary.
       if (report.status === 'unavailable') failedWorkers.add(key)
+      if (opts.workerFormPiece && key === 'structure' && report.status === 'needs_verification'
+        && report.reason === 'construction_piece_write_conflict') failedWorkers.add('structure_piece')
       return report
     } }))
   const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: turnPreload,

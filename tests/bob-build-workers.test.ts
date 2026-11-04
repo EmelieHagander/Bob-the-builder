@@ -35,7 +35,7 @@ const tail = (catalog: AiCatalogSession, o: OpenAIServiceOptions, prefix: string
 const ask = (tool: string, request: unknown) => () => ({ success: true, model: 'fixture', usage, responseId: 'b1', toolCalls: [call('c1', tool, request)] })
 const toolOutput = (o: OpenAIServiceOptions) => JSON.parse(String(o.messages!.find(m => m.role === 'tool')!.content))
 
-async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>, readDraft?: (args: any) => unknown, piecePreflight?: Record<string, unknown>) {
+async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>, readDraft?: (args: any) => unknown, piecePreflight?: Record<string, unknown>, editResult?: Record<string, unknown>) {
   const projectId = 'p', message = 'Rita lådan', hasAccess = async () => true
   const lookup = createProjectLookup(projectId, async (_project, input) => ({ data: { records: input.dataset === 'project' ? [{ id: projectId, name: 'Lådan', description: 'Saved project' }] : [], related: [], truncated: false }, error: null }) as any, undefined, undefined, undefined, { unlimitedWork: true })
   const writer = createProjectWriter(projectId, message, async () => { throw Error('No write requested') }, async () => ({ data: [], error: null }), async () => ({ data: [], error: null }))
@@ -46,7 +46,7 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
     constructionCalls.push({ name, args })
     if (name === 'save_construction_draft') pendingImage = true // stands in for a worker opening an image
     if (name === 'read_construction_draft') return readDraft ? readDraft(args) : { status: 'ok', drafts: [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }] }
-    if (name === 'edit_construction_parts') return { status: 'invalid', validation: { code: 'unknown_part', fields: ['changes.0.part_id'] } }
+    if (name === 'edit_construction_parts') return editResult ?? { status: 'invalid', validation: { code: 'unknown_part', fields: ['changes.0.part_id'] } }
     if (name === 'check_construction_draft') return { status: 'checked', artifact_id: 'c1', revision: 3 }
     // A writer save, as production returns it: the receipt is nested.
     return { status: 'saved', receipt: { projectId, dataset: 'artifacts', recordId: 'c1', label: 'Lådan', operation: 'updated', savedAt: '2026-10-31T00:00:00Z', revision: 3, record: { title: 'Lådan' } } }
@@ -107,6 +107,21 @@ test('v4 Plan focus gate prevents a paid Konrad call before the approved opening
   assert.deepEqual([result.status, result.reason, result.required_step_id, result.current_focus_step_id],
     ['needs_verification', 'construction_piece_step_not_focused', 'step-windows', 'step-reconciliation'])
   assert.match(String(result.note), /plan-focus flow/)
+})
+
+test('v4 canonical piece write conflict stops a second paid Konrad handoff in the same Bob turn', async () => {
+  const ready = { status: 'ready', artifact_id: 'c1', plan_revision: 2, step_id: 'step-windows',
+    focus_step_id: 'step-windows', requested_total_openings: 7 }
+  const { bob, workers, ran } = await turn(catalogFixture(), [
+    ask('ask_structure_worker', { request: 'Make the first window.' }),
+    ask('ask_structure_worker', { request: 'Try the same blocked window again.' }),
+  ], { 'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'w-conflict',
+    toolCalls: [call('w1', 'edit_construction_parts', { expected_revision: 4 })] })] }, undefined, ready,
+    { status: 'conflict', message: 'construction_piece_too_spread_out' })
+  assert.equal(workers['structure-worker'].length, 1, 'a second specialist chain must not start')
+  assert.equal(toolOutput(bob[1]).reason, 'construction_piece_write_conflict')
+  assert.equal(toolOutput(bob[2]).reason, 'construction_piece_blocked_earlier_this_turn')
+  assert.equal(ran.filter(r => r.name === 'ask_structure_worker').length, 2)
 })
 
 test('Bob asks Konrad in plain words; Konrad has his own tools, the project in his persona and his project knowledge', async () => {
