@@ -587,3 +587,46 @@ captures remain private scratch data outside the repository.
 ## Separate entrance observation
 
 The simultaneously run `Bygga in entrén` turn completed with a saved **new concept Construction rev 1**, 31 part instances, 44 joints and selected target/solution 7. Bob asked the owner to reconcile the old **174 cm** depth with the proposed **265 cm** depth. It is not a checked build-ready or CAD-delivered design; no new Construction-linked drawing artifact was present at this inspection. Subsequent owner work on entrance mockup images is separate and must not be interrupted by this fix.
+
+
+## Code-owned Rita handoff and inline drawing preview
+
+Owner follow-up, 2026-11-04: restore direct chat presentation and make drawing
+identity a code-owned handover rather than a choice for Rita. The actual reopen
+proved an old completed request could still be selected, then a new handoff was
+rejected before recovery. These were unnecessary routing/model rounds.
+
+The implementation binds the exact saved Construction revision, existing drawing
+head, work links and active/new request before starting Rita. A unique source is
+required; incomplete lists, stale sources, multiple drawings/requests or ambiguous
+work scope stop explicitly before specialist dispatch. Current heads are queried
+before typed lineage, so accumulating historical drawing revisions does not grow
+this lookup. Completed requests are not candidates. The binding and allocated
+request survive CAD checkpoints; a concurrent resolve returning an existing
+operation adopts only the same verified binding. Fresh dispatch checks detect a
+changed destination; the existing source checks and atomic save remain authority.
+Routing fields disappear both from the worker session and after the provider
+adapter reconstructs catalog schemas. Other drawing/shell/link writers cannot
+escape the scoped operation. Old execution pins keep their old replay protocol.
+
+Chat renders one saved SVG from the exact receipt revision through the existing
+project-authorized data owner and zoom modal. It lazily fetches one view rather
+than full geometry/files/STEP, respects saved camera ordering, labels history and
+source changes, withholds pixels on unavailable sources and offers retry. It
+neither regenerates CAD nor records visual approval. The real drawing revision 3
+already contains `isometric, front, isometric_front_left, top`; its typed source
+is Construction revision 5. Read-only production inspection confirmed that link
+and zero queued/running jobs before release preparation.
+
+Local verification: 68 focused tests passed across worker handover, CAD,
+checkpoint, catalog and preview-data paths; two additional camera-order and cross-construction identity
+regressions passed separately (70 total). The frontend production build and both
+Edge entry-point type checks passed; Edge types use installed equivalent
+Supabase declarations because the exact remote import cannot be fetched here.
+No browser executable is installed, so 320/390/1280 interaction, modal, image-error,
+reload and project-switch browser proof remains unrun. No full CI/workflow or
+paid model/CAD run was started. New live behavioral/cost acceptance is still open.
+
+Release status: prepared for reviewed merge and Edge deployment. Web publication
+is the owner's manual `Deploy to GitHub Pages` action; its workflow was not
+started. This status is updated below after exact-source deployment readback.

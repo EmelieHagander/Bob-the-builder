@@ -137,6 +137,25 @@ himself. Manifests with `bob.tools` `build_workers_version` 1
   Steps, composes shells from pieces and handles drawing gaps. She is no longer
   the drawing reviewer: **code alone checks a drawing**
   ([CAD adapter](cad-adapter.md#code-drawing-check)).
+- **Code-owned Rita identity — 2026-11-04 implementation.** New execution
+  identities pin `drawingBindingVersion:1`. Bob's exact successful Construction
+  reads and Konrad's saved-record readback carry IDs/revisions in code. The
+  caller-authorized resolver retains the unique current linked drawing; a
+  focused drawing disambiguates identities. With no explicit read, only a
+  complete, unique current Construction list can establish a source. It never
+  chooses a first row, a newer revision after pinning, or a completed historical
+  request. The source revision, destination revision, work links and active
+  request form one durable CAD binding. Rita's native drawing/read schemas hide
+  routing IDs; forged identity arguments are refused and server arguments are
+  supplied before the domain handler. The model adapter reapplies this binding
+  after catalog reconstruction. Allocated/reused request IDs survive checkpoints;
+  saved requirements resume from their own request. Fresh dispatch checks and the
+  existing atomic writer fence source/destination changes and cancellation.
+  This is one Construction drawing operation: shell/piece and work-link writers
+  are excluded from this scoped bench until they have their own typed binding;
+  they cannot bypass it. Earlier pinned jobs retain their original interface.
+  The catalog role and hand-over remain a plain colleague request, without
+  geometry or model-authored authority IDs. [Evidence and rollout](p25-live-window-anchor-followup-2026-11-04.md#code-owned-rita-handoff-and-inline-drawing-preview).
 - **Mattias** keeps the materials shelf and now works the same way.
 - **Bob hands over no values.** Each hand-over (`ask_structure_worker`,
   `ask_drawing_worker`, `ask_materials_worker` v2) takes one `request`, written as

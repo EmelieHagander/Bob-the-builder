@@ -1,3 +1,4 @@
+import { BobChatDrawings } from './BobChatDrawings'
 import { createBobDraftBinding } from '../lib/bobDraftBinding'
 /*
  * Project-bound assistant drawer. The direct backend can read allowed project
@@ -238,6 +239,7 @@ function Bubble({ msg, projectId, attachedBefore, onAction, onOpenDrawing }: { m
         {isUser ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : <MarkdownText text={msg.text} />}
         <BobChatImages projectId={projectId} ids={parseBobImageIds(msg.imageIds)} />
         <BobChatImages projectId={projectId} ids={generatedImages} label="Project illustration" />
+        {!isUser&&<BobChatDrawings projectId={projectId} receipts={msg.evidence?.writes}/>}
         {viewedImages.length > 0 && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 }}>Earlier {viewedImages.length === 1 ? 'image' : 'images'} Bob looked at</div>}
         <BobChatImages projectId={projectId} ids={viewedImages} label="Image Bob looked at" />
         {isUser && msg.deliveryState === 'failed' && !msg.deliveryRecovery && <div className="foundation-hint" style={{ color: 'inherit' }}>Bob’s earlier attempt was interrupted. Your message is saved.</div>}
