@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "gpt-tokenizer/encoding/o200k_base": "npm:gpt-tokenizer@3.4.0/encoding/o200k_base"
+  }
+}

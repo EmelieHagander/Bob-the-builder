@@ -4,7 +4,7 @@ export const SAVED_VIEW_RENDERER='resvg-2.6.2-dejavu-2.37-sheets-v1'
 export type SavedViewPin={project_id:string;artifact_id:string;revision:number;view:string;source_sha256:string}
 export type SavedViewRecord={status:'ready';projectId:string;artifact_id:string;revision:number;current_revision:number;view:string;source_view:string;source_sha256:string;title:string;archived:boolean;recorded_at:string;area_id:string|null;source_state:string;source_reasons:unknown;svg?:string}
 const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i
-export const savedViewName=/^[a-z][a-z0-9_]*(?:\.sheet(?:[2-9]|[1-9][0-9]))?$/
+export const savedViewName=/^[A-Za-z][A-Za-z0-9_-]*(?:\.sheet(?:[2-9]|[1-9][0-9]))?$/
 export function savedViewPin(v:any):SavedViewPin|null{return v&&Object.keys(v).sort().join(',')==='artifact_id,project_id,revision,source_sha256,view'
  &&typeof v.project_id==='string'&&v.project_id.length>0&&v.project_id.length<=200&&uuid.test(v.artifact_id)&&Number.isSafeInteger(v.revision)&&v.revision>0
  &&typeof v.view==='string'&&v.view.length<=80&&savedViewName.test(v.view)&&/^[0-9a-f]{64}$/.test(v.source_sha256)?v:null}
@@ -34,7 +34,7 @@ export function savedSvgPage(svg:string,view:string):{svg:string;width:number;he
  return{svg:head+svg.slice(root[0].length),width:box[2],height:pageHeight,page,pages}
 }
 export function validateSavedPng(bytes:Uint8Array){if(bytes.length> SAVED_VIEW_PNG_MAX||bytes.length<24||!validImageSignature(bytes,'image/png'))throw Error('saved_view_image_invalid');const h=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);if(!h.getUint32(16)||!h.getUint32(20)||h.getUint32(16)>1024||h.getUint32(20)>1024)throw Error('saved_view_image_invalid')}
-export function createSavedDrawingHandler(opts:{read:(authorization:string,pin:SavedViewPin,svg:boolean)=>Promise<any>;raster:(page:ReturnType<typeof savedSvgPage>)=>Promise<Uint8Array>}){
+export function createSavedDrawingHandler(opts:{read:(authorization:string,pin:SavedViewPin,svg:boolean)=>Promise<any>;raster:(page:ReturnType<typeof savedSvgPage>)=>Promise<Uint8Array>; sourceSvg?:(record:SavedViewRecord)=>Promise<string>}){
  const cache=new Map<string,{at:number;bytes:Uint8Array}>()
  const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Expose-Headers':'x-drawing-source-sha256, x-drawing-view','Cache-Control':'no-store'}
  return async(req:Request)=>{
@@ -49,7 +49,7 @@ export function createSavedDrawingHandler(opts:{read:(authorization:string,pin:S
    let bytes=known&&Date.now()-known.at<300000?known.bytes:undefined
    if(!bytes){
     const source=await opts.read(auth,pin,true);if(!sameSavedView(source,pin)||savedViewVersion(source)!==savedViewVersion(record))return new Response(null,{status:409,headers})
-    const page=savedSvgPage(await sourceSvg(source),pin.view);bytes=await opts.raster(page);validateSavedPng(bytes)
+    const page=savedSvgPage(await (opts.sourceSvg??sourceSvg)(source),pin.view);bytes=await opts.raster(page);validateSavedPng(bytes)
    }
    const latest=await opts.read(auth,pin,false);if(!sameSavedView(latest,pin)||savedViewVersion(latest)!==savedViewVersion(record))return new Response(null,{status:409,headers})
    if(!known||Date.now()-known.at>=300000){cache.delete(cacheKey);if(cache.size>=8)cache.delete(cache.keys().next().value!);cache.set(cacheKey,{at:Date.now(),bytes})}

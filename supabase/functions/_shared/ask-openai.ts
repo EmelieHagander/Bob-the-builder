@@ -1,3 +1,5 @@
+import {createConceptViewAdapter,resolveConceptViewImage} from './project-context/concepts.ts'
+import {createConceptViewTransport} from './project-context/concept-transport.ts'
 import {createDrawingViewAdapter,resolveDrawingViewImage} from './project-context/drawings.ts'
 import {createDrawingViewTransport} from './project-context/drawing-transport.ts'
 import {createWorkerOperations} from './worker-operations.ts'
@@ -173,11 +175,13 @@ export async function answerWithOpenAi(opts: {
   }
   let metrics:ReturnType<typeof createExecutionMetrics>|undefined
   const mediaTransport = createMediaTransport(client, { ...opts, url, key })
+  const conceptViewTransport=createConceptViewTransport(client,{...opts,url,key})
   const drawingViewTransport=createDrawingViewTransport(client,{...opts,url,key})
   const imageRefs = new Map<string, Opened>()
   const resolveImage = async (ref: string) => {
     const record = imageRefs.get(ref)
     if (!record) throw new Error('image_not_opened')
+    if(record.item.ref.startsWith('concept:'))return resolveConceptViewImage(opts.projectId,conceptViewTransport,record,AbortSignal.timeout(30000))
     if(record.item.ref.startsWith('drawing:'))return resolveDrawingViewImage(opts.projectId,drawingViewTransport,record,AbortSignal.timeout(30000))
     // Claimed server turns reuse one stored provider file per image revision
     // instead of re-sending pixels; the image itself stays in bob storage.
@@ -188,6 +192,7 @@ export async function answerWithOpenAi(opts: {
   const resolveImageInline = async (ref: string) => {
     const record = imageRefs.get(ref)
     if (!record) throw new Error('image_not_opened')
+    if(record.item.ref.startsWith('concept:'))return resolveConceptViewImage(opts.projectId,conceptViewTransport,record,AbortSignal.timeout(30000))
     if(record.item.ref.startsWith('drawing:'))return resolveDrawingViewImage(opts.projectId,drawingViewTransport,record,AbortSignal.timeout(30000))
     return resolveMediaImage(opts.projectId, mediaTransport, record, AbortSignal.timeout(12000))
   }
@@ -247,9 +252,9 @@ export async function answerWithOpenAi(opts: {
     if (window && !window.ready) throw new BobContinuation('yield')
     const wall = journal ? journal.remaining() + 8000 : Infinity
     const allowed = window ? window.timeoutMs : Math.max(1000, Math.min(timeout, wall))
-    let result
+    let result,usageEventId:string|null=null
     try {
-      const invoke=(recovery?:{key?:string;context?:Record<string,unknown>;expiresAt?:string;fingerprint?:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage, resolveImageInline,
+      const invoke=(recovery?:{key?:string;context?:Record<string,unknown>;expiresAt?:string;fingerprint?:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage, resolveImageInline, onUsageLogged:(id:string)=>{usageEventId=id},
         // Routing hint only, added after the journal, job and drawing-budget
         // fingerprints so recorded steps of in-flight jobs still match.
         ...(promptCacheKey && (options.catalogRoleKey ?? options.functionName) === 'ask-bob' ? { promptCacheKey } : {}),
@@ -269,7 +274,7 @@ export async function answerWithOpenAi(opts: {
       if (error instanceof AIBackgroundPending) throw new BobContinuation('yield', 'ai_wait', { id: error.jobId, accepted: error.accepted, role: options.aiFunction })
       throw error
     }
-    await metrics?.model({...options,timeoutMs:allowed},result,performance.now()-started,{step:identity?.key??null,attempt:identity?.attempt??0})
+    await metrics?.model({...options,timeoutMs:allowed},result,performance.now()-started,{step:identity?.key??null,attempt:identity?.attempt??0,usageEventId})
     console.log('[Bob model]', JSON.stringify({ role:options.aiFunction, success:result.success, elapsed_ms:Math.round(performance.now()-started), input_tokens:result.usage.input_tokens, output_tokens:result.usage.output_tokens }))
     if (journal && !result.success && allowed < timeout && performance.now() - started >= allowed - 1500) throw new BobContinuation('yield', 'segment_wall')
     // A definite provider rejection produced no billable output; a lost
@@ -318,12 +323,13 @@ export async function answerWithOpenAi(opts: {
       current: checkpoint ? adapter.current : reuseFresh(adapter.current, unchanged => unchanged, (ref, expected) => ref + '\u0000' + expected),
     }
   }
-  const drawingAdapter=()=>{
-    const adapter=createDrawingViewAdapter(opts.projectId,drawingViewTransport)
+  const drawingAdapter=(concept=false)=>{
+    const adapter=concept?createConceptViewAdapter(opts.projectId,conceptViewTransport):createDrawingViewAdapter(opts.projectId,drawingViewTransport)
+    const namespace=concept?'concept-view:':'drawing-view:'
     return{...adapter,checkpointed:!!journal,
-      count:(signal:AbortSignal)=>memo('drawing-view:count',{},()=>adapter.count(signal),0,signal),
-      list:(...args:Parameters<typeof adapter.list>)=>memo('drawing-view:list',args[0],()=>adapter.list(...args),0,args[1]),
-      open:async(...args:Parameters<typeof adapter.open>)=>{const opened=await memo('drawing-view:open',args[0],()=>adapter.open(...args),0,args[1]);imageRefs.set(opened.image.image_url,opened);return opened},
+      count:(signal:AbortSignal)=>memo(namespace+'count',{},()=>adapter.count(signal),0,signal),
+      list:(...args:Parameters<typeof adapter.list>)=>memo(namespace+'list',args[0],()=>adapter.list(...args),0,args[1]),
+      open:async(...args:Parameters<typeof adapter.open>)=>{const opened=await memo(namespace+'open',args[0],()=>adapter.open(...args),0,args[1]);imageRefs.set(opened.image.image_url,opened);return opened},
       current:adapter.current,
     }
   }
@@ -371,11 +377,12 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
       constructionPageVersion: 1 as const, workingStateVersion: 1 as const, drawingBindingVersion:1 as const, operationPathsVersion:2 as const,
+      ...(aiCatalog.definition('bob.tools','tool_contract').definition.solution_work_version===1?{solutionWorkVersion:1 as const}:{}),
       // Core reading tools loaded from the first step. Jobs without this pin keep on-demand loading.
       corePreloadVersion: 1 as const,
       // Building links read once at turn start. Jobs without this pin read nothing extra.
@@ -435,6 +442,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.completeRequestVersion !== undefined && execution.completeRequestVersion !== 1) throw new Error('complete_request_version_invalid')
   if (execution.resultReferenceVersion !== undefined && (execution.resultReferenceVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('result_reference_version_invalid')
   if (execution.resultWindowVersion !== undefined && (![1, 2].includes(execution.resultWindowVersion) || execution.resultReferenceVersion !== 1)) throw new Error('result_window_version_invalid')
+  if(execution.solutionWorkVersion!==undefined&&execution.solutionWorkVersion!==1)throw new Error('solution_work_version_invalid')
   if(execution.operationPathsVersion!==undefined&&![1,2].includes(execution.operationPathsVersion))throw new Error('operation_paths_version_invalid')
   if(execution.drawingBindingVersion!==undefined&&execution.drawingBindingVersion!==1)throw new Error('drawing_binding_version_invalid')
   if (execution.workingStateVersion !== undefined && execution.workingStateVersion !== 1) throw new Error('working_state_version_invalid')
@@ -462,7 +470,7 @@ export async function answerWithOpenAi(opts: {
     return result
   } }
   const contextStrategy = execution.contextStrategyVersion === 1 && contract.context_strategy_version === 1
-  if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel,
+  if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel,onInternalTool:value=>metrics?.internalTool(value)??Promise.resolve(),
     ...(execution.resultReferenceVersion === 1 ? { mainResultReferences: 1 } : {}),
     ...(execution.resultWindowVersion === 1 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS } : {}),
     ...(execution.resultWindowVersion === 2 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS, resultWindowVersion: 2 as const } : {}),
@@ -585,7 +593,7 @@ export async function answerWithOpenAi(opts: {
     ...(claimedServer ? { modelFeedback: { message: opts.message, read: before => rpc('read_model_feedback', { ...binding, p_before: before }, AbortSignal.timeout(12000)) } } : {}),
     read: input => rpc('read_bob_solution_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
   })
-  const projectEdits = createProjectEdits({ unlimitedWork, projectId: opts.projectId, writer, hasAccess, sources: lookup.sources,
+  const projectEdits = createProjectEdits({ coherent:execution.solutionWorkVersion===1,unlimitedWork, projectId: opts.projectId, writer, hasAccess, sources: lookup.sources,
     ...(writeState ? { writeState: { readiness: constructionReadinessReader } } : {}),
     read: input => rpc('read_bob_edit_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
     readSelected: areaId => rpc('read_bob_selected_edit_context', { p_project: opts.projectId, p_area: areaId }, AbortSignal.timeout(12000)),
@@ -593,7 +601,7 @@ export async function answerWithOpenAi(opts: {
   const projectContext = createProjectContext({ unlimitedWork,
     reviewInstruction: aiCatalog.text('drawing-review.instruction'),
     imageEvidenceInstruction: aiCatalog.text('images.evidence-intro'), reviewLabel: aiCatalog.text('images.review-label'),
-    adapters: [mediaAdapter(),...(execution.operationPathsVersion===2?[drawingAdapter()]:[])],
+    adapters: [mediaAdapter(),...(execution.operationPathsVersion===2?[drawingAdapter()]:[]),...(execution.solutionWorkVersion===1?[drawingAdapter(true)]:[])],
     hasAccess, sources: lookup.sources,
     ...(claimedServer ? { describe: (record: Opened, description: string) => memo('media:describe', { ref: record.item.ref, version: record.version, description }, async () => {
       const { error } = await internal.rpc('bob_describe_image', { ...binding, p_user: opts.userId,
@@ -993,7 +1001,7 @@ export async function answerWithOpenAi(opts: {
       return {...data,current_step_ids:links}
     },
     catalog:createMaterialCatalogReader(opts.projectId,checkpointed((input:Record<string,unknown>,signal:AbortSignal)=>rpc('catalog_read',{p_project:opts.projectId,p_input:input},signal)),hasAccess,lookup.sources,undefined,{unlimitedWork}),
-    context:createProjectContext({ unlimitedWork,adapters:[mediaAdapter(),...(execution.operationPathsVersion===2?[drawingAdapter()]:[])],hasAccess,sources:lookup.sources,reviewInstruction:aiCatalog.text('drawing-review.instruction'),imageEvidenceInstruction:aiCatalog.text('images.evidence-intro'),reviewLabel:aiCatalog.text('images.review-label')}),
+    context:createProjectContext({ unlimitedWork,adapters:[mediaAdapter(),...(execution.operationPathsVersion===2?[drawingAdapter()]:[]),...(execution.solutionWorkVersion===1?[drawingAdapter(true)]:[])],hasAccess,sources:lookup.sources,reviewInstruction:aiCatalog.text('drawing-review.instruction'),imageEvidenceInstruction:aiCatalog.text('images.evidence-intro'),reviewLabel:aiCatalog.text('images.review-label')}),
     referenceImageRefs:()=>projectContext.openedImageRefs(),
   })
   if(opts.background?.drawingRequestId){

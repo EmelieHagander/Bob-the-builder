@@ -679,3 +679,41 @@ Baseline tests executed: **18 pass** across picker, Anthropic and saved-drawing
 vision. Those verify current behavior, not the planned fixes. Source authority
 for this investigation is main `b7d8fd53b21577dc6befa3ca3536bb60eb2fd111` and
 the immutable live turn/revisions above. Broader CPU attribution O5 remains open.
+
+### Five-finding implementation — 2026-11-05
+
+Implemented in `fix/coherent-solution-work`; installation is pending until the
+release readback below is recorded.
+
+| Finding | Implemented behavior | Verification |
+|---|---|---|
+| F1 | New turns receive a compact overview and compact save results. Explicit semantic section pages stay bound to the original edit snapshot and survive checkpoints without rereading the database. The complete original remains available on explicit request. | Overview under 700 serialized tokens; section results under the existing 3,000-token generic page boundary; exact reassembly, checkpoint restore and forged cursor rejection. |
+| F2 | Alignment reset preserves its previous basis. `add_choice_for_components` creates a server-owned choice identity and links it to exact active component refs in one delta/save. | Deterministic retry, same-project stale refs, foreign refs, original snapshot preservation and atomic link checks. |
+| F3 | Claude structured failures retain safe failure codes and declared schema paths; the usage ledger receives error code/latency and its returned row ID is linked to execution metrics. Helper function names and internal history reads are durable metadata. The unused picker reason is removed by an immutable publication. | Malformed JSON/schema failure fixtures, no raw output or unexpected field names in diagnostics, deterministic internal-tool event keys, continuation callback and published schema tests. No diagnostic model call. |
+| F4 | Model v2 adds exact linked measurement revisions, original values/units and intended versus recorded endpoints. Code supplies the source pins and normalized estimate; unresolved endpoints remain visible and block construction reconciliation. Sources may be detached explicitly while retaining an estimate. | JS/SQL shape and value consistency; forged, foreign and unlinked source rejection; deferred source-link constraint; 209 cm stays 209 cm. Existing v1 models remain readable. |
+| F5 | Bob and Rita can list/open exact saved Solution views through the existing image carrier. A caller-authenticated `concept-preview` rasterizes the same `conceptSvg` as the UI, with pinned source hash, revision, view and source-state checks. Typed visual evidence routes CAD/concepts to their own previews, including the exact viewed CAD sheet. | Actual bounded WASM raster, same-SVG comparison, denied/mismatched caller/project/revision/hash/view checks, compact checkpoints without pixels, evidence only after confirmed delivery, and model/browser source routing checks. |
+
+The new behavior is selected by immutable catalog `solution_work_version=1`
+and retained in the execution identity. Older execution identities retain their
+editor schema/results and adapter set. No global token/work budget was added,
+no project data was deleted and no existing measurement definition was guessed.
+The door's physical measurement endpoints still need owner confirmation; a
+source binding cannot establish their meaning by itself.
+
+Focused validation includes the isolated full-schema project/edit/operation
+suites, new source/view SQL tests, real raster fixtures, picker/provider,
+continuation and execution-metric regressions, and chat data/SSR tests.
+Deno checks both Bob endpoints and both preview endpoints using the installed
+equivalent dependency map. Frontend TypeScript/Vite and local PWA checks pass.
+Test batches overlap; do not add their counts. Full CI, paid model/CAD probes
+and the signed-in private browser acceptance were not run. O5 whole-turn CPU/
+cost and ordinary owner visual acceptance remain separate.
+
+Rollout order: core SQL, the two preview endpoints and matching complete Bob
+bundles, then immutable catalog activation, then matching Pages. Preserve
+`bob-worker` private capability mode and JWT verification on the other endpoints.
+Check actual project URL, active jobs, migration names and installed source before
+applying; compare complete deployed closures and caller-scoped reads afterwards.
+The CLI's earlier telemetry connection was blocked by automatic approval review;
+the two new source filenames use their recorded actual UTC authoring times and
+must be mapped to the hosted migration ledger without changing the SQL.

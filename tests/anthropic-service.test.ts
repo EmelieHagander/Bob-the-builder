@@ -206,3 +206,11 @@ test('every strict Bob tool and response schema translates to the keyword subset
   const sample = strictSchema({ type: 'object', properties: { tags: { type: 'array', maxItems: 3, minItems: 2, items: { type: 'string', maxLength: 9, format: 'json' } }, id: { type: 'string', format: 'uuid' } } }, true)
   assert.deepEqual(sample, { type: 'object', properties: { tags: { type: 'array', items: { type: 'string', description: '{maxLength: 9, format: "json"}' }, description: '{maxItems: 3, minItems: 2}' }, id: { type: 'string', format: 'uuid' } }, required: ['tags', 'id'], additionalProperties: false })
 })
+
+test('structured helper failures retain safe codes, field paths and ledger latency without raw output',async()=>{
+ for(const [text,code,paths] of [['not json PRIVATE','model_invalid_json',[]],['{"tools":[1],"PRIVATE_KEY":"PRIVATE_VALUE"}','model_schema_violation',['$.tools[0]']]] as const){
+  const ledger:any[]=[]
+  const response=await callAnthropicMessages({...base,aiFunction:'tool-picker',prompt:'PRIVATE PROMPT',schemaName:'bob_tool_pick',structuredToolOutput:true,schema:{type:'object',additionalProperties:false,required:['tools'],properties:{tools:{type:'array',items:{type:'string'}}}}},ctx({log:async r=>{ledger.push(r)},fetch:(async()=>sse({type:'message_start',message:{id:'msg_diag',model:claude.model_name,content:[],usage:{input_tokens:10,output_tokens:0}}},{type:'content_block_start',index:0,content_block:{type:'text',text}},{type:'content_block_stop',index:0},{type:'message_delta',delta:{stop_reason:'end_turn'},usage:{output_tokens:5}})) as typeof fetch}))
+  assert.equal(response.success,false);assert.equal(response.failure?.code,code);assert.deepEqual(response.failure?.schemaPaths,paths);assert.equal(ledger[0].errorCode,code);assert(ledger[0].latencyMs>=0);assert(!JSON.stringify({failure:response.failure,ledger}).includes('PRIVATE'))
+ }
+})

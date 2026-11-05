@@ -107,7 +107,7 @@ test('the picker is a small read-only role with its own schema and no tools', ()
   assert.equal(role.function_name, 'tool-picker'); assert.equal(role.profile_key, 'profile.context-summary'); assert.deepEqual(role.tool_keys, [])
   assert.equal(catalog.definition('profile.context-summary').definition.tier, 'mini')
   const schema = catalog.definition('schema.bob_tool_pick').definition as any
-  assert.equal(schema.properties.tools.maxItems, 4); assert.deepEqual(schema.required, ['tools', 'reason'])
+  assert.equal(schema.properties.tools.maxItems, 4); assert.deepEqual(schema.required, ['tools'])
   assert.equal(catalog.definition('agent-contract.tool-picker').definition.writes, 'none')
   assert.equal(preToolPickerCatalogFixture().manifest().definitions.some(row => row.prompt_key === 'role.tool-picker'), false)
 })

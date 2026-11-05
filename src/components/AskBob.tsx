@@ -231,7 +231,7 @@ function Bubble({ msg, projectId, attachedBefore, onAction, onOpenDrawing }: { m
   // sees them here too (2026-11-02: an earlier image Bob described never showed).
   // The owner's own attachments just above and new illustrations are not repeated.
   const shown = new Set([...generatedImages, ...(attachedBefore ?? [])])
-  const viewedImages = [...new Set(msg.evidence?.sources?.filter(s => s.dataset === 'image_pixels').map(s => s.recordId) ?? [])].filter(id => !shown.has(id))
+  const viewedImages = [...new Set(msg.evidence?.sources?.filter(s => s.dataset === 'image_pixels' && !s.visual).map(s => s.recordId) ?? [])].filter(id => !shown.has(id))
   return (
     <div className={`bob-message ${isUser ? 'bob-message-user' : 'bob-message-assistant'}`}>
       <div className="bob-bubble">
@@ -239,7 +239,7 @@ function Bubble({ msg, projectId, attachedBefore, onAction, onOpenDrawing }: { m
         {isUser ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : <MarkdownText text={msg.text} />}
         <BobChatImages projectId={projectId} ids={parseBobImageIds(msg.imageIds)} />
         <BobChatImages projectId={projectId} ids={generatedImages} label="Project illustration" />
-        {!isUser&&<BobChatDrawings projectId={projectId} receipts={msg.evidence?.writes}/>}
+        {!isUser&&<BobChatDrawings projectId={projectId} receipts={msg.evidence?.writes} sources={msg.evidence?.sources}/>}
         {viewedImages.length > 0 && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 }}>Earlier {viewedImages.length === 1 ? 'image' : 'images'} Bob looked at</div>}
         <BobChatImages projectId={projectId} ids={viewedImages} label="Image Bob looked at" />
         {isUser && msg.deliveryState === 'failed' && !msg.deliveryRecovery && <div className="foundation-hint" style={{ color: 'inherit' }}>Bob’s earlier attempt was interrupted. Your message is saved.</div>}
