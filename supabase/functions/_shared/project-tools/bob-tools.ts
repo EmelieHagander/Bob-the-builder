@@ -90,7 +90,7 @@ export const DRAWING_CONTINUATION_PRELOAD = ['read_construction_draft', 'check_c
   'read_drawing_requests', 'read_drawing_request_work', 'read_construction_changes', 'change_construction_parameters',
   'edit_construction_parts', 'save_cad_design']
 
-export function createBobToolSession(opts: {
+export function createBobToolSession(opts: { continuedWork?:boolean;
   drawingWorker?:boolean;
   workerOperation?:{role:OperationRole;operations:WorkerOperations};
   runtimeSurface?:()=>RuntimeToolSurface;
@@ -270,6 +270,7 @@ export function createBobToolSession(opts: {
     ...(opts.aiCatalog?.manifest().definitions.some(row=>row.prompt_key==='bob.tools'&&row.metadata?.construction_work_version===1)?{
       autoLoadReady:true,followups:opts.aiCatalog.definition('bob.tools','tool_contract').definition.operation_followups as import('./session.ts').ToolFollowup[],
     }:{}),
+    selectVisible:opts.continuedWork,
     selectiveTools: opts.aiCatalog?.manifest().definitions.some(row => row.prompt_key === 'bob.workflows' && row.metadata?.selective_tools_version === 1),
     ...(opts.aiCatalog ? { catalogTool: (name, parameters) => {
         const definition = opts.aiCatalog!.tool(name, parameters)

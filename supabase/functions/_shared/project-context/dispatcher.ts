@@ -18,6 +18,7 @@ export interface ProjectContextState {
   pending: Opened[]
   /** Successfully delivered images retain evidence and an empty image URL. */
   delivered: Opened[]
+  metadataChanges?: Item[]
 }
 export interface ContextAdapter {
   checkpointed?: boolean
@@ -27,6 +28,7 @@ export interface ContextAdapter {
   count(signal: AbortSignal): Promise<number>
   list(input: ListRequest, signal: AbortSignal): Promise<{ items: Item[]; next_cursor: string | null }>
   open(ref: string, signal: AbortSignal): Promise<Opened>
+  refresh?(record:Opened,signal:AbortSignal):Promise<Opened|null>
   current(ref: string, version: string, signal: AbortSignal): Promise<boolean>
 }
 export const CONTEXT_LIMITS = { calls: 12, batch: 4, images: 8, bytes: 16 * 1024 * 1024, timeoutMs: 12000 } as const
@@ -47,6 +49,7 @@ export function createProjectContext(opts: {
   let used = 0, imageCount = 0, byteCount = 0, partial = false
   let pending: Opened[] = []
   const delivered = new Map<string, Opened>()
+  const metadataChanges=new Map<string,Item>()
   const timeoutMs = opts.timeoutMs ?? CONTEXT_LIMITS.timeoutMs
   async function bounded<T>(run: (signal: AbortSignal) => Promise<T>, checkpointed=false): Promise<T> {
     const controller = new AbortController()
@@ -98,13 +101,15 @@ export function createProjectContext(opts: {
       // The background media adapter supplies resolver refs. Inline pixels belong
       // only to synchronous callers and must never be copied into durable state.
       if (!checkpointImages(pending, true)) throw new Error('context_checkpoint_image_not_reference')
-      return structuredClone({ version: 1, used, imageCount, byteCount, partial, pending, delivered: [...delivered.values()] })
+      return structuredClone({ version: 1, used, imageCount, byteCount, partial, pending, delivered: [...delivered.values()],...(metadataChanges.size?{metadataChanges:[...metadataChanges.values()]}:{}) })
     },
     restoreState(state: ProjectContextState): void {
       if (!state || state.version !== 1 || ![state.used, state.imageCount, state.byteCount].every(value => Number.isSafeInteger(value) && value >= 0)
         || state.byteCount > CONTEXT_LIMITS.bytes || typeof state.partial !== 'boolean'
         || !checkpointImages(state.pending, true) || !checkpointImages(state.delivered, false)
         || new Set(state.delivered.map(record => record.item.ref)).size !== state.delivered.length) throw new Error('context_checkpoint_invalid')
+      if(state.metadataChanges&&(!Array.isArray(state.metadataChanges)||state.metadataChanges.length>state.delivered.length+state.pending.length||state.metadataChanges.some(item=>!item||typeof item.ref!=='string'||![...state.delivered,...state.pending].some(r=>r.item.ref===item.ref))))throw Error('context_checkpoint_invalid')
+      metadataChanges.clear();for(const item of state.metadataChanges??[])metadataChanges.set(item.ref,structuredClone(item))
       const restored = structuredClone(state)
       used = restored.used; imageCount = restored.imageCount; byteCount = restored.byteCount; partial = restored.partial
       pending = restored.pending
@@ -181,13 +186,32 @@ export function createProjectContext(opts: {
       if (!delivered.size && !pending.length) return true
       if (!await opts.hasAccess()) return false
       const records = [...delivered.values(), ...pending]
-      try { return (await Promise.all(records.map(r => bounded(signal => byRef(r.item.ref)!.current(r.item.ref, r.version, signal))))).every(Boolean) }
-      catch { partial = true; return false }
+      try {
+        const refreshed=await Promise.all(records.map(async r=>{
+          const adapter=byRef(r.item.ref)!
+          if(!adapter.refresh)return await bounded(signal=>adapter.current(r.item.ref,r.version,signal))?r:null
+          return bounded(signal=>adapter.refresh!(r,signal))
+        }))
+        if(refreshed.some(r=>!r)||!await opts.hasAccess()){console.warn('[Bob visual context]',JSON.stringify({status:'unavailable',categories:[...new Set(records.map(r=>byRef(r.item.ref)!.category))]}));return false}
+        for(const [index,r] of refreshed.entries()){
+          if(!r)continue
+          const before=records[index]
+          if(JSON.stringify(before.item)!==JSON.stringify(r.item)){
+            metadataChanges.set(r.item.ref,structuredClone(r.item))
+            if(delivered.has(r.item.ref))delivered.set(r.item.ref,r)
+            else pending=pending.map(p=>p.item.ref===r.item.ref?r:p)
+          }
+        }
+        return true
+      }
+      catch { partial = true; console.warn('[Bob visual context]',JSON.stringify({status:'validation_failed'})); return false }
     },
     imageEvidence(){return new Map([...delivered.values(),...pending].map(r=>[r.item.ref,r.version]))},
     carrier(): ImageCarrier[] {
-      if (!pending.length) return []
+      if (!pending.length && !metadataChanges.size) return []
+      if(!pending.length)return [{role:'user',content:[{type:'text',text:JSON.stringify({saved_view_metadata_changed:[...metadataChanges.values()],pixels_unchanged:true,approval_not_implied:true})}]}]
       return [{ role: 'user', content: [
+        ...(metadataChanges.size?[{type:'text' as const,text:JSON.stringify({saved_view_metadata_changed:[...metadataChanges.values()],pixels_unchanged:true,approval_not_implied:true})}]:[]),
         { type: 'text', text: opts.imageEvidenceInstruction??(()=>{throw new Error('ai_prompt_missing: images.evidence-intro')})() },
         ...(pending.some(r => r.item.source_kind === 'ai_generated' || ['instruction', 'proposal'].includes(String(r.item.purpose)))
           ? [{ type: 'text' as const, text:[opts.reviewLabel??(()=>{throw new Error('ai_prompt_missing: images.review-label')})(),opts.reviewInstruction??(()=>{throw new Error('ai_prompt_missing: drawing-review.instruction')})()].join('\n') }] : []),
@@ -197,6 +221,7 @@ export function createProjectContext(opts: {
     },
     /** Called only after a successful model call that included the carrier. Not at listing/download time. */
     confirmDelivery() {
+      metadataChanges.clear()
       for (const r of pending) {
         delivered.set(r.item.ref, { ...r, image: { type: 'image_url', image_url: '' } })
         if (!opts.sources.some(s => s.dataset === 'image_pixels' && s.recordId === r.source.recordId && s.updatedAt === r.source.updatedAt && s.visual?.ref===r.source.visual?.ref)) opts.sources.push(r.source)

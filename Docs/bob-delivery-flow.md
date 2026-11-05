@@ -578,6 +578,8 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
+**Nytt ägarprov på alla tre projekten 2026-11-05:** [fem fortsättningsfynd har kodrättningar och riktade prover](bob-runtime-path-audit-2026-11-04.md#three-project-followup-2026-11-05). Sängen sparade version 14 men svaret bröts med `context_unavailable`; entréns hjälproller saknade det nya samtalsminnet och en tillgänglig historikläsare krävde extra laddningsrundor. Rättningen skiljer sparade bildpixlar från ändrad källstatus, delar rätt minne/förmågor med hjälprollerna, stödjer explicit verktygsval, granskar äldre konstruktioner utan påhittad FORM-koppling och låter gamla öppna frågor rättas atomiskt. **Implementerat; drift/publicering är ännu inte verifierad.** Ägarens projektdata lämnas orörda av releasen.
+
 **Entréprovet 2026-11-05:** [alla fem fynd har nu kodrättningar och riktade tester](bob-runtime-path-audit-2026-11-04.md#entry-five-findings-2026-11-05): tunna revisionsbundna läsningar, atomisk beslutskoppling och bevarad alignment-basis, säker helperdiagnostik, explicita måttkällor med olösta referenser samt Solution-bildadapter för Bob/Rita och typad chattvisning. **Tekniskt driftsatt och återläst:** `bob-worker` v200, `ask-bob` v232, `concept-preview` v1, `drawing-preview` v2 och Pages #394. Befintliga 209 cm och deras osäkra definition är oförändrade. Ordinarie ägarprov och O5 CPU/kostnad är separata acceptanser.
 
 

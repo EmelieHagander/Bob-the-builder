@@ -18,7 +18,7 @@ const model = (id: string, calls: ReturnType<typeof call>[] = []): OpenAIService
 
 function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; readback?: (revision: number) => unknown;
   checkInSave?: boolean; serverCheck?: 'checked' | 'unavailable'; inspect?: (revision: number) => Record<string, unknown>;
-  pauseForDesignReview?: boolean; boundedReview?: (revision: number) => Record<string, unknown>; conflict?: boolean; afterStep?: () => void;
+  unmappedReview?:boolean; pauseForDesignReview?: boolean; boundedReview?: (revision: number) => Record<string, unknown>; conflict?: boolean; afterStep?: () => void;
   restored?: WorkerProgress; finishReadback?: () => Promise<unknown[]>; access?: boolean }) {
   const commands: { name: string; revision: number | null }[] = []
   const scopedChecks: string[][] = []
@@ -47,7 +47,7 @@ function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; r
       scopedChecks.push(t.component_ids ?? [])
       return { ...t, status: opts.serverCheck ?? 'checked', concept_ready: true }
     }),
-    ...(opts.enabled ? { pieceProgress: { readSaved: async (receipt: Record<string, unknown>) => {
+    ...(opts.enabled ? { pieceProgress: { unmappedReview:opts.unmappedReview, readSaved: async (receipt: Record<string, unknown>) => {
       const revision = receipt.revision as number
       commands.push({ name: 'verify_exact_revision', revision })
       return opts.readback?.(revision) ?? { status: 'ok', artifact_id: 'c1', revision,
@@ -313,4 +313,10 @@ test('v2 fails closed on an unfamiliar FORM status while v1 remains unchanged', 
   ], { enabled: true, inspect: () => ({ status: 'new_unreviewed_result' }) })
   assert.deepEqual([(await result).status, (await result).reason], ['needs_verification', 'saved_form_evidence_unavailable'])
   assert.equal(observed.length, 1)
+})
+
+test('unmapped legacy constructions return an exact checked review boundary without fabricating FORM coverage',async()=>{
+ const h=harness([model('one',[call('a','edit_construction_parts')])],{enabled:true,pauseForDesignReview:true,unmappedReview:true,
+  inspect:revision=>({status:'construction_scoped',artifact_id:'c1',revision,scope:'whole_saved_construction',form_mapping:false,verification:'unverified'}),boundedReview:()=>({status:'not_configured'})})
+ const report=await h.result;assert.equal(report.status,'awaiting_design_review');assert.equal(report.receipts[0].piece_evidence.form_mapping,false);assert.equal(h.observed.length,1)
 })

@@ -103,3 +103,13 @@ test('Rita can list, open and consume a saved drawing sheet through the actual w
   },catalog)})
  assert.equal(result.status,'ok');assert.equal(step,3);assert.equal(context.exportState().pending.length,0);assert.equal(context.exportState().delivered.length,1)
 })
+
+test('new stable visual pins survive own source/head changes with a metadata-only notice, while revocation and changed bytes still stop',async()=>{
+ let current=3,state='current',authorized=true,source=hash
+ const transport={list:async()=>({projectId:'p',total:0,records:[]}),read:async()=>authorized?{...row,current_revision:current,source_state:state,source_sha256:source}:null,raster:async()=>render(savedSvgPage(svg,'front')).png}
+ const adapter=createDrawingViewAdapter('p',transport,true),make=()=>createProjectContext({adapters:[adapter],hasAccess:async()=>authorized,sources:[]})
+ const c=make(),ref=drawingViewRef(id,3,'front');await c.execute('open_project_item',{refs:[ref]});c.confirmDelivery()
+ current=4;state='changed';assert(await c.validate());const notice=c.carrier();assert.equal(notice[0].content.length,1);assert.equal(notice[0].content[0].type,'text');assert(JSON.stringify(notice).includes('pixels_unchanged'));assert.equal(JSON.parse((notice[0].content[0] as any).text).saved_view_metadata_changed[0].historical,true)
+ const checkpoint=JSON.parse(JSON.stringify(c.exportState()));assert(!JSON.stringify(checkpoint).includes('data:image'));const resumed=make();resumed.restoreState(checkpoint);assert(await resumed.validate());assert(resumed.carrier().length);resumed.confirmDelivery();assert.deepEqual(resumed.carrier(),[])
+ source='0'.repeat(64);assert.equal(await resumed.validate(),false);source=hash;authorized=false;assert.equal(await resumed.validate(),false)
+})

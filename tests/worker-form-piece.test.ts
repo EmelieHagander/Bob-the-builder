@@ -89,3 +89,10 @@ test('a newly created Construction revision can report its mapped scope without 
   assert.equal(fresh.newly_mapped_components.count, 2)
   assert.deepEqual(fresh.scope_check_ids, ['window_east', 'window_west'])
 })
+
+test('a legacy delta has exact whole-construction evidence and never gains invented FORM mapping',()=>{
+ const current={...after,form_refinement:null,form_scope:null},prior={...before,form_refinement:null}
+ const evidence=savedFormPieceEvidence(receipt,current,prior,'p1',{},true);assert.equal(evidence.status,'construction_scoped');assert.equal(evidence.form_mapping,false);assert.equal(evidence.verification,'unverified');assert.equal(evidence.changed_instances.count,1)
+ assert.equal(savedFormPieceEvidence(receipt,current,{...prior,projectId:'other'},'p1',{},true).status,'unavailable')
+ assert.equal(savedFormPieceEvidence(receipt,current,prior,'p1',{}).status,'no_form_scope','old jobs retain their contract')
+})

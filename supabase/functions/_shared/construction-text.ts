@@ -16,12 +16,17 @@ export const CONSTRUCTION_TEXT_SCHEMA = { anyOf: [{
   properties: { title: { type: 'string', minLength: 1, maxLength: 200 }, description: { type: 'string', minLength: 1, maxLength: 5500 } },
 }, { type: 'null' }] }
 
+export const CONSTRUCTION_NOTES_SCHEMA = structuredClone(CONSTRUCTION_TEXT_SCHEMA) as any
+CONSTRUCTION_NOTES_SCHEMA.anyOf[0].properties.open_questions={anyOf:[{type:'array',maxItems:40,items:{type:'string',minLength:1,maxLength:1000}},{type:'null'}]}
+CONSTRUCTION_NOTES_SCHEMA.anyOf[0].required.push('open_questions')
+export const CONSTRUCTION_NOTES_NOTE=' text.open_questions:null preserves saved questions; a supplied complete list replaces them (empty clears). A text-only edit may use an empty instances delta. Correct stale questions in the same bounded edit; source and geometry guards still apply.'
+
 export const CONSTRUCTION_TEXT_NOTE = ' text:null keeps the saved title and description. When either states a size this change alters, supply text with the complete corrected title and description (or leave sizes out of them); a change that would leave a stated overall size wrong is rejected without saving.'
 
-export function withConstructionText(base: Tool): Tool {
+export function withConstructionText(base: Tool,notes=false): Tool {
   const p = base.function.parameters
-  return { ...base, function: { ...base.function, description: base.function.description + CONSTRUCTION_TEXT_NOTE,
-    parameters: { ...p, properties: { ...p.properties, text: CONSTRUCTION_TEXT_SCHEMA }, required: [...new Set([...p.required, 'text'])] } } }
+  return { ...base, function: { ...base.function, description: base.function.description + CONSTRUCTION_TEXT_NOTE+(notes?CONSTRUCTION_NOTES_NOTE:''),
+    parameters: { ...p, properties: { ...p.properties, text: notes?CONSTRUCTION_NOTES_SCHEMA:CONSTRUCTION_TEXT_SCHEMA }, required: [...new Set([...p.required, 'text'])] } } }
 }
 
 const unitFactor = (unit: string | undefined) => unit === 'cm' ? 10 : unit === 'm' ? 1000 : 1

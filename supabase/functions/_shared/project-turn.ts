@@ -28,7 +28,7 @@ import { compactReceipts, type ProjectWriter } from './project-write.ts'
 import { bobTurnFailure, type BobTurnFailure, type BobTurnFailureStage } from './bob-turn-failure.ts'
 
 /** Production orchestration, injected for failure/retry tests without an AI key. */
-export async function runClaimedProjectTurn(opts: {
+export async function runClaimedProjectTurn(opts: { continuedWork?:boolean;
   aiCatalog: AiCatalogSession;
   /** Same pinned build-guide switch that runProjectAnswer forwards into the toolbox. */
   boundDrawingWork?:boolean;

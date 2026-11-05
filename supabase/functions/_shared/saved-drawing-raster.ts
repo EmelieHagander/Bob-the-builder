@@ -58,3 +58,6 @@ export function createSavedDrawingHandler(opts:{read:(authorization:string,pin:S
  }
 }
 export function savedViewVersion(r:SavedViewRecord){return JSON.stringify([SAVED_VIEW_RENDERER,r.artifact_id,r.revision,r.view,r.source_sha256,r.current_revision,r.archived,r.source_state,r.source_reasons])}
+
+/** Stable pixel identity: head/source status is refreshed separately as metadata. */
+export function savedPixelVersion(r:SavedViewRecord){return JSON.stringify([SAVED_VIEW_RENDERER,r.artifact_id,r.revision,r.view,r.source_sha256])}
