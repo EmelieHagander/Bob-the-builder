@@ -16,6 +16,22 @@ const svg='<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="2
 const hash=createHash('sha256').update(svg).digest('hex')
 const pin={project_id:'p',artifact_id:id,revision:3,view:'front',source_sha256:hash}
 const row:SavedViewRecord={status:'ready',projectId:'p',artifact_id:id,revision:3,current_revision:3,view:'front',source_view:'front',source_sha256:hash,title:'Ladan',archived:false,recorded_at:'2026-11-05T07:00:00Z',area_id:null,source_state:'current',source_reasons:[],svg:Buffer.from(svg).toString('base64')}
+test('main chat reports its exact preview capability but attaches evidence only after pixel delivery, including restore',async()=>{
+ const sources:any[]=[]
+ const transport:any={read:async()=>row,raster:async()=>new Uint8Array(),list:async()=>({projectId:'p',total:1,records:[]})}
+ const make=(chatPreviews:boolean)=>createProjectContext({chatPreviews,adapters:[createDrawingViewAdapter('p',transport)],hasAccess:async()=>true,sources,imageEvidenceInstruction:'Evidence'})
+ const main=make(true),ref=drawingViewRef(id,3,'front')
+ const result:any=await main.execute('open_project_item',{refs:[ref]})
+ assert.equal(result.items[0].chat_preview.status,'attached_to_answer_after_pixel_delivery')
+ assert.equal(result.items[0].context_ref,'image-input:'+main.carrier()[0].content.find(p=>p.type==='image_url')!.image_url.slice(14))
+ assert.deepEqual([result.items[0].chat_preview.ref,result.items[0].chat_preview.revision,result.items[0].chat_preview.view],[ref,3,'front'])
+ assert.equal(sources.length,0,'opening or preparing alone is not delivery')
+ const restored=make(true);restored.restoreState(JSON.parse(JSON.stringify(main.exportState())))
+ assert.equal(restored.carrier().length,1);restored.confirmDelivery()
+ assert.equal(sources[0].visual.ref,ref)
+ const worker:any=await make(false).execute('open_project_item',{refs:[ref]})
+ assert(!Object.hasOwn(worker.items[0],'chat_preview'),'workers do not promise their own private images in the main reply')
+})
 let font:Uint8Array
 before(async()=>{await initWasm(await readFile(require.resolve('@resvg/resvg-wasm/index_bg.wasm')));font=await readFile(require.resolve('dejavu-fonts-ttf/ttf/DejaVuSans.ttf'))})
 function render(page:ReturnType<typeof savedSvgPage>){const r=new Resvg(page.svg,{background:'white',fitTo:{mode:'zoom',value:1024/Math.max(page.width,page.height)},font:{fontBuffers:[font],defaultFontFamily:'DejaVu Sans'}});try{const im=r.render();try{return{png:new Uint8Array(im.asPng()),pixels:new Uint8Array(im.pixels),width:im.width,height:im.height}}finally{im.free()}}finally{r.free()}}

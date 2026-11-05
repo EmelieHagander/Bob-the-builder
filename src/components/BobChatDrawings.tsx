@@ -7,6 +7,7 @@ import { Modal } from './Modal'
 import { ZoomableImage } from './ZoomableImage'
 import { SolutionConcept } from './SolutionConcept'
 import { conceptSvg } from '../../supabase/functions/_shared/solution-concept'
+import {bobChatViews} from '../lib/bobChatViews'
 
 function usePreviewVisibility(){
  const ref=useRef<HTMLDivElement>(null),[visible,setVisible]=useState(false)
@@ -66,15 +67,6 @@ function SavedDrawing({projectId,id,revision,view:requestedView}:{projectId:stri
 }
 /** Transcript stores exact receipts, never picture bytes or generated URL text. */
 export function BobChatDrawings({projectId,receipts,sources}:{projectId:string;receipts?:ProjectWriteReceipt[];sources?:ProjectSource[]}){
- const refs=new Map<string,ProjectWriteReceipt>()
- for(const receipt of receipts??[])if(receipt.projectId===projectId&&receipt.dataset==='artifacts'&&receipt.operation!=='deleted'&&Number.isSafeInteger(receipt.revision)&&Number(receipt.revision)>0)
-  refs.set(`${receipt.recordId}:${receipt.revision}`,receipt)
- const concepts=new Map<string,ProjectWriteReceipt>()
- for(const receipt of receipts??[])if(receipt.projectId===projectId&&receipt.dataset==='solutions'&&receipt.operation!=='deleted'&&Number.isSafeInteger(receipt.revision)&&Number(receipt.revision)>0){
-  if(Number(receipt.revision)>Number(concepts.get(receipt.recordId)?.revision??0))concepts.set(receipt.recordId,receipt)
- }
- const seen=new Map<string,ProjectSource>()
- for(const source of sources??[])if(source.projectId===projectId&&source.visual)seen.set(source.visual.ref,source)
- for(const source of seen.values())if(source.visual?.kind==='concept')concepts.delete(source.recordId);else refs.delete(`${source.recordId}:${source.visual?.revision}`)
- return <>{[...seen.values()].map(s=>s.visual!.kind==='concept'?<SavedConcept key={s.visual!.ref} projectId={projectId} id={s.recordId} revision={s.visual!.revision} view={s.visual!.view}/>:<SavedDrawing key={s.visual!.ref} projectId={projectId} id={s.recordId} revision={s.visual!.revision} view={s.visual!.view}/>)}{[...concepts.values()].map(r=><SavedConcept key={`${projectId}:solution:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!}/>)}{[...refs.values()].map(r=><SavedDrawing key={`${projectId}:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!}/>)}</>
+ const {seen,concepts,drawings}=bobChatViews(projectId,receipts,sources)
+ return <>{seen.map(s=>s.visual!.kind==='concept'?<SavedConcept key={s.visual!.ref} projectId={projectId} id={s.recordId} revision={s.visual!.revision} view={s.visual!.view}/>:<SavedDrawing key={s.visual!.ref} projectId={projectId} id={s.recordId} revision={s.visual!.revision} view={s.visual!.view}/>)}{concepts.map(r=><SavedConcept key={`${projectId}:solution:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!}/>)}{drawings.map(r=><SavedDrawing key={`${projectId}:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!}/>)}</>
 }

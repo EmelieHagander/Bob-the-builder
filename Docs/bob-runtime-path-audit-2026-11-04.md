@@ -1145,3 +1145,79 @@ Post-rollout check at 21:03:35 UTC found zero active Bob jobs. No SQL/catalog,
 project content, preview service or frontend change was made; no paid probe,
 Pages workflow or full CI was started. Code-path tests and installation are
 verified; an actual ordinary run's image counts and dedup effect remain pending.
+
+### Measured owner run — entry, 2026-11-05, 21:28:44–21:30:14 UTC
+
+Job `27705c1c-cd1f-40b1-9af1-b01f633b7775` completed in about 90 seconds:
+8 successful model calls, 7 tool calls, no uncertain resends, final delivery
+`partial`, no project writes. Main input grew **45,319 → 46,452 → 63,676 →
+67,948 → 70,137 → 82,309** tokens. Scoped function logs prove activation and
+deduplication: the last request was **before 5 / after 3 / removed 2 /
+unique_private 3 / other 0 / dedup_version 1**. Earlier requests had zero,
+then three unique image parts. This proves removal of two exact copies in that
+request, not a measured token/CPU saving or a solution to total growth.
+
+Visual evidence now records the exact **Solution 21 front**. Bob nevertheless
+said the picture could only reach him and substituted ASCII. That capability
+claim is wrong: the shipped component already renders read-only `source.visual`
+previews. We did not directly observe the owner's rendered final reply, so
+missing pixels in that particular UI are not independently established.
+Source inspection found a separate concrete render bug behind earlier writes:
+an opened Solution 20 view removed a just-saved Solution 21 receipt preview
+solely because they shared a record ID. Only an exact same-revision viewed
+source should replace that receipt's default preview.
+
+<a id="stage-context-increment-2026-11-05"></a>
+## Next increment — exact chat previews and explicit stage release, 2026-11-05
+
+Owner authorized both fixes. Safety branch
+`save/bob-before-stage-context-2026-11-05` retains published source
+`a53f5ccb3662dce505486984e6499c7e09c7cf89`; the original pre-dedup safety
+branch above is also retained. New main complete-request identities use a
+published `stage_context_version: 1` pin; old manifests/jobs omit it.
+
+- `open_project_item` supplies immutable `context_ref` and conditional
+  `chat_preview` information in the main chat. Actual delivery remains the
+  prerequisite for source evidence. Worker-private images make no main-chat
+  promise. The view selector replaces a written receipt preview only when a
+  viewed source has the exact same revision. Older comparison views therefore
+  cannot hide newly saved work; read-only exact views and drawing revisions
+  retain their existing rendering and authority checks.
+- `advance_work_stage` replaces a bounded, unverified note when a visual/work
+  question is settled. It validates finding refs against this chain's observed
+  calls or exact active image inputs. Selected immutable pixels stay; other
+  registered private pixels leave. Public/unknown identities stay. Original
+  seed text and subsequent user constraints remain verbatim. Earlier assistant
+  exchanges/tool payloads leave as whole native exchanges; a fresh matched
+  handoff call/output pair remains, with the refreshed callable surface.
+- The exact operation archive survives across stage boundaries and JSONB
+  restoration. Reopening a retired picture uses the canonical authorized image
+  reader. Backend write receipts, failed-worker stops, unfinished candidates,
+  source/access validation and spending/idempotency policies are not reset.
+  Stable note serialization keeps the next journal fingerprint exact after
+  JSONB key reordering. Content-free stage logs contain image counts only.
+
+**Verification:** 122 focused tests pass, including 40 unique-image stage
+transitions through checkpoints, old pins/mismatched restore, explicit archive
+recall, later reopening, exact media versions, invalid/invented refs, mixed
+handoff/write batches, live pre-dispatch denial, native pairing/Claude wire,
+JSONB-style fingerprints, preview capability and old/new view selection.
+Both Edge type checks, app build, PWA checks and publication generation parity
+pass. The actual live catalog activation/validation was exercised inside a
+transaction and rolled back; readback retained contract v24 and no stage-tool
+row. The final generated publication is checked again before actual activation.
+No paid model/CAD probe or full CI was started.
+
+The browser fixture now covers an exact read-only front preview after reload;
+its TypeScript fixture import loads. No local Chromium is installed, so that
+browser scenario has not run here. The pure preview-selection regression tests
+and build pass; owner/browser rendering and ordinary model choice of correct
+stage boundaries remain acceptance work. The initial seed, directory and
+protected user text can still be large, and the private exact archive remains
+once per turn; this does not close all C1–C4 or claim constant memory/CPU.
+
+Hosted installation/activation is not yet claimed. Deploy matching runtimes and
+the frontend before catalog activation, then verify the complete file closures,
+JWT policies, four changed catalog heads, and the served frontend bundle.
+Rollback first disables the new contract, then drains pinned stage jobs before
+restoring older runtime code. No canonical project data is deleted by this fix.
