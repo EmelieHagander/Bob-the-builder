@@ -9,6 +9,7 @@ import { ProjectImages } from './ProjectImages'
 import { ProjectStart } from './ProjectStart'
 import { TaskModal } from './editors'
 import { StepDrawings } from './StepDrawings'
+import { GuidePager } from './GuidePager'
 import { DrawingRequests } from './DrawingRequests'
 
 const taskState = { todo: 'To do', doing: 'In progress', blocked: 'Blocked', done: 'Done' }
@@ -33,21 +34,33 @@ function CurrentStep({ work, step, people, onAdd }: {
   const [imagesOpen, setImagesOpen] = useState(false)
   const area = work.areas.find(item => item.id === step.area_id)
   const isFocus = step.id === work.focus_step_id
-  const nextNeed = step.requirements.find(r => !['satisfied','waived','not_applicable'].includes(r.status.state))
+  const archivedAreas = new Set(work.areas.filter(a => a.archived_at).map(a => a.id))
+  const sequence = work.steps.filter(s => area?.archived_at ? s.area_id === area.id : !s.area_id || !archivedAreas.has(s.area_id))
+  const index = sequence.findIndex(s => s.id === step.id)
+  const page = (s?: WorkStep) => s ? `/project?step=${encodeURIComponent(s.id)}` : undefined
+  const nextTask = step.tasks.find(t => t.status === 'doing') ?? step.tasks.find(t => t.status === 'todo')
+  const pending = step.requirements.filter(r => !['satisfied','waived','not_applicable'].includes(r.status.state))
+  const need = pending.find(r => r.responsible_kind === 'person') ?? (step.state === 'blocked' ? pending[0] : undefined)
   return <article id={`step-${step.id}`} className="current-plan-step">
-    <div className="plan-step-label">{isFocus ? 'Bob’s focus' : 'Viewing step'} · Step {step.position} of {work.steps.length}</div>
+    <GuidePager label="Browse plan steps" previous={page(sequence[index-1])} next={page(sequence[index+1])}><strong>Step {index+1} of {sequence.length}</strong>
+      <span className="step-responsibility" aria-label={`Responsible: ${responsible(step.responsible_kind, step.responsible_person_id, people)}`}>
+        {step.responsible_kind === 'bob' ? 'Bob’s step' : responsible(step.responsible_kind, step.responsible_person_id, people)}</span>
+    </GuidePager>
     <h2>{step.title}</h2>
-    <p className="step-responsibility">Responsible: <strong>{responsible(step.responsible_kind, step.responsible_person_id, people)}</strong> · {stepState[step.state]}</p>
-    {step.goal && <p className="step-goal">{step.goal}</p>}
-    {nextNeed && <p className="step-need"><strong>{nextNeed.title}</strong><br />
-      {nextNeed.status.state.replace(/_/g, ' ')}{nextNeed.responsible_kind && ' · ' + responsible(nextNeed.responsible_kind, nextNeed.responsible_person_id, people)}</p>}
-    <StepDrawings projectId={work.project_id} stepId={step.id} returnLabel={step.title} returnKey={`step:${step.id}`} />
-    <div className="foundation-actions">
-      <button className="btn" onClick={openBobForCurrentSurface}>Ask Bob about this step</button>
-      {!isFocus && work.focus_step_id && <Link className="btn" to="/project">Back to Bob’s focus</Link>}
-    </div>
+    {step.state === 'blocked' && <p className="guide-caution" role="status">Blocked{need && ` · ${need.title}`}</p>}
+    {step.state === 'completed' && <p className="foundation-hint">Completed</p>}
+    {need && step.state !== 'blocked' && <p className="guide-need">{need.title}</p>}
+    <StepDrawings guide projectId={work.project_id} stepId={step.id} returnLabel={step.title} returnKey={`step:${step.id}`} />
+    {nextTask && !area?.archived_at && step.state !== 'completed' && <Link className="guide-task" to={`/tasks/${encodeURIComponent(nextTask.id)}`}>
+      <span><small>{nextTask.status === 'doing' ? 'In progress' : 'Task'}</small>{nextTask.name}</span><span aria-hidden="true">→</span>
+    </Link>}
+    {!nextTask && !need && !area?.archived_at && step.state !== 'completed' && <button className="guide-help" onClick={() => openBobWithDraft('Explain this step in plain words. What, if anything, do you need from me?')}>Explain this step</button>}
+    {!isFocus && work.focus_step_id && <Link className="guide-return" to="/project">Back to Bob’s focus</Link>}
     <details id={`work-details-${step.id}`} className="step-support">
-      <summary>Step details{step.tasks.length > 0 && ` · ${step.tasks.length} tasks`}</summary>
+      <summary>Step details</summary>
+      {step.goal && <p>{step.goal}</p>}
+      <p className="foundation-hint">{stepState[step.state]}{isFocus && ' · Bob’s focus'}</p>
+      <button className="btn" onClick={openBobForCurrentSurface}>Ask Bob about this step</button>
       {area && <p className="foundation-hint"><Link to={`/areas/${area.slug}`}>{area.name}</Link>{area.archived_at && ' · Archived area'}</p>}
       {!!step.tasks.length && <TaskLinks tasks={step.tasks} people={people} />}
       {!area?.archived_at && <button className="btn" onClick={onAdd}>Add task</button>}
@@ -55,10 +68,10 @@ function CurrentStep({ work, step, people, onAdd }: {
         <ul>{step.requirements.map(r => <li key={r.id}>{r.title} · {r.status.state.replace(/_/g, ' ')}</li>)}</ul>
       </details>}
       {!!step.related_tasks.length && <details id={`related-${step.id}`}><summary>Related work</summary><TaskLinks tasks={step.related_tasks} people={people} /></details>}
-    </details>
-    <details id={`work-images-${step.id}`} className="step-support" onToggle={event => setImagesOpen(event.currentTarget.open)}>
-      <summary>Step images</summary>
-      {imagesOpen && <ProjectImages projectId={work.project_id} target={{kind:'plan_step',id:step.id}} title="Step images" />}
+      <details id={`work-images-${step.id}`} className="step-support" onToggle={event => setImagesOpen(event.currentTarget.open)}>
+        <summary>Step images</summary>
+        {imagesOpen && <ProjectImages projectId={work.project_id} target={{kind:'plan_step',id:step.id}} title="Step images" />}
+      </details>
     </details>
   </article>
 }

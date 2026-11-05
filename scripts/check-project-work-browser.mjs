@@ -62,6 +62,14 @@ try{
    if(path==='/rest/v1/projects')return respond(req.headers().accept?.includes('object+json')?project:[project])
    if(path==='/rest/v1/account')return respond({id:'account',name:'Work fixture',owner_name:'',email:''})
    if(path==='/rest/v1/project_plan_revisions')return respond(pendingPlan?[{summary:'Review the proposed sequence'}]:[])
+   if(path==='/rest/v1/current_drawing_overview'&&showDocuments&&url.searchParams.has('id')){
+    assert.equal(url.searchParams.get('id'),'eq.drawing-id')
+    assert.equal(url.searchParams.get('revision'),'eq.3')
+    const sheet='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 200" data-page-height="100" data-page-count="2"><defs><g id="ModelGeometry"><path d="M0 0 L20 0 L20 10 Z"/></g></defs><g id="DrawingPage1"><g id="Geometry" transform="translate(20 25)"><use href="#ModelGeometry"/></g><text>Sheet notes</text></g><g id="DrawingPage2" transform="translate(0 100)"><text>Second sheet</text></g></svg>'
+    return respond([{id:'drawing-id',project_id:'P',revision:3,title:'Same title',status:'concept',source_state:'changed',preview_svg:Buffer.from(sheet).toString('base64')}])
+   }
+   if(path==='/rest/v1/current_drawing_steps'&&showDocuments&&!offlineLinks)return respond([
+    {artifact_id:'drawing-id',artifact_revision:3,step_id:grouped.id,title:'Same title',status:'concept',source_state:'changed',source_reasons:['target_changed']}])
    if(path==='/rest/v1/current_drawing_overview'&&showDocuments)return respond([
     {id:'drawing-id',project_id:'P',revision:3,title:'Same title',status:'concept',steps:[],source_state:'changed',source_reasons:['target_changed']},
     {id:'model-id',project_id:'P',revision:20,title:'Same title',status:'concept',steps:[],source_state:'current',source_reasons:[]},
@@ -111,6 +119,7 @@ try{
   assert.equal(await projectDescription.getAttribute('open'),null,'Long saved notes do not push the Plan off the opening screen')
   const planBox=await plan.boundingBox()
   assert(planBox && planBox.y<520,`Plan is easy to reach at ${width}px: ${JSON.stringify(planBox)}`)
+  await page.locator('#project-information > summary').click()
   await page.locator('details.planning-tools > summary').click()
   const shortcuts=page.getByRole('navigation',{name:'Project tools',exact:true})
   assert.equal(await shortcuts.getByRole('link').count(),4,'All planning shortcuts remain available in Build mode')
@@ -124,7 +133,12 @@ try{
   await projectDescription.getByText('Project description',{exact:true}).click()
   assert.equal(await projectDescription.locator('.instruction-text').textContent(),description,'All saved notes and dimensions remain available verbatim')
   await projectDescription.getByText('Project description',{exact:true}).click()
-  await plan.getByText('Bob’s focus · Step 1 of 2',{exact:true}).waitFor()
+  await plan.getByText('Step 2 of 2',{exact:true}).waitFor()
+  await plan.getByRole('navigation',{name:'Browse plan steps'}).getByRole('link',{name:'Previous',exact:true}).click()
+  await plan.getByRole('heading',{name:'Drawers',exact:true}).waitFor()
+  await plan.getByRole('navigation',{name:'Browse plan steps'}).getByRole('link',{name:'Next',exact:true}).click()
+  await plan.getByRole('heading',{name:'Floor',exact:true}).waitFor()
+  assert.equal(await plan.locator('.step-goal:visible').count(),0)
   await plan.getByText('Full plan · 2 steps',{exact:true}).click()
   await plan.getByText('Tasks to organise · 1',{exact:true}).click()
   await plan.getByRole('link',{name:'Inspect existing floor',exact:true}).waitFor()
@@ -146,7 +160,7 @@ try{
   await page.reload()
   await drawers.locator('.step-support > summary').first().click()
   await drawers.getByRole('link',{name:'Assemble drawers',exact:true}).waitFor()
-  await drawers.getByText('Step details · 2 tasks',{exact:true}).waitFor()
+  await drawers.getByText('Step details',{exact:true}).waitFor()
   assert(reads>=4)
   await drawers.getByRole('link',{name:'Back to Bob’s focus',exact:true}).click()
   const floor=plan.locator('#step-'+grouped.id)
@@ -169,8 +183,10 @@ try{
   requestsVisible=true
   await page.goto(base+'#/project');await page.reload()
   const requests=page.getByRole('region',{name:'Drawing requests',exact:true})
+  const openRequest=async () => {const request=requests.locator('.request-item').first();await request.waitFor(); if(!await request.evaluate(e=>e.open)) await request.locator(':scope > summary').click()}
+  await openRequest()
   await requests.getByRole('heading',{name:'Waiting for information',exact:true}).waitFor()
-  await requests.getByText('Record panel width',{exact:true}).waitFor()
+  await requests.locator('.drawing-request-gaps').getByText('Record panel width',{exact:true}).waitFor()
   await requests.getByText('Responsible: Bob',{exact:true}).waitFor()
   await requests.getByRole('link',{name:'Open linked task',exact:true}).waitFor()
   const requestDestination=requests.locator('.drawing-request-card > p').getByRole('link',{name:root.title,exact:true})
@@ -181,6 +197,7 @@ try{
   await page.getByRole('region',{name:'Project plan',exact:true}).waitFor()
   // Drawing work has no budget (owner decision 2026-10-18): even an old exhausted
   // allocation shows only its cost log, with no top-up and no limit message.
+  await openRequest()
   await requests.getByText('Run details',{exact:true}).click()
   await requests.getByText('24 calls · $0.35',{exact:true}).waitFor()
   assert.equal(await requests.getByRole('button',{name:'Add request budget',exact:true}).count(),0,'No budget top-up exists')
@@ -189,6 +206,7 @@ try{
   await page.screenshot({animations:'disabled',path:`test-results/drawing-requests-${width}.png`,fullPage:true})
   requestWork.budget={...requestWork.budget,unlimited_work:true,calls:64,spent_usd:14.50}
   await page.reload()
+  await openRequest()
   await requests.getByText('Run details',{exact:true}).click()
   await requests.getByText('64 calls · $14.50',{exact:true}).waitFor()
   assert.equal(await requests.getByText('The request has reached its cost or call limit.',{exact:true}).count(),0,'Historical totals do not imply a current work limit')
@@ -233,7 +251,8 @@ try{
   await drawer.getByRole('button',{name:'Close Ask bob',exact:true}).click()
   await page.goto(base+'#/tasks/cut')
   await page.getByRole('heading',{name:'Cut panels',exact:true}).waitFor()
-  await page.getByRole('region',{name:'Drawing requests',exact:true}).getByRole('button',{name:'Cancel request',exact:true}).click()
+  await openRequest()
+  await requests.getByRole('button',{name:'Cancel request',exact:true}).click()
   await page.getByText('Past drawing requests · 1',{exact:true}).waitFor();assert.equal(cancels,1)
   await page.reload();await page.getByText('Past drawing requests · 1',{exact:true}).click()
   await page.locator('.past-request > summary').click()
@@ -242,7 +261,7 @@ try{
   project.phase='planning';grouped.state='planned';planOnly=true;offlineLinks=true
   await page.goto(base+'#/project');await page.reload()
   await plan.getByRole('heading',{name:'Floor',exact:true}).waitFor()
-  await plan.getByText('Responsible: Bob',{exact:false}).waitFor()
+  await plan.getByLabel('Responsible: Bob',{exact:true}).waitFor()
   assert.equal(await page.getByRole('heading',{name:'What do you want to build?'}).count(),0)
   assert.equal(await page.getByRole('region',{name:'Planning next steps'}).count(),0)
   await plan.getByRole('alert').getByText('Linked drawings could not be loaded.',{exact:false}).waitFor()
@@ -251,6 +270,7 @@ try{
   await plan.getByRole('alert').waitFor({state:'hidden'})
   await plan.getByText('Full plan · 2 steps',{exact:true}).click()
   await plan.getByRole('link',{name:/Drawers/}).click()
+  await plan.getByText('Step details',{exact:true}).click()
   await plan.getByRole('button',{name:'Ask Bob about this step'}).click()
   await drawer.getByLabel('Bob page context').getByText('Plan Step · Drawers',{exact:true}).waitFor()
   await drawer.getByRole('button',{name:'Close Ask bob'}).click()
@@ -259,6 +279,14 @@ try{
   await plan.getByRole('link',{name:'Back to Bob’s focus'}).click()
   await plan.getByRole('heading',{name:'Floor',exact:true}).waitFor()
   showDocuments=true
+  await page.reload()
+  const figure=plan.locator('.guide-image img')
+  await figure.waitFor()
+  const svg=await figure.evaluate(async img=>{await img.decode();return decodeURIComponent(img.src.slice(img.src.indexOf(',')+1))})
+  assert(svg.includes('ModelGeometry') && !svg.includes('Sheet notes') && !svg.includes('Second sheet'),'Guide uses only the saved vector geometry')
+  assert((await plan.locator('.guide-drawing a').getAttribute('href')).endsWith('drawing=drawing-id&revision=3'))
+  await plan.getByText('Sources changed — review drawing',{exact:true}).waitFor()
+  await page.locator('#project-information > summary').click()
   await page.locator('#project-documents > summary').click()
   const documents=page.getByRole('region',{name:'Project drawings'})
   await documents.getByRole('link',{name:'Open drawing: Same title · v3'}).waitFor()

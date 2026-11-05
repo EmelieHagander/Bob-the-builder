@@ -98,7 +98,8 @@ export async function verifyFactsBrowser(page, base, fixture, width) {
 
   // Project focus comes from the plan; recorded facts remain in the planning tools.
   await page.goto(base+'#/project')
-  await page.locator('.planning-tools > summary').click()
+  await page.locator('#project-information > summary').click()
+    await page.locator('.planning-tools > summary').click()
   await page.getByRole('navigation',{name:'Project tools'}).getByRole('link',{name:'Measurements & existing parts'}).click()
   await page.getByRole('heading', { name: 'Measurements & existing parts', exact: true }).waitFor()
   await page.getByLabel('Show records', { exact: true }).selectOption('missing')

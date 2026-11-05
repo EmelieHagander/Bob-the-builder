@@ -75,9 +75,15 @@ export function DrawingRequests({projectId, taskId, stepId}: {projectId:string; 
   if (!data || (!data.active.length && !data.closed.length)) return null
   const relevant = (w: db.DrawingRequestWork) => !stepId || w.request.scope.step_id === stepId || w.gaps.some(g => g.blocking && g.step_id === stepId)
   const here = data.active.filter(relevant), other = data.active.filter(w => !relevant(w))
-  const card = (w: db.DrawingRequestWork) => <RequestCard key={w.request.id} projectId={projectId} work={w} taskId={taskId} refresh={refresh} />
+  const card = (w: db.DrawingRequestWork) => {
+    const gap = w.gaps.find(g => g.blocking && g.step_id === stepId) ?? w.gaps.find(g => g.blocking)
+    return <details className="request-item" id={`open-request-${w.request.id}`} key={w.request.id}>
+      <summary>{gap?.label || gap?.task_name || drawingRequestStatusLabel(w.request.status)}</summary>
+      <RequestCard projectId={projectId} work={w} taskId={taskId} refresh={refresh} />
+    </details>
+  }
   return <section aria-label="Drawing requests" className="project-requests">
-    {!!here.length && <><h2 className="font-display">Open drawing requests</h2>{here.map(card)}</>}
+    {!!here.length && <><h2 className="guide-request-heading">Drawing requests</h2>{here.map(card)}</>}
     {!!other.length && <details className="request-history"><summary>Open requests in other steps · {other.length}</summary>{other.map(card)}</details>}
     {!!data.closed.length && <details className="request-history" id="past-drawing-requests"><summary>Past drawing requests · {data.closed.length}</summary>
       {data.closed.map(r => <PastRequest key={r.id} projectId={projectId} request={r} taskId={taskId} refresh={refresh} />)}

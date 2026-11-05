@@ -12,7 +12,8 @@ export function drawingUrl(drawing: { id: string; revision: number; area_id?: st
   return `/artifacts?drawing=${encodeURIComponent(drawing.id)}&revision=${drawing.revision}${drawing.area_id ? `&area=${encodeURIComponent(drawing.area_id)}` : ''}`
 }
 
-function Preview({ drawing }: { drawing: db.ProjectDrawingCard }) {
+type PreviewData = Pick<db.ProjectDrawingCard, 'id' | 'project_id' | 'revision' | 'title' | 'status' | 'preview_svg' | 'parametric_recipe' | 'source_media_id'>
+export function DrawingPreview({ drawing, compact = false }: { drawing: PreviewData; compact?: boolean }) {
   const data = drawing
   let src = data.preview_svg ? `data:image/svg+xml;base64,${data.preview_svg}` : null
   if (!src && data.parametric_recipe) {
@@ -24,7 +25,7 @@ function Preview({ drawing }: { drawing: db.ProjectDrawingCard }) {
   }
   if (src) return <img src={src} alt={`${drawing.title} — drawing preview`} loading="lazy" />
   if (data.source_media_id) return <StoredImage projectId={drawing.project_id} image={{ id: data.source_media_id, title: drawing.title }} allowRetry={false} />
-  return <p className="foundation-hint">Open drawing for its views and project evidence.</p>
+  return compact ? null : <p className="foundation-hint">Open drawing for its views and project evidence.</p>
 }
 
 function DrawingCard({ drawing }: { drawing: db.ProjectDrawingCard }) {
@@ -40,7 +41,7 @@ function DrawingCard({ drawing }: { drawing: db.ProjectDrawingCard }) {
   return <article className="project-drawing-card" ref={ref}>
     <DrawingLink projectId={drawing.project_id} returnLabel="Project plan" returnKey={`project:${drawing.id}`} to={drawingUrl(drawing)} className="project-drawing-open" aria-label={`Open ${drawing.isConstruction ? 'model' : 'drawing'}: ${drawing.title} · v${drawing.revision}`}>
       <p className="document-kind">{drawing.isConstruction ? 'Construction model' : 'Drawing'}</p>
-      {!drawing.isConstruction && <div className="project-drawing-preview">{drawing.source_state === 'unavailable' ? <p>Preview unavailable until sources can be checked.</p> : visible && <Preview drawing={drawing} />}</div>}
+      {!drawing.isConstruction && <div className="project-drawing-preview">{drawing.source_state === 'unavailable' ? <p>Preview unavailable until sources can be checked.</p> : visible && <DrawingPreview drawing={drawing} />}</div>}
       <h3>{drawing.title}</h3>
       <p className="foundation-hint">{statusLabel[drawing.status]} · v{drawing.revision}</p>
     </DrawingLink>

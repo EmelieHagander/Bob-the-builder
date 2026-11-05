@@ -108,13 +108,29 @@ Backend rules: [building model](building-model.md#room-dimensions--owner-decisio
 
 ### Compact Project home and phone conversation
 
-The connected project opens the approved plan's exact focus step with its goal,
-responsible party, first outstanding finish criterion and linked drawing.
+The connected project opens one approved step at a time. Its heading, owner,
+a person’s outstanding requirement or blocker, and a linked drawing or task are
+the working view. Previous/Next browse the ordered plan without changing its
+focus or recording completion. Goals, editing and project-wide background are
+available under Step details and Project information.
 The full plan preserves area groups, parallel steps, archived areas and tasks
 awaiting organisation. Browsing a step and following its deep link publish
 the same step context to Ask Bob. Browsing never changes the stored focus.
 A failed drawing read can be retried beside the step while the plan stays usable.
 Without a focus, the available steps can be opened from the list.
+
+An exact linked drawing opens the full saved version. For a CAD sheet with
+the worker’s labelled geometry, the guide fits that geometry to the phone.
+Changed or unavailable sources retain an inline warning. Other saved drawings
+use their sheet preview. An image can illustrate a step only when its attachment
+names that step. A missing illustration leaves the working view text-only.
+
+Task detail opens the first unfinished instruction, or the specific instruction
+in its URL. It keeps the full authored instruction, its linked image, required
+check and recorded completion together. Paging is read-only and marking a
+check is explicit. The shared task tools and recorded task-wide scope remain
+reachable under Task details. The focused browser fixture runs with
+`FOUNDATION_FOCUS=step-guide`.
 
 Project documents open on demand and distinguish construction sources from
 rendered drawings. Source-model links use the saved model revision. Open

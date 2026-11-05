@@ -2242,6 +2242,19 @@ export interface ProjectDrawingCard extends DrawingSourceStatus {
  // Read with the card: the source check is the expensive part, so run it once.
  preview_svg:string|null; parametric_recipe:unknown; source_media_id:string|null;
 }
+export async function getStepDrawingPreview(projectId: string, id: string, revision: number) {
+  const guard = captureFileContext(projectId)
+  guard()
+  if (!db) return null
+  const result = await db.from('current_drawing_overview')
+    .select('id,project_id,revision,title,status,source_state,preview_svg,parametric_recipe,source_media_id')
+    .eq('project_id', projectId).eq('id', id).eq('revision', revision).maybeSingle()
+  guard()
+  if (result.error) throw toDataError(result.error)
+  const row = result.data
+  return row?.project_id === projectId && row.id === id && row.revision === revision ? row : null
+}
+
 export async function getProjectDrawingCards(projectId:string):Promise<ProjectDrawingCard[]> {
  const guard=captureFileContext(projectId);guard()
  if(!db)return []

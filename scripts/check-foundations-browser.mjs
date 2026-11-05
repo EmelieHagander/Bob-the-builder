@@ -209,6 +209,10 @@ try {
     activePage = page
     page.setDefaultTimeout(15000)
     page.on('pageerror', error => errors.push(error.message))
+    const expand = async (selector) => {
+      const panel = page.locator(selector)
+      if (!await panel.evaluate(el => el.open)) await panel.locator(':scope > summary').click()
+    }
     await page.goto(base + '#/signin')
     await page.getByPlaceholder('you@example.se').fill(user.email)
     await page.locator('input[type="password"]').fill('fixture-password')
@@ -223,8 +227,10 @@ try {
         continue
       }
     }
-    await verifyModelFeedbackBrowser(page, base, solutions, focusedTurns, viewport.width)
-    await verifyConstructionModelBrowser(page, base, constructionModel, artifacts, solutions, focusedTurns, viewport.width)
+    if (process.env.FOUNDATION_FOCUS !== 'step-guide') {
+      await verifyModelFeedbackBrowser(page, base, solutions, focusedTurns, viewport.width)
+      await verifyConstructionModelBrowser(page, base, constructionModel, artifacts, solutions, focusedTurns, viewport.width)
+    }
     if (['model-feedback', 'construction-model'].includes(process.env.FOUNDATION_FOCUS)) {
       await verifyConceptsBrowser(page, base, solutions, viewport.width)
       assert.deepEqual(errors, [])
@@ -238,6 +244,7 @@ try {
       return canvas.toDataURL('image/png').split(',')[1]
     }), 'base64')
     const uploadImage = async title => {
+      await expand('#project-information')
       const photos = page.locator('.project-photo-details')
       if (await photos.getAttribute('open') === null) await photos.locator('summary').first().click()
       await page.getByRole('region', { name: 'Project images', exact: true }).getByRole('button', { name: 'Add image', exact: true }).click()
@@ -253,6 +260,7 @@ try {
     await page.getByRole('button',{name:'Unpin thumbnail',exact:true}).waitFor()
     assert(pinnedThumbnail,'Thumbnail choice is saved through the project command')
     await page.reload()
+    await expand('#project-information')
     await page.locator('.project-photo-details > summary').click()
     await page.getByRole('button',{name:'Unpin thumbnail',exact:true}).waitFor()
     const headerThumb=page.locator('.project-header-identity .ui-thumbnail img')
@@ -268,6 +276,7 @@ try {
     await original.getByRole('button', { name: 'Close', exact: true }).click()
     await page.goto(base + '#/areas/entry')
     await page.getByRole('link', { name: 'Prepare opening', exact: true }).click()
+    await expand('#task-options')
     await page.getByRole('button', { name: 'Edit instructions', exact: true }).click()
     const instructions = page.getByRole('dialog', { name: 'Task instructions', exact: true })
     await instructions.getByLabel('Scope and instructions').fill('Keep the original opening visible until the checks are complete.')
@@ -282,28 +291,36 @@ try {
       await modal.getByRole('button', { name: 'Save instruction', exact: true }).click()
       await modal.waitFor({ state: 'hidden' })
     }
+    const pager = page.getByRole('navigation',{name:'Browse instructions'})
+    await pager.getByRole('link',{name:'Next',exact:true}).click()
+    const check = page.locator('.task-step').filter({ hasText: 'Check opening' })
+    await check.getByText('Instruction details',{exact:true}).click()
     await page.getByRole('button', { name: 'Move Check opening up', exact: true }).click()
     await page.waitForFunction(() => document.querySelector('.task-step')?.textContent.includes('Check opening'))
     await page.getByLabel('Task status', { exact: true }).selectOption('done')
     await page.getByRole('alert').filter({ hasText: 'Complete required checks' }).waitFor()
-    const check = page.locator('.task-step').filter({ hasText: 'Check opening' })
-    await check.locator('.step-completion').click()
+    await check.getByRole('checkbox',{name:'Completed',exact:true}).click()
     await check.getByText(/Completed /).waitFor()
+    await pager.getByRole('link',{name:'Next',exact:true}).click()
     const work = page.locator('.task-step').filter({ hasText: 'Remove trim' })
-    await work.locator('summary').click()
+    await work.getByText('Instruction details',{exact:true}).click()
+    await work.getByText('Instruction images',{exact:true}).click()
     await work.getByRole('button', { name: 'Attach existing', exact: true }).click()
     const chooser = page.getByRole('dialog', { name: 'Choose a project image', exact: true })
     await chooser.getByRole('button', { name: 'Use image', exact: true }).click()
     await chooser.waitFor({ state: 'hidden' })
-    await work.getByRole('img', { name: 'Entry before work', exact: true }).waitFor()
+    await work.getByRole('img', { name:'Entry before work',exact:true }).first().waitFor()
     const statusSaved = page.waitForResponse(response => response.url().includes('/rest/v1/tasks?') && response.request().method() === 'PATCH')
     await page.getByLabel('Task status', { exact: true }).selectOption('done')
     await statusSaved
     await page.reload()
+    await expand('#task-options')
+    await pager.getByRole('link',{name:'Previous',exact:true}).click()
     await page.getByText('Keep the original opening visible until the checks are complete.', { exact: true }).waitFor()
     assert.equal(await page.getByLabel('Task status', { exact: true }).inputValue(), 'done')
     assert(await check.getByRole('checkbox').isChecked())
     assert((await page.locator('.task-step').first().textContent()).includes('Check opening'))
+    await check.getByText('Instruction details',{exact:true}).click()
     await check.getByRole('button', { name: 'Ask Bob about this instruction', exact: true }).click()
     const focusDrawer = page.getByRole('complementary', { name: 'Ask bob for Porch A', exact: true })
     await focusDrawer.getByLabel('Bob page context').getByText('Instruction · Check opening', { exact: true }).waitFor()
@@ -322,14 +339,20 @@ try {
     assert.deepEqual(focusedTurns.at(-1).screen, { surface: 'task', taskId: 'taskA', areaId: 'areaA' })
     await page.keyboard.press('Escape')
     await focusDrawer.waitFor({ state: 'hidden' })
-    await work.locator('summary').click()
-    await work.getByRole('img', { name: 'Entry before work', exact: true }).waitFor()
+    await pager.getByRole('link',{name:'Next',exact:true}).click()
+    await work.getByRole('img', { name:'Entry before work',exact:true }).first().waitFor()
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Task/media layout must fit the viewport')
     for (const button of await work.getByRole('button').all()) {
       const box = await button.boundingBox()
       assert(!box || (box.width >= 44 && box.height >= 44), 'Task/image actions need 44px targets')
     }
     await page.screenshot({animations:'disabled', path: 'test-results/foundations-' + viewport.width + '.png', fullPage: true })
+    if (process.env.FOUNDATION_FOCUS === 'step-guide') {
+      assert.deepEqual(errors, [])
+      console.log(`Instruction guide at ${viewport.width}px: next, previous, exact images, check, reorder, Ask Bob and reload`)
+      await context.close()
+      continue
+    }
     await verifyFactsBrowser(page, base, facts, viewport.width)
     await verifySolutionsBrowser(page, base, solutions, facts, viewport.width)
     await verifyArtifactsBrowser(page, base, artifacts, facts, solutions, viewport.width)
@@ -487,6 +510,7 @@ try {
     assert(headerBox&&headerBox.y>=0&&headerBox.y+headerBox.height<viewport.height,'Drawings stays in the opening viewport with 10 Steps and 60 Tasks')
     const drawings=page.getByRole('region',{name:'Project drawings',exact:true})
     const openDocuments=async () => {
+      await expand('#project-information')
       const disclosure=page.locator('#project-documents')
       await disclosure.waitFor()
       if(!await disclosure.evaluate(el=>el.open)) await disclosure.locator('summary').first().click()
@@ -512,6 +536,7 @@ try {
     await openDocuments()
     await drawings.getByRole('link',{name:'Assemble the shelf',exact:true}).click()
     const workspace=page.getByRole('region',{name:'Project plan',exact:true})
+    await workspace.getByText('Step details',{exact:true}).click()
     await workspace.getByText('Join the panel to its supports',{exact:true}).waitFor()
     await workspace.locator('.step-support > summary').filter({hasText:'Step images'}).click()
     await workspace.getByRole('region',{name:'Step images',exact:true}).getByText('No images here yet.',{exact:true}).waitFor()
@@ -609,6 +634,7 @@ try {
     await page.getByRole('link', { name: 'Home', exact: true }).click()
     await page.locator('.account-project-row').filter({ hasText: 'Porch B' }).getByRole('button', { name: 'Open project Porch B', exact: true }).click()
     waiting.resolve()
+    await expand('#project-information')
     await page.locator('.project-photo-details > summary').click()
     await page.getByRole('region', { name: 'Project images', exact: true }).getByText('No images here yet.', { exact: true }).waitFor()
     assert.equal(await page.getByRole('img', { name: 'Entry before work', exact: true }).count(), 0)

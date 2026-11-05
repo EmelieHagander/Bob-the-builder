@@ -67,17 +67,17 @@ export function ProjectHome() {
   const startButton = startSize === 'small' && <button className={connected ? 'btn' : 'btn btn-primary'} disabled={starting} onClick={() => void startBuild()}>
     <Icon name="hammer" size={16} /> {starting ? 'Starting…' : 'Start this build'}
   </button>
-  return <div className="page project-home">
+  return <div className={connected ? "page project-home project-home-connected" : "page project-home"}>
     <div className="page-head">
       <div className="project-header-identity">
-        <ProjectThumbnail projectId={project.id} mediaId={thumbnailId} />
+        {thumbnailId && <ProjectThumbnail projectId={project.id} mediaId={thumbnailId} />}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 7 }}>
           <button className="project-phase-control" aria-label={project.phase ? 'Review phase' : 'Set project phase'}
             title={project.phase ? 'Review phase' : 'Set project phase'} onClick={() => setPhaseOpen(true)}>
             <PhasePill phase={project.phase} prefix="Project" /><Icon name="caret-down" size={12} />
           </button>
-          {project.location && <span className="foundation-hint">{project.location}</span>}
+
         </div>
         <h1 className="page-title">{project.name}</h1>
         {!connected && <><ProjectMetadata overview={overview?.[0]} /><p className="page-sub project-area-summary">{areaSummary}</p></>}
@@ -105,6 +105,9 @@ export function ProjectHome() {
       </button>
     </section>}
 
+    <details className="project-reference" id="project-information" open={!connected || undefined}>
+      <summary>Project information</summary>
+    {project.location && <p className="foundation-hint">{project.location}</p>}
     {project.description && <details id="project-description" className="project-description">
       <summary>Project description</summary>
       <p className="instruction-text">{project.description}</p>
@@ -197,6 +200,8 @@ export function ProjectHome() {
         </div>
       </section>}
     </div>
+
+    </details>
 
     {phaseOpen && <PhaseTransitionDialog title="Review Project phase" current={project.phase} onClose={() => setPhaseOpen(false)}
       onSave={async (phase, reason) => { await db.setProjectPhase(phase, reason); setPhaseOpen(false); setVersion(value => value + 1) }} />}
