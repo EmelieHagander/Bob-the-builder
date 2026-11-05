@@ -170,6 +170,8 @@ export interface OpenAIServiceOptions {
   maxOutputTokens?: number;
   /** Explicit per-call ceiling for bounded internal routing. Does not alter app settings. */
   outputTokenLimit?: number;
+  /** Trusted server callback; never sent to the provider or serialized. */
+  onUsageLogged?: (id:string)=>void;
   timeoutMs?: number;
   /** Opt in to durable provider work. Only trusted app servers choose the receiver/context. */
   background?: BackgroundCall;
@@ -232,6 +234,7 @@ export interface OpenAIServiceOptions {
 export interface OpenAIServiceResponse<T = unknown> {
   /** Caller-owned recovery metadata; never provider text or input. */
   priorAttemptUncertain?: boolean;
+  failure?: {code:string;schemaPaths?:string[]};
   success: boolean;
   data: T | null;
   usage: {
@@ -508,7 +511,7 @@ export async function callOpenAIResponses<T = unknown>(
       log: (r) => logAIUsage(aiClient, { app: options.app, module, aiFunction, userId, model: r.model,
         inputTokens: r.inputTokens, cachedInputTokens: r.cachedInputTokens, outputTokens: r.outputTokens,
         reasoningTokens: r.reasoningTokens, totalTokens: r.totalTokens, costUsd: r.costUsd,
-        inputPricePer1m: anthropicModel.input_cost_per_1m_tokens, outputPricePer1m: anthropicModel.output_cost_per_1m_tokens, success: r.success }),
+        inputPricePer1m: anthropicModel.input_cost_per_1m_tokens, outputPricePer1m: anthropicModel.output_cost_per_1m_tokens, success: r.success, errorCode:r.errorCode,latencyMs:r.latencyMs,onId:options.onUsageLogged }),
     });
   }
 
@@ -805,6 +808,7 @@ export async function callOpenAIResponses<T = unknown>(
     /** Everything the usage ledger needs that is constant for this call. */
     const usageBase = {
       background: !!options.background,
+      onId:options.onUsageLogged,
       app: options.app,
       module,
       aiFunction,
@@ -1218,11 +1222,12 @@ async function logAIUsage(
     outputPricePer1m: number;
     success: boolean;
     background?: boolean;
+    errorCode?:string;latencyMs?:number;onId?:(id:string)=>void;
   }
 ): Promise<void> {
   // Durable completions and usage are committed atomically by ai_job_accept.
   if (params.background) return;
-  const { error } = await aiClient.from('ai_usage_events').insert({
+  const insert = aiClient.from('ai_usage_events').insert({
     app: params.app,
     user_id: params.userId || null,
     module: params.module,
@@ -1236,8 +1241,13 @@ async function logAIUsage(
     input_price_per_1m: params.inputPricePer1m,
     output_price_per_1m: params.outputPricePer1m,
     cost_usd: params.costUsd,
-    success: params.success
+    success: params.success,
+    ...(params.errorCode?{error_code:params.errorCode}:{}),
+    ...(Number.isFinite(params.latencyMs)?{latency_ms:Math.round(params.latencyMs!)}:{})
   });
+  const result = params.onId ? await insert.select('id').single() : await insert;
+  const {error}=result;
+  if(!error&&params.onId){const id=String((result as any).data?.id??'');if(/^\d{1,30}$/.test(id))params.onId(id)}
   if (error) console.error(`[OpenAI Service] Usage log failed: ${error.message}`);
 }
 

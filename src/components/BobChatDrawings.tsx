@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import * as db from '../data/database'
-import type { ProjectWriteReceipt } from '../data/provenance'
+import type { ProjectWriteReceipt, ProjectSource } from '../data/provenance'
 import { useAsync, useProjectVersion } from './ui'
 import { DrawingSourceNotice } from './DrawingSourceNotice'
 import { Modal } from './Modal'
@@ -18,13 +18,13 @@ function usePreviewVisibility(){
  },[])
  return {ref,visible}
 }
-function SavedConcept({projectId,id,revision}:{projectId:string;id:string;revision:number}){
+function SavedConcept({projectId,id,revision,view:requestedView}:{projectId:string;id:string;revision:number;view?:string}){
  const {ref,visible}=usePreviewVisibility(),[retry,setRetry]=useState(0),[open,setOpen]=useState(false),[imageFailed,setImageFailed]=useState(false)
  const version=useProjectVersion()
- const {data,error,loading}=useAsync(()=>visible?db.getSolutionChatPreview(projectId,id,revision):Promise.resolve(null),[projectId,id,revision,visible,version,retry])
+ const {data,error,loading}=useAsync(()=>visible?db.getSolutionChatPreview(projectId,id,revision):Promise.resolve(null),[projectId,id,revision,requestedView,visible,version,retry])
  useEffect(()=>setImageFailed(false),[data,retry])
  const current=data?.projectId===projectId&&data.id===id&&data.revision===revision?data:null
- const intent=current?.intent,view=intent?.model?.views[0]
+ const intent=current?.intent,view=requestedView?intent?.model?.views.find(v=>v.id===requestedView):intent?.model?.views[0]
  const label=current?`${current.title} · v${revision}`:`Saved concept · v${revision}`
  const src=intent&&view?`data:image/svg+xml;charset=utf-8,${encodeURIComponent(conceptSvg(intent,view.id))}`:null
  return <div ref={ref} className="bob-chat-drawing">
@@ -39,14 +39,14 @@ function SavedConcept({projectId,id,revision}:{projectId:string;id:string;revisi
   {open&&current&&intent&&src&&!loading&&!error&&!imageFailed&&<Modal title={label} layer={100} wide onClose={()=>setOpen(false)}>
    {current.latestRevision!==revision&&<p className="solution-attention">Historical revision. The current solution is v{current.latestRevision}.</p>}
    {(current.archived||current.currentlyArchived)&&<p className="solution-attention">This solution is archived.</p>}
-   <SolutionConcept intent={intent} revision={revision} projectId={projectId} solutionId={id} contextActive={false} areaId={null} readOnly/>
+   <SolutionConcept intent={intent} revision={revision} projectId={projectId} solutionId={id} contextActive={false} areaId={null} readOnly initialView={requestedView}/>
   </Modal>}
  </div>
 }
-function SavedDrawing({projectId,id,revision}:{projectId:string;id:string;revision:number}){
+function SavedDrawing({projectId,id,revision,view:requestedView}:{projectId:string;id:string;revision:number;view?:string}){
  const {ref,visible}=usePreviewVisibility(),[retry,setRetry]=useState(0),[open,setOpen]=useState(false),[imageFailed,setImageFailed]=useState(false)
  const version=useProjectVersion()
- const {data,error,loading}=useAsync(()=>visible?db.getProjectDrawingPreview(projectId,id,revision):Promise.resolve(null),[projectId,id,revision,visible,version,retry])
+ const {data,error,loading}=useAsync(()=>visible?db.getProjectDrawingPreview(projectId,id,revision,requestedView):Promise.resolve(null),[projectId,id,revision,requestedView,visible,version,retry])
  useEffect(()=>setImageFailed(false),[data,retry])
  const src=data?.svg?`data:image/svg+xml;base64,${data.svg}`:null
  const historical=data?.latestRevision!==revision
@@ -65,7 +65,7 @@ function SavedDrawing({projectId,id,revision}:{projectId:string;id:string;revisi
  </div>
 }
 /** Transcript stores exact receipts, never picture bytes or generated URL text. */
-export function BobChatDrawings({projectId,receipts}:{projectId:string;receipts?:ProjectWriteReceipt[]}){
+export function BobChatDrawings({projectId,receipts,sources}:{projectId:string;receipts?:ProjectWriteReceipt[];sources?:ProjectSource[]}){
  const refs=new Map<string,ProjectWriteReceipt>()
  for(const receipt of receipts??[])if(receipt.projectId===projectId&&receipt.dataset==='artifacts'&&receipt.operation!=='deleted'&&Number.isSafeInteger(receipt.revision)&&Number(receipt.revision)>0)
   refs.set(`${receipt.recordId}:${receipt.revision}`,receipt)
@@ -73,5 +73,8 @@ export function BobChatDrawings({projectId,receipts}:{projectId:string;receipts?
  for(const receipt of receipts??[])if(receipt.projectId===projectId&&receipt.dataset==='solutions'&&receipt.operation!=='deleted'&&Number.isSafeInteger(receipt.revision)&&Number(receipt.revision)>0){
   if(Number(receipt.revision)>Number(concepts.get(receipt.recordId)?.revision??0))concepts.set(receipt.recordId,receipt)
  }
- return <>{[...concepts.values()].map(r=><SavedConcept key={`${projectId}:solution:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!}/>)}{[...refs.values()].map(r=><SavedDrawing key={`${projectId}:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!}/>)}</>
+ const seen=new Map<string,ProjectSource>()
+ for(const source of sources??[])if(source.projectId===projectId&&source.visual)seen.set(source.visual.ref,source)
+ for(const source of seen.values())if(source.visual?.kind==='concept')concepts.delete(source.recordId);else refs.delete(`${source.recordId}:${source.visual?.revision}`)
+ return <>{[...seen.values()].map(s=>s.visual!.kind==='concept'?<SavedConcept key={s.visual!.ref} projectId={projectId} id={s.recordId} revision={s.visual!.revision} view={s.visual!.view}/>:<SavedDrawing key={s.visual!.ref} projectId={projectId} id={s.recordId} revision={s.visual!.revision} view={s.visual!.view}/>)}{[...concepts.values()].map(r=><SavedConcept key={`${projectId}:solution:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!}/>)}{[...refs.values()].map(r=><SavedDrawing key={`${projectId}:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!}/>)}</>
 }

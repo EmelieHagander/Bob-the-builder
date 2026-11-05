@@ -30,7 +30,7 @@
 export const ANTHROPIC_ENABLED = true
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { OpenAIResponseItem } from './openai-content.ts'
-import { schemaIssues } from './schema-issues.ts'
+import { schemaIssues,safeSchemaPaths } from './schema-issues.ts'
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 // Pinned so a wire-shape change is a deliberate code edit.
@@ -53,7 +53,7 @@ export interface AnthropicModelRow {
 }
 export interface AnthropicUsageRecord {
   model: string; inputTokens: number; cachedInputTokens: number; outputTokens: number
-  reasoningTokens: number; totalTokens: number; costUsd: number | null; success: boolean
+  reasoningTokens: number; totalTokens: number; costUsd: number | null; success: boolean;errorCode?:string;latencyMs?:number
 }
 export interface AnthropicCallContext {
   apiKey: string
@@ -395,7 +395,7 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
   const usage = { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: inputTokens + outputTokens, cached_input_tokens: read, reasoning_tokens: 0 }
   const estimatedCostUsd = anthropicCostUsd(ctx.model, raw)
   const servedBy = typeof message.model === 'string' ? message.model : model
-  const log = (success: boolean) => ctx.log({ model: servedBy, inputTokens, cachedInputTokens: read, outputTokens, reasoningTokens: 0,
+  const log = (success: boolean,errorCode?:string) => ctx.log({errorCode,latencyMs:Date.now()-startedAt, model: servedBy, inputTokens, cachedInputTokens: read, outputTokens, reasoningTokens: 0,
     totalTokens: usage.total_tokens, costUsd: estimatedCostUsd, success })
   const base = { usage, model: servedBy, reasoningEffort: ctx.effort, estimatedCostUsd, responseId: typeof message.id === 'string' ? message.id : undefined }
   const phaseAware = options.responsePhaseMode === 'aware'
@@ -406,12 +406,12 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
   const text = content.filter(b => b.type === 'text' && typeof b.text === 'string').map(b => b.text as string).join('\n\n')
 
   if (message.stop_reason === 'refusal') {
-    await log(!strict)
-    return { ...base, success: !strict, data: strict ? null : (text || 'model_refusal') as T, outputPhase: 'refusal', ...native, ...(strict ? { error: 'model_refusal' } : {}) }
+    await log(!strict,strict?'model_refusal':undefined)
+    return { ...base, success: !strict, data: strict ? null : (text || 'model_refusal') as T, outputPhase: 'refusal', ...native, ...(strict ? { error: 'model_refusal',failure:{code:'model_refusal'} } : {}) }
   }
   if (message.stop_reason === 'max_tokens') {
-    await log(false)
-    return { ...base, success: false, data: null, error: 'model_output_limit', ...(phaseAware ? { outputPhase: 'incomplete' as const } : {}) }
+    await log(false,'model_output_limit')
+    return { ...base, success: false, data: null, failure:{code:'model_output_limit'}, error: 'model_output_limit', ...(phaseAware ? { outputPhase: 'incomplete' as const } : {}) }
   }
   const calls = content.filter(b => b.type === 'tool_use')
   if (calls.length) {
@@ -420,8 +420,8 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
       toolCalls: calls.map(b => ({ id: String(b.id), type: 'function' as const, function: { name: String(b.name), arguments: JSON.stringify(b.input ?? {}) } })) }
   }
   if (!text) {
-    await log(false)
-    return { ...base, success: false, data: null, error: content.some(b => b.type === 'thinking') ? 'model_reasoning_only' : 'No content in Anthropic response' }
+    await log(false,content.some(b=>b.type==='thinking')?'model_reasoning_only':'model_empty_response')
+    return { ...base, success: false, data: null, failure:{code:content.some(b=>b.type==='thinking')?'model_reasoning_only':'model_empty_response'}, error: content.some(b => b.type === 'thinking') ? 'model_reasoning_only' : 'No content in Anthropic response' }
   }
   const phase = phaseAware ? { outputPhase: 'legacy' as const } : {}
   if (!strict || (options.tools?.length && !options.structuredToolOutput)) {
@@ -431,8 +431,9 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
   let parsed: T | null = null
   try { parsed = JSON.parse(text) } catch { /* honest parse failure */ }
   // The wire schema drops bounds Claude cannot enforce; the original holds them.
-  const valid = parsed !== null && (!options.schema || schemaIssues(options.schema, parsed).length === 0)
-  await log(valid)
+  const issues=parsed!==null&&options.schema?schemaIssues(options.schema,parsed):[]
+  const valid=parsed!==null&&!issues.length,code=parsed===null?'model_invalid_json':'model_schema_violation'
+  await log(valid,valid?undefined:code)
   return { ...base, success: valid, data: valid ? parsed : null, ...native, ...phase,
-    ...(valid ? {} : { error: options.structuredToolOutput ? 'invalid_structured_output' : 'Failed to parse JSON response' }) }
+    ...(valid ? {} : { error: options.structuredToolOutput ? 'invalid_structured_output' : 'Failed to parse JSON response',failure:{code,schemaPaths:options.schema?safeSchemaPaths(options.schema,issues):[]} }) }
 }

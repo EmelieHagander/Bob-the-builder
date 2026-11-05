@@ -27,7 +27,7 @@ export function createDrawingViewAdapter(projectId:string,transport:DrawingViewT
    const row=await read(projectId,transport,ref,signal),version=savedViewVersion(row)
    const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(version)))].map(n=>n.toString(16).padStart(2,'0')).join('')
    return{item:{ref,project_id:projectId,title:`${row.title} · v${row.revision} · ${row.view}`,purpose:'saved_drawing',source_kind:'saved_cad_view',artifact_revision:row.revision,current_revision:row.current_revision,historical:row.revision!==row.current_revision,archived:row.archived,view:row.view,source_state:row.source_state,source_reasons:row.source_reasons,links:[{area_id:row.area_id}],links_truncated:false},
-    version,bytes:SAVED_VIEW_PNG_MAX,image:{type:'image_url',image_url:`private-image:${ref}/${digest}`},source:{projectId,dataset:'image_pixels',recordId:row.artifact_id,label:`Ritningsvy öppnad: ${row.title} · v${row.revision} · ${row.view}`,retrievedAt:new Date().toISOString(),updatedAt:row.recorded_at,truth:'ai_assessment'}}
+    version,bytes:SAVED_VIEW_PNG_MAX,image:{type:'image_url',image_url:`private-image:${ref}/${digest}`},source:{projectId,dataset:'image_pixels',recordId:row.artifact_id,label:`Ritningsvy öppnad: ${row.title} · v${row.revision} · ${row.view}`,retrievedAt:new Date().toISOString(),updatedAt:row.recorded_at,truth:'ai_assessment',visual:{kind:'cad',ref,revision:row.revision,view:row.view}}}
   },
   async current(ref,expected,signal){try{return savedViewVersion(await read(projectId,transport,ref,signal))===expected}catch{return false}},
  }

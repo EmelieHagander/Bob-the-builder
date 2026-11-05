@@ -548,6 +548,8 @@ for(const migration of migrations){
    shelves:box.definition.shelves.map((shelf:any)=>shelf.label==='Drawings and CAD'?{...shelf,tools:[...policies.map(p=>p.name),...shelf.tools]}:shelf)}
   publishAs(box,publication);box.metadata.build_workers_version=1;versions.set(box.key,versions.get(box.key)!+1)
  }
+ const coherent=source.match(/\$coherent_solution_spec\$([\s\S]+?)\$coherent_solution_spec\$/)
+ if(coherent)for(const item of JSON.parse(coherent[1])){const row=seed.find(r=>r.key===item.key);row.definition={...row.definition,...item.patch};publishAs(row,'coherent-solution-work-v1');versions.set(item.key,versions.get(item.key)!+1)}
  const operationBindings=source.match(/\$worker_operation_bindings\$([\s\S]+?)\$worker_operation_bindings\$/)
  if(operationBindings){
   const box=seed.find(row=>row.key==='bob.tools');box.definition.worker_operation_bindings=JSON.parse(operationBindings[1])

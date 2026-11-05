@@ -204,6 +204,7 @@ export function createBobContextContinuation(opts: {
   /** Pinned only for new native main turns. CAD and legacy jobs keep their
    * existing compactor and archive cursor contract. */
   mainResultReferences?: 1
+  onInternalTool?:(input:{name:string;status:string;callId:string;role:string;ms:number})=>Promise<void>
   /** Pinned per execution. Older results stay whole, newest first, up to this
    * many tokens before they become references. A fixed two-exchange window
    * hid results Bob had just reopened, so he reopened them again (2026-10-20). */
@@ -624,7 +625,9 @@ export function createBobContextContinuation(opts: {
       for (const tool of internal) {
         let input: unknown
         try { input = JSON.parse(tool.function.arguments) } catch { input = null }
-        chain.pendingInternal.push({ role: 'tool', tool_call_id: tool.id, content: JSON.stringify(readArchivedOperation(input, chain)) })
+        const began=Date.now(),result=readArchivedOperation(input,chain)
+        chain.pendingInternal.push({ role: 'tool', tool_call_id: tool.id, content: JSON.stringify(result) })
+        await opts.onInternalTool?.({name:HISTORY_TOOL,status:String(result.status??'returned'),callId:tool.id,role:options.functionName,ms:Date.now()-began})
       }
       // Specialists continue a chain only through their own tool calls; only
       // Bob's main loop resumes after a final message (nudges, completion

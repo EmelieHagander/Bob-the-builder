@@ -9,6 +9,7 @@ export interface ProjectSource {
   retrievedAt: string
   updatedAt: string | null
   /** Legacy values must not be promoted to measured/specification evidence. */
+  visual?: { kind: 'cad' | 'concept'; ref: string; revision: number; view: string }
   truth: TruthState
 }
 

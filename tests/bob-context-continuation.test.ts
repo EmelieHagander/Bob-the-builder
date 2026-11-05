@@ -259,9 +259,10 @@ test('incomplete parallel native results keep their provider chain instead of be
 
 test('specialists can read history internally and mixed batches retain every native output', async () => {
   const sent: OpenAIServiceOptions[] = []
+  const internal:any[]=[]
   let main = 0
   const read = (id: string) => ({ id, type: 'function' as const, function: { name: 'get_work_history', arguments: JSON.stringify({ call_id: 'r1', after: null }) } })
-  const adapter = createBobContextContinuation({ version: 1, aiCatalog: catalog, callModel: async options => {
+  const adapter = createBobContextContinuation({ version: 1, aiCatalog: catalog, onInternalTool:async e=>{internal.push(e)}, callModel: async options => {
     sent.push(structuredClone(options))
     if (options.catalogRoleKey === 'context-compactor') return handoff(options)
     main++
@@ -273,6 +274,7 @@ test('specialists can read history internally and mixed batches retain every nat
   await adapter.call(specialist)
   await adapter.call({ ...specialist, previousResponseId: 'r1', messages: [output('r1')] })
   const mixed = await adapter.call({ ...specialist, previousResponseId: 'r2', messages: [output('r2')] })
+  assert.deepEqual(internal.map(e=>[e.name,e.callId,e.role]),[['get_work_history','read1','plan-reviewer'],['get_work_history','read2','plan-reviewer']])
   assert.deepEqual(mixed.toolCalls?.map(value => value.id), ['external'])
   const historyOnly = sent.find(value => value.messages?.some(message => message.tool_call_id === 'read1'))!
   assert(historyOnly.messages?.some(value => value.tool_call_id === 'read1'))

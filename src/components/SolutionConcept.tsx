@@ -5,9 +5,9 @@ import type { DesignIntent } from '../../supabase/functions/_shared/project-desi
 import './StorageBoxDrawing.css'
 
 /** The data layer has already validated this exact immutable Solution revision. */
-export function SolutionConcept({ intent, revision, projectId, solutionId, contextActive, areaId, readOnly = false }: { intent: DesignIntent; revision: number; projectId: string; solutionId: string; contextActive: boolean; areaId: string | null; readOnly?: boolean }) {
+export function SolutionConcept({ intent, revision, projectId, solutionId, contextActive, areaId, readOnly = false, initialView = null }: { intent: DesignIntent; revision: number; projectId: string; solutionId: string; contextActive: boolean; areaId: string | null; readOnly?: boolean; initialView?: string | null }) {
   const viewport = useRef<HTMLDivElement>(null)
-  const [selected, setSelected] = useState<string | null>(null), [zoom, setZoom] = useState(1)
+  const [selected, setSelected] = useState<string | null>(initialView), [zoom, setZoom] = useState(1)
   if (!intent.model) return null
   const viewId = intent.model.views.some(v => v.id === selected) ? selected! : intent.model.views[0].id
   const result = conceptView(intent, viewId), svg = conceptSvg(intent, viewId)

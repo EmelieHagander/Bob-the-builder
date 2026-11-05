@@ -5,7 +5,8 @@ import type { CadAssemblyRequest } from './cad-adapter.ts'
 type Node = Exclude<ParameterInput, { role: 'source' }>
 type Triple = [string, string, string]
 export type ConceptModel = {
-  version: 1
+  version: 1 | 2
+  source_bindings?: {node:string;measurement_id:string;measurement_revision:number;value:number;unit:'mm'|'cm'|'m';reference:string|null;requested_reference:string;reference_status:'confirmed'|'unresolved'}[]
   frame: { origin: string; x: string; y: string; z: string }
   nodes: Node[]
   components: { id: string; label: string; kind: 'solid' | 'space' | 'opening'; active: boolean; position: Triple; size: Triple; features: string[]; choices: string[] }[]
@@ -25,7 +26,7 @@ const unique = (xs: string[]) => new Set(xs).size === xs.length
 /** Strict, bounded data only. The owning Solution supplies revision and authority. */
 export function parseConceptModel(raw: unknown): ConceptModel | null {
   const m = raw as ConceptModel
-  if (!exact(m, ['version', 'frame', 'nodes', 'components', 'views', 'constraints', 'unsupported']) || m.version !== 1
+  if (!exact(m, ['version', 'frame', 'nodes', 'components', 'views', 'constraints', 'unsupported',...(m?.version===2?['source_bindings']:[])]) || ![1,2].includes(m.version)
     || !exact(m.frame, ['origin', 'x', 'y', 'z']) || !Object.values(m.frame).every(v => text(v))
     || !list(m.nodes, 64) || !m.nodes.length || !list(m.components, 48) || !m.components.length
     || !list(m.views, 6) || m.views.length < 2 || !list(m.constraints, 24) || !list(m.unsupported, 12) || !m.unsupported.every(v => text(v, 500))) return null
@@ -53,6 +54,13 @@ export function parseConceptModel(raw: unknown): ConceptModel | null {
     } else if (!exact(c, ['id', 'label', 'relation', 'left', 'right', 'feature']) || !['equal', 'at_most'].includes(c.relation) || !ref(c.left) || !ref(c.right)) return null
   }
   if (![m.nodes, m.components, m.views, m.constraints].every(xs => unique(xs.map(x => x.id)))) return null
+  if(m.version===2){
+    if(!list(m.source_bindings,64)||!unique(m.source_bindings.map(b=>b.node)))return null
+    for(const b of m.source_bindings){
+      const n=m.nodes.find(n=>n.id===b.node)
+      if(!exact(b,['node','measurement_id','measurement_revision','value','unit','reference','requested_reference','reference_status'])||!n||n.role!=='estimate'||n.unit!=='mm'||!/^([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i.test(b.measurement_id)||!Number.isSafeInteger(b.measurement_revision)||b.measurement_revision<1||!Number.isFinite(b.value)||b.value<0||b.value>1000000||!['mm','cm','m'].includes(b.unit)||!(b.reference===null||text(b.reference,120))||!text(b.requested_reference,120)||!['confirmed','unresolved'].includes(b.reference_status)||b.reference_status!==(b.reference!==null&&b.reference===b.requested_reference?'confirmed':'unresolved')||n.value!==Number((b.value*({mm:1,cm:10,m:1000}[b.unit])).toFixed(6)))return null
+    }
+  }
   return structuredClone(m)
 }
 
@@ -105,6 +113,7 @@ export function evaluateConcept(intent: DesignIntent) {
   for (const c of model.constraints) if (c.feature !== null && !features.has(c.feature)) add('design_link_missing', [c.id], `${c.label}: a linked feature is missing.`)
   for (const f of intent.features) if (!model.components.some(c => c.active && c.features.includes(f.id))) add('feature_missing', [f.id], `Not represented in the concept: ${f.description}`)
   for (const c of intent.choices) if (c.geometry_dependency && !model.components.some(p => p.active && p.choices.includes(c.id))) add('choice_missing', [c.id], `Not linked to concept geometry: ${c.question}`)
+  for(const b of model.source_bindings??[])if(b.reference_status!=='confirmed')add('measurement_reference_unresolved',[b.node],`The saved measurement reference does not establish ${b.requested_reference}; confirm its endpoints before construction.`)
   model.unsupported.forEach(message => add('unsupported', [], message))
   return { model, issues, boxes, values }
 }

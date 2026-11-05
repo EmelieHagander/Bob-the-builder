@@ -1,3 +1,4 @@
+import {validVisualSource} from '../../../../src/data/bobEvidence.ts'
 import type { ProjectSource } from '../../../../src/data/provenance.ts'
 import { rethrowContinuation } from '../bob-job-journal.ts'
 
@@ -64,7 +65,7 @@ export function createProjectContext(opts: {
       && Number.isSafeInteger(record.bytes) && record.bytes >= 0
       && record.image?.type === 'image_url' && typeof record.image.image_url === 'string'
       && (pendingImages ? record.image.image_url.startsWith('private-image:') : record.image.image_url === '')
-      && record.source && typeof record.source.projectId === 'string' && record.source.dataset === 'image_pixels'
+      && validVisualSource(record.source) && record.source && typeof record.source.projectId === 'string' && record.source.dataset === 'image_pixels'
       && typeof record.source.recordId === 'string' && typeof record.source.label === 'string'
       && typeof record.source.retrievedAt === 'string' && Number.isFinite(Date.parse(record.source.retrievedAt))
       && (record.source.updatedAt === null || typeof record.source.updatedAt === 'string')
@@ -198,7 +199,7 @@ export function createProjectContext(opts: {
     confirmDelivery() {
       for (const r of pending) {
         delivered.set(r.item.ref, { ...r, image: { type: 'image_url', image_url: '' } })
-        if (!opts.sources.some(s => s.dataset === 'image_pixels' && s.recordId === r.source.recordId && s.updatedAt === r.source.updatedAt)) opts.sources.push(r.source)
+        if (!opts.sources.some(s => s.dataset === 'image_pixels' && s.recordId === r.source.recordId && s.updatedAt === r.source.updatedAt && s.visual?.ref===r.source.visual?.ref)) opts.sources.push(r.source)
       }
       pending = [] // pixels are transient; the provider cursor handles this turn's continuation.
       if (opts.unlimitedWork) byteCount = 0 // Limit the pending provider packet, not previously delivered pixels.
