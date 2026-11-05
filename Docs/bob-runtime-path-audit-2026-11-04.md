@@ -401,3 +401,58 @@ These timings and pixels prove the derivative locally, not hosted CPU attributio
 Owner facade acceptance (#438), actual model consumption in an ordinary Bob turn,
 and O5 whole-run CPU attribution remain separate acceptance work. No construction
 geometry was changed and no paid AI/CAD run was started by this implementation.
+
+
+### Hosted installation and Pages publication — 2026-11-05
+
+Implementation [#464](https://github.com/EmelieHagander/Bob-the-builder/pull/464)
+merged as `c4cfce99731732af9afbeb69710fbeff16f66cb2`; its exact tree was
+`59dd3ee2e03b3cb23f6db3d19f7fdca3e5dd6874`. Installation target was double-checked
+as `yuobtgoidmmmwfqenkau`, with zero queued/running Bob jobs and the expected
+prior catalog/Edge hashes. Ladan drawing 3 and Construction 5 stayed unchanged.
+
+- Migration installed as **20261105080905_saved_drawing_visual_access**. The CLI
+  generated filename is renamed to the hosted version without changing SQL bytes;
+  SHA256 `a425530b4e21b416e425158bfed7180766211fbc4698c972b3d130359a67fcd4`.
+- Catalog resolved/validated as **e92b7a7f-d2f7-48ed-9957-ca0810831465**:
+  `bob.tools` version 47 and open/list contracts version 3, publication
+  `saved-drawing-visual-access-v1`. Older immutable manifests remain untouched.
+- **drawing-preview v1**, JWT true, four runtime files, bundle SHA256
+  `dc89596f6aa55133ff8712423c8dc525fa47a36faaf05c302cf070b44e55c8f7`.
+  The readback normalizes the common `supabase/` directory; all four actual
+  runtime files match their upload exactly. Type-only dependencies are omitted
+  by the Edge bundler, as expected.
+- **bob-worker v199**, 143 files, existing job-capability JWT false unchanged,
+  SHA256 `1a27560c80f5b99de45b06fc72cea76327b097eae3261b65b776e165afbe0044`.
+- **ask-bob v231**, 145 files, JWT true,
+  SHA256 `a3c3b3385e3e6f67c58390a775bbb83a57dd96444610c0d83c25de53516181f5`.
+  Every returned file of both Bob closures matches the intended content byte for
+  byte, with no missing or extra files.
+- Hosted authenticated-role reads return the exact Ladan `front.sheet2` metadata,
+  SVG source hash, revision 3/current state, one listed saved drawing and a ready
+  operation scope. All three read RPCs are security invoker, authenticated-only;
+  anon/service-role execute grants are false. Anonymous endpoint POST is 401;
+  OPTIONS boots the new function and returns 200 with CORS. Security advisor
+  output contains no notice for these functions (unrelated existing notices are
+  not reclassified as fixed).
+- Pages **[#392 / run 41992782178](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41992782178)**
+  succeeded on the exact merged implementation SHA in 55 seconds. Public
+  [Bob](https://emeliehagander.github.io/Bob-the-builder/) now serves
+  `assets/index-Bm1fsy3l.js` containing `bob-chat-drawing`; the old Nov 2 bundle
+  is replaced. This publishes #458's already merged chat preview.
+
+An additional real `runWorker` + final catalog reconstruction regression passes:
+Rita lists `drawing_views`, opens the selected saved sheet, carries its private
+image reference to her next provider call, resolves PNG pixels and confirms
+successful delivery. **100 affected tests** are now represented by the green
+runs (99 before installation plus this added regression); final operation/replay
+refinements also passed 33 worker tests and 11 operation tests. No full CI or
+paid AI/CAD run was started.
+
+The published app opens correctly at its sign-in page in the inspection browser.
+That browser has no Bob member session, so no private chat/owner screenshot or
+ordinary model consumption is claimed. Positive hosted member-role SQL, local
+real SVG rasterization and the worker/provider fixture are distinct evidence.
+Next owner check: reload the app, inspect the existing saved view in the chat,
+and let Bob continue with that saved view available as real visual input. #438
+owner acceptance and O5 whole-run CPU attribution remain open.
