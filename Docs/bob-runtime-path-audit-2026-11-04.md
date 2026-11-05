@@ -1035,6 +1035,27 @@ activation-pin test passes; no catalog publication is changed here.
 This increment prevents duplicate visual inputs; it does **not** yet release
 unique obsolete images or solve C1–C4, entry/Barnrum's exact past failure inputs,
 or the bed edit-preparation conflict. Controlled request fixtures are not
-ordinary owner/model acceptance. Runtime installation is pending readback.
+ordinary owner/model acceptance. Runtime installation is verified below.
 Rollback to the safety branch requires settling active new-version jobs first;
 an old runtime must not restore a newer continuation identity.
+
+### Image-dedup increment hosted readback — 2026-11-05, 19:59–20:00 UTC
+
+Implementation [#474](https://github.com/EmelieHagander/Bob-the-builder/pull/474)
+merged as `20c041491cc6e11779e9e8a81dc177a3e1bfca25`, reviewed local/remote/merged
+tree `c9b0d34f1cbca43c4428abe2969513568ef390ff`. Correct project URL/ref
+`yuobtgoidmmmwfqenkau` and zero queued/running jobs checked before rollout;
+fresh previous version/hash/JWT checked before each endpoint replacement.
+
+| Consumer | Version | Full files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 202 | 146 | Existing private job capability, JWT false | `7b7412d93a9046acde699362dc86a17e5ba95bbae31c67cded4c88d295c78da6` |
+| ask-bob | 234 | 148 | JWT true | `b9e7041710e1b8a75bf4ebf5c72bf6fe1f9c798028cca9b1781e63e6fef0f19a` |
+
+Every returned runtime file matches the prepared closure byte for byte; only
+three reviewed shared runtime files were replaced in each complete bundle.
+Post-rollout readback: zero active jobs, bob.tools v49 and agent contract v24
+unchanged. No SQL/catalog/project-content mutation, preview redeploy, Pages
+workflow, full CI or paid model/CAD probe was needed or started. Existing web
+clients use these same endpoint URLs. New ordinary owner/model acceptance remains
+open before the next larger context-lifecycle increment.

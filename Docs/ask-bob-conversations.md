@@ -260,7 +260,7 @@ schema migration or public request-history logging is introduced.
 
 ### PR3 — bound result payloads without an AI history summary
 
-**First context-release increment, 2026-11-05 (source prepared):** newly created
+**First context-release increment, installed 2026-11-05:** newly created
 durable complete-request execution identities pin `imageInputDedupVersion: 1`.
 Only exact private image resolver references with the same detail level are
 deduplicated in the assembled model request, before its capacity estimate. The
