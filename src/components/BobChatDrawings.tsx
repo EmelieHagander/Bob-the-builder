@@ -5,15 +5,47 @@ import { useAsync, useProjectVersion } from './ui'
 import { DrawingSourceNotice } from './DrawingSourceNotice'
 import { Modal } from './Modal'
 import { ZoomableImage } from './ZoomableImage'
+import { SolutionConcept } from './SolutionConcept'
+import { conceptSvg } from '../../supabase/functions/_shared/solution-concept'
 
-function SavedDrawing({projectId,id,revision}:{projectId:string;id:string;revision:number}){
- const ref=useRef<HTMLDivElement>(null),[visible,setVisible]=useState(false),[retry,setRetry]=useState(0),[open,setOpen]=useState(false),[imageFailed,setImageFailed]=useState(false)
- const version=useProjectVersion()
+function usePreviewVisibility(){
+ const ref=useRef<HTMLDivElement>(null),[visible,setVisible]=useState(false)
  useEffect(()=>{
+  if(typeof IntersectionObserver==='undefined'){setVisible(true);return}
   const observer=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting)){setVisible(true);observer.disconnect()}},{rootMargin:'200px'})
   if(ref.current)observer.observe(ref.current)
   return ()=>observer.disconnect()
  },[])
+ return {ref,visible}
+}
+function SavedConcept({projectId,id,revision}:{projectId:string;id:string;revision:number}){
+ const {ref,visible}=usePreviewVisibility(),[retry,setRetry]=useState(0),[open,setOpen]=useState(false),[imageFailed,setImageFailed]=useState(false)
+ const version=useProjectVersion()
+ const {data,error,loading}=useAsync(()=>visible?db.getSolutionChatPreview(projectId,id,revision):Promise.resolve(null),[projectId,id,revision,visible,version,retry])
+ useEffect(()=>setImageFailed(false),[data,retry])
+ const current=data?.projectId===projectId&&data.id===id&&data.revision===revision?data:null
+ const intent=current?.intent,view=intent?.model?.views[0]
+ const label=current?`${current.title} · v${revision}`:`Saved concept · v${revision}`
+ const src=intent&&view?`data:image/svg+xml;charset=utf-8,${encodeURIComponent(conceptSvg(intent,view.id))}`:null
+ return <div ref={ref} className="bob-chat-drawing">
+  {error?<div role="alert"><p>Saved concept could not be loaded.</p><button className="btn" type="button" onClick={()=>setRetry(n=>n+1)}>Retry concept preview</button></div>
+   :loading&&visible?<p role="status">Loading saved concept…</p>:current&&<>
+    <p className="foundation-hint">{label}{current.latestRevision!==revision?' · historical revision':''}{current.archived||current.currentlyArchived?' · archived':''}</p>
+    {src&&!imageFailed?<button type="button" className="bob-chat-image" aria-label={`Enlarge concept: ${label}`} onClick={()=>{setRetry(n=>n+1);setOpen(true)}}><img src={src} alt={`${label} — ${view!.label}`} loading="lazy" onError={()=>setImageFailed(true)}/></button>
+     :<p role="status">The saved concept could not be displayed. The original version is retained. <button className="btn" type="button" onClick={()=>setRetry(n=>n+1)}>Retry concept preview</button></p>}
+    {intent?.model&&<p className="foundation-hint">{intent.model.views.map(v=>v.label).join(' · ')}. Open to inspect all views.</p>}
+    <p className="foundation-hint">Concept · design values and estimates, not measured or approved for construction.</p>
+   </>}
+  {open&&current&&intent&&src&&!loading&&!error&&!imageFailed&&<Modal title={label} layer={100} wide onClose={()=>setOpen(false)}>
+   {current.latestRevision!==revision&&<p className="solution-attention">Historical revision. The current solution is v{current.latestRevision}.</p>}
+   {(current.archived||current.currentlyArchived)&&<p className="solution-attention">This solution is archived.</p>}
+   <SolutionConcept intent={intent} revision={revision} projectId={projectId} solutionId={id} contextActive={false} areaId={null} readOnly/>
+  </Modal>}
+ </div>
+}
+function SavedDrawing({projectId,id,revision}:{projectId:string;id:string;revision:number}){
+ const {ref,visible}=usePreviewVisibility(),[retry,setRetry]=useState(0),[open,setOpen]=useState(false),[imageFailed,setImageFailed]=useState(false)
+ const version=useProjectVersion()
  const {data,error,loading}=useAsync(()=>visible?db.getProjectDrawingPreview(projectId,id,revision):Promise.resolve(null),[projectId,id,revision,visible,version,retry])
  useEffect(()=>setImageFailed(false),[data,retry])
  const src=data?.svg?`data:image/svg+xml;base64,${data.svg}`:null
@@ -37,5 +69,9 @@ export function BobChatDrawings({projectId,receipts}:{projectId:string;receipts?
  const refs=new Map<string,ProjectWriteReceipt>()
  for(const receipt of receipts??[])if(receipt.projectId===projectId&&receipt.dataset==='artifacts'&&receipt.operation!=='deleted'&&Number.isSafeInteger(receipt.revision)&&Number(receipt.revision)>0)
   refs.set(`${receipt.recordId}:${receipt.revision}`,receipt)
- return <>{[...refs.values()].map(r=><SavedDrawing key={`${projectId}:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!}/>)}</>
+ const concepts=new Map<string,ProjectWriteReceipt>()
+ for(const receipt of receipts??[])if(receipt.projectId===projectId&&receipt.dataset==='solutions'&&receipt.operation!=='deleted'&&Number.isSafeInteger(receipt.revision)&&Number(receipt.revision)>0){
+  if(Number(receipt.revision)>Number(concepts.get(receipt.recordId)?.revision??0))concepts.set(receipt.recordId,receipt)
+ }
+ return <>{[...concepts.values()].map(r=><SavedConcept key={`${projectId}:solution:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!}/>)}{[...refs.values()].map(r=><SavedDrawing key={`${projectId}:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!}/>)}</>
 }

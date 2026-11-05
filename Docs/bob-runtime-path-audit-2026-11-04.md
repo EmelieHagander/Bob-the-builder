@@ -456,3 +456,14 @@ real SVG rasterization and the worker/provider fixture are distinct evidence.
 Next owner check: reload the app, inspect the existing saved view in the chat,
 and let Bob continue with that saved view available as real visual input. #438
 owner acceptance and O5 whole-run CPU attribution remain open.
+
+
+### Entré follow-up: saved Solution sketch absent from chat — 2026-11-05
+
+The owner's entré turn completed with a saved three-view **Solution concept**,
+not a generated media asset or CAD Artifact. Chat rendered media/CAD receipts
+but skipped `solutions`, so “look at the sketch” had no visible counterpart.
+The [Solution owner records the fix and evidence](solutions.md#saved-concept-previews-in-bob-chat--2026-11-05): reuse the existing renderer for the exact
+receipt revision, deduplicate intermediate saves, recheck caller/current head,
+and retain historical/archival/estimate notices. No backend migration, Edge
+change, new geometry or paid generation is required.
