@@ -682,8 +682,7 @@ the immutable live turn/revisions above. Broader CPU attribution O5 remains open
 
 ### Five-finding implementation — 2026-11-05
 
-Implemented in `fix/coherent-solution-work`; installation is pending until the
-release readback below is recorded.
+Implemented in #469 and installed with the release readback below.
 
 | Finding | Implemented behavior | Verification |
 |---|---|---|
@@ -717,3 +716,61 @@ applying; compare complete deployed closures and caller-scoped reads afterwards.
 The CLI's earlier telemetry connection was blocked by automatic approval review;
 the two new source filenames use their recorded actual UTC authoring times and
 must be mapped to the hosted migration ledger without changing the SQL.
+
+### Five-finding hosted installation — 2026-11-05, 14:13 UTC
+
+- Merged implementation: [#469](https://github.com/EmelieHagander/Bob-the-builder/pull/469),
+  source `6ee8850a6e166ea9067066e2daab4956a27375f3`, reviewed tree
+  `b5af362c933eaaecc24e3642d0a0343db7f1e47f` (local/remote tree equality).
+- Project URL/ref was rechecked as `yuobtgoidmmmwfqenkau`; zero queued/running
+  jobs before installation and after activation. Existing runtime versions and
+  complete source were checked before replacement. No project-content writes.
+- Core source `20261105135621_coherent_solution_work.sql` maps to hosted ledger
+  `20261105141212`, name `coherent_solution_work`.
+- Catalog source `20261105135742_coherent_solution_catalog.sql` maps to ledger
+  `20261105141332`, name `coherent_solution_catalog`. It was activated only after
+  all four deployed bundles passed complete source comparison. Source filenames
+  retain authoring times; do not replay either migration under its source time.
+- New immutable manifest: `35bcd84f-6253-42b3-9b20-84c747bf6161`.
+  `bob.tools` v48 carries `solution_work_version=1`; picker schema v2 requires
+  only `tools`; editor contract v10, edit-read v4 and open/list v4 are active.
+
+| Consumer | Version | Files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 200 | 145 | Existing private job capability, JWT false | `40da3be312d0347bb5162904fd35be594c8aed479417e300e6a272cf688aa3fc` |
+| ask-bob | 232 | 147 | JWT true | `e9e30b68dc6db52f8e0cb25130e1d7a6f9bedfce3b5e73490b01bfe1be7c576f` |
+| drawing-preview | 2 | 5 | JWT true | `d88df37ce339f58dd26259ecda8719f8643632a57d1a8115e6b320b3dfd2f25a` |
+| concept-preview | 1 | 11 | JWT true | `e006ba9ab80175bcff65cc9fd416c80059c3f5ceeecbde167f64588df1ae5619` |
+
+All returned runtime files matched the prepared merged-source closures byte for
+byte. The same pinned raster engine is shared by the two preview endpoints.
+Unauthenticated POST is 401 and OPTIONS is 200 for both. Read RPC execution is
+allowed for `authenticated`, denied for `anon`/`service_role`, with caller RLS
+and explicit project access inside the read. Security advisors have the same
+seven lint groups and identical entities/counts as the pre-release baseline
+(observation timestamps excluded).
+
+A read-only authenticated-role check using the existing project owner verified:
+`p_bygga_in_entren` lists its saved concept, exact Solution revision 13 returns
+view `plan`, source SHA-256
+`d74ec37438352877f1be4b4ebfe09ab3985deac3947bdf5b7515676961b00dfd`, and
+current head 16 is retained separately. The original 209 cm measurement is
+unchanged. This is caller-RLS evidence, not a signed-in browser/model acceptance.
+
+Matching frontend: manual Pages **#394**, [run 42043160044](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/42043160044),
+completed successfully against the exact implementation merge. The public
+`assets/index-C6yQdkCL.js` bundle was fetched and contains the saved-view RPC,
+source bindings/reference handling and concept preview routing. A cropped
+success/commit screenshot was retained for the handoff. No full CI or paid
+model/CAD execution was started.
+
+Focused test results include: 21 editor/operation/schema tests; 12 provider/new
+vision/diagnostic tests; 23 continuation tests; two new caller/source SQL tests;
+9 compact-editor/chat tests; 5 drawing-preview data tests. The metric/tool
+regression batch passed its 16 non-view tests; its two failed view tests were
+fixed and rerun in the passing two-test SQL batch. Counts overlap. Final four
+Edge entrypoint type checks, frontend build, PWA and diff checks passed.
+
+F1–F5 are technically installed. The exact old picker failure remains unknown,
+the physical door measurement meaning still needs confirmation, and ordinary
+owner/provider visual acceptance plus O5 whole-run CPU/cost remain open.
