@@ -1,3 +1,4 @@
+import {helperConversation} from './bob-helper-context.ts'
 import type {WorkerOperations,OperationRole} from './worker-operations.ts'
 import { validConstructionRef, type ConstructionRef } from './drawing-work.ts'
 import type { PlanLinks } from './project-plan-links.ts'
@@ -177,8 +178,7 @@ export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], 
   if (!candidates.length) return null
   const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'tool-picker', aiFunction: 'tool-picker', module: 'global',
     userId: opts.userId, catalogRoleKey: 'tool-picker', catalogSchemaKey: 'bob_tool_pick',
-    messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, memory_summary: opts.context?.summary ?? null,
-      recent_conversation: (opts.context?.recent ?? []).slice(-4).map(({ role, text }) => ({ role, text: text.slice(0, 1000) })),
+    messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, ...(opts.continuedWork?helperConversation(opts.context,true):{memory_summary:opts.context?.summary??null,recent_conversation:(opts.context?.recent??[]).slice(-4).map(({role,text})=>({role,text:text.slice(0,1000)}))}),
       pending_drawing_requests: Array.isArray(drawingRequests) ? drawingRequests.length : 0,
       always_loaded: core, candidates }) }],
     timeoutMs: Math.max(1000, Math.min(opts.modelTimeoutMs ?? 45_000, 15_000, deadline - Date.now())) })
@@ -262,6 +262,7 @@ export interface BobAnswerCheckpoint {
   afterWorkerStep?(): void
 }
 export type ProjectAnswerOptions = {
+  continuedWork?:boolean;
   aiCatalog: AiCatalogSession;
   /** Pinned per execution; Rita receives server-owned source/destination identity. */
   boundDrawingWork?:boolean;
@@ -566,7 +567,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const report = await runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
         ...(workerPads ? { workpadEnabled: true, ...(workerWorkpad ? { workpad: workerWorkpad } : {}) } : {}),
         ...(opts.workerPieceProgress && key === 'structure' && workerPads && reportReadback && worker.knowledge
-          ? { pieceProgress: { readSaved: async (receipt: Record<string, unknown>) => {
+          ? { pieceProgress: { ...(opts.continuedWork?{unmappedReview:true}:{}), readSaved: async (receipt: Record<string, unknown>) => {
             const read = readbackReads([receipt])[0]
             if (!read || !('tool' in read) || read.label !== 'construction') return { status: 'unavailable' }
             return readSavedRecord(read)
@@ -577,9 +578,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
               return { status: 'unavailable', reason: 'saved_revision_identity_missing' }
             const current = await opts.workerFormPiece!.readConstruction(id, Number(revision))
             const previous = Number(revision) > 1 && current && typeof current === 'object'
-              && (current as { form_refinement?: unknown }).form_refinement != null
+              && (opts.continuedWork || (current as { form_refinement?: unknown }).form_refinement != null)
               ? await opts.workerFormPiece!.readConstruction(id, Number(revision) - 1) : null
-            return savedFormPieceEvidence(receipt, current, previous, opts.projectId, toolArgs)
+            return savedFormPieceEvidence(receipt, current, previous, opts.projectId, toolArgs, opts.continuedWork)
           }, ...(opts.workerFormPiece.readPiece ? { readBoundedReview: async () => await opts.workerFormPiece!.readPiece!() as Record<string, unknown> } : {}) } : {}) } } : {}),
         ...(opts.workerVerifiedRenewal && workerPads && opts.workerCheckpoint && opts.releaseContext
           ? { verifiedRenewal: { loadWorkpad: (step: number) => workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}:renewal:${step}`) } }
@@ -693,8 +694,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (!completionGate) return true
     const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'completion-gate', aiFunction: 'completion-gate', module: 'global',
       userId: opts.userId, catalogRoleKey: 'completion-gate', catalogSchemaKey: 'bob_completion_gate',
-      messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, memory_summary: opts.context?.summary ?? null,
-        recent_conversation: (opts.context?.recent ?? []).slice(-6).map(({ role, text }) => ({ role, text: text.slice(0, 2000) })),
+      messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, ...helperConversation(opts.context,opts.continuedWork),
+        ...(opts.continuedWork?{available_capabilities:toolbox.toolbox.map(({name,state,description})=>({name,state,description}))}:{}),
         candidate_final_answer: answer }) }],
       timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, 30_000, deadline - Date.now()) })
     let verdict: unknown = result.data
@@ -709,8 +710,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (!completionGate) return null
     const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'completion-gate', aiFunction: 'completion-gate', module: 'global',
       userId: opts.userId, catalogRoleKey: 'completion-gate', catalogSchemaKey: 'bob_completion_gate',
-      messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, memory_summary: opts.context?.summary ?? null,
-        recent_conversation: (opts.context?.recent ?? []).slice(-6).map(({ role, text }) => ({ role, text: text.slice(0, 2000) })),
+      messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, ...helperConversation(opts.context,opts.continuedWork),
+        ...(opts.continuedWork?{available_capabilities:toolbox.toolbox.map(({name,state,description})=>({name,state,description}))}:{}),
         candidate_final_answer: answer,
         saved_work: compactReceipts(opts.writer?.executedReceipts ?? []).slice(-32).map(({ dataset, label, operation, revision }) =>
           ({ dataset, label, operation, ...(revision ? { revision } : {}) })),
@@ -789,7 +790,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       tools, closedByLimit, closedByCommentary, request, response: pendingResponse, toolIndex }))
   }
   const answered = (text: string, responseId: string | undefined, incomplete: boolean): ProjectAnswer => ({ ok: true, answer: text, projectId: opts.projectId, providerResponseId: responseId,
-      evidence: { kind: 'ai_assessment', ...(opts.currentView ? { currentView: opts.getCurrentViewEvidence?.() ?? opts.currentView } : {}), references: opts.knowledgeReader?.references ?? [], sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
+      evidence: { kind: 'ai_assessment', ...(opts.currentView ? { currentView: opts.getCurrentViewEvidence?.() ?? opts.currentView } : {}), references: opts.knowledgeReader?.references ?? [], sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId&&x.visual?.ref===s.visual?.ref)===i),
         partial: incomplete || !!orientation?.warnings.length || !!opts.projectEdits?.partial || !!opts.solutionActions?.partial || !!opts.workRecords?.partial || !!opts.planLinks?.partial || !!opts.buildingScope?.partial || !!opts.buildTree?.partial || !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain || !!opts.writer?.hasUnresolvedWrites,
         ...(opts.writer?.receipts.length ? { writes: compactReceipts(opts.writer.receipts) } : {}) },
     })

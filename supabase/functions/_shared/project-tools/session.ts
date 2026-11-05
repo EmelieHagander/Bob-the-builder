@@ -1,3 +1,4 @@
+import {schemaIssues} from '../schema-issues.ts'
 import { rethrowContinuation } from '../bob-job-journal.ts'
 import { countContextTokens } from '../bob-token-budget.ts'
 /** Bob's toolbox. Inline mode offers all available tools; pinned lazy mode offers
@@ -115,6 +116,7 @@ export interface ToolSessionState {
 
 export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; selectiveTools?: boolean;
   compactState?: { catalogManifestId: string };
+  selectVisible?:boolean;
   autoLoadReady?:boolean; followups?:ToolFollowup[];
   /** Workers (2026-10-31): offer a loaded tool that waits for a prerequisite too, so the
    * tool list stays fixed for the whole job; execution still answers "not available yet". */ offerWaiting?: boolean;
@@ -327,7 +329,16 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
       }
       // The set offered to one model step is a fence: a tool that became available
       // later in the same batch is callable from the next step, not retroactively.
-      if (!offered.has(name)) { record('execute', name, 'not_offered'); return safeStatus('not_offered', opts.feedback?.('not-offered') ?? 'This tool became available after this step began. Call it again in your next step.') }
+      if (!offered.has(name)) {
+        if(!opts.selectVisible||visible.get(name)!==def.version||shelf.find(item=>item.name===name)?.state!=='offered'){record('execute',name,'not_offered');return safeStatus('not_offered',opts.feedback?.('not-offered')??'This tool is not available in this step. Use describe_tool with its exact name.')}
+        const schema=surfaceSpec(row,def).function.parameters
+        const issues=schemaIssues(schema,args)
+        loaded.set(name,def.version)
+        if(issues.length)return {status:'invalid',name,issues,parameters:schema,message:'The selected tool is now loaded. Correct its arguments before execution.'}
+        // A model explicitly selected a capability already on this step's shelf.
+        // Gate, live policy, version and arguments are checked before its handler.
+        offered.set(name,def.version)
+      }
       if (offered.get(name) !== def.version) return safeStatus('contract_changed', opts.feedback?.('contract-changed') ?? 'This tool changed during the turn. Use the version offered on your next step.')
       const input = quote !== undefined && takesQuote(def.spec) && object(args) ? { ...args, [SERVER_QUOTE_FIELD]: quote } : args
       try {

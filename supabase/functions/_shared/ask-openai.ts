@@ -324,7 +324,7 @@ export async function answerWithOpenAi(opts: {
     }
   }
   const drawingAdapter=(concept=false)=>{
-    const adapter=concept?createConceptViewAdapter(opts.projectId,conceptViewTransport):createDrawingViewAdapter(opts.projectId,drawingViewTransport)
+    const adapter=concept?createConceptViewAdapter(opts.projectId,conceptViewTransport,execution.continuedWorkVersion===1):createDrawingViewAdapter(opts.projectId,drawingViewTransport,execution.continuedWorkVersion===1)
     const namespace=concept?'concept-view:':'drawing-view:'
     return{...adapter,checkpointed:!!journal,
       count:(signal:AbortSignal)=>memo(namespace+'count',{},()=>adapter.count(signal),0,signal),
@@ -377,11 +377,12 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
       constructionPageVersion: 1 as const, workingStateVersion: 1 as const, drawingBindingVersion:1 as const, operationPathsVersion:2 as const,
+      ...(aiCatalog.definition('bob.tools','tool_contract').definition.continued_work_version===1?{continuedWorkVersion:1 as const}:{}),
       ...(aiCatalog.definition('bob.tools','tool_contract').definition.solution_work_version===1?{solutionWorkVersion:1 as const}:{}),
       // Core reading tools loaded from the first step. Jobs without this pin keep on-demand loading.
       corePreloadVersion: 1 as const,
@@ -442,6 +443,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.completeRequestVersion !== undefined && execution.completeRequestVersion !== 1) throw new Error('complete_request_version_invalid')
   if (execution.resultReferenceVersion !== undefined && (execution.resultReferenceVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('result_reference_version_invalid')
   if (execution.resultWindowVersion !== undefined && (![1, 2].includes(execution.resultWindowVersion) || execution.resultReferenceVersion !== 1)) throw new Error('result_window_version_invalid')
+  if(execution.continuedWorkVersion!==undefined&&execution.continuedWorkVersion!==1)throw Error('continued_work_version_invalid')
   if(execution.solutionWorkVersion!==undefined&&execution.solutionWorkVersion!==1)throw new Error('solution_work_version_invalid')
   if(execution.operationPathsVersion!==undefined&&![1,2].includes(execution.operationPathsVersion))throw new Error('operation_paths_version_invalid')
   if(execution.drawingBindingVersion!==undefined&&execution.drawingBindingVersion!==1)throw new Error('drawing_binding_version_invalid')
@@ -544,7 +546,7 @@ export async function answerWithOpenAi(opts: {
         currentView = await memo('context:current_view', screen, read)
         const guard = currentViewGuard = createCurrentViewGuard({ initial: currentView, read, hasAccess,
           receipts: () => writer?.receipts ?? [] })
-        validateCurrentView = guard.validate
+        validateCurrentView = async()=>{const valid=await guard.validate();if(!valid)console.warn('[Bob current view]',JSON.stringify({status:'unavailable',surface:currentView?.surface??null}));return valid}
         getCurrentViewEvidence = guard.evidence
         lookup.sources.push(...currentView.sources)
       }
@@ -680,6 +682,7 @@ export async function answerWithOpenAi(opts: {
     creationPreparation:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_draft'&&row.metadata?.creation_preparation_version===1),
     writeState,
     // Owner decision 2026-10-29: changes carry corrected title/description; stale stated sizes are rejected.
+    constructionNotes:execution.continuedWorkVersion===1,
     constructionText:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.change_construction_parameters'&&row.metadata?.construction_text_version===1),
     prepareSolutionEdit:projectEdits.prepare,
     prepareWork:async(payload:import('./project-write.ts').WritePayload)=>{
@@ -1213,7 +1216,7 @@ export async function answerWithOpenAi(opts: {
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
-    ...opts, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? CLAUDE_BACKGROUND_TIMEOUT_MS : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
+    ...opts, continuedWork:execution.continuedWorkVersion===1, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? CLAUDE_BACKGROUND_TIMEOUT_MS : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
     readToolPolicy,
     boundDrawingWork:execution.drawingBindingVersion===1&&execution.operationPathsVersion===undefined,
     ...(workerOperations?{workerOperations}:{}),

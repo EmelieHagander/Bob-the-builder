@@ -209,7 +209,7 @@ export async function runWorker(opts: {
   workpadEnabled?: boolean; workpad?: WorkpadSnapshot
   /** New claimed Konrad jobs only: one construction mutation per model batch,
    * followed by a code-only readback before the next piece can be attempted. */
-  pieceProgress?: {
+  pieceProgress?: { unmappedReview?:boolean;
     readSaved(receipt: Record<string, unknown>): Promise<unknown>
     /** New v2 jobs only. Inspect exact saved FORM scope and persisted part changes in code. */
     inspectSaved?(receipt: Record<string, unknown>, toolArgs: unknown): Promise<Record<string, unknown>>
@@ -222,7 +222,7 @@ export async function runWorker(opts: {
    * chain is allowed after a persisted note and an exact saved-record readback. */
   verifiedRenewal?: { loadWorkpad(step: number): Promise<WorkpadSnapshot> }
   /** Pixels the worker opened go with the worker's own next call (not Bob's), and are confirmed after it. */
-  images?: { carrier: () => Messages; confirmDelivery: () => void }
+  images?: { validate?:()=>Promise<boolean>; carrier: () => Messages; confirmDelivery: () => void }
   /** Reads what the worker saved, by code, after the job (see readbackReads). */
   readback?: (receipts: Record<string, unknown>[]) => Promise<unknown[]>
   /** Checks, by code, each saved construction revision the job left unchecked; returns the check results. */
@@ -316,6 +316,7 @@ export async function runWorker(opts: {
     if (!await opts.hasAccess()) throw new Error('project_denied')
     if (Date.now() + 15_000 >= opts.deadline) return finish({ status: 'time_budget', worker: roleKey, calls })
     if (step) specs = await offer()
+    if(opts.images?.validate&&!await opts.images.validate())return finish({status:'unavailable',worker:roleKey,reason:'visual_context_unavailable',calls})
     const images = opts.images?.carrier() ?? []
     const response = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: roleKey, aiFunction: roleKey, module: 'global', userId: opts.userId,
       catalogRoleKey: roleKey, ...(opts.runtimeSurface?{catalogRuntimeSurface:opts.runtimeSurface()}:{}), ...(opts.boundDrawingWork?{catalogDrawingWork:true}:{}), ...(opts.variables ? { catalogVariables: opts.variables } : {}), messages: [...messages, ...images], tools: specs, catalogSchemaParameters: params, catalogToolParameters: toolParams(),
@@ -436,6 +437,7 @@ export async function runWorker(opts: {
           piece_check: { status: checked?.status ?? 'unavailable', concept_ready: checked?.concept_ready === true },
           ...(pieceEvidence ? { piece_evidence: pieceEvidence } : {}), ...(localCheck ? { piece_local_check: localCheck } : {}),
           ...(receipt.construction_review_boundary ? { construction_review_boundary: receipt.construction_review_boundary } : {}) }
+        const unmappedReview=opts.pieceProgress.unmappedReview&&pieceEvidence?.status==='construction_scoped'&&pieceEvidence.artifact_id===confirmed?.artifact_id&&pieceEvidence.revision===confirmed?.revision&&boundedReview?.status==='not_configured'
         if (!confirmed) incompletePiece = { receipt, reason: 'saved_revision_readback_missing' }
         else if (checked?.status !== 'checked') incompletePiece = { receipt, reason: 'saved_revision_check_incomplete' }
         else if (opts.pieceProgress.readBoundedReview && !heldExactPiece && boundedReview?.status !== 'not_configured')
@@ -443,7 +445,7 @@ export async function runWorker(opts: {
         else if (opts.pieceProgress.inspectSaved && pieceEvidence?.status === 'no_form_scope' && !heldExactPiece)
           incompletePiece = { receipt, reason: 'saved_form_scope_missing' }
         else if (opts.pieceProgress.inspectSaved && (pieceEvidence?.status !== 'form_scoped'
-          || pieceEvidence.affected_scope_complete !== true) && !heldExactPiece)
+          || pieceEvidence.affected_scope_complete !== true) && !heldExactPiece && !unmappedReview)
           incompletePiece = { receipt, reason: pieceEvidence?.status === 'form_scoped'
             ? 'saved_form_scope_unbounded' : 'saved_form_evidence_unavailable' }
         else if (localCheck && localCheck.status !== 'checked') incompletePiece = { receipt, reason: 'saved_local_check_incomplete' }

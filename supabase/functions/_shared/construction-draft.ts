@@ -129,8 +129,8 @@ export const CONSTRUCTION_CUT_SAVE_TOOL=tool('save_construction_cut_plan','Save 
 const CONSTRUCTION_PROSE:Record<string,readonly string[]>={
  save_construction_draft:['title','description','change_note','parameter_plan.frames.*.reason','parameter_plan.nodes.*.reason','instance_policy.instances.*.reason','joints.*.reason','joints.*.fastener.reason','open_questions.*'],
  transition_legacy_drawing:['change_note','joints.*.reason','joints.*.fastener.reason','open_questions.*'],
- change_construction_parameters:['change_note','changes.*.reason','text.title','text.description'],
- edit_construction_parts:['change_note','changes.nodes.upsert.*.reason','changes.joints.upsert.*.reason','changes.joints.upsert.*.fastener.reason','changes.roles.upsert.*.reason','text.title','text.description'],
+ change_construction_parameters:['change_note','changes.*.reason','text.title','text.description','text.open_questions.*'],
+ edit_construction_parts:['change_note','changes.nodes.upsert.*.reason','changes.joints.upsert.*.reason','changes.joints.upsert.*.fastener.reason','changes.roles.upsert.*.reason','text.title','text.description','text.open_questions.*'],
  change_construction_roles:['change_note','changes.*.reason'],
  continue_construction_change:['change_note','review_note'],
  save_construction_cut_plan:['change_note','candidates.*.note'],
@@ -209,7 +209,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  /** Pinned per manifest (construction_text_version 1): parameter changes and
   * part edits carry corrected title/description text and are rejected when
   * they would leave a stated overall size wrong; requires coherentWork. */
- constructionText?:boolean;
+ constructionText?:boolean; constructionNotes?:boolean;
  readWorkSources?:(draft:Record<string,any>|null,stepId:string|null)=>Promise<ConstructionWorkSources>;
  prepareSolutionEdit?:ProjectEdits['prepare'];
  prepareWork?:(payload:WritePayload)=>Promise<Record<string,any>>;
@@ -244,7 +244,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  const saveTool=opts.placeIn?withSubBuild(placedSaveTool):placedSaveTool
  const joints=(value:unknown)=>opts.chosenJointFasteners?storedChosenJoints(value):storedJoints(value)
  const baseParameterTool=opts.constructionSourceRefresh?CONSTRUCTION_PARAMETER_REFRESH_TOOL:CONSTRUCTION_PARAMETER_TOOL
- const withText=(tool:typeof CONSTRUCTION_EDIT_TOOL)=>opts.constructionText?withConstructionText(tool):tool
+ const withText=(tool:typeof CONSTRUCTION_EDIT_TOOL)=>opts.constructionText?withConstructionText(tool,opts.constructionNotes):tool
  const parameterTool=opts.coherentWork?withText(withConstructionWorkWrite(baseParameterTool)):baseParameterTool
  const workEditTool=opts.coherentWork?withText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL)):CONSTRUCTION_EDIT_TOOL
  const editTool=zeroText(opts.chosenJointFasteners?withChosenJointFasteners(workEditTool):workEditTool)

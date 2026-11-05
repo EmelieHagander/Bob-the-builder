@@ -153,6 +153,18 @@ test('construction changes carry corrected text and never leave a stated size wr
     const legacy: any = await pinnedTools.execute('change_construction_parameters', await change('pinned', head, 640, 450))
     assert.equal(legacy.status, 'saved', JSON.stringify({ legacy, sqlErrors })); assert.equal((await read()).title, 'Wide frame 620x450x18')
   })
+  await t.test('narrative question repair is part of the same bounded edit, with unchanged geometry and exact replay',async()=>{
+    const {readdirSync}=await import('node:fs')
+    const name=readdirSync('supabase/migrations').find(n=>n.endsWith('_continued_construction_notes.sql'))!
+    await pg.exec(readFileSync('supabase/migrations/'+name,'utf8'))
+    const current=await read(),notes=createConstructionTools({...options,constructionText:true,constructionNotes:true})
+    const input={key:'notes-fix',record_id:id,expected_revision:current.revision,target_revision:null,solution_edit:null,request_quote:message,change_note:'Correct the stale question',text:{title:current.title,description:current.description,open_questions:['Hardware selection remains unverified']},changes:{instances:{upsert:[],remove:[]}}}
+    const result:any=await notes.execute('edit_construction_parts',input);assert.equal(result.status,'saved',JSON.stringify(result))
+    const fresh=await read();assert.deepEqual(fresh.open_questions,input.text.open_questions);assert.deepEqual(fresh.recipe,current.recipe)
+    assert.equal((await notes.execute('edit_construction_parts',input) as any).status,'saved');assert.equal((await read()).revision,fresh.revision)
+    const invalid=(await pg.query<any>('select bob_private.valid_construction_text($1) valid',[{title:'x',description:'x',open_questions:['']}])).rows[0].valid;assert.equal(invalid,false)
+  })
+
 })
 
 test('the publication versions two construction tools, the answer contract and two notes; schemas match the runtime', async () => {

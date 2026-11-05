@@ -774,3 +774,47 @@ Edge entrypoint type checks, frontend build, PWA and diff checks passed.
 F1–F5 are technically installed. The exact old picker failure remains unknown,
 the physical door measurement meaning still needs confirmation, and ordinary
 owner/provider visual acceptance plus O5 whole-run CPU/cost remain open.
+
+<a id="three-project-followup-2026-11-05"></a>
+## Three-project follow-up — 2026-11-05
+
+Owner requested fixes and publication after testing all projects. The latest
+bunk-bed turn `425866c0-1452-4c5c-89d5-1497dd04eb59` (16:31–16:35 UTC)
+saved Construction revision 14, then recovered one receipt instead of producing
+Bob's normal answer. Durable delivery code is `context_unavailable`; all 13 model
+calls succeeded, with observed model cost USD 1.337298. Shutdown entries in the
+scoped window say `EarlyDrop`, not `CPUTime`. The retained screen is the Project
+page, with no selected drawing focus. Terminal image/journal records were cleared
+as intended, so the exact opened image refs cannot be reconstructed from that
+turn's tool-name metrics alone.
+
+The two latest entry turns are `c2621b81-a51c-47bb-81c9-2a28a3f4f90a`
+and `41ec7105-a6a8-41d9-8fec-f7bf2aee0f55`. They saved measurement notes and
+Solution revision 20, then described future framing work. Two direct history
+calls in the former were refused as `not_offered` before a separate describe call.
+The barn turn `f4bcfa23-e5f4-4115-91ff-dcd557791227` reached a design-review stop;
+it is useful comparative evidence, not complete owner/model acceptance.
+
+| Finding | Cause / source evidence | Implemented correction |
+|---|---|---|
+| N1: a successful save can invalidate retained visual context | Saved-view version combined immutable pixels with mutable head, archive and source-status metadata. An own Construction write can stale its drawing source without changing any saved pixels; the reproduced next-step validator then stops the whole answer. Live failure matches this mechanism, but the exact opened refs are no longer retained. | New pinned visual adapters keep pixel identity exact, refresh mutable metadata under caller access and deliver a text-only historical/stale notice on the next ordinary model call. Changed bytes and access loss still stop. Notices survive checkpoints; no pixels are stored there. Focus and visual failures now have distinct content-free log markers. |
+| N2: picker and completion gate lose the conversation in stair mode | `prepareMemoryStair` intentionally returns an empty `summary` and only the current instruction in `recent`. Helpers read those legacy fields instead of `stair.summaries/raw`, so delegated work and prior measurement deferrals disappear from their inputs. This is a confirmed blind spot, not proof of every conversational misjudgment. | Both helpers receive the real bounded stair summaries and recent raw conversation, using existing memory without another model call. Completion also sees the current capability shelf. Legacy pins retain their original inputs. |
+| N3: a visible capability still requires failed selection rounds | Shelf cards advertise available tools, while execution requires the tool to have been separately loaded. The entry history lookup paid for two refused calls. | An explicit call may select an already available capability from that step's shelf after live policy/version/gate and argument validation. Newly available, disabled, waiting, unknown or changed-contract capabilities cannot acquire authority retroactively. |
+| N4: older constructions cannot report their exact small change without FORM mapping | Bed has no configured construction-piece policy. The old evidence helper returns `no_form_scope` even after an exact readback and successful whole-Construction check. | New pins can report exact predecessor/current legacy Construction evidence, then stop for design review. They never invent FORM coverage, local functional verification or owner approval; configured FORM and source guards remain unchanged. |
+| N5: stale open questions cannot be repaired with a bounded edit | The bed worker's retained note identifies old narrative information but the text interface accepts only title/description. Geometry-only edits preserve the stale question. | Optional complete `text.open_questions` joins the same atomic parameter/part edit. Null preserves it; an empty list clears it. A narrative-only edit is allowed only when its text actually changes. Exact source, compilation, revision and replay checks remain in the ordinary writer. |
+
+Changes are pinned by `bob.tools.continued_work_version=1` in the execution
+identity, with a new immutable publication after matching core SQL and both Bob
+bundles. No existing project measurement, geometry, question, workpad or private
+conversation is manually rewritten by this release. Existing revision 14 and
+its receipt remain the starting point for the owner's next normal instruction.
+The remaining source-reading volume is observable but not proved to be needless;
+no claim of a whole-run CPU/cost improvement is made without a new ordinary run.
+
+Focused fixtures cover: helper history and completion continuation; direct
+capability selection and authority fences; metadata-only visual renewal, restart,
+revocation and hash changes; legacy exact change review without FORM promotion;
+and same-revision geometry preservation plus idempotent narrative repair through
+SQL. Provider/WASM/worker regressions, Edge types and frontend/PWA checks are local.
+No full CI or paid AI/CAD probe is part of this repair. Hosted installation and
+matching public release are pending the readback below.

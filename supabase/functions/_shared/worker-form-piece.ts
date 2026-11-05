@@ -42,13 +42,21 @@ function changedIds(before: unknown, after: unknown, key: string): string[] {
 /** Code-only result of inspecting *exact* saved and preceding Construction
  * revisions. It describes persisted change, never infers that a window works,
  * matches a natural-language assignment, or has been approved. */
-export function savedFormPieceEvidence(receipt: Row, current: unknown, previous: unknown, projectId: string, toolArgs?: unknown): Row {
+export function savedFormPieceEvidence(receipt: Row, current: unknown, previous: unknown, projectId: string, toolArgs?: unknown, unmappedReview=false): Row {
   const artifactId = typeof receipt.artifact_id === 'string' ? receipt.artifact_id : receipt.record_id
   const revision = receipt.revision
   const now = object(current) ? current : null
   if (!now || now.status !== 'ok' || now.projectId !== projectId || now.artifact_id !== artifactId || now.revision !== revision
     || now.current_revision !== revision || now.archived !== false || now.source_state !== 'current')
     return { status: 'unavailable', reason: 'exact_current_construction_missing' }
+  if(now.form_refinement==null&&unmappedReview){
+    const before=object(previous)?previous:null
+    if(revision>1&&(!before||before.status!=='ok'||before.projectId!==projectId||before.artifact_id!==artifactId||before.revision!==revision-1))return {status:'unavailable',reason:'prior_construction_revision_missing'}
+    return {status:'construction_scoped',artifact_id:artifactId,revision,prior_revision:revision>1?revision-1:null,scope:'whole_saved_construction',
+      changed_instances:compactIds(changedIds(before?.recipe?.instances,now.recipe?.instances,'id')),
+      changed_definitions:compactIds(changedIds(before?.recipe?.definitions,now.recipe?.definitions,'id')),
+      form_mapping:false,verification:'unverified',functional_fidelity:'unverified',owner_acceptance:'not_recorded',note:'Exact legacy construction change. Whole-construction technical checks and visual review remain separate; no FORM mapping is inferred.'}
+  }
   if (now.form_refinement == null) return { status: 'no_form_scope', artifact_id: artifactId, revision,
     verification: 'unverified', note: 'No FORM component mapping exists; a save and a check do not prove requested placement.' }
   let form: ReturnType<typeof parseFormRefinement>
