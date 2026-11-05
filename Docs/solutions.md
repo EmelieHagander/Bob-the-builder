@@ -359,9 +359,23 @@ selection receipts, but no generated-media/CAD receipt. Its final reply correctl
 referred to a saved 2D sketch, which the chat did not render. This differs from
 the earlier missing-CAD-preview publication and does not require new generation.
 
-Validation: 24 affected data/renderer tests, production build and PWA checks pass.
+Validation: 26 affected data/renderer/view tests, production build and PWA checks pass.
 Authenticated hosted reads confirm exact Solution v10 and its current head; its
 saved plan/front/side views rasterize locally with 9/9/5 visible shapes. The front
 view was visually inspected. A local HTML browser fixture could not be opened:
 the cloud browser blocks `file:` URLs; no workaround was attempted. Private chat
 browser acceptance remains separate from the data/renderer/build evidence.
+
+
+Publication: [#466](https://github.com/EmelieHagander/Bob-the-builder/pull/466)
+merged as `9f47c5a5b56048fdb4e6ff54fc5d3f03d98df697`, exact source tree
+`6466cc8deba61b5b0ddb7d41950548608d241ad9`. Pages
+[#393 / run 42011123573](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/42011123573)
+succeeded on that SHA. The public bundle is `assets/index-DTsqlTML.js`. Its returned contents include
+the new saved-concept loading/enlarge controls and narrow Solution read.
+Existing transcript receipts are sufficient: no reply backfill or new Bob run is
+needed. Browser-renderer acceptance in the owner's private chat remains to be
+confirmed after reload. Additional server-rendered component regressions confirm
+one lazy preview for Solution-only receipts (including duplicate/intermediate,
+foreign/deleted/invalid records) and the shared view/SVG/dimension controls without
+activating model feedback. No backend change or paid generation was performed.

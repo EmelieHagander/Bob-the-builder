@@ -467,3 +467,10 @@ The [Solution owner records the fix and evidence](solutions.md#saved-concept-pre
 receipt revision, deduplicate intermediate saves, recheck caller/current head,
 and retain historical/archival/estimate notices. No backend migration, Edge
 change, new geometry or paid generation is required.
+
+
+Entré fix #466 is merged and published by Pages #393 on exact merge
+`9f47c5a5b56048fdb4e6ff54fc5d3f03d98df697`. The public bundle contains saved
+Solution previews. The [Solution owner](solutions.md#saved-concept-previews-in-bob-chat--2026-11-05)
+records the 26 green affected tests and the remaining private-chat acceptance
+boundary. This repairs existing replies without new AI work or project writes.
