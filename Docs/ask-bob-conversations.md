@@ -272,7 +272,7 @@ deduplication only, not retirement of unique images or whole-stage renewal.
 The [audit increment](bob-runtime-path-audit-2026-11-04.md#image-dedup-increment-2026-11-05)
 owns test/release evidence; C1–C4 and R1–R6 remain the wider lifecycle work.
 
-**Next diagnostic increment, source verified 2026-11-05:** complete-request
+**Next diagnostic increment, installed 2026-11-05:** complete-request
 assembly supplies content-free image counts separately from provider options.
 `[Bob image input attempt]` logs numeric `before`, `after`, `removed`,
 `unique_private`, `other` and `dedup_version` inside the existing journalled

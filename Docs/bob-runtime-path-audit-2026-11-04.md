@@ -1120,6 +1120,28 @@ replay. **56 related existing tests** pass (complete requests, context/native
 wire, checkpoint state, model budgets and replay CPU). Both Edge entrypoint
 type checks pass. No paid model/CAD probe, full suite or workflow was started.
 The known pre-existing catalog parity fixture failure above is outside this
-increment; catalog/SQL/publication remain unchanged. Hosted installation is not
-yet claimed; compare the next ordinary run's counts with input growth before
+increment; catalog/SQL/publication remain unchanged. Hosted installation is
+verified below; compare the next ordinary run's counts with input growth before
 judging deduplication savings. C1–C4 and R1–R6 remain open lifecycle work.
+
+### Image-count diagnostic hosted readback — 2026-11-05, 21:02–21:03 UTC
+
+Implementation [#476](https://github.com/EmelieHagander/Bob-the-builder/pull/476)
+merged as `31c648467c7b39e1efb4f0cf029e0ab32d14bbe7`. Local, uploaded and
+merged source tree match `b47e285b66bafa8db73a5d63129fdd2353a94ace`.
+Correct project `yuobtgoidmmmwfqenkau`, previous versions/hashes/JWT policies
+and zero queued/running Bob jobs were checked before replacement. Fresh worker
+v202 and ask-bob v234 bundles were retrieved; only the three reviewed shared
+runtime files changed. The full worker closure was installed/read back before
+replacing ask-bob.
+
+| Consumer | Version | Full files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 203 | 146 | Existing private job capability, JWT false | `0b47c0d7ad95b5d6e0770ce0d7f956fa942ec083bb110c3ae8423b14d2953f6c` |
+| ask-bob | 235 | 148 | JWT true | `c863a4985f5fa5b02d6f35a4924cb2f37c69df102d242c916197700938d09979` |
+
+Every returned runtime file matches its prepared closure byte for byte.
+Post-rollout check at 21:03:35 UTC found zero active Bob jobs. No SQL/catalog,
+project content, preview service or frontend change was made; no paid probe,
+Pages workflow or full CI was started. Code-path tests and installation are
+verified; an actual ordinary run's image counts and dedup effect remain pending.
