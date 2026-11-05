@@ -1,3 +1,5 @@
+import {createDrawingViewAdapter,resolveDrawingViewImage} from './project-context/drawings.ts'
+import {createDrawingViewTransport} from './project-context/drawing-transport.ts'
 import {createWorkerOperations} from './worker-operations.ts'
 import { resolveDrawingWork } from './drawing-work.ts'
 import { drawingErrorCode } from './drawing-errors.ts'
@@ -171,10 +173,12 @@ export async function answerWithOpenAi(opts: {
   }
   let metrics:ReturnType<typeof createExecutionMetrics>|undefined
   const mediaTransport = createMediaTransport(client, { ...opts, url, key })
+  const drawingViewTransport=createDrawingViewTransport(client,{...opts,url,key})
   const imageRefs = new Map<string, Opened>()
   const resolveImage = async (ref: string) => {
     const record = imageRefs.get(ref)
     if (!record) throw new Error('image_not_opened')
+    if(record.item.ref.startsWith('drawing:'))return resolveDrawingViewImage(opts.projectId,drawingViewTransport,record,AbortSignal.timeout(30000))
     // Claimed server turns reuse one stored provider file per image revision
     // instead of re-sending pixels; the image itself stays in bob storage.
     if (claimedServer) return resolveMediaImageFile(opts.projectId, mediaTransport, record, ref, imageFiles, AbortSignal.timeout(30000))
@@ -184,6 +188,7 @@ export async function answerWithOpenAi(opts: {
   const resolveImageInline = async (ref: string) => {
     const record = imageRefs.get(ref)
     if (!record) throw new Error('image_not_opened')
+    if(record.item.ref.startsWith('drawing:'))return resolveDrawingViewImage(opts.projectId,drawingViewTransport,record,AbortSignal.timeout(30000))
     return resolveMediaImage(opts.projectId, mediaTransport, record, AbortSignal.timeout(12000))
   }
   const imageFiles: ProviderImageFiles = {
@@ -313,6 +318,15 @@ export async function answerWithOpenAi(opts: {
       current: checkpoint ? adapter.current : reuseFresh(adapter.current, unchanged => unchanged, (ref, expected) => ref + '\u0000' + expected),
     }
   }
+  const drawingAdapter=()=>{
+    const adapter=createDrawingViewAdapter(opts.projectId,drawingViewTransport)
+    return{...adapter,checkpointed:!!journal,
+      count:(signal:AbortSignal)=>memo('drawing-view:count',{},()=>adapter.count(signal),0,signal),
+      list:(...args:Parameters<typeof adapter.list>)=>memo('drawing-view:list',args[0],()=>adapter.list(...args),0,args[1]),
+      open:async(...args:Parameters<typeof adapter.open>)=>{const opened=await memo('drawing-view:open',args[0],()=>adapter.open(...args),0,args[1]);imageRefs.set(opened.image.image_url,opened);return opened},
+      current:adapter.current,
+    }
+  }
   // Jobs pinned with roomDimensionsVersion read v9 (adds room_dimensions); other journals keep v8.
   // Jobs pinned with exactLookupVersion read v10 and retry a statement timeout once (2026-10-29).
   let lookupPinned: LookupPin = lookupPin({})
@@ -357,11 +371,11 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
-      constructionPageVersion: 1 as const, workingStateVersion: 1 as const, drawingBindingVersion:1 as const, operationPathsVersion:1 as const,
+      constructionPageVersion: 1 as const, workingStateVersion: 1 as const, drawingBindingVersion:1 as const, operationPathsVersion:2 as const,
       // Core reading tools loaded from the first step. Jobs without this pin keep on-demand loading.
       corePreloadVersion: 1 as const,
       // Building links read once at turn start. Jobs without this pin read nothing extra.
@@ -421,7 +435,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.completeRequestVersion !== undefined && execution.completeRequestVersion !== 1) throw new Error('complete_request_version_invalid')
   if (execution.resultReferenceVersion !== undefined && (execution.resultReferenceVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('result_reference_version_invalid')
   if (execution.resultWindowVersion !== undefined && (![1, 2].includes(execution.resultWindowVersion) || execution.resultReferenceVersion !== 1)) throw new Error('result_window_version_invalid')
-  if(execution.operationPathsVersion!==undefined&&execution.operationPathsVersion!==1)throw new Error('operation_paths_version_invalid')
+  if(execution.operationPathsVersion!==undefined&&![1,2].includes(execution.operationPathsVersion))throw new Error('operation_paths_version_invalid')
   if(execution.drawingBindingVersion!==undefined&&execution.drawingBindingVersion!==1)throw new Error('drawing_binding_version_invalid')
   if (execution.workingStateVersion !== undefined && execution.workingStateVersion !== 1) throw new Error('working_state_version_invalid')
   if (execution.constructionPageVersion !== undefined && execution.constructionPageVersion !== 1) throw new Error('construction_page_version_invalid')
@@ -579,7 +593,7 @@ export async function answerWithOpenAi(opts: {
   const projectContext = createProjectContext({ unlimitedWork,
     reviewInstruction: aiCatalog.text('drawing-review.instruction'),
     imageEvidenceInstruction: aiCatalog.text('images.evidence-intro'), reviewLabel: aiCatalog.text('images.review-label'),
-    adapters: [mediaAdapter()],
+    adapters: [mediaAdapter(),...(execution.operationPathsVersion===2?[drawingAdapter()]:[])],
     hasAccess, sources: lookup.sources,
     ...(claimedServer ? { describe: (record: Opened, description: string) => memo('media:describe', { ref: record.item.ref, version: record.version, description }, async () => {
       const { error } = await internal.rpc('bob_describe_image', { ...binding, p_user: opts.userId,
@@ -864,7 +878,7 @@ export async function answerWithOpenAi(opts: {
    return !error&&data?.is_enabled===true
   }):Promise.resolve(false)
   const readBoundDrawing=async(id:string,revision:number|null)=>{
-    const {data,error}=await rpc(execution.operationPathsVersion===1?'read_drawing_identity':'read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000))
+    const {data,error}=await rpc(execution.operationPathsVersion!==undefined?'read_drawing_identity':'read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000))
     if(error)throw new Error('drawing_binding_unavailable')
     if(!data)return null
     const links=await client.from('current_drawing_steps').select('step_id').eq('project_id',opts.projectId).eq('artifact_id',id).abortSignal(AbortSignal.timeout(10000))
@@ -889,7 +903,7 @@ export async function answerWithOpenAi(opts: {
     // Same fixed grounding read order as Bob's own call: parallel reads can swap journal positions on resume.
     groundingReadOrder: execution.groundingReadOrderVersion === 1 ? 'serial' : 'parallel',
     allowSourceRenewal:execution.constructionReplayVersion===2,
-    resumeStoredPieces:execution.operationPathsVersion===1,
+    resumeStoredPieces:execution.operationPathsVersion!==undefined,
     aiCatalog,calculator,
     ...(contextStrategy ? { registerContextSurface: registerSpecialistContextSurface } : {}),
     runtimeVersion:()=>memo('cad:runtime',{},()=>drawingRuntimeVersion(internal,{model:!!Deno.env.get('OPENAI_API_KEY'),cad:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN')},aiCatalog)),
@@ -979,7 +993,7 @@ export async function answerWithOpenAi(opts: {
       return {...data,current_step_ids:links}
     },
     catalog:createMaterialCatalogReader(opts.projectId,checkpointed((input:Record<string,unknown>,signal:AbortSignal)=>rpc('catalog_read',{p_project:opts.projectId,p_input:input},signal)),hasAccess,lookup.sources,undefined,{unlimitedWork}),
-    context:createProjectContext({ unlimitedWork,adapters:[mediaAdapter()],hasAccess,sources:lookup.sources,reviewInstruction:aiCatalog.text('drawing-review.instruction'),imageEvidenceInstruction:aiCatalog.text('images.evidence-intro'),reviewLabel:aiCatalog.text('images.review-label')}),
+    context:createProjectContext({ unlimitedWork,adapters:[mediaAdapter(),...(execution.operationPathsVersion===2?[drawingAdapter()]:[])],hasAccess,sources:lookup.sources,reviewInstruction:aiCatalog.text('drawing-review.instruction'),imageEvidenceInstruction:aiCatalog.text('images.evidence-intro'),reviewLabel:aiCatalog.text('images.review-label')}),
     referenceImageRefs:()=>projectContext.openedImageRefs(),
   })
   if(opts.background?.drawingRequestId){
@@ -1010,7 +1024,7 @@ export async function answerWithOpenAi(opts: {
     return {ok:true,projectId:opts.projectId,answer,evidence:{kind:'ai_assessment',references:[],sources:cadAssistant.sources,partial:!saved,writes:writer?.receipts??[]}}
   }
   const imageTools=writer?createProjectImageTools({ unlimitedWork,
-    ...(execution.operationPathsVersion===1?{delivery:{
+    ...(execution.operationPathsVersion!==undefined?{delivery:{
       validateTarget:async(kind:string,id:string)=>{
         const {data,error}=await client.rpc('read_image_target',{p_project:opts.projectId,p_kind:kind,p_target:id}).abortSignal(AbortSignal.timeout(10000))
         if(error){if(error.code==='42501')throw new Error('project_denied');throw new Error('image_target_unavailable')}
@@ -1066,8 +1080,10 @@ export async function answerWithOpenAi(opts: {
       return true
     })},
   }):undefined
-  const workerOperations=execution.operationPathsVersion===1?createWorkerOperations({
-    projectId:opts.projectId,hasAccess,
+  const operationBindings=aiCatalog.definition('bob.tools','tool_contract').definition.worker_operation_bindings as any
+  if(execution.operationPathsVersion===2&&(!operationBindings||typeof operationBindings!=='object'||!operationBindings.design_project_cad))throw new Error('ai_contract_missing: worker_operation_bindings')
+  const workerOperations=execution.operationPathsVersion!==undefined?createWorkerOperations({
+    version:execution.operationPathsVersion,bindings:operationBindings,projectId:opts.projectId,hasAccess,
     load:async(role,sources,focus)=>{
       // Navigation is not an assignment. Multiple inspected constructions need
       // an explicit server-issued selection, never a last-row/focus guess.
@@ -1103,7 +1119,7 @@ export async function answerWithOpenAi(opts: {
       ?await rpc('project_plan_read',{p_project:opts.projectId,p_revision:Number(id)},AbortSignal.timeout(10000))
       :await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000));
     if(error)throw new Error('record_unavailable');return dataset==='plan'?data?.record:data
-  },hasAccess,{unlimitedWork,...(execution.operationPathsVersion===1?{projectId:opts.projectId,readSection:async(id:string,revision:number,path:string[])=>{
+  },hasAccess,{unlimitedWork,...(execution.operationPathsVersion!==undefined?{projectId:opts.projectId,readSection:async(id:string,revision:number,path:string[])=>{
     const {data,error}=await rpc('read_cad_section',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_path:path},AbortSignal.timeout(10000))
     if(error)throw new Error(error.code==='42501'?'project_denied':'record_unavailable');return data
   }}:{})})
@@ -1191,7 +1207,7 @@ export async function answerWithOpenAi(opts: {
     // receipt-only recovery would abandon the unfinished part of the request.
     ...opts, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? CLAUDE_BACKGROUND_TIMEOUT_MS : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
     readToolPolicy,
-    boundDrawingWork:execution.drawingBindingVersion===1&&execution.operationPathsVersion!==1,
+    boundDrawingWork:execution.drawingBindingVersion===1&&execution.operationPathsVersion===undefined,
     ...(workerOperations?{workerOperations}:{}),
     compactToolState: execution.workingStateVersion === 1,
     checkpoint: answerCheckpoint,

@@ -5,12 +5,14 @@ import {fingerprint,rethrowContinuation} from './bob-job-journal.ts'
 export type OperationRole='structure'|'materials'|'drawing'
 type Kind='construction'|'drawing'|'shell'|'request'|'step'|'task'|'gap'|'requirement'|'plan_requirement'|'cut_plan'|'stock'|'product'
 export type OperationEntry={ref:string;kind:Kind;id:string;revision:number;label:string;parent?:string;area_id?:string|null;target_revision?:number;component_id?:string|null;definition_id?:string;quantity_mode?:string}
-export type OperationSurface={version:1;role:OperationRole;source:boolean;refs:Partial<Record<Kind,string[]>>}
-type Scope={role:OperationRole;source:ConstructionRef|null;entries:OperationEntry[];completed:{source:string;result:Record<string,any>}[];area_id:string|null}
+export type OperationSurface={version:1;role:OperationRole;source:boolean;flexible?:boolean;bindings?:OperationBindings;refs:Partial<Record<Kind,string[]>>}
+export type OperationBindings=Record<string,{source?:{id:string;revision:string;ref:string;readOnly:boolean};schema:{path:string[];hide:string[];refs:{field:string;kind:Kind;nullable:boolean;id?:string;revision?:string;when?:string;kinds?:Kind[]}[];role?:OperationRole}[]}>
+type Scope={role:OperationRole;source:ConstructionRef|null;entries:OperationEntry[];completed:{source:string;key?:string;result:Record<string,any>}[];active?:{source:string;key:string};area_id:string|null}
 export type WorkerOperationsState={version:1;projectId:string;scopes:Scope[]}
 const object=(v:any):v is Record<string,any>=>!!v&&typeof v==='object'&&!Array.isArray(v)
 const kinds:Kind[]=['construction','drawing','shell','request','step','task','gap','requirement','plan_requirement','cut_plan','stock','product']
 const sourceTools=new Set(['read_construction_draft','read_construction_delivery','check_construction_draft','derive_construction_lists','check_construction_cut_fit','save_construction_cut_plan','read_construction_changes','continue_construction_change'])
+const readSourceTools=new Set(['read_construction_draft','read_construction_delivery','check_construction_draft','derive_construction_lists','check_construction_cut_fit','read_construction_changes'])
 const editTools=new Set(['save_construction_draft','edit_construction_parts','change_construction_parameters','change_construction_roles'])
 function properties(node:any):any{return node?.properties??{}}
 function hide(node:any,...fields:string[]){for(const f of fields)delete properties(node)[f];if(Array.isArray(node?.required))node.required=node.required.filter((f:string)=>!fields.includes(f))}
@@ -28,9 +30,23 @@ function pair(node:any,id:string,rev:string|undefined,ref:string,kind:Kind,s:Ope
 export function workerOperationSpec(spec:ToolSpec,s:OperationSurface):ToolSpec{
  if(s.version!==1||!['structure','materials','drawing'].includes(s.role))throw Error('worker_operation_surface_invalid')
  const out=structuredClone(spec),p=out.function.parameters as any,n=out.function.name
+ if(s.bindings){
+  const allowed=(when?:string)=>!when||when==='unbound'&&!s.source||when==='drawingOrUnbound'&&(s.role==='drawing'||!s.source)||when==='readable'
+  for(const op of s.bindings[n]?.schema??[]){
+   if(op.role&&op.role!==s.role)continue
+   const node=op.path.reduce((o:any,k)=>o?.[k],p);if(!node)continue
+   hide(node,...op.hide)
+   for(const r of op.refs){if(!allowed(r.when)||r.id&&!Object.hasOwn(properties(node),r.id))continue
+    if(r.id)hide(node,r.id,...(r.revision?[r.revision]:[]))
+    refField(node,r.field,r.kind,s,r.nullable)
+    if(r.kinds)properties(node)[r.field].enum=[...r.kinds.flatMap(k=>s.refs[k]??[]),...(r.nullable?[null]:[])]
+   }
+  }
+  return out
+ }
  if(sourceTools.has(n)){
   hide(p,'artifact_id','revision')
-  if(s.role==='drawing'||!s.source)refField(p,'source_ref','construction',s,true)
+  if(s.role==='drawing'||!s.source||s.flexible&&readSourceTools.has(n))refField(p,'source_ref','construction',s,true)
  }
  if(editTools.has(n)&&s.role==='structure'){hide(p,'record_id','expected_revision');if(!s.source)refField(p,'source_ref','construction',s,true)}
  if(n==='transition_legacy_drawing')pair(p,'record_id','expected_revision','drawing_ref','drawing',s)
@@ -77,7 +93,7 @@ export function workerOperationSpec(spec:ToolSpec,s:OperationSurface):ToolSpec{
  return out
 }
 
-export function createWorkerOperations(opts:{projectId:string;hasAccess:()=>Promise<boolean>;
+export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBindings;projectId:string;hasAccess:()=>Promise<boolean>;
  load:(role:OperationRole,sources:ConstructionRef[],focus?:ConstructionRef)=>Promise<{status:string;source:ConstructionRef|null;entries:Omit<OperationEntry,'ref'>[];area_id?:string|null;reason?:string}>;
  validateMany?:(entries:OperationEntry[])=>Promise<boolean>;
  prepareDrawing:(source:ConstructionRef,focus?:ConstructionRef)=>Promise<Record<string,any>>;
@@ -105,7 +121,8 @@ export function createWorkerOperations(opts:{projectId:string;hasAccess:()=>Prom
    ||s.entries.some(e=>!object(e)||!/^op_[0-9a-f]{32}$/.test(e.ref)||!kinds.includes(e.kind)||typeof e.id!=='string'||!Number.isSafeInteger(e.revision)||e.revision<0))throw Error('worker_operations_checkpoint_invalid')
   if(new Set(state.scopes.map(s=>s.role)).size!==state.scopes.length||state.scopes.some(s=>
    new Set(s.entries.map(e=>e.ref)).size!==s.entries.length||s.source&&!s.entries.some(e=>e.kind==='construction'&&e.id===s.source!.artifact_id&&e.revision===s.source!.revision)
-   ||s.completed.some(c=>!object(c)||!s.entries.some(e=>e.kind==='construction'&&e.ref===c.source)||!object(c.result)||c.result.receipt?.projectId!==opts.projectId)))throw Error('worker_operations_checkpoint_invalid')
+   ||s.completed.some(c=>!object(c)||!s.entries.some(e=>e.kind==='construction'&&e.ref===c.source)||!object(c.result)||c.result.receipt?.projectId!==opts.projectId||c.key!==undefined&&!/^[0-9a-f]{64}$/.test(c.key))))throw Error('worker_operations_checkpoint_invalid')
+  if(state.scopes.some(s=>s.active&&(!/^op_[0-9a-f]{32}$/.test(s.active.source)||!s.entries.some(e=>e.kind==='construction'&&e.ref===s.active!.source)||!/^[0-9a-f]{64}$/.test(s.active.key))))throw Error('worker_operations_checkpoint_invalid')
   scopes.clear();for(const s of structuredClone(state.scopes))scopes.set(s.role,s)
  },
  async prepare(role:OperationRole,sources:ConstructionRef[],focus?:ConstructionRef){
@@ -118,7 +135,7 @@ export function createWorkerOperations(opts:{projectId:string;hasAccess:()=>Prom
   scopes.set(role,scope)
   return {status:'ready'}
  },
- surface(role:OperationRole):OperationSurface{const s=get(role);return {version:1,role,source:!!s.source,refs:Object.fromEntries(kinds.map(kind=>[kind,s.entries.filter(e=>e.kind===kind).map(e=>e.ref)]))}},
+ surface(role:OperationRole):OperationSurface{const s=get(role);return {version:1,role,source:!!s.source,flexible:opts.version!==1,...(opts.version!==1&&opts.bindings?{bindings:opts.bindings}:{}),refs:Object.fromEntries(kinds.map(kind=>[kind,s.entries.filter(e=>e.kind===kind).map(e=>e.ref)]))}},
  describe(role:OperationRole){const s=get(role);return {projectId:opts.projectId,source:s.source?{ref:s.entries.find(e=>e.kind==='construction'&&e.id===s.source!.artifact_id&&e.revision===s.source!.revision)?.ref}:null,
   selections:s.entries.map(({ref,kind,label})=>({ref,kind,label}))}},
  /** Initial catalog knowledge reads are server-originated; discard their old
@@ -155,13 +172,18 @@ export function createWorkerOperations(opts:{projectId:string;hasAccess:()=>Prom
    const e=await check(selection(s,value,kind));v[id]=e.id;if(rev)v[rev]=e.revision;return e
   }
   try{
-   if(sourceTools.has(name)){
-    if(Object.hasOwn(v,'artifact_id')||Object.hasOwn(v,'revision'))throw Error('operation_identity_is_server_owned')
-    if(s.source&&v.source_ref!==undefined&&v.source_ref!==null&&source(s,v.source_ref)?.id!==s.source.artifact_id)throw Error('operation_scope_changed')
-    const e=s.source?s.entries.find(e=>e.kind==='construction'&&e.id===s.source!.artifact_id&&e.revision===s.source!.revision):source(s,v.source_ref)
-    delete v.source_ref
-    if(!e&&name==='read_construction_draft'&&['overview','work'].includes(v.view)){v.artifact_id=null;v.revision=null}
-    else{const selected=await check(e);v.artifact_id=selected.id;v.revision=selected.revision;if(role!=='drawing'&&!s.source)s.source={artifact_id:selected.id,revision:selected.revision}}
+   const sourceBinding=opts.version!==1?opts.bindings?.[name]?.source:undefined
+   if(sourceTools.has(name)||sourceBinding){
+    const id=sourceBinding?.id??'artifact_id',rev=sourceBinding?.revision??'revision',field=sourceBinding?.ref??'source_ref'
+    if(Object.hasOwn(v,id)||Object.hasOwn(v,rev))throw Error('operation_identity_is_server_owned')
+    const readOnly=opts.version!==1&&(sourceBinding?.readOnly??readSourceTools.has(name))
+    const explicit=v[field]!==undefined&&v[field]!==null?source(s,v[field]):undefined
+    if(v[field]!=null&&!explicit)throw Error('operation_reference_required')
+    if(!readOnly&&s.source&&explicit&&explicit.id!==s.source.artifact_id)throw Error('operation_scope_changed')
+    const e=readOnly&&explicit?explicit:s.source?s.entries.find(e=>e.kind==='construction'&&e.id===s.source!.artifact_id&&e.revision===s.source!.revision):explicit
+    delete v[field]
+    if(!e&&name==='read_construction_draft'&&['overview','work'].includes(v.view)){v[id]=null;v[rev]=null}
+    else{const selected=await check(e);v[id]=selected.id;v[rev]=selected.revision;if(!readOnly&&role!=='drawing'&&!s.source)s.source={artifact_id:selected.id,revision:selected.revision}}
    }
    if(editTools.has(name)&&role==='structure'){
     if(Object.hasOwn(v,'record_id')||Object.hasOwn(v,'expected_revision'))throw Error('operation_identity_is_server_owned')
@@ -215,10 +237,22 @@ export function createWorkerOperations(opts:{projectId:string;hasAccess:()=>Prom
     const destination=v.drawing_ref===null||v.drawing_ref===undefined?undefined:await check(selection(s,v.drawing_ref,'drawing'));delete v.drawing_ref
     if(destination&&(destination.kind!=='drawing'||destination.parent!==e.id))throw Error('operation_scope_changed')
     await validate()
-    const done=s.completed.find(x=>x.source===e.ref);if(done)return {status:'complete',result:done.result}
+    const legacyDone=opts.version===1?s.completed.find(x=>x.source===e.ref):undefined
+    if(legacyDone)return {status:'complete',result:legacyDone.result}
+    const intent=await fingerprint({source:e.ref,arguments:v})
+    const done=s.completed.find(x=>x.source===e.ref&&x.key===intent&&(!destination||x.result.receipt?.recordId===destination.id)&&s.entries.some(r=>r.kind==='drawing'&&r.id===x.result.receipt?.recordId&&r.revision===x.result.receipt?.revision))
+    if(done){
+     // The receipt identifies the code-resolved destination, including a drawing
+     // created during this job. Recheck its saved revision before replay; do not
+     // create another request merely to rediscover an already committed result.
+     await check(s.entries.find(x=>x.kind==='drawing'&&x.id===done.result.receipt?.recordId&&x.revision===done.result.receipt?.revision));await validate()
+     return {status:'complete',result:done.result}
+    }
+    if(s.completed.some(x=>x.source===e.ref&&!x.key))return {status:'needs_verification',reason:'saved_drawing_intent_unavailable'}
     const ready=await opts.prepareDrawing({artifact_id:e.id,revision:e.revision},destination?{artifact_id:destination.id,revision:destination.revision}:undefined)
     if(ready.status!=='ready')return {status:String(ready.status??'unavailable'),reason:ready.reason}
     const bound=opts.drawingArguments(v);if(!bound)throw Error('operation_reference_required')
+    s.active={source:e.ref,key:intent}
     return {status:'ready',args:bound}
    }
    if(name==='plan_cad_pieces'){
@@ -257,6 +291,7 @@ export function createWorkerOperations(opts:{projectId:string;hasAccess:()=>Prom
  },
  async observe(role:OperationRole,name:string,args:Record<string,any>,result:any){
   const s=get(role),before=new Set(s.entries.map(e=>e.ref))
+  if(name==='design_project_cad'&&result?.status!=='ready')delete s.active
   if(!await opts.hasAccess())throw Error('project_denied')
   const receipt=result?.status==='saved'?result.receipt:undefined
   if(receipt?.projectId===opts.projectId&&typeof receipt.recordId==='string'&&Number.isSafeInteger(receipt.revision)){
@@ -264,7 +299,7 @@ export function createWorkerOperations(opts:{projectId:string;hasAccess:()=>Prom
    if(kind){const e=await put(s,{kind,id:receipt.recordId,revision:receipt.revision,label:receipt.label??kind,...(kind==='requirement'?{parent:s.source?.artifact_id,definition_id:args.data?.definition_id,quantity_mode:args.data?.quantity_mode}:kind==='cut_plan'?{parent:s.source?.artifact_id}:kind==='drawing'?{parent:opts.drawingWork()?.construction.artifact_id}:kind==='shell'?{area_id:args.action==='create'?args.area_id:s.entries.find(e=>e.kind==='shell'&&e.id===receipt.recordId)?.area_id}:{}),...(kind==='construction'?{area_id:s.area_id,target_revision:receipt.record?.target_revision??args.target_revision??s.entries.find(x=>x.kind==='construction'&&x.id===s.source?.artifact_id)?.target_revision}: {})})
     if(kind==='construction')s.source={artifact_id:e.id,revision:e.revision}
     if(kind==='drawing'){const work=opts.drawingWork(),ref=s.entries.find(e=>e.kind==='construction'&&e.id===work?.construction.artifact_id&&e.revision===work?.construction.revision)?.ref
-     if(ref)s.completed.push({source:ref,result:{status:'already_saved',saved:true,receipt:structuredClone(Object.fromEntries(Object.entries(receipt).filter(([key])=>key!=='record')))}})}
+     if(ref)s.completed.push({source:ref,...(s.active?.source===ref?{key:s.active.key}:{}),result:{status:'already_saved',saved:true,receipt:structuredClone(Object.fromEntries(Object.entries(receipt).filter(([key])=>key!=='record')))}});delete s.active}
    }
   }
   if(name==='read_drawing_request_work'&&result?.request?.project_id===opts.projectId){
@@ -273,7 +308,7 @@ export function createWorkerOperations(opts:{projectId:string;hasAccess:()=>Prom
   }
   if(name==='read_drawing_requests'&&Array.isArray(result?.requests))for(const row of result.requests)if(row.project_id===opts.projectId)await put(s,{kind:'request',id:row.id,revision:row.revision,label:'Drawing request · '+row.status})
   if(result?.status==='ok'){
-   if(role!=='drawing'&&!s.source&&sourceTools.has(name)&&result.projectId===opts.projectId&&result.artifact_id===args.artifact_id&&result.revision===args.revision){
+   if(opts.version===1&&role!=='drawing'&&!s.source&&sourceTools.has(name)&&result.projectId===opts.projectId&&result.artifact_id===args.artifact_id&&result.revision===args.revision){
     const entry=s.entries.find(e=>e.kind==='construction'&&e.id===result.artifact_id&&e.revision===result.revision)
     if(entry)s.source={artifact_id:entry.id,revision:entry.revision}
    }

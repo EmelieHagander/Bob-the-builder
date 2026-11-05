@@ -1,11 +1,12 @@
 import {before,after,test} from 'node:test'
 import assert from 'node:assert/strict'
-import {randomUUID} from 'node:crypto'
+import {createHash,randomUUID} from 'node:crypto'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 import {constructionFormFixture} from './support/construction-form-fixture.ts'
 import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import {manufacturePolicy} from './support/construction-instance-policy-fixture.ts'
-let pg:any,owner:string,outsider:string,project:string,other:string,source:string,drawing:string,area:string,task:string
+let pg:any,owner:string,outsider:string,project:string,other:string,source:string,secondSource:string,drawing:string,area:string,task:string
+const viewSvg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" data-page-height="100"><rect width="10" height="10"/></svg>',viewHash=createHash('sha256').update(viewSvg).digest('hex')
 const call=async(user:string|null,name:string,args:any[],role='authenticated')=>(await asProjectUser(pg,user,`select bob.${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result
 before(async()=>{
  pg=await projectSchema();owner=randomUUID();outsider=randomUUID()
@@ -18,12 +19,13 @@ before(async()=>{
  const write=(p:any)=>call(owner,'bob_project_write_v17',[project,c.thread_id,turn,c.generation,p])
  const material=await write({kind:'catalog',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{action:'ensure',key:'material',kind:'material',name:'Fixture plywood',aliases:[],profile_code:'sheet_stock',profile_revision:1,categories:['wood.plywood','sheet'],properties:{thickness:{value:'18',unit:'mm',truth:'provided_spec',parameter:null,note:''}},material_id:null,material_revision:null,notes:'',source_kind:'design_choice',source_quote:message,source_seq:null}})
  const saved=await write({kind:'construction',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{key:'frame',title:'Frame',description:'Checkpoint',area_id:null,target_revision:target.revision,change_note:'Initial',recipe:f.recipe,parameters:parameterPacket(project,f.recipe),materials:[{definition_id:'rail',material_id:material.recordId,material_revision:1,part_id:null,part_revision:null}],joints:[],instance_policy:manufacturePolicy(f.recipe),open_questions:[],form_refinement:f.refinement}})
- source=saved.recordId;drawing=randomUUID()
+ const second=await write({kind:'construction',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{key:'roof',title:'Roof',description:'Checkpoint',area_id:null,target_revision:target.revision,change_note:'Initial',recipe:f.recipe,parameters:parameterPacket(project,f.recipe),materials:[{definition_id:'rail',material_id:material.recordId,material_revision:1,part_id:null,part_revision:null}],joints:[],instance_policy:manufacturePolicy(f.recipe),open_questions:[],form_refinement:f.refinement}})
+ source=saved.recordId;secondSource=second.recordId;drawing=randomUUID()
  await call(owner,'artifact_command',[project,'create',drawing,0,{title:'Saved drawing',description:'Read fixture',kind:'detail',status:'concept',assumptions:'Synthetic only',source_media_id:null,measurements:[],target_revision:target.revision}])
  // Read fixture only: oversized annotations/files intentionally bypass CAD write
  // validation. Domain writers have their own tests; never do this in production.
  await pg.exec('alter table bob.artifact_cad_revisions disable trigger user')
- await pg.query('insert into bob.artifact_cad_revisions(project_id,artifact_id,artifact_revision,recipe,manifest,files) values($1,$2,1,$3,$4,$5)',[project,drawing,f.recipe,{annotations:'x'.repeat(280000)},{step:'x'.repeat(1000000)}])
+ await pg.query('insert into bob.artifact_cad_revisions(project_id,artifact_id,artifact_revision,recipe,manifest,files) values($1,$2,1,$3,$4,$5)',[project,drawing,{...f.recipe,views:['front']},{annotations:'x'.repeat(280000),exports:{front:{sha256:viewHash}},preview_metadata:{front:{},'front.sheet2':{}}},{step:'x'.repeat(1000000),front:Buffer.from(viewSvg).toString('base64')}])
  await pg.exec('alter table bob.artifact_cad_revisions enable trigger user')
  area='area-operation';task='task-operation'
  await pg.query('insert into bob.areas(id,project_id,slug,name) values($1,$2,$3,$4)',[area,project,'operation','Operation'])
@@ -62,7 +64,7 @@ test('image target preflight rejects missing and foreign targets before generati
 test('operation inventory and reference validation retain project, kind and exact revision fences',async()=>{
  const scope=await call(owner,'read_worker_operation_scope',[project,source,1])
  assert.equal(scope.status,'ready');assert.deepEqual(scope.source,{artifact_id:source,revision:1})
- assert(scope.entries.some((e:any)=>e.kind==='construction'&&e.id===source));assert(scope.entries.some((e:any)=>e.kind==='drawing'&&e.id===drawing))
+ assert(scope.entries.some((e:any)=>e.kind==='construction'&&e.id===source));assert(scope.entries.some((e:any)=>e.kind==='construction'&&e.id===secondSource),'write pin must not narrow read inventory');assert(scope.entries.some((e:any)=>e.kind==='drawing'&&e.id===drawing))
  assert(!JSON.stringify(scope).includes('xxxx'))
  assert.equal((await call(owner,'read_worker_operation_scope',[project,source,2])).status,'conflict')
  assert.equal((await call(owner,'read_worker_operation_scope',[other,source,1])).status,'conflict')
@@ -78,4 +80,21 @@ test('read helpers do not grant anonymous/service-role execution',async()=>{
   await assert.rejects(call(null,name,[...args],'anon'),/permission denied/)
   await assert.rejects(call(null,name,[...args],'service_role'),/permission denied/)
  }
+})
+
+
+test('saved drawing metadata and selected SVG obey exact revision, sheet, project and caller boundaries',async()=>{
+ const list=await call(owner,'list_saved_drawing_views',[project,null,null,null])
+ assert.equal(list.total,1);assert.equal(list.records.length,1);assert.deepEqual(list.records[0].views,['front','front.sheet2'])
+ assert(!JSON.stringify(list).includes('annotations'));assert(!JSON.stringify(list).includes('files'))
+ const meta=await call(owner,'read_saved_drawing_view',[project,drawing,1,'front.sheet2',false])
+ assert.equal(meta.status,'ready');assert.equal(meta.source_sha256,viewHash);assert.equal(meta.revision,1);assert(!('svg'in meta))
+ const pixels=await call(owner,'read_saved_drawing_view',[project,drawing,1,'front.sheet2',true]);assert.equal(Buffer.from(pixels.svg,'base64').toString(),viewSvg)
+ assert(JSON.stringify(pixels).length<2000);assert(!JSON.stringify(pixels).includes('xxxx'))
+ for(const args of [[other,drawing,1,'front',true],[project,drawing,99,'front',true],[project,drawing,1,'top',true],[project,drawing,1,'front.sheet3',true]])assert.equal((await call(owner,'read_saved_drawing_view',args)).status,'not_found')
+ await assert.rejects(call(outsider,'read_saved_drawing_view',[project,drawing,1,'front',true]),/project_denied/)
+ await assert.rejects(call(outsider,'list_saved_drawing_views',[project,null,null,null]),/project_denied/)
+ for(const role of ['anon','service_role'])for(const [name,args]of [['read_saved_drawing_view',[project,drawing,1,'front',true]],['list_saved_drawing_views',[project,null,null,null]]] as const)await assert.rejects(call(null,name,[...args],role),/permission denied/)
+ const after=await call(owner,'list_saved_drawing_views',[project,drawing,null,null]);assert.equal(after.records.length,0);assert.equal(after.total,1)
+ assert.equal((await call(owner,'list_saved_drawing_views',[project,null,null,'does not exist'])).total,0)
 })

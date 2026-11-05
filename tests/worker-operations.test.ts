@@ -18,7 +18,7 @@ const entries:Omit<OperationEntry,'ref'>[]=[
  {kind:'request',id:'request',revision:3,label:'Frame drawing'},
  {kind:'gap',id:'gap',revision:0,label:'Gap',parent:'request'},
 ]
-function fixture(bound=false){let valid=true,access=true;const seen:any[]=[],f=createWorkerOperations({projectId:'p',hasAccess:async()=>access,
+function fixture(bound=false,version:1|2=2){let valid=true,access=true;const seen:any[]=[],f=createWorkerOperations({version,bindings:catalogFixture().definition('bob.tools','tool_contract').definition.worker_operation_bindings as any,projectId:'p',hasAccess:async()=>access,
  load:async()=>({status:'ready',source:bound?{artifact_id:A,revision:3}:null,entries}),
  validateMany:async refs=>{seen.push({validate:refs});return valid},
  prepareDrawing:async(source,focus)=>{seen.push({source,focus});return {status:'ready'}},drawingArguments:raw=>({...raw as any,artifact_id:A,construction_revision:3}),drawingWork:()=>({construction:{artifact_id:A,revision:3},request_id:'request'})})
@@ -30,7 +30,8 @@ test('Konrad and Mattias cannot supply identities or switch a pinned job to anot
  for(const role of ['structure','materials'] as const){const {f}=fixture(true);await f.prepare(role,[])
  const b=ref(f,role,B),a=ref(f,role,A)
  assert.equal((await f.before(role,'check_construction_draft',{artifact_id:B,revision:2})).reason,'operation_identity_is_server_owned')
- assert.equal((await f.before(role,'check_construction_draft',{source_ref:b})).reason,'operation_scope_changed')
+ assert.equal((await f.before(role,'check_construction_draft',{source_ref:b})).args?.artifact_id,B)
+ assert.equal((await f.before(role,'save_construction_cut_plan',{source_ref:b})).reason,'operation_scope_changed')
  assert.deepEqual((await f.before(role,'check_construction_draft',{})).args,{artifact_id:A,revision:3})
  assert.equal(f.describe(role).source?.ref,a)
  assert.equal(f.serverArgs(role,'check_construction_draft',{artifact_id:A,revision:3}).artifact_id,undefined)
@@ -47,7 +48,8 @@ test('unbound semantic selection is code-resolved and stale validation cannot ac
  setValid(false);assert.equal((await f.before('structure','edit_construction_parts',{source_ref:b})).reason,'operation_reference_changed')
  assert.equal(f.exportState().scopes[0].source,null)
  setValid(true);assert.equal((await f.before('structure','edit_construction_parts',{source_ref:b})).args?.record_id,B)
- assert.equal((await f.before('structure','read_construction_draft',{source_ref:ref(f,'structure',A)})).reason,'operation_scope_changed')
+ assert.equal((await f.before('structure','read_construction_draft',{source_ref:ref(f,'structure',A)})).args?.artifact_id,A)
+ assert.equal(f.exportState().scopes[0].source?.artifact_id,B)
 })
 test('Rita resolves batch, shell, step and gap selections without accepting raw tuple overrides',async()=>{
  const {f}=fixture();await f.prepare('drawing',[]);const r=(id:string)=>ref(f,'drawing',id)
@@ -125,4 +127,35 @@ test('returned request records carry their own reference so identical labels can
  const output=await f.observe('drawing','read_drawing_requests',{}, {requests:[{project_id:'p',id:'request',revision:3,status:'collecting'},{project_id:'p',id:'second-request',revision:1,status:'collecting'}]})
  assert.notEqual(output.requests[0].operation_ref,output.requests[1].operation_ref)
  assert.equal((await f.before('drawing','read_drawing_request_work',{request_ref:output.requests[1].operation_ref})).args?.request_id,'second-request')
+})
+
+
+test('changed views or brief on the same revision produce a new intent; identical retries reuse only saved receipts',async()=>{
+ const {f}=fixture();await f.prepare('drawing',[])
+ const args={source_ref:ref(f,'drawing',A),drawing_ref:null,brief:'Frame',views:['front']}
+ assert.equal((await f.before('drawing','design_project_cad',args)).status,'ready')
+ await f.observe('drawing','save_cad_design',{}, {status:'saved',receipt:{projectId:'p',recordId:'drawing',revision:5,label:'Frame'}})
+ assert.equal((await f.before('drawing','design_project_cad',args)).status,'complete')
+ assert.equal((await f.before('drawing','design_project_cad',{...args,views:['top']})).status,'ready')
+ await f.observe('drawing','save_cad_design',{}, {status:'saved',receipt:{projectId:'p',recordId:'drawing',revision:6,label:'Top'}})
+ assert.equal((await f.before('drawing','design_project_cad',args)).status,'ready','an overwritten saved revision must not block a new drawing intent')
+ assert.equal((await f.before('drawing','design_project_cad',{...args,brief:'Show dimensions'})).status,'ready')
+})
+test('legacy execution retains its pinned read surface and source-only receipt replay',async()=>{
+ const {f}=fixture(true,1);await f.prepare('structure',[])
+ assert.equal((await f.before('structure','check_construction_draft',{source_ref:ref(f,'structure',B)})).reason,'operation_scope_changed')
+ const p:any=workerOperationSpec(catalogFixture().tool('read_construction_draft'),f.surface('structure')).function.parameters
+ assert(!('source_ref' in p.properties))
+})
+test('a catalog-defined reader alias projects and resolves its fields without a tool-name branch',async()=>{
+ const catalog=catalogFixture(),bindings=structuredClone(catalog.definition('bob.tools','tool_contract').definition.worker_operation_bindings) as any
+ bindings.inspect_frame={source:{id:'frame_id',revision:'frame_revision',ref:'frame_ref',readOnly:true},schema:[{path:[],hide:['frame_id','frame_revision'],refs:[{field:'frame_ref',kind:'construction',nullable:true}]}]}
+ const f=createWorkerOperations({projectId:'p',bindings,hasAccess:async()=>true,load:async()=>({status:'ready',source:{artifact_id:A,revision:3},entries}),validateMany:async refs=>refs.every(e=>e.id===B&&e.revision===2),prepareDrawing:async()=>({status:'ready'}),drawingArguments:()=>null,drawingWork:()=>undefined})
+ await f.prepare('structure',[])
+ const spec:any={type:'function',function:{name:'inspect_frame',description:'Read',parameters:{type:'object',properties:{frame_id:{type:'string'},frame_revision:{type:'integer'}},required:['frame_id','frame_revision']}}}
+ const p:any=workerOperationSpec(spec,f.surface('structure')).function.parameters
+ assert.deepEqual(p.required,['frame_ref']);assert(!('frame_id' in p.properties))
+ assert.deepEqual((await f.before('structure','inspect_frame',{frame_ref:f.exportState().scopes[0].entries.find(e=>e.id===B)!.ref})).args,{frame_id:B,frame_revision:2})
+ assert.equal(f.exportState().scopes[0].source?.artifact_id,A)
+ assert.equal((await f.before('structure','inspect_frame',{frame_id:B,frame_revision:2})).reason,'operation_identity_is_server_owned')
 })
