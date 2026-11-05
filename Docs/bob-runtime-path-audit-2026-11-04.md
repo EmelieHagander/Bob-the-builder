@@ -817,4 +817,53 @@ revocation and hash changes; legacy exact change review without FORM promotion;
 and same-revision geometry preservation plus idempotent narrative repair through
 SQL. Provider/WASM/worker regressions, Edge types and frontend/PWA checks are local.
 No full CI or paid AI/CAD probe is part of this repair. Hosted installation and
-matching public release are pending the readback below.
+matching public release are verified in the readback below.
+
+### Continued-work hosted installation — 2026-11-05, 17:05–17:12 UTC
+
+- Implementation merged in [#471](https://github.com/EmelieHagander/Bob-the-builder/pull/471),
+  source `5c021008ac2fa344c8e7813981e477f2582a1dcd`, reviewed tree
+  `4105a6f34bd340aa18437ec0cfcc3f5e6af1bb06` (local/remote tree equality).
+- Actual project URL/ref was rechecked as `yuobtgoidmmmwfqenkau`; no queued/running
+  jobs before core installation or after catalog activation. Fresh source/JWT
+  readback preceded each endpoint replacement. No existing project-content writes.
+- Core source `20261105165327_continued_construction_notes.sql` maps to hosted
+  ledger **20261105170514**, name `continued_construction_notes`, SHA-256
+  `f5e8df2c02b5860a7ab3ab6fb2cfd3d33f25cc591bf6bd8f588c552864a780bf`.
+- Catalog source `20261105165925_continued_work_catalog.sql` maps to ledger
+  **20261105170606**, name `continued_work_catalog`, SHA-256
+  `4d7070f1e3416704dda9539a2fa6e79addaffc21afc070d0d713d0d963b27bed`.
+  Both complete hosted SQL strings match their source MD5 values. Keep these
+  authoring-time filenames and ledger mappings; do not replay under source times.
+- Catalog activation followed byte-for-byte readback of both complete Bob bundles.
+  Resolved immutable manifest: `209068b0-7b40-4b43-8fde-219366267319`.
+  `bob.tools` **v49** pins `continued_work_version=1`; parameter-edit **v11**
+  and part-edit **v9** expose the same bounded optional question schema.
+
+| Consumer | Version | Files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 201 | 146 | Existing private job capability, JWT false | `56cc75de6a7a9d3e1e4f1931ba1bbd064fd655e05cf7538f86670d836255589c` |
+| ask-bob | 233 | 148 | JWT true | `178d6194e06e7d7a3deba25c386a0c768eb13471f00d850efd32a54196066608` |
+
+Every returned file matches the prepared merged-source closure byte for byte.
+Drawing-preview v2 and concept-preview v1 remain unchanged: their raster/wire
+protocol is compatible; the new saved-pixel identity is consumed by Bob's adapters.
+Hosted text validation accepts a valid question list and rejects a non-string
+question. A read-only authenticated-role check under the existing bed owner sees
+Construction **14** and piece progress **not_configured**, preserving the honest
+legacy status. Security advisors have identical seven lint groups and entities/
+counts to the pre-release baseline (observation timestamps excluded).
+
+Matching frontend: manual Pages **#395**, [run 42071944787](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/42071944787),
+completed successfully against implementation merge `5c02100` (build and deploy
+both green). The public page loads `assets/index-C6yQdkCL.js`; no frontend source
+change was needed for these runtime repairs. A cropped success/commit screenshot
+was retained for the handoff.
+
+Final focused validation: 58 pure/worker/vision tests; 21 SQL/provider/WASM tests;
+8 SQL/completion tests; 8 final visual tests. Batches overlap and are not an
+independent total. Both Bob Edge entrypoint type checks, frontend build, PWA and
+diff checks passed. No full CI, paid model/CAD probe or private browser acceptance
+was run. N1–N5 are technically installed; ordinary owner/provider acceptance and
+O5 whole-run CPU/cost remain open. Physical meaning of the entry's 209 cm remains
+unchanged and unconfirmed.
