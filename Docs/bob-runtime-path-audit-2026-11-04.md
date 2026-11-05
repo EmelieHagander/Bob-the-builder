@@ -867,3 +867,174 @@ diff checks passed. No full CI, paid model/CAD probe or private browser acceptan
 was run. N1–N5 are technically installed; ordinary owner/provider acceptance and
 O5 whole-run CPU/cost remain open. Physical meaning of the entry's 209 cm remains
 unchanged and unconfirmed.
+
+<a id="context-envelope-2026-11-05"></a>
+## Context-envelope investigation — owner runs 2026-11-05, 18:37–18:48 UTC
+
+**Investigation only; corrections below are not implemented.** The owner asked
+why input grows and what Bob actually needs. Readback confirms bob-worker v201,
+bundle `56cc75de6a7a9d3e1e4f1931ba1bbd064fd655e05cf7538f86670d836255589c`;
+the inspected continuation/request/result/answer files match installed source.
+All four jobs pin manifest `209068b0-7b40-4b43-8fde-219366267319`.
+
+| Owner run | Observed evidence |
+|---|---|
+| Barnrum – våningssäng, `0e5d63b9-2c7b-4c69-b534-cbf32f1a411c` | Main model inputs 27,737 → 29,453 → 44,225 → 57,484 tokens; successful construction read followed by `context_input_too_large`, stage `model`, 18:39:37 UTC. No final answer. |
+| Entry, `4ca1919e-83d0-460f-be53-8f0db0c45e93` | Main inputs 44,056 → 45,265 → 64,349 → 67,668; successful image open followed by the same code/stage at 18:40:23 UTC. No saved work or final answer in this attempt. |
+| Barn, `15bb592f-32d3-4cb7-b58d-8573310e75b9` | Saved image candidates; final image open followed by the same context failure. Job is technically completed at 18:43:36 UTC because receipt recovery succeeded; normal delivery did not succeed. Earlier events on this reused turn precede this job and must not be counted as its new calls. |
+| Våningssäng2, `271d0f34-a8a0-4d4c-a8bc-216b2ff86c09` | Main input reached 86,833 before delegation; Konrad's own inputs grew 75,975 → 125,075. The later bounded edit conflicted; main answer finished at 18:48:29 UTC after verification stops. Large input is observed, but this run's edit conflict is a separate cause. |
+
+Execution events and scoped function logs agree on the failed stage/code.
+These failures are application input-envelope refusals, not demonstrated
+provider maximum-context errors or CPU shutdowns. The active agent contract v24
+sets a 64,000-token continuation target and a 96,000-token main input ceiling.
+Specialists use a separate larger envelope. Provider-reported usage and the
+application's conservative GPT-tokenizer/image estimate are different measures.
+Successful main inputs can therefore exceed 96,000 provider-reported tokens.
+
+### Measured live main context
+
+A read-only copy of the running bed checkpoint **59**, 18:44:01 UTC, was analysed
+locally before terminal cleanup. The last completed main request reconstructs to
+**84,501 estimated input tokens** with its saved tools; the real model reported
+**86,833**. No project content or private reasoning is reproduced in this report.
+
+| Part | Local measurement / meaning |
+|---|---|
+| Role/persona plus context principles | 696 text tokens |
+| Toolbox directory/workflows/colleague cards | 3,460 text tokens; system total 4,156 |
+| Full native tool definitions | 10,202 text tokens across 18 tools; general editor 4,020, calculator 1,825 |
+| Fixed initial messages | 9,558 estimated conversation tokens, including history and fresh turn context |
+| Four retained images | 32,768 reserved visual tokens, plus small reference envelopes; this is an estimate, not image billing |
+| Remaining transcript | Tool results, calls and intervening messages; its older text-result allowance is separate from the image/total request size |
+
+The current-turn frame includes 16 historical receipts (1,624 tokens), fresh
+orientation (1,822), project facts (968), and current-view/source metadata.
+These measurements overlap the fixed initial messages; do not add them again.
+Removing image parts from the reconstructed diagnostic request lowers the
+estimate from 84,501 to 51,666. Removing editor/calculator schemas alone lowers
+it to 78,071. Neither experiment is a proposed production deletion of evidence
+or authority; they isolate where capacity is used.
+
+### Confirmed mechanisms and open corrections
+
+| Finding | Source / consequence | Required correction |
+|---|---|---|
+| C1: result references are not whole-request renewal | In `bob-context-continuation.ts`, `references` skips the legacy 64k rollover branch. Its text-result projection is followed by the final 96k estimate/throw. There is no request-wide headroom adjustment or equivalent renewal at the target in this path. | Bound the assembled request around the active assignment, exact work state and currently needed evidence. Renew before exhaustion; retain immutable originals for targeted reopening. Preserve native call/output pairs and original constraints. |
+| C2: images remain literal for the whole main chain | `buildBobRequest` reconstructs all seed/history image parts. The dispatcher clears only its pending carrier after delivery; that does not remove an image from continuation history. Reopening can append the same pixels again. The eight-image count is bypassed for unlimited work, and its byte limit does not account for total model headroom. | Give visual evidence an explicit active lifetime and deduplicate exact image identities in assembled input. Keep the exact comparison images while needed; after a completed stage retain source/version-bound findings and reopening references. Never silently substitute prose for an unperformed visual check. |
+| C3: tool discovery does not make all tool costs lazy | The bed picker selected four optional tools; main preload adds core tools, all colleague handovers, check readers and workpad. Its full set starts at 16 and grows to 18. General editor/calculation schema costs apply before their eventual use, while availability messages also remain in transcript. | Keep concise discoverability and select the tools/typed operation needed for the current stage. Broader schemas should load when needed and have a renewal lifetime; avoid replacing this with project-specific lists or rigid work quotas. |
+| C4: bounded individual sources do not bound their combination | The 20k older-result window excludes seed and user image carriers. Batched compaction leaves the latest 2–5 exchanges whole. Fresh facts, receipts, orientation, shelf states and older calls can coexist even when each individual packet passes its own check. | Allocate from the actual whole-request headroom, deduplicate source/version claims and replace superseded progress with a compact exact work state. Do not remove the user's selected design, deferred measurements, constraints or provenance. |
+
+Controlled offline replay uses this checkpoint and actual continuation code,
+with catalog/tool/model boundaries stubbed and one synthetic completed worker
+result (not an exact replay of a failed production request). Baseline: estimate
+85,227, four images retained, one stub dispatch succeeds. Reopening two of those
+same image refs: `context_input_too_large`, zero stub dispatches. **Zero real
+provider calls** in either case. Failed jobs' terminal checkpoints/journals were
+cleared by design, so the exact last inputs of entry/Barnrum/barn cannot now be
+reconstructed; the general mechanism and its failure boundary are reproduced.
+
+### Information needed for these assignments
+
+- **Bed visual comparison:** owner's current request and chosen mockup; exact
+  current Construction identity/revision, relevant dimensions/requirements and
+  parts; the mockup plus matching current-model views; concise findings,
+  unresolved checks and source-bound worker handoff. The captured CAD v4 views
+  are explicitly stale relative to Construction v14. They can illustrate the
+  old drawing, but cannot prove the current model matches the mockup.
+- **Entry window balance:** selected current Solution and front view, exact
+  facade/window/door geometry and measurement uncertainty, plus the requested
+  design adjustment. Broader building/material/fastener detail can be read when
+  required by the subsequent construction stage.
+- **Barn mockups:** pinned drawing/proportions and requested views; generation
+  inputs and the current candidates under review. Every older candidate need
+  not remain a pixel input to all subsequent coordination calls.
+- **Konrad:** affected current parts/parameters, shared constraints and exact
+  findings/reference evidence needed for the change; additional joints/materials
+  through focused reads. The observed main reads cover different views/part
+  groups, so they must not all be labelled redundant rereads.
+
+First repair C1/C2, then trim stage-specific tool/seed duplication. Instrument
+the fully bound request's components and renewal outcome without logging private
+text/pixels. Verify both provider protocols, checkpoints, exact reopening,
+access/source changes, and final delivery after many image/read exchanges. A
+larger ceiling alone postpones the same accumulation. These findings remain open.
+
+<a id="context-release-regression-review-2026-11-05"></a>
+## Regression review of context release — 2026-11-05
+
+**Manual source review against owner incidents; no runtime change.** Current
+hosted worker remains v201 with the SHA recorded above. Latest job/message/event
+readback at 19:21 UTC confirms the same four owner runs. Copying Launchpad's
+"strip images after first grounding iteration" rule directly is not approved by
+this review: Bob's comparisons may require further dimension/part reads while
+the same visual question is still open.
+
+| Regression risk | Recent bug / current seam | Required acceptance before release |
+|---|---|---|
+| R1: lose delegation or turn a deferred measurement into a blocker | Entry's picker/completion helpers previously lost stair history (N2). A shorter seed/brief can reproduce this even with smaller requests. | Renewal during the entry task preserves the delegated framing/roof outcome, preliminary front-window height and remeasure-at-build-start instruction. Helpers see the same current assignment and unresolved facts; no extra owner approval for ordinary work. |
+| R2: claim a comparison after its pixels disappear | Current continuation delivers real pixels after an open/restart; reference IDs are not viewed evidence. N1's stable pixel identity also carries metadata-only stale/head notices. | A multi-round comparison retains or explicitly reopens its exact required views until a source-bound finding exists. Later retirement releases pixels, not truth status: old CAD cannot prove current Construction, unconfirmed review cannot become approval, and revoked access/changed bytes never reuse evidence. Metadata notices survive until consumed. |
+| R3: regenerate images or repeat already committed work | Ladan recovered saved images; worker-operation bindings distinguish identical retries from new views/briefs. Model context and execution state have different lifetimes. | Remove old payloads from the model while preserving server-side receipts, exact intent keys, operation pins and journal/replay cursors. A crash after renewal neither generates nor saves twice. A genuinely changed drawing intent remains possible. |
+| R4: recreate unavailable tools or broken native call/output chains | N3 fixed direct use of an already visible tool. Prior retention fixes preserve parallel outputs and prevent commentary consuming exchange slots. | Renew schema, instructions and offered fence together; every kept output has its matching call. Test OpenAI and Claude plus late parallel outputs, descriptions loaded mid-turn, pending images and checkpoint resume. Existing pinned jobs keep their old request protocol. |
+| R5: repeat a blocked edit, or mistake context repair for edit repair | Bed's `edit_construction_parts` returned `construction_edit_preparation_failed` at 18:46:59 UTC. `failedWorkers.structure_piece` persisted the stop, so later handovers returned verification stops. The underlying RPC reason is collapsed; it is not proved to be a missing measurement or a geometry conflict. | A context renewal must preserve the failed-attempt/source state and cannot clear the stop just to retry. Separately classify and reconcile the actual edit conflict. A new user "kör" is not evidence that its cause has disappeared. |
+| R6: save tokens but cause endless rereads or lose reopen promises | Result archives currently belong to continuation chains; a brand-new empty chain cannot automatically open old `get_work_history` refs. Past overly small result pages/windows caused extra reading rounds. | Before advertising a reference after renewal, preserve its authorized exact-read path or replace it with the saved canonical source. Carry current-stage coverage, findings and next cursor so partial source reads can continue. Old source payloads and completed-stage notes must actually leave the next prompt; no ever-growing backup summary. |
+
+The revised design boundary is **active evidence until its question is settled,
+then an explicit stage handoff and fresh model context**. Canonical project
+facts/decisions and the server execution ledger remain outside the prompt;
+only current-stage constraints, source-bound findings, unfinished work and
+necessary tools/evidence enter the rebuilt model request. This is not a new
+spending or call-count quota. The initial owner request, physical uncertainty,
+authority and already-committed work must survive the handoff.
+
+Focused baseline revalidation: **76/76** existing helper, tool-session,
+worker-operation/piece, continuation/request and saved-vision tests pass. Three
+additional PostgreSQL-fixture checkpoint tests pass: exact construction read
+observations after yield/claim, 40 resumed main steps with one uncommitted-operation
+retry, and prepared tool cards through JSONB. This validates current invariants,
+**not the unimplemented retirement/renewal design**.
+Missing regression cases are the R1–R6 end-to-end combinations above: a smaller
+prompt and passing historical tests alone cannot close C1–C4. No real AI/CAD,
+workflow, hosted mutation or deploy was started for this review.
+
+<a id="image-dedup-increment-2026-11-05"></a>
+## First context increment — exact image input deduplication, 2026-11-05
+
+Owner approved small implementation/test increments, starting with impact, after
+preserving today's state. Remote safety branch
+[`save/bob-before-context-release-2026-11-05`](https://github.com/EmelieHagander/Bob-the-builder/tree/save/bob-before-context-release-2026-11-05)
+was created and read back at `462a6d046559324f00f9e952f16bfde152da9d56`
+**before code edits**. Local `save/local-context-review-2026-11-05` also retains
+the reviewed audit state (`dc47582`). No database/catalog/project content changes
+are needed for this increment.
+
+New durable complete-request identities adopt `imageInputDedupVersion: 1` inside
+the existing memoized execution factory. Previous jobs never rerun that factory,
+so their model inputs stay unchanged. The continuation checkpoint records the
+pin and rejects mismatched restoration. The actual full provider request keeps
+the first occurrence of an exact private resolver identity/detail pair and
+removes subsequent copies before capacity estimation. Metadata/text/native tool
+pairs are preserved. Different hashes, revisions, views and detail levels remain;
+mutable public URLs are deliberately not deduplicated. Saved project images,
+operation receipts, source bindings and archives are untouched.
+
+**Validation:** 4 new tests pass, including 40 repeated opens across JSON
+restarts, both actual provider request shapers, native invalid-input refusal,
+historical pin compatibility and a duplicate-only capacity failure that now
+fits while distinct necessary views still fail honestly. 82 related existing
+regressions pass. Three targeted activation/SQL-checkpoint cases pass. Both Bob
+Edge entrypoint type checks pass with the same installed dependency map used
+for prior releases. No paid model/CAD test or full CI was run.
+
+One older catalog-publication parity test fails at
+`tests/bob-release-capacity.test.ts:57` (`bob.tools` definition parity). The exact
+same assertion fails in an isolated, unmodified `dc47582` worktree, so it is a
+pre-existing fixture/publication issue, not caused by this increment. The scoped
+activation-pin test passes; no catalog publication is changed here.
+
+This increment prevents duplicate visual inputs; it does **not** yet release
+unique obsolete images or solve C1–C4, entry/Barnrum's exact past failure inputs,
+or the bed edit-preparation conflict. Controlled request fixtures are not
+ordinary owner/model acceptance. Runtime installation is pending readback.
+Rollback to the safety branch requires settling active new-version jobs first;
+an old runtime must not restore a newer continuation identity.

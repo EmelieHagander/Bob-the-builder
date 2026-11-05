@@ -260,6 +260,18 @@ schema migration or public request-history logging is introduced.
 
 ### PR3 — bound result payloads without an AI history summary
 
+**First context-release increment, 2026-11-05 (source prepared):** newly created
+durable complete-request execution identities pin `imageInputDedupVersion: 1`.
+Only exact private image resolver references with the same detail level are
+deduplicated in the assembled model request, before its capacity estimate. The
+first occurrence stays in place; all text, source-status notices, distinct
+revisions/views and detail levels remain. Public URLs and execution archives are
+unchanged. The pin survives checkpoints; a mismatched restore is refused. Old
+execution identities omit the pin and retain byte-identical requests. This is
+deduplication only, not retirement of unique images or whole-stage renewal.
+The [audit increment](bob-runtime-path-audit-2026-11-04.md#image-dedup-increment-2026-11-05)
+owns test/release evidence; C1–C4 and R1–R6 remain the wider lifecycle work.
+
 **Prepared, not activated.** The explicit catalog opt-in above pins
 `resultReferenceVersion: 1` together with complete requests. Their native main-turn adapter never invokes
 the AI compactor and offers `get_work_history` from the first request. Legacy jobs
