@@ -20,6 +20,7 @@ export interface ProjectContextState {
 }
 export interface ContextAdapter {
   checkpointed?: boolean
+  descriptionCache?:boolean
   category: string
   prefix: string
   count(signal: AbortSignal): Promise<number>
@@ -133,6 +134,7 @@ export function createProjectContext(opts: {
       if (name === 'describe_project_image') {
         if (!opts.describe || Object.keys(v).some(k => !['ref', 'description'].includes(k)) || typeof v.ref !== 'string'
           || typeof v.description !== 'string' || !v.description.trim() || v.description.length > 500) return invalid()
+        if(byRef(v.ref)?.descriptionCache===false)return {status:'unavailable',reason:'description_cache_not_supported',saved:false}
         const record = delivered.get(v.ref)
         if (!record) return { status: 'image_not_viewed', saved: false }
         try {
@@ -189,7 +191,7 @@ export function createProjectContext(opts: {
         ...(pending.some(r => r.item.source_kind === 'ai_generated' || ['instruction', 'proposal'].includes(String(r.item.purpose)))
           ? [{ type: 'text' as const, text:[opts.reviewLabel??(()=>{throw new Error('ai_prompt_missing: images.review-label')})(),opts.reviewInstruction??(()=>{throw new Error('ai_prompt_missing: drawing-review.instruction')})()].join('\n') }] : []),
         ...pending.flatMap(r => [{ type: 'text' as const, text: JSON.stringify({ ref: r.item.ref, title: r.item.title, version: r.version,
-          project_id: r.item.project_id, purpose: r.item.purpose, source_kind: r.item.source_kind, links: r.item.links, links_truncated: r.item.links_truncated }) }, r.image]),
+          project_id: r.item.project_id, purpose: r.item.purpose, source_kind: r.item.source_kind, artifact_revision:r.item.artifact_revision,current_revision:r.item.current_revision,historical:r.item.historical,archived:r.item.archived,view:r.item.view,source_state:r.item.source_state,source_reasons:r.item.source_reasons, links: r.item.links, links_truncated: r.item.links_truncated }) }, r.image]),
       ] }]
     },
     /** Called only after a successful model call that included the carrier. Not at listing/download time. */

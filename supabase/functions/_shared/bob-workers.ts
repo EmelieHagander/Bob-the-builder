@@ -269,7 +269,7 @@ export async function runWorker(opts: {
       ...(knowledge ? { knowledge } : {}), ...(opts.workpad ? { workpad: opts.workpad } : {}) })
   // The worker sees full manuals: it has few tools and they are fixed for the job.
   const params = { server_quote: true, include_manual: true }
-  const toolParams = () => Object.fromEntries(specs.map(spec => [spec.function.name, { card: false, include_manual: true }]))
+  const toolParams = () => Object.fromEntries(specs.map(spec => [spec.function.name, { card: false, include_manual: true, ...(spec.function.name==='list_project_category'?{categories:(spec.function.parameters as any).properties.category.enum}:{}) }]))
   const calls: { tool: string; status: string }[] = structuredClone(restored?.calls ?? [])
   // Workers with knowledge: what they saved travels to Bob as receipts, in code (no AI restates ids),
   // and with the readback switch the saved records themselves, read after the job.

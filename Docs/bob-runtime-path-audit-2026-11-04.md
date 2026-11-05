@@ -349,3 +349,55 @@ None of these flexibility mechanisms has been established as the cause of this
 specific visual-delivery failure. The [active State](bob-delivery-flow.md#state)
 owns the next actions; no additional behavior rule or mandatory owner prompt
 was introduced as a substitute for capability.
+
+
+<a id="saved-visual-access-2026-11-05"></a>
+## Saved drawing vision and flexible operations — 2026-11-05
+
+Implementation follows the failed owner retry above. Publication evidence is
+recorded below after hosted readback; local tests are not a production model run.
+
+- The existing Project Context registry adds `drawing_views`. One metadata card
+  contains exact revision/view/sheet refs. `open_project_item` prepares one chosen
+  saved sheet for the calling model, including source status, historical/current
+  revision and archival state. Bob and Rita use the same adapter and resolver.
+  Metadata is not pixels and opening is not owner approval.
+- `read_saved_drawing_view` and `list_saved_drawing_views` are authenticated,
+  security-invoker project reads. Only the selected SVG export is returned to the
+  raster boundary. No STEP, full CAD packet or service-role project read crosses
+  that boundary. Historical revisions remain explicitly historical.
+- A separate JWT-protected `drawing-preview` function rasterizes the immutable
+  source SVG with pinned Resvg WASM and DejaVu font hashes. It crops the saved
+  multi-sheet viewport without new geometry or model/CAD work. PNG <=700 kB,
+  longest side <=1024 px; cache <=8 entries / 5 minutes. Fresh caller/source
+  checks precede and follow raster/cache use. Fixed public dependency assets carry
+  no project data; unavailability fails closed.
+- Checkpoints retain private resolver references and exact source versions, never
+  SVG/PNG payloads. Source/permission changes stop subsequent model use. Saved CAD
+  views do not write image-asset description rows.
+- Construction read selections may inspect other authorized current constructions
+  without moving the write pin. SQL inventory includes those sources; writes and
+  automatic checks retain the assigned source/revision fence.
+- Drawing reuse keys include source, code-resolved destination and the full
+  requested intent/views. Identical saved retries survive restart; a new brief or
+  view can proceed on the same construction revision. Legacy execution pins keep
+  their original replay behavior; unverifiable old intent is not regenerated.
+- Native schema field/ref mappings are published as immutable
+  `bob.tools.worker_operation_bindings` catalog data. Generic projection and source
+  resolution support a reader with new tool/field names. Specialized CAD, material
+  and write validation remain server code. This is not arbitrary model-defined
+  routing. Worker final catalog binding also carries all registered categories.
+
+Validation before installation: **99 affected tests pass**, including full-schema
+PGlite caller/grant tests, actual WASM sheet/glyph rendering, cache revocation,
+source races, checkpoint/provider carrier, transport limits and new catalog-reader
+fields. Production build, PWA checks and Edge type checks pass. The exact saved
+Ladan front SVG (revision 3, SHA256
+`71debf413395d29f01c0b5ba57845bff217d1d413cd3caa5a82d230e12e03c76`)
+was read through the authenticated project role and rasterized locally: three
+1024×798 sheets, 136038 / 121066 / 106557 bytes; visually inspected sheets 1–2.
+These timings and pixels prove the derivative locally, not hosted CPU attribution.
+
+Owner facade acceptance (#438), actual model consumption in an ordinary Bob turn,
+and O5 whole-run CPU attribution remain separate acceptance work. No construction
+geometry was changed and no paid AI/CAD run was started by this implementation.
