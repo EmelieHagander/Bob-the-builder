@@ -55,18 +55,17 @@ an unscheduled build can be enriched later through the existing Project
 detail/schedule editor. Account navigation
 hides an already-open Bob composer without discarding its unsent project draft.
 The project creation modal renders above the Bob drawer. Creating a Project
-opens it. An empty Project (no Areas and no Tasks) leads with **What do you want
+opens it. A connected project with no plan, proposal, areas, tasks, saved designs, physical records or photos leads with **What do you want
 to build?** (`ProjectStart`): the idea goes into the Bob composer as an unsent
 draft, never auto-sent, followed by an optional manual path (photos,
 measurements, Areas, build day).
 
 **Start this build** moves a Project into Build. It is a person's explicit
 action, never automatic. While the Project is not yet Build or Complete:
-with an upcoming build day, Project Home leads with a large **Start this build**
-card and starting opens Today; without one, a small header button appears once
-the Project reaches Planning. In Build, Project Home leads with a **Build mode**
+with an upcoming build day, Project Home offers a large **Start this build**
+card and starting opens Today. Without a build day, a Planning project offers the action under Planning tools (in demo mode, in the header). In Build, Project Home leads with a **Build mode**
 card (next build day on one line, **What needs doing** → Today), immediately followed
-by the Plan before project notes and planning tools. Drawings stay visible, and
+by the Plan before project notes and planning tools. Drawings remain accessible, and
 measurements, materials, target and project focus fold under
 **Planning tools**. The desktop sidebar moves Today next to Project. Covered by
 `scripts/check-build-start-browser.mjs`.
@@ -109,12 +108,20 @@ Backend rules: [building model](building-model.md#room-dimensions--owner-decisio
 
 ### Compact Project home and phone conversation
 
-Project home keeps the Project phase, mixed Area summary and a stable Drawings
-entrance in the header. Measurements, Material plan and Solutions remain in the
-planning tools. The shared Plan comes before drawing previews and planning evidence. Long
-Project descriptions (including any dimensions recorded in that text), lifecycle
-explanations and Project images expand on demand; their saved content remains
-verbatim. The description is not a substitute for sourced Measurements.
+The connected project opens the approved plan's exact focus step with its goal,
+responsible party, first outstanding finish criterion and linked drawing.
+The full plan preserves area groups, parallel steps, archived areas and tasks
+awaiting organisation. Browsing a step and following its deep link publish
+the same step context to Ask Bob. Browsing never changes the stored focus.
+A failed drawing read can be retried beside the step while the plan stays usable.
+Without a focus, the available steps can be opened from the list.
+
+Project documents open on demand and distinguish construction sources from
+rendered drawings. Source-model links use the saved model revision. Open
+drawing requests are grouped by relevance to the step, with completed
+requests and run details disclosed separately. In the chat, the presented
+view leads; other saved views and revision links remain accessible on demand.
+Project notes, measurements, materials and lifecycle tools remain available.
 
 Reference exposes direct, Area-preserving links between Measurements & parts,
 Drawings, Material plan and Solutions & target. Area headers also expose Drawings;
@@ -373,7 +380,7 @@ See the [stair contract](artifacts.md#stair-geometry-study--implementation-branc
 
 Browser coverage: `scripts/check-project-work-browser.mjs` and the existing foundations/phase checks. SQL/RLS and migration coverage: `tests/unified-project-work.test.ts`.
 
-Project home now places `ProjectDrawings` below the phase rail. It previews recent saved drawings and links to their exact versions and related work Steps. A Step shows drawing count even while collapsed, and named drawing links when open. The drawing/work persistence contract is owned by [artifacts](artifacts.md#project-home-drawings-and-work-links--september-24-2026).
+Project documents preview recently updated drawings and models on demand. The viewed step links directly to its exact drawing version. The drawing/work persistence contract is owned by [artifacts](artifacts.md#project-home-drawings-and-work-links--september-24-2026).
 
 
 ### Area history and participant drawings — September 24, deployed

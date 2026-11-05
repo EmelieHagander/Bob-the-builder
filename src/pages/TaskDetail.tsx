@@ -83,7 +83,7 @@ export function TaskDetail() {
   const [version, setVersion] = useState(0)
   const { data: detail, loading, error: loadError } = useAsync(() => db.getTaskDetail(projectId, taskId), [projectId, taskId, version])
   const { data: areas } = useAsync(() => db.getAreas({ includeArchived: true }), [projectId])
-  const { data: work, loading: workLoading, error: workError } = useAsync(() => db.getProjectStepWorkspace(projectId), [projectId, version])
+  const { data: work } = useAsync(() => db.getProjectWork(projectId), [projectId, version])
   const [dialog, setDialog] = useState<{ kind: 'step' | 'delete'; step?: TaskStep } | { kind: 'instructions' | 'task' } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -120,10 +120,7 @@ export function TaskDetail() {
     </select></Field></div>
     {task.primaryStepId && <section className="card foundation-section" aria-label="Task drawings">
       <h2>Drawings for this task</h2>
-      {workError ? <div role="alert"><p>Task drawings could not be checked.</p><button className="btn" onClick={() => setVersion(v => v + 1)}>Reload drawings</button></div>
-        : workLoading || !work ? <p role="status">Loading task drawings…</p>
-          : work.drawings.some(d => d.step_id === task.primaryStepId) ? <StepDrawings projectId={projectId} drawings={work.drawings.filter(d => d.step_id === task.primaryStepId)} returnLabel={task.name} returnKey={`task:${task.id}`} />
-            : <p className="foundation-hint">No drawing is linked to this task’s current step yet.</p>}
+      <StepDrawings key={task.primaryStepId} projectId={projectId} stepId={task.primaryStepId} returnLabel={task.name} returnKey={`task:${task.id}`} showEmpty />
     </section>}
     <TaskReadinessPanel projectId={projectId} taskId={task.id} areaId={task.areaId} refreshKey={version} />
     {db.authEnabled()&&<DrawingRequests key={task.id} projectId={projectId} taskId={task.id} />}

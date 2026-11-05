@@ -232,6 +232,10 @@ function Bubble({ msg, projectId, attachedBefore, onAction, onOpenDrawing }: { m
   // The owner's own attachments just above and new illustrations are not repeated.
   const shown = new Set([...generatedImages, ...(attachedBefore ?? [])])
   const viewedImages = [...new Set(msg.evidence?.sources?.filter(s => s.dataset === 'image_pixels' && !s.visual).map(s => s.recordId) ?? [])].filter(id => !shown.has(id))
+  const [showReferences, setShowReferences] = useState(false)
+  const hasVisualResult = generatedImages.length > 0 || msg.evidence?.sources.some(source => source.visual)
+    || msg.evidence?.writes?.some(write => ['artifacts','solutions'].includes(write.dataset) && write.operation !== 'deleted' && write.revision)
+  const earlierImages = <BobChatImages projectId={projectId} ids={viewedImages} label="Image Bob looked at" />
   return (
     <div className={`bob-message ${isUser ? 'bob-message-user' : 'bob-message-assistant'}`}>
       <div className="bob-bubble">
@@ -240,8 +244,9 @@ function Bubble({ msg, projectId, attachedBefore, onAction, onOpenDrawing }: { m
         <BobChatImages projectId={projectId} ids={parseBobImageIds(msg.imageIds)} />
         <BobChatImages projectId={projectId} ids={generatedImages} label="Project illustration" />
         {!isUser&&<BobChatDrawings projectId={projectId} receipts={msg.evidence?.writes} sources={msg.evidence?.sources}/>}
-        {viewedImages.length > 0 && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 }}>Earlier {viewedImages.length === 1 ? 'image' : 'images'} Bob looked at</div>}
-        <BobChatImages projectId={projectId} ids={viewedImages} label="Image Bob looked at" />
+        {viewedImages.length > 0 && (hasVisualResult ? <details className="chat-earlier-results" onToggle={event => setShowReferences(event.currentTarget.open)}>
+          <summary>Reference images · {viewedImages.length}</summary>{showReferences && earlierImages}
+        </details> : earlierImages)}
         {isUser && msg.deliveryState === 'failed' && !msg.deliveryRecovery && <div className="foundation-hint" style={{ color: 'inherit' }}>Bob’s earlier attempt was interrupted. Your message is saved.</div>}
         {isUser && msg.deliveryRecovery === 'completed' && <div className="foundation-hint" style={{ color: 'inherit' }}>The drawing was saved after the earlier interruption.</div>}
         {msg.evidence?.currentView && <ViewEvidence view={msg.evidence.currentView} />}

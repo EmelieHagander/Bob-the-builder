@@ -984,15 +984,15 @@ select {
 .project-home .page-title { overflow-wrap: anywhere; }
 .project-area-summary { font-size: 13px; }
 .project-description, .project-context-details { margin-top: 8px; border-bottom: 1px solid var(--line); }
-.project-description > summary, .project-context-details > summary, .project-photo-details > summary { min-height: 44px; padding: 12px 0; font-size: 13px; font-weight: 700; cursor: pointer; }
+.project-description > summary, .project-context-details > summary, .project-disclosure > summary { min-height: 44px; padding: 12px 0; font-size: 13px; font-weight: 700; cursor: pointer; }
 .project-description .instruction-text { font-size: 14px; }
 .project-shortcuts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: var(--section-gap); }
 .project-shortcuts .btn { min-width: 0; min-height: 48px; justify-content: flex-start; padding: 8px 12px; }
 .project-shortcuts .btn span { min-width: 0; overflow-wrap: anywhere; }
 .project-detail-link { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; font-weight: 700; color: var(--accent-2); }
 .project-home #project-plan { scroll-margin-top: var(--section-gap); }
-.project-home .project-photo-details { margin-top: var(--section-gap); padding: 0 16px 12px; }
-.project-home .project-photo-details:not([open]) { padding-bottom: 0; }
+.project-home .project-disclosure { margin-top: var(--section-gap); padding: 0 16px 12px; }
+.project-home .project-disclosure:not([open]) { padding-bottom: 0; }
 .project-home summary:focus-visible, .project-home a:focus-visible, .project-home button:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
 @media (max-width: 860px) {
   .main-col { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
@@ -1113,3 +1113,33 @@ select {
 .step-drawings { padding: var(--space-2); border-left: 3px solid var(--brand); background: var(--surface-2); }
 .step-drawings a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; }
 .drawing-return { max-width: 100%; white-space: normal; }
+
+/* Project work leads with the single step the person has opened or Bob is focusing. */
+.project-plan-panel { padding: var(--panel-padding); margin: var(--section-gap) 0; }
+.current-plan-step { min-width: 0; overflow-wrap: anywhere; }
+.plan-step-label, .document-kind { color: var(--accent-2); font-size: 13px; font-weight: 700; margin: 0 0 6px; }
+.current-plan-step h2 { font-size: clamp(21px, 4vw, 28px); line-height: 1.15; margin: 0 0 8px; }
+.step-responsibility, .step-goal { margin: 6px 0 10px; }
+.step-responsibility { font-size: 14px; color: var(--ink-soft); }
+.step-need { border-left: 3px solid var(--honey); padding-left: 10px; }
+.step-support > summary, .full-project-plan summary, .request-history > summary, .request-diagnostics > summary, .chat-earlier-results > summary {
+  cursor: pointer; min-height: 44px; padding: 12px 0; font-weight: 650;
+}
+.full-project-plan { margin-top: 8px; border-top: 1px solid var(--line); }
+.plan-step-link { display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 8px 0; min-height: 44px; border-bottom: 1px solid var(--line); text-decoration: none; }
+.plan-step-link[aria-current="step"] { font-weight: 750; }
+.plan-step-link small { color: var(--ink-soft); }
+.step-drawings { list-style: none; padding: 0; }
+.step-drawings a { display: inline-flex; align-items: center; min-height: 44px; }
+.request-history { margin: var(--section-gap) 0; }
+@media (max-width: 560px) {
+  .project-workbench-nav a { flex: 1; justify-content: center; padding-inline: 3px; font-size: 13px; }
+  .project-home .project-header-identity .ui-thumbnail { width: 44px; height: 44px; flex-basis: 44px; }
+}
+
+.past-request > summary { min-height: 44px; padding: 10px 0; cursor: pointer; }
+.project-requests { margin: var(--section-gap) 0; }
+
+.project-model-source { display: inline-flex; align-items: center; min-height: 44px; margin-inline: var(--panel-padding); text-decoration: underline; }
+
+.project-phase-control { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; border: 0; background: transparent; padding: 0; color: var(--ink-soft); }

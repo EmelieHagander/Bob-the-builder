@@ -96,18 +96,12 @@ export async function verifyFactsBrowser(page, base, fixture, width) {
   let opening = page.getByRole('article', { name: 'Opening width', exact: true })
   await opening.getByText('Not measured yet', { exact: true }).waitFor()
 
-  // The home Dashboard is the fast planning path: the saved unknown must surface
-  // as the next step and drill directly into the To measure selection.
+  // Project focus comes from the plan; recorded facts remain in the planning tools.
   await page.goto(base+'#/project')
-  const nextStep = page.getByRole('link').filter({ hasText: 'Check 1 required measurement' })
-  await nextStep.getByText('Opening width', { exact: false }).waitFor()
-  const missingCard = page.getByRole('region', { name: 'Planning next steps' })
-  await missingCard.getByText('Still missing', { exact: true }).waitFor()
-  await missingCard.getByText('Opening width', { exact: true }).waitFor()
-  await page.screenshot({ path: 'test-results/actionable-dashboard-' + width + '.png', fullPage: true })
-  await nextStep.click()
+  await page.locator('.planning-tools > summary').click()
+  await page.getByRole('navigation',{name:'Project tools'}).getByRole('link',{name:'Measurements & existing parts'}).click()
   await page.getByRole('heading', { name: 'Measurements & existing parts', exact: true }).waitFor()
-  assert.equal(await page.getByLabel('Show records', { exact: true }).inputValue(), 'missing')
+  await page.getByLabel('Show records', { exact: true }).selectOption('missing')
   opening = page.getByRole('article', { name: 'Opening width', exact: true })
   await opening.getByText('Not measured yet', { exact: true }).waitFor()
 

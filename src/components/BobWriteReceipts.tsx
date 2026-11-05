@@ -5,7 +5,7 @@ import type { ProjectWriteReceipt } from '../data/provenance'
 export function BobWriteReceipts({ receipts, onOpenDrawing }: { receipts?: ProjectWriteReceipt[]; onOpenDrawing?: () => void }) {
   const links = receipts?.filter(receipt => ['building_context','stock','requirements','materials','events','tasks'].includes(receipt.dataset) || (receipt.dataset === 'artifacts' && receipt.revision))
   if (!links?.length) return null
-  return <div className="bob-saved-links">{links.map(receipt =>
+  const content = <div className="bob-saved-links">{links.map(receipt =>
     <Link key={`${receipt.dataset}:${receipt.recordId}:${receipt.revision ?? ''}:${receipt.savedAt}`}
       onClick={onOpenDrawing} title={receipt.label}
       to={receipt.dataset === 'building_context'
@@ -22,4 +22,5 @@ export function BobWriteReceipts({ receipts, onOpenDrawing }: { receipts?: Proje
         : receipt.dataset==='materials'?'Open Shopping':`Open drawing · v${receipt.revision}`}
     </Link>,
   )}</div>
+  return links.length === 1 ? content : <details className="chat-earlier-results"><summary>Saved records · {links.length}</summary>{content}</details>
 }

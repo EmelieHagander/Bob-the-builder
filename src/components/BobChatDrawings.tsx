@@ -66,15 +66,42 @@ function SavedDrawing({projectId,id,revision,view:requestedView}:{projectId:stri
 }
 /** Transcript stores exact receipts, never picture bytes or generated URL text. */
 export function BobChatDrawings({projectId,receipts,sources}:{projectId:string;receipts?:ProjectWriteReceipt[];sources?:ProjectSource[]}){
- const refs=new Map<string,ProjectWriteReceipt>()
- for(const receipt of receipts??[])if(receipt.projectId===projectId&&receipt.dataset==='artifacts'&&receipt.operation!=='deleted'&&Number.isSafeInteger(receipt.revision)&&Number(receipt.revision)>0)
-  refs.set(`${receipt.recordId}:${receipt.revision}`,receipt)
- const concepts=new Map<string,ProjectWriteReceipt>()
- for(const receipt of receipts??[])if(receipt.projectId===projectId&&receipt.dataset==='solutions'&&receipt.operation!=='deleted'&&Number.isSafeInteger(receipt.revision)&&Number(receipt.revision)>0){
-  if(Number(receipt.revision)>Number(concepts.get(receipt.recordId)?.revision??0))concepts.set(receipt.recordId,receipt)
+ const [expanded, setExpanded] = useState(false)
+ const shown = new Map<string, ProjectSource>()
+ for (const source of sources ?? []) {
+   if (source.projectId === projectId && source.visual) shown.set(source.visual.ref, source)
  }
- const seen=new Map<string,ProjectSource>()
- for(const source of sources??[])if(source.projectId===projectId&&source.visual)seen.set(source.visual.ref,source)
- for(const source of seen.values())if(source.visual?.kind==='concept')concepts.delete(source.recordId);else refs.delete(`${source.recordId}:${source.visual?.revision}`)
- return <>{[...seen.values()].map(s=>s.visual!.kind==='concept'?<SavedConcept key={s.visual!.ref} projectId={projectId} id={s.recordId} revision={s.visual!.revision} view={s.visual!.view}/>:<SavedDrawing key={s.visual!.ref} projectId={projectId} id={s.recordId} revision={s.visual!.revision} view={s.visual!.view}/>)}{[...concepts.values()].map(r=><SavedConcept key={`${projectId}:solution:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!}/>)}{[...refs.values()].map(r=><SavedDrawing key={`${projectId}:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!}/>)}</>
+ const views = [...shown.values()].map(source => {
+   const visual = source.visual!
+   const Preview = visual.kind === 'concept' ? SavedConcept : SavedDrawing
+   return <Preview key={visual.ref} projectId={projectId} id={source.recordId} revision={visual.revision} view={visual.view} />
+ })
+ const shownVersions = new Set([...shown.values()].map(s => `${s.visual!.kind}:${s.recordId}:${s.visual!.revision}`))
+ const saved = new Map<string, ProjectWriteReceipt>()
+ for (const r of receipts ?? []) {
+   if (r.projectId !== projectId || r.operation === 'deleted' || !r.revision) continue
+   if (r.dataset !== 'solutions' && r.dataset !== 'artifacts') continue
+   const key = `${r.dataset === 'solutions' ? 'concept' : 'cad'}:${r.recordId}:${r.revision}`
+   if (!shownVersions.has(key)) saved.set(key,r)
+ }
+ // An explicit presentation pins the view, even if a later revision was saved.
+ // With receipts alone, each distinct document can contribute its latest view.
+ // A construction receipt has no drawing preview and must not bury a separate drawing.
+ const primary = views.slice(0, 1), secondary = views.slice(1)
+ const latest = new Map<string,number>()
+ for (const r of saved.values()) {
+   const id = r.dataset + ':' + r.recordId
+   latest.set(id, Math.max(latest.get(id) ?? 0, r.revision!))
+ }
+ for (const [key,r] of saved) {
+   const Preview = r.dataset === 'solutions' ? SavedConcept : SavedDrawing
+   const preview = <Preview key={key} projectId={projectId} id={r.recordId} revision={r.revision!} />
+   const document = r.dataset + ':' + r.recordId
+   if (views.length || r.revision !== latest.get(document)) secondary.push(preview)
+   else primary.push(preview)
+ }
+ if (!primary.length) return null
+ return <>{primary}{secondary.length > 0 && <details className="chat-earlier-results" onToggle={e => setExpanded(e.currentTarget.open)}>
+   <summary>Other views and versions · {secondary.length}</summary>{expanded && secondary}
+ </details>}</>
 }
