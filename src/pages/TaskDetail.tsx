@@ -6,10 +6,9 @@ import * as db from '../data/database'
 import type { TaskDetail as Detail, TaskStatus, TaskStep } from '../data/types'
 import { Field, FormError, inputStyle } from '../components/form'
 import { Modal } from '../components/Modal'
-import { GuidePhoto } from '../components/GuidePhoto'
+import { GuideVisuals } from '../components/GuideVisuals'
 import { GuidePager } from '../components/GuidePager'
 import { ProjectImages } from '../components/ProjectImages'
-import { StepDrawings } from '../components/StepDrawings'
 import { PhasePill } from '../components/PhaseUI'
 import { TaskModal } from '../components/editors'
 import { TaskReadinessPanel } from '../components/TaskReadinessPanel'
@@ -105,6 +104,7 @@ export function TaskDetail() {
     const next = new URLSearchParams(params)
     next.set('instruction', step.id)
     next.delete('context')
+    next.delete('visual')
     return `/tasks/${encodeURIComponent(taskId)}?${next}`
   }
   const selectContext = (wholeTask: boolean) => {
@@ -137,7 +137,7 @@ export function TaskDetail() {
           {active.isCheckpoint && <span>{active.required ? 'Required check' : 'Optional check'}</span>}
         </GuidePager>
         <h2>{active.title}</h2>
-        <GuidePhoto projectId={projectId} target={{kind:'step',id:active.id}} />
+        <GuideVisuals projectId={projectId} planStepId={task.primaryStepId} taskId={task.id} target={{kind:'step',id:active.id}} returnLabel={active.title} returnKey={`instruction:${active.id}`} />
         {active.instructions && <p className="instruction-text">{active.instructions}</p>}
         <label className="foundation-check"><input type="checkbox" checked={Boolean(active.completedAt)} disabled={busy || !editable}
           onChange={e => {
@@ -161,14 +161,11 @@ export function TaskDetail() {
           <StepImages projectId={projectId} stepId={active.id} />
         </details>
       </article> : <>
+        <GuideVisuals key={task.id} projectId={projectId} planStepId={task.primaryStepId} target={{kind:'task',id:task.id}} returnLabel={task.name} returnKey={`task:${task.id}`} />
         {detail.instructions && <p className="instruction-text">{detail.instructions}</p>}
-        <GuidePhoto projectId={projectId} target={{kind:'task',id:task.id}} />
         {!detail.instructions && <button className="btn" onClick={() => openBobWithDraft('Show me how to do this task, one step at a time. What do I do first?')}>Ask Bob how</button>}
       </>}
     </section>
-    {task.primaryStepId && <section className="foundation-section" aria-label="Task drawings">
-      <StepDrawings key={task.primaryStepId} projectId={projectId} stepId={task.primaryStepId} returnLabel={task.name} returnKey={`task:${task.id}`} />
-    </section>}
     {db.authEnabled() && <DrawingRequests key={task.id} projectId={projectId} taskId={task.id} />}
     <details className="project-reference" id="task-options"><summary>Task details</summary>
       <div className="foundation-actions"><SkillPill level={task.skill}/><span>{task.hours}</span>{area && <PhasePill phase={area.phase} prefix="Area" />}</div>

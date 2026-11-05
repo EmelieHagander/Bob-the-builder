@@ -31,6 +31,11 @@ try{
    {id:'legacy',project_id:'P',primary_step_id:null,area_id:'kitchen',name:'Inspect existing floor',status:'done',skill:'novice',hours:'1h',materials:'0 / 0',task_assignees:[],instructions:'',updated_at:'2026-09-24T00:00:00Z'}]
   let creates=0,reads=0,requestsVisible=false,cancels=0,contextFailures=0
   let offlineLinks=false, planOnly=false, pendingPlan=false, showDocuments=false
+  const photo={id:'floor-photo',project_id:'P',title:'Floor corner',state:'ready',purpose:'instruction',bucket_id:'project-media',object_path:'P/floor.png',content_type:'image/png',media_links:[{id:'link-photo',plan_step_id:grouped.id}]}
+  const instructionPhoto={...photo,id:'trim-photo',title:'Trim detail',media_links:[{id:'instruction-link',step_id:'first-instruction'}]}
+  const taskPhoto={...photo,id:'room-photo',title:'Whole room',purpose:'reference',media_links:[{id:'task-link',task_id:'cut'}]}
+  const mixedPhotos=[photo,instructionPhoto,taskPhoto,{...photo,id:'unlinked-photo',title:'Other step only',media_links:[{id:'other-link',plan_step_id:root.id}]}]
+  let mixedMedia=false
   const sentScreens=[]
   const requestWork={request:{id:'40000000-0000-4000-8000-000000000001',revision:3,status:'needs_data',reason:null,artifact_id:null,artifact_revision:null,scope:{step_id:root.id}},gaps:[
    {id:'50000000-0000-4000-8000-000000000002',action:'prerequisite',blocking:true,observed_revision:3,task_id:null,task_name:null,label:'Inspect floor before placing drawers',owner_label:null,step_title:grouped.title,area_id:'kitchen',step_id:grouped.id},
@@ -62,6 +67,14 @@ try{
    if(path==='/rest/v1/projects')return respond(req.headers().accept?.includes('object+json')?project:[project])
    if(path==='/rest/v1/account')return respond({id:'account',name:'Work fixture',owner_name:'',email:''})
    if(path==='/rest/v1/project_plan_revisions')return respond(pendingPlan?[{summary:'Review the proposed sequence'}]:[])
+   if (path==='/rest/v1/media_assets' && mixedMedia) {
+    if(url.searchParams.has('id')) return respond(mixedPhotos.find(p=>'eq.'+p.id===url.searchParams.get('id')))
+    return respond(mixedPhotos) // Include unrelated links to exercise the UI scope check.
+   }
+   if (path.endsWith('/P/floor.png')) return route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAoAAAAICAIAAABPmPnhAAAAFElEQVR4nGNc7mbEgBsw4ZEb0tIAHQYBLxJvyIQAAAAASUVORK5CYII=','base64'),headers:{'Access-Control-Allow-Origin':'*'}})
+   if(path==='/rest/v1/task_steps'&&mixedMedia) return respond(['first-instruction','second-instruction'].map((id,index)=>({
+    id,task_id:'cut',position:index+1,title:index?'Place panel':'Remove trim',instructions:'Keep the edge visible.',revision:1
+   })))
    if(path==='/rest/v1/current_drawing_overview'&&showDocuments&&url.searchParams.has('id')){
     assert.equal(url.searchParams.get('id'),'eq.drawing-id')
     assert.equal(url.searchParams.get('revision'),'eq.3')
@@ -286,14 +299,76 @@ try{
   assert(svg.includes('ModelGeometry') && !svg.includes('Sheet notes') && !svg.includes('Second sheet'),'Guide uses only the saved vector geometry')
   assert((await plan.locator('.guide-drawing a').getAttribute('href')).endsWith('drawing=drawing-id&revision=3'))
   await plan.getByText('Sources changed — review drawing',{exact:true}).waitFor()
-  await page.locator('#project-information > summary').click()
-  await page.locator('#project-documents > summary').click()
+  mixedMedia=true
+  await page.reload()
+  const hero=plan.locator('.guide-image img')
+  await plan.getByRole('button',{name:'Open image: Floor corner'}).waitFor()
+  await hero.evaluate(img=>img.decode())
+  assert((await hero.boundingBox()).height>=200,'The active figure fills the working card')
+  if (width < 860) {
+    const dock=await page.locator('.mobile-nav').boundingBox()
+    const bob=await page.getByRole('button',{name:'Ask bob',exact:true}).boundingBox()
+    assert(bob.y>=dock.y && bob.height>=44 && bob.width>=44,'Chat leaves the picture unobstructed')
+    for (const tab of await page.locator('.mobile-nav a').all()) {
+      const box=await tab.boundingBox()
+      assert(box.width>=44 && box.x+box.width<=bob.x,'Every tab remains reachable beside chat')
+    }
+  }
+  const choices=plan.getByRole('group',{name:'Choose a picture or drawing'})
+  assert.equal(await choices.getByRole('button').count(),2,'Only exact step attachments appear')
+  const drawChoice=choices.getByRole('button',{name:/Drawing: Same title · v3/})
+  await drawChoice.locator('img').evaluate(img=>img.decode())
+  await plan.getByRole('button',{name:'Open image: Floor corner'}).click()
+  await page.getByRole('dialog').getByRole('img').waitFor()
+  await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
+  await drawChoice.click()
+  await plan.getByText('Sources changed — review drawing',{exact:true}).waitFor()
+  assert.equal(await plan.locator('.guide-image').count(),1)
+  await page.reload()
+  await plan.getByText('Sources changed — review drawing',{exact:true}).waitFor()
+  assert.equal(await drawChoice.getAttribute('aria-pressed'),'true')
+  const planUrl=page.url()
+  await page.getByRole('link',{name:'Images & drawings',exact:true}).click()
+  await page.getByRole('navigation',{name:'Project media'}).getByRole('link',{name:'Photos'}).click()
+  await page.getByRole('region',{name:'Project images',exact:true}).waitFor()
+  await page.getByRole('link',{name:'Back to plan'}).click()
+  assert.equal(page.url(),planUrl)
+  await plan.getByText('Sources changed — review drawing',{exact:true}).waitFor()
+  await page.getByRole('navigation',{name:'Browse plan steps'}).getByRole('link',{name:'Previous',exact:true}).click()
+  assert(!page.url().includes('visual='))
+  assert.equal(await plan.getByRole('button',{name:'Open image: Floor corner'}).count(),0)
+  // The instruction image wins over the whole-task reference and parent plan
+  // drawing. Browse all three, then verify the next instruction's own scope.
+  planOnly=false
+  tasks[0].primary_step_id=grouped.id
+  await page.goto(base+'#/tasks/cut')
+  const taskGuide=page.getByRole('region',{name:'Task images and drawings'})
+  await taskGuide.getByRole('button',{name:'Open image: Trim detail'}).waitFor()
+  assert.equal(await taskGuide.locator('.visual-choice').count(),3)
+  await taskGuide.getByRole('button',{name:'Photo: Whole room'}).click()
+  await taskGuide.getByText('Task photo · Whole room',{exact:true}).waitFor()
+  await taskGuide.getByRole('button',{name:/Drawing: Same title · v3/}).click()
+  await taskGuide.getByRole('link',{name:'Same title · v3'}).waitFor()
+  await taskGuide.getByText(/Plan step · Concept drawing/).waitFor()
+  assert((await taskGuide.locator('.guide-image').boundingBox()).y < (await page.locator('.task-step .instruction-text').boundingBox()).y)
+  await page.reload()
+  await taskGuide.getByRole('link',{name:'Same title · v3'}).waitFor()
+  await page.getByRole('navigation',{name:'Browse instructions'}).getByRole('link',{name:'Next'}).click()
+  await page.getByRole('heading',{name:'Place panel'}).waitFor()
+  await taskGuide.getByRole('button',{name:'Open image: Whole room'}).waitFor()
+  assert.equal(await taskGuide.getByRole('button',{name:'Photo: Trim detail'}).count(),0)
+  assert(!page.url().includes('visual='))
+  planOnly=true
+  tasks[0].primary_step_id=root.id
+  await page.goto(base+'#/project')
+  mixedMedia=false
+  await page.getByRole('link',{name:'Images & drawings',exact:true}).click()
   const documents=page.getByRole('region',{name:'Project drawings'})
   await documents.getByRole('link',{name:'Open drawing: Same title · v3'}).waitFor()
   await documents.getByRole('link',{name:'Open model: Same title · v20'}).waitFor()
   const sourceLink=documents.getByRole('link',{name:'Source model · v16'})
   assert.equal(await sourceLink.getAttribute('href'),'#/artifacts?drawing=model-id&revision=16','Source opens the pinned model, even when its latest revision is newer')
-  pendingPlan=true;await page.reload()
+  pendingPlan=true;await page.goto(base+'#/project');await page.reload()
   await plan.getByRole('heading',{name:'Plan proposal'}).waitFor()
   assert.equal(await page.getByRole('heading',{name:'What do you want to build?'}).count(),0)
   project.phase='build'

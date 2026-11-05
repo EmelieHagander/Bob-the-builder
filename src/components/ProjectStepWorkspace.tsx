@@ -8,7 +8,7 @@ import { PhasePill } from './PhaseUI'
 import { ProjectImages } from './ProjectImages'
 import { ProjectStart } from './ProjectStart'
 import { TaskModal } from './editors'
-import { StepDrawings } from './StepDrawings'
+import { GuideVisuals } from './GuideVisuals'
 import { GuidePager } from './GuidePager'
 import { DrawingRequests } from './DrawingRequests'
 
@@ -50,7 +50,7 @@ function CurrentStep({ work, step, people, onAdd }: {
     {step.state === 'blocked' && <p className="guide-caution" role="status">Blocked{need && ` · ${need.title}`}</p>}
     {step.state === 'completed' && <p className="foundation-hint">Completed</p>}
     {need && step.state !== 'blocked' && <p className="guide-need">{need.title}</p>}
-    <StepDrawings guide projectId={work.project_id} stepId={step.id} returnLabel={step.title} returnKey={`step:${step.id}`} />
+    <GuideVisuals key={step.id} projectId={work.project_id} planStepId={step.id} target={{kind:'plan_step',id:step.id}} returnLabel={step.title} returnKey={`step:${step.id}`} />
     {nextTask && !area?.archived_at && step.state !== 'completed' && <Link className="guide-task" to={`/tasks/${encodeURIComponent(nextTask.id)}`}>
       <span><small>{nextTask.status === 'doing' ? 'In progress' : 'Task'}</small>{nextTask.name}</span><span aria-hidden="true">→</span>
     </Link>}
@@ -104,7 +104,7 @@ function StartOrResume({ projectId, hasWork }: { projectId: string; hasWork: boo
   const { data, error, loading } = useAsync(() => db.getProjectStartingPoint(projectId), [projectId, retry])
   if (loading) return <p role="status">Checking saved project work…</p>
   if (error || !data) return <p role="alert">Saved project work could not be checked. <button className="btn" onClick={() => setRetry(n => n + 1)}>Retry</button></p>
-  if (!hasWork && !data.pending && !data.hasSources) return <ProjectStart />
+  if (!hasWork && !data.pending && !data.hasSources) return <ProjectStart photoUrl="/project?media=photos" />
   return <div className="current-plan-step"><h2>{data.pending ? 'Plan proposal' : 'Continue planning'}</h2>
     <p>{data.pending?.summary || 'Use the existing project records to prepare the plan.'}</p>
     <button className="btn" onClick={() => openBobWithDraft(data.pending ? 'Show me the pending plan proposal.' : 'Help me plan the next step using the saved project records.')}>Discuss with Bob</button>

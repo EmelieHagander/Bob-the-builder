@@ -122,8 +122,13 @@ Without a focus, the available steps can be opened from the list.
 An exact linked drawing opens the full saved version. For a CAD sheet with
 the worker’s labelled geometry, the guide fits that geometry to the phone.
 Changed or unavailable sources retain an inline warning. Other saved drawings
-use their sheet preview. An image can illustrate a step only when its attachment
-names that step. A missing illustration leaves the working view text-only.
+use their sheet preview. The large frame precedes the instruction. Thumbnails
+switch between the linked photos and exact drawings without leaving the step.
+Whole-task photos are labelled separately. Opening a photo shows its zoomable
+original. Project-wide media is one tap away under **Images & drawings**.
+On phones, Ask Bob sits beside the bottom tabs, clear of the figure.
+Returning restores the step. When a step has no linked media its guide stays
+text-only.
 
 Task detail opens the first unfinished instruction, or the specific instruction
 in its URL. It keeps the full authored instruction, its linked image, required

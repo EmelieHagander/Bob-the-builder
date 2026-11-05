@@ -56,7 +56,7 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
     changed()
     return result as Row
   }
-  async function getMedia(projectId: string, target: MediaTarget, offset = 0, readyOnly = false): Promise<MediaPage> {
+  async function getMedia(projectId: string, target: MediaTarget, offset = 0, readyOnly = false, imageId?: string): Promise<MediaPage> {
     if (!client) return { items: [], hasMore: false }
     const { db, assertCurrent } = connection(projectId)
     if (target.kind === 'project' && target.id !== projectId) throw new UserError('Project changed.')
@@ -64,6 +64,7 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
     let query = db.from('media_assets').select('*,media_links(id,area_id,task_id,step_id,plan_step_id)' + relation).eq('project_id', projectId)
     if (target.kind !== 'project') query = query.eq('target.' + target.kind + '_id', target.id)
     if (readyOnly) query = query.eq('state','ready')
+    if (imageId) query = query.eq('id', imageId)
     const rows = value(await query.order('created_at', { ascending: false }).order('id').range(offset, offset + 12)) as unknown as Row[]
     assertCurrent()
     if (rows.some(row => row.project_id !== projectId)) throw new DataError('project_mismatch', 'Image project mismatch.')

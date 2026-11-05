@@ -4,7 +4,7 @@ import { ProjectStepWorkspace } from '../components/ProjectStepWorkspace'
 import { ProjectDrawings } from '../components/ProjectDrawings'
 import { useEffect, useState, type ReactNode } from 'react'
 import type { BuildEvent } from '../data/types'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
 import { PhasePill, PhaseRail, PhaseTransitionDialog, NextActionCard } from '../components/PhaseUI'
 import { ProjectThumbnail } from '../components/ProjectThumbnail'
@@ -24,6 +24,15 @@ export function ProjectHome() {
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState('')
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const media = params.get('media')
+  const showingMedia = db.authEnabled() && (media === 'photos' || media === 'drawings')
+  const mediaUrl = (section?: 'photos' | 'drawings') => {
+    const next = new URLSearchParams(params)
+    if (section) next.set('media', section)
+    else next.delete('media')
+    return { pathname: '/project', search: next.toString() }
+  }
   const { data: project, loading: projectLoading, error: projectError } = useAsync(() => db.getProject(), [projectVersion, version])
   const { data: areas, loading: areasLoading, error: areasError } = useAsync(() => db.getAreas(), [projectVersion, version])
   const { data: people } = useAsync(() => db.getPeople(), [projectVersion])
@@ -72,7 +81,7 @@ export function ProjectHome() {
       <div className="project-header-identity">
         {thumbnailId && <ProjectThumbnail projectId={project.id} mediaId={thumbnailId} />}
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 7 }}>
+        <div className="project-phase-row">
           <button className="project-phase-control" aria-label={project.phase ? 'Review phase' : 'Set project phase'}
             title={project.phase ? 'Review phase' : 'Set project phase'} onClick={() => setPhaseOpen(true)}>
             <PhasePill phase={project.phase} prefix="Project" /><Icon name="caret-down" size={12} />
@@ -84,11 +93,23 @@ export function ProjectHome() {
       </div></div>
       <div className="cluster no-print">
         {!connected && startButton}
-        <Link className="btn" to="/artifacts">Drawings</Link>
+        {connected
+          ? <Link className="btn media-entry" aria-label={showingMedia ? 'Back to plan' : 'Images & drawings'} to={mediaUrl(showingMedia ? undefined : 'drawings')}>
+              <Icon name={showingMedia ? 'arrow-left' : 'images'} size={16} />{showingMedia ? 'Back to plan' : <span>Images &amp; drawings</span>}
+            </Link>
+          : <Link className="btn" to="/artifacts">Drawings</Link>}
 
       </div>
     </div>
 
+    {showingMedia ? <section className="project-media" aria-label="Images and drawings">
+      <nav aria-label="Project media" className="media-tabs">
+        <Link to={mediaUrl('drawings')} replace aria-current={media === 'drawings' ? 'page' : undefined}>Drawings</Link>
+        <Link to={mediaUrl('photos')} replace aria-current={media === 'photos' ? 'page' : undefined}>Photos</Link>
+      </nav>
+      {media === 'drawings' ? <ProjectDrawings key={project.id} projectId={project.id} />
+        : <ProjectImages key={project.id} projectId={project.id} target={{kind:'project',id:project.id}} title="Project images" allowUpload allowThumbnail />}
+    </section> : <>
     {startError && <FormError>Could not start the build: {startError}</FormError>}
 
     {building && <BuildFocus next={next} />}
@@ -141,12 +162,10 @@ export function ProjectHome() {
 
     </PlanningTools>
 
-    {connected && <ProjectDrawings key={`documents:${project.id}`} projectId={project.id} />}
-
-    <details className="card project-photo-details project-disclosure" id="project-images" onToggle={event => setImagesOpen(event.currentTarget.open)}>
+    {!connected && <details className="card project-photo-details project-disclosure" id="project-images" onToggle={event => setImagesOpen(event.currentTarget.open)}>
       <summary>Project images</summary>
       {imagesOpen && <ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" allowUpload allowThumbnail />}
-    </details>
+    </details>}
 
     {!db.authEnabled() && <section style={{ marginTop: 'var(--section-gap)' }}>
       <SectionTitle action={<Link to="/areas" style={{ fontSize: 13, color: 'var(--accent-2)', fontWeight: 700 }}>All Areas</Link>}>
@@ -202,6 +221,8 @@ export function ProjectHome() {
     </div>
 
     </details>
+
+    </>}
 
     {phaseOpen && <PhaseTransitionDialog title="Review Project phase" current={project.phase} onClose={() => setPhaseOpen(false)}
       onSave={async (phase, reason) => { await db.setProjectPhase(phase, reason); setPhaseOpen(false); setVersion(value => value + 1) }} />}

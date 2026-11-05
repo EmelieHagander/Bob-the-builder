@@ -39,13 +39,13 @@ function DrawingCard({ drawing }: { drawing: db.ProjectDrawingCard }) {
     return () => observer.disconnect()
   }, [])
   return <article className="project-drawing-card" ref={ref}>
-    <DrawingLink projectId={drawing.project_id} returnLabel="Project plan" returnKey={`project:${drawing.id}`} to={drawingUrl(drawing)} className="project-drawing-open" aria-label={`Open ${drawing.isConstruction ? 'model' : 'drawing'}: ${drawing.title} · v${drawing.revision}`}>
+    <DrawingLink projectId={drawing.project_id} returnLabel="Images & drawings" returnKey={`project:${drawing.id}`} to={drawingUrl(drawing)} className="project-drawing-open" aria-label={`Open ${drawing.isConstruction ? 'model' : 'drawing'}: ${drawing.title} · v${drawing.revision}`}>
       <p className="document-kind">{drawing.isConstruction ? 'Construction model' : 'Drawing'}</p>
       {!drawing.isConstruction && <div className="project-drawing-preview">{drawing.source_state === 'unavailable' ? <p>Preview unavailable until sources can be checked.</p> : visible && <DrawingPreview drawing={drawing} />}</div>}
       <h3>{drawing.title}</h3>
       <p className="foundation-hint">{statusLabel[drawing.status]} · v{drawing.revision}</p>
     </DrawingLink>
-    {drawing.modelSource && <DrawingLink projectId={drawing.project_id} returnLabel="Project documents" returnKey={`model:${drawing.id}`}
+    {drawing.modelSource && <DrawingLink projectId={drawing.project_id} returnLabel="Images & drawings" returnKey={`model:${drawing.id}`}
       to={drawingUrl(drawing.modelSource)} className="project-model-source">Source model · v{drawing.modelSource.revision}</DrawingLink>}
     <DrawingSourceNotice source={drawing} />
     {drawing.steps.length > 0 && <ul className="project-drawing-steps" aria-label="Related steps">
@@ -54,7 +54,7 @@ function DrawingCard({ drawing }: { drawing: db.ProjectDrawingCard }) {
   </article>
 }
 
-function DocumentList({ projectId }: { projectId: string }) {
+export function ProjectDrawings({ projectId }: { projectId: string }) {
   const version = useProjectVersion(), [retry, setRetry] = useState(0)
   const { data, error, loading } = useAsync(() => db.getProjectDrawingCards(projectId), [projectId, version, retry])
   return <section className="foundation-section project-drawings" aria-label="Project drawings">
@@ -65,12 +65,4 @@ function DocumentList({ projectId }: { projectId: string }) {
           : <><div className="project-drawing-grid">{data.slice(0, 3).map(drawing => <DrawingCard key={`${projectId}:${drawing.id}:${drawing.revision}`} drawing={drawing} />)}</div>
             {data.length > 3 && <p className="foundation-hint">Showing the three most recently updated documents.</p>}</>}
   </section>
-}
-
-export function ProjectDrawings({ projectId }: { projectId: string }) {
-  const [open, setOpen] = useState(false)
-  return <details id="project-documents" className="card project-disclosure" onToggle={e => setOpen(e.currentTarget.open)}>
-    <summary>Project documents</summary>
-    {open && <DocumentList projectId={projectId} />}
-  </details>
 }

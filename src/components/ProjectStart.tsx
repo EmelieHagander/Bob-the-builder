@@ -5,7 +5,7 @@ import { inputStyle } from './form'
 import { Icon } from './ui'
 
 /** First screen of an empty project: say the idea in plain words and let Bob draft the plan. */
-export function ProjectStart() {
+export function ProjectStart({ photoUrl }: { photoUrl?: string } = {}) {
   const [idea, setIdea] = useState('')
   const openImages = () => {
     const images = document.getElementById('project-images') as HTMLDetailsElement | null
@@ -24,7 +24,7 @@ export function ProjectStart() {
       <Icon name="tree-evergreen" size={16} /> Ask Bob to plan it
     </button>
     <details><summary>Other ways to start</summary><ol className="project-start-steps">
-      <li><button type="button" className="project-start-link" onClick={openImages}>Add photos of the space</button><span className="foundation-hint">so Bob can see what is there today</span></li>
+      <li>{photoUrl ? <Link to={photoUrl}>Add photos of the space</Link> : <button type="button" className="project-start-link" onClick={openImages}>Add photos of the space</button>}<span className="foundation-hint">so Bob can see what is there today</span></li>
       <li><Link to="/facts">Note the measurements you know</Link><span className="foundation-hint">unknown ones can be measured later</span></li>
       <li><Link to="/areas">Split the work into Areas</Link><span className="foundation-hint">only if the project is big</span></li>
       <li><Link to="/events">Plan a build day</Link><span className="foundation-hint">when you want help from others</span></li>
