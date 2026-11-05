@@ -474,3 +474,208 @@ Entré fix #466 is merged and published by Pages #393 on exact merge
 Solution previews. The [Solution owner](solutions.md#saved-concept-previews-in-bob-chat--2026-11-05)
 records the 26 green affected tests and the remaining private-chat acceptance
 boundary. This repairs existing replies without new AI work or project writes.
+
+
+<a id="entry-five-findings-2026-11-05"></a>
+## Entré: five findings investigated and implementation plan — 2026-11-05
+
+**Status: investigation/reproductions complete; changes below are planned, not
+implemented or deployed.** Owners: project edits/solutions, project facts, shared
+AI seam, Project Context. This is evidence and a staged repair plan, not another
+prompt policy. The active delivery State links here.
+
+### Pinned observation
+
+Entré turn `9a1108ca-939f-4753-9b04-85b9d388170e`, job
+`abdd5557-de69-4afc-8fb8-e01e1a26dd24`, ran 13:56:11–13:58:29 CET.
+It completed, error_code null, two worker claims. Solution revisions 11–13 and
+the corresponding selected-target decisions were saved. That is successful
+persistence, not proof of visual review or construction suitability. The observed
+shutdown was EarlyDrop after normal background continuation; this is not CPUTime
+failure evidence. Investigation performed only reads and local synthetic tests.
+Later owner edits are independent; immutable revision 13 is the geometry baseline.
+
+Durable `bob.execution_events` confirms 13 main model calls, **seven returning
+get_work_history**, three edit writes and a final answer. Main input ranged from
+29438 to 78302 tokens. Model-event cost is USD 1.743988 (the general usage ledger
+also includes the separate embedding cost). These are observed totals, not an
+attribution guessed from a time window.
+
+### F1 — The generic result pager adds seven model rounds
+
+`displayEditSnapshot` sends the full design intent, measurement evidence, checks
+and link dictionaries. Each successful selected-solution edit returns the full
+fresh display again. `constructionReadiness` is already compact; it is not a
+second full model copy. The generic result reference layer cuts these tool
+results at 3000 serialized tokens. The model then fetches the remaining literal
+JSON through get_work_history. These are pages of retained results, not seven
+repeated database reads and not evidence of a runaway loop.
+
+Local reproduction using the saved v10 model with a reduced surrounding envelope
+still produces 11092 characters / 3675 serialized tokens and a first-page cursor.
+The actual live read has more surrounding evidence. The immutable v13 intent is
+12847 bytes with 36 nodes and 11 components. Current-head reads can differ while
+the owner continues working; they must not replace this incident baseline.
+
+**Repair:** retain the complete server-side edit snapshot and exact edit_ref,
+but return purpose-built compact model summaries/section reads. Make requested
+nodes, components, views, choices and source facts independently readable against
+that same snapshot. After a save, return the fresh ref, changed content and
+compact checks rather than resending the full model. Large originals remain
+available on demand. Add same-batch choice/component linking from F2 so a write
+need not be followed by full rereads just to resolve a new identity. Do not fix
+this by globally enlarging prompts or weakening the reference/source fence.
+
+**Acceptance:** a section produced by the domain reader reaches the provider
+whole; the representative edit/save response does not need generic history pages.
+Freshness/conflict, caller access, exact revisions and checkpoint replay remain
+covered. Compare model rounds, input/cache tokens and delivered outcome in the
+next ordinary owner run; no hard call-count/spending limit is introduced.
+
+### F2 — Two different API behaviors force the extra revisions
+
+1. v11 creates a width decision through add_choice. Its ID is correctly assigned
+   by the server. The add operation cannot also link it to model components, so
+   v12 is needed solely to connect that new decision to wall_front. The live
+   revision comparison confirms null links in v11 and wall_front in v12/v13.
+2. `applyProjectDelta` unconditionally replaces `alignment.basis` with the change
+   reason unless alignment is explicitly supplied. Consequently v12's small link
+   edit discards the longer existing reconciliation basis; v13 restores it.
+   A local metadata-only label edit reproduces this replacement and draft reset.
+
+**Repair:** preserve the existing reconciliation basis when invalidating status
+to draft; use the existing change_note for the new edit reason. An explicit
+alignment update remains possible and subject to the existing authority/gates.
+Add an operation that creates a choice and links it to server-issued component
+selections in the same bound transaction. The caller must not manufacture the
+future persistent ID. Keep target advancement atomic with the same Solution.
+
+**Acceptance:** the representative geometry/decision/link change can be saved
+once, with no repair save. The prior basis and unrelated sources/choices remain;
+changed geometry still becomes draft and never inherits stale visual approval.
+Foreign, stale or ambiguous component selections fail closed; retries reuse the
+committed receipt without making another revision.
+
+### F3 — Picker failure is confirmed; its original subtype is not retained
+
+The picker consumed 6752 input / 116 output tokens and returned success=false.
+The retained model event classifies it only as model_error, role other. The
+terminal journal cleanup is working and has removed the raw transient response;
+the precise old cause cannot now be established responsibly.
+
+The provider adapter computes JSON/schema/refusal/output-limit error outcomes,
+but its ledger callback records only success and usage. `logAIUsage` does not
+write the existing error_code/latency columns. The execution-metrics role list
+also folds tool-picker/memory-stair/completion-gate into other. A further metrics
+gap: none of the seven internal history calls has its own tool event, although
+returned model tool names retain enough evidence to reconstruct them.
+
+A reproducible **possible failure class**, not the established live cause:
+the picker schema requires an unused reason of <=200 characters. Claude's wire
+schema cannot enforce maxLength, and the adapter rejects an overlong reason even
+when tool selections are valid. The consumer never uses this reason. The same
+wire/post-validation distinction applies to the four-tool bound; synthetic picker
+tests currently bypass that real provider-validation boundary for oversized picks.
+
+**Repair first:** record bounded error codes and schema issue paths/counts,
+actual helper identity and timing in existing execution metrics; count internal
+history tool calls as well. Preserve privacy: no prompts, output excerpts,
+arguments, source values or secrets. Link each synchronous usage row to its
+execution event (for example a returned usage-event identifier). Do not put the
+same Bob job ID into background_job_id: that existing column has a unique index
+for single durable provider jobs, not multiple calls in one Bob turn.
+
+Then repair the proven schema/adapter subtype from the next ordinary observation.
+The unused reason is a candidate for removal through immutable catalog
+publication. Keep candidate filtering, existing tool permissions and safe fallback;
+do not retry paid picker calls blindly or loosen general output validation.
+
+**Acceptance:** fixture refusal, malformed JSON, schema-bound violation, output
+limit and transport failure have distinct safe diagnostics and correct helper
+attribution. A valid tool list survives the actual provider/caller seam. Ledger
+links and deterministic tool events remain correct through replay without double
+billing/counting. A failed optional picker still lets Bob continue safely.
+
+### F4 — The door value exists, but its definition is ambiguous
+
+The stored measurement is labelled karmytterhöjd and measured, value 209 cm.
+Its source explicitly says underside of threshold to top of trim. Bob's reply
+retains that source description but also treats the value as the frame's height
+in the model. This is a conflict in meaning within the source record, not a
+missing value or an arithmetic-fetch failure. The 98 cm width and 118×170 cm
+window records exist as measured project facts.
+
+Measurement identity already has optional property/side/reference metadata;
+reuse that owner before adding a competing measurement system. The concept model
+explicitly excludes ParameterInput source nodes, whereas the Construction
+parameter engine can bind an exact measurement revision. Concept values therefore
+carry a decision/estimate plus prose, not the same typed source binding.
+
+**Repair:** deliver exact source revision, property/reference, complete source
+explanation and uncertainty together when a model dimension uses a measurement.
+Plan a versioned concept-source binding compatible with the existing measurement
+and parameter owners; update JS/SQL validation, rendering, readiness and export
+consumers together. Source meaning must not be inferred by a door-specific text
+rule. An unclassified/ambiguous datum remains unresolved for a verified opening
+or derived sill dimension. Owner clarification can establish what was actually
+measured once; existing classification/history rules still apply.
+
+**Acceptance:** an outer-trim height does not silently become a verified frame
+height; changes to the exact source revision invalidate dependent readiness.
+Legacy concepts remain readable with honest design/estimate status. **Do not
+change 209, subtract a guessed trim size or backfill a measurement definition
+automatically.** This case needs a source-definition decision, not invented data.
+
+### F5 — Solution vision is a distinct missing source adapter
+
+The owner can now see Solution concepts in chat (#466), using `SolutionConcept`
+and `conceptSvg`. Model vision is separately registered in Project Context:
+media images and saved CAD drawing_views only. There is no Solution-concept
+adapter. No open_project_item/image_pixels consumption was recorded for this
+incident. Correctly saving model JSON is not a completed visual review.
+
+**Repair:** register exact Solution/view references in the existing Project
+Context registry for Bob and Rita. Derive pixels with the same concept renderer
+and existing bounded raster engine, with caller, project, exact revision,
+current-head/source state and renderer version checks. Keep original SVG/PNG
+bytes out of checkpoints. Feed the pixels through the existing image carrier to
+a normal following model call; no new image-generation/CAD job is needed.
+Actual visual delivery is recorded only after provider consumption succeeds.
+
+Carry the visual source kind/ref/version through evidence and chat display.
+The current generic image_pixels source recordId alone is insufficient: a CAD
+Artifact or Solution UUID must not be passed to BobChatImages as a media-asset
+UUID. Route by a validated visual source descriptor, not by title/text guessing.
+
+**Acceptance:** Bob and Rita can open the same immutable Solution/view that the
+owner sees; denied/foreign/stale/source-changed cases are explicit and fail
+closed as appropriate. A consumed concept/CAD view remains reachable after
+reply/reload through its correct viewer. Viewing never records owner approval
+or implies construction safety. UI and provider/checkpoint tests must both pass.
+
+### Proposed delivery order and review gates
+
+1. **Diagnostic visibility (F3):** preserve a safe failure subtype before it is
+   lost and repair helper/internal-tool attribution. This lets the next normal
+   owner turn establish the picker cause without a paid diagnostic rerun.
+2. **One coherent edit (F2):** preserve the basis while invalidating alignment;
+   create/link choices atomically. This removes two confirmed forced saves.
+3. **Thin semantic reads/results (F1):** use the same exact server snapshot with
+   section reads and compact changed-state responses; remove the seven paging
+   detours in a representative fixture.
+4. **Source meaning (F4):** implement explicit versioned source binding and
+   uncertainty propagation; leave the ambiguous existing measurement unchanged.
+5. **Shared concept vision (F5):** extend the existing registry/raster/carrier and
+   visual evidence/display routing for the same saved Solution views.
+
+Each delivery has focused regression/type checks and an explicit source/catalog/
+RPC/Edge readback before its status becomes installed. Larger source-binding
+changes need a coordinated migration and immutable catalog activation. Existing
+in-flight jobs keep their pinned contract. The final ordinary owner probe checks
+saved geometry, readable visuals, source truth, tool behavior and cost together;
+no paid AI/CAD rerun or full CI is started by this investigation.
+
+Baseline tests executed: **18 pass** across picker, Anthropic and saved-drawing
+vision. Those verify current behavior, not the planned fixes. Source authority
+for this investigation is main `b7d8fd53b21577dc6befa3ca3536bb60eb2fd111` and
+the immutable live turn/revisions above. Broader CPU attribution O5 remains open.
