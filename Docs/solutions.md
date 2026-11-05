@@ -325,3 +325,43 @@ geometry/measurement checks, K2 and CAD/manufacturing restrictions remain in for
 Untouched legacy alignment keeps its prior design-readiness behavior and is **not**
 backfilled as shown or accepted evidence. Full FORM delivery and 3D/export review
 remain separate work in [State](bob-delivery-flow.md#state).
+
+
+## Saved concept previews in Bob chat — 2026-11-05
+
+A Solution with an immutable `design_intent.model` is a renderable 2D concept,
+not a generated image asset or a CAD Artifact. The transcript's exact Solution
+receipt must therefore open that model through the existing `SolutionConcept`
+renderer. `BobChatDrawings` now covers both concept and CAD receipt kinds.
+
+For each Solution identity in one reply, show only its highest saved receipt
+revision (for example the entré reply saved v9 and then v10). Other projects,
+deleted records, target decisions and invalid revisions do not become previews.
+The data owner `solutions.chatPreview` reads only that exact version's concept
+and its authorized current head. It never substitutes newer geometry. Older or
+archived versions retain explicit notices; revoked/missing access fails closed
+with retry. Legacy text-only Solutions remain text-only and invalid saved model
+data is reported as unavailable.
+
+The existing lazy chat preview and shared Modal are reused. The thumbnail names
+all saved views; opening it rechecks access/current head, then uses the same
+view selectors, zoom and dimension/provenance table as Solutions. The chat modal
+is read-only: it does not create a model presentation, publish a new navigation
+pointer or record owner acceptance. Concept estimates and unsupported details
+remain visible. Formal shown-model feedback still belongs to the Solutions
+surface and its exact presentation contract above.
+
+The owner report was reproduced from entré turn
+`7ed14f11-8af6-45bd-a265-26999e3bbacf`, job
+`5e6f91d3-57bc-47ad-a3d3-badbe2393a70` (2026-11-05 11:10–11:12 CET).
+Bob saved Solution `b78f6970-5af6-4ae1-9f3e-36bc9ddfb799` v9/v10 and target
+selection receipts, but no generated-media/CAD receipt. Its final reply correctly
+referred to a saved 2D sketch, which the chat did not render. This differs from
+the earlier missing-CAD-preview publication and does not require new generation.
+
+Validation: 24 affected data/renderer tests, production build and PWA checks pass.
+Authenticated hosted reads confirm exact Solution v10 and its current head; its
+saved plan/front/side views rasterize locally with 9/9/5 visible shapes. The front
+view was visually inspected. A local HTML browser fixture could not be opened:
+the cloud browser blocks `file:` URLs; no workaround was attempted. Private chat
+browser acceptance remains separate from the data/renderer/build evidence.

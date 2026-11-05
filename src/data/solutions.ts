@@ -98,6 +98,28 @@ export function createSolutions(client: SupabaseClient<any, any, any> | null, ca
     return { decision: d, solution: s, requestedAreaId, inherited }
   }
   return {
+    /** Exact saved concept for a transcript receipt. Do not substitute the head
+     * or hydrate unrelated measurements/media just to show one saved model. */
+    async chatPreview(projectId: string, id: string, revision: number) {
+      if (!id || id.length > 200 || !Number.isSafeInteger(revision) || revision < 1) throw new UserError('Invalid saved concept version.')
+      const { db, guard } = connection(projectId)
+      const r = checked(await db.from('solution_revisions').select('project_id,solution_id,revision,title,design_intent,archived')
+        .eq('project_id', projectId).eq('solution_id', id).eq('revision', revision).maybeSingle()) as Row | null
+      guard()
+      if (!r) throw new UserError('Saved concept unavailable. Reload to check access.')
+      scoped([r], projectId)
+      if (r.solution_id !== id || r.revision !== revision) throw new UserError('Saved concept version mismatch.')
+      const head = checked(await db.from('current_solutions').select('project_id,solution_id,revision,archived')
+        .eq('project_id', projectId).eq('solution_id', id).maybeSingle()) as Row | null
+      guard()
+      if (!head) throw new UserError('Current solution access could not be checked.')
+      scoped([head], projectId)
+      if (head.solution_id !== id || !Number.isSafeInteger(head.revision) || head.revision < revision) throw new UserError('Saved concept identity mismatch.')
+      const intent = r.design_intent == null ? null : parseDesignIntent(r.design_intent)
+      if (r.design_intent == null || intent && !intent.model) return null
+      return { projectId, id, revision, latestRevision: head.revision, title: String(r.title), archived: r.archived === true,
+        currentlyArchived: head.archived === true, intent }
+    },
     async presentConstruction(projectId: string, id: string, revision: number, viewId: string) {
       const { db, guard } = connection(projectId)
       const result = checked(await db.rpc('record_construction_presentation', { p_project: projectId, p_artifact: id, p_revision: revision, p_view: viewId }))
