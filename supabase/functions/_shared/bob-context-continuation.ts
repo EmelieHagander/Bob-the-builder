@@ -25,6 +25,7 @@ export interface BobContextContinuationState {
   version: 1;
   strategyVersion: number;
   resultReferenceVersion?: 1;
+  imageInputDedupVersion?: 1;
   chains: [string, Omit<Chain, 'operations'> & { operations: [string, Operation][] }][];
 }
 const HISTORY_TOOL = 'get_work_history'
@@ -204,6 +205,8 @@ export function createBobContextContinuation(opts: {
   /** Pinned only for new native main turns. CAD and legacy jobs keep their
    * existing compactor and archive cursor contract. */
   mainResultReferences?: 1
+  /** New execution identities only; old journalled requests remain exact. */
+  imageInputDedupVersion?: 1
   onInternalTool?:(input:{name:string;status:string;callId:string;role:string;ms:number})=>Promise<void>
   /** Pinned per execution. Older results stay whole, newest first, up to this
    * many tokens before they become references. A fixed two-exchange window
@@ -242,8 +245,10 @@ export function createBobContextContinuation(opts: {
   const chains = new Map<string, Chain>()
   const resultTokens = new Map<string, number>()
   const enabled = opts.version === 1
+  if (opts.imageInputDedupVersion !== undefined && opts.imageInputDedupVersion !== 1) throw new Error('image_input_dedup_version_invalid')
   const exportState = (): BobContextContinuationState => clone({ version: 1, strategyVersion: opts.version ?? 0,
     ...(opts.mainResultReferences === 1 ? { resultReferenceVersion: 1 as const } : {}),
+    ...(opts.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
     chains: [...chains].map(([id, chain]) => [id, { ...chain, operations: [...chain.operations] }]),
   })
   const restoreState = (state: BobContextContinuationState): void => {
@@ -257,7 +262,7 @@ export function createBobContextContinuation(opts: {
     const messages = (value: unknown): boolean => Array.isArray(value) && value.every(message)
     const natural = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0
     if (!state || state.version !== 1 || state.strategyVersion !== (opts.version ?? 0)
-      || state.resultReferenceVersion !== opts.mainResultReferences || !Array.isArray(state.chains)
+      || state.resultReferenceVersion !== opts.mainResultReferences || state.imageInputDedupVersion !== opts.imageInputDedupVersion || !Array.isArray(state.chains)
       || new Set(state.chains.map(entry => Array.isArray(entry) ? entry[0] : null)).size !== state.chains.length) throw new Error('context_checkpoint_invalid')
     const restored = new Map<string, Chain>()
     for (const entry of state.chains) {
@@ -422,7 +427,8 @@ export function createBobContextContinuation(opts: {
       // unsupported adapter cannot silently inherit OpenAI's response cursor.
       const replay = replaysMessages(options)
       const identity = JSON.stringify([options.app, options.coworkerId, options.functionName, options.catalogRoleKey ?? options.functionName,
-        ...(native ? ['complete-request-v1'] : []), ...(references ? ['result-references-v1'] : [])])
+        ...(native ? ['complete-request-v1'] : []), ...(references ? ['result-references-v1'] : []),
+        ...(native && opts.imageInputDedupVersion === 1 ? ['image-input-dedup-v1'] : [])])
       let chain: Chain
       if (options.previousResponseId) {
         const previous = chains.get(options.previousResponseId)
@@ -599,6 +605,7 @@ export function createBobContextContinuation(opts: {
       }
       if (native) options = buildBobRequest(options, {
         seed: chain.seed, history: chain.groups.flat(), historicalImages: chain.historicalImages,
+        ...(opts.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
         ...(chain.handoff ? { handoff: { role: 'user', content: JSON.stringify({
           context_handoff: chain.handoff, original_assignment_preserved: true,
           completed_operations: [...chain.operations.values()].slice(-40).map(statusOf),
