@@ -272,6 +272,20 @@ deduplication only, not retirement of unique images or whole-stage renewal.
 The [audit increment](bob-runtime-path-audit-2026-11-04.md#image-dedup-increment-2026-11-05)
 owns test/release evidence; C1–C4 and R1–R6 remain the wider lifecycle work.
 
+**Next diagnostic increment, source verified 2026-11-05:** complete-request
+assembly supplies content-free image counts separately from provider options.
+`[Bob image input attempt]` logs numeric `before`, `after`, `removed`,
+`unique_private`, `other` and `dedup_version` inside the existing journalled
+dispatcher, after the dispatch/time gates. Counts cover message `image_url`
+parts, not pixel bytes or token savings. `unique_private` means eligible exact
+private reference/detail identities; public, inline and ineligible-role parts
+are `other`. Completed journal replays produce no new attempt log; pending
+async recovery can produce another attempt, so log-row count is not billable
+model-call count. Capacity refusals before dispatch have no attempt log.
+Counts are neither checkpoint state nor provider/journal fingerprint input.
+No URLs, hashes, source IDs, text or pixels enter this diagnostic. The audit
+increment owns deployment status and the next ordinary owner-run comparison.
+
 **Prepared, not activated.** The explicit catalog opt-in above pins
 `resultReferenceVersion: 1` together with complete requests. Their native main-turn adapter never invokes
 the AI compactor and offers `get_work_history` from the first request. Legacy jobs

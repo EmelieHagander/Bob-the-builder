@@ -1059,3 +1059,67 @@ unchanged. No SQL/catalog/project-content mutation, preview redeploy, Pages
 workflow, full CI or paid model/CAD probe was needed or started. Existing web
 clients use these same endpoint URLs. New ordinary owner/model acceptance remains
 open before the next larger context-lifecycle increment.
+
+### First owner run after dedup — entry, 2026-11-05, 20:25–20:27 UTC
+
+Turn `044a28df-d3a8-4a52-9cb1-485810f810f7`, job
+`4e7ca1df-64e1-4bb9-a988-e4b81d2fe2d8`, requested a proportion review and
+balanced window proposal while confirming the preliminary height. New durable
+checkpoint job started after the v202/v234 release, with the same catalog
+manifest. It completed in about **123 seconds**, through three worker claims.
+Nine model calls and nine tool executions are recorded; model cost totals
+**USD 1.3087552**. All model events succeeded. Scoped logs have no context-error
+or CPUTime entry. Final delivery is **partial**, not receipt-recovery; a normal
+answer was delivered.
+
+Readback verifies Solution **21** and selected target **21**. Both front-window
+position expressions changed, with explicit proposal labels and an open owner
+choice; no owner decision is invented. Front width **370 mm** and preliminary
+height **1170 mm** remain unchanged. No construction/CAD execution occurred.
+Visual evidence records the old Solution **20 front view**; delivery evidence
+does not establish that Bob inspected the new revision 21 image. Terminal
+checkpoint/journal cleanup prevents reconstructing the exact two open requests
+or the component that set the aggregate partial flag.
+
+Main provider inputs were **47,216 → 49,683 → 63,977 → 70,788 → 74,005 →
+77,404 → 86,826** tokens. This is successful continuation but still growing
+input. The deployment/new-job path supports the new pin, but no persisted
+before/after image-count diagnostic exists, so the run cannot quantify actual
+dedup savings or prove a causal improvement over the earlier different request.
+Add content-free image counts before judging that effect.
+
+Inherited data inconsistency remains: both Solution 20 and 21 descriptions still
+say front windows are 170 cm high and tight beside the door, while their model
+already uses preliminary 117 cm and revision 21 moves the windows. This predates
+deduplication; source narrative/model alignment needs a separate repair. No
+project data, model rerun or runtime change was made during this read-only check.
+
+### Image-count diagnostic increment — source verified 2026-11-05
+
+Owner approved the next small measurement step after the first ordinary run.
+Complete-request assembly reports six numeric values: message image parts
+`before`/`after` deduplication, `removed`, eligible `unique_private` identities,
+`other` image parts, and `dedup_version` (0/1). Identity is the same exact private
+resolver reference/detail pair used by deduplication; uniqueness is not an
+inference that different references contain different pixels. Public/inline
+images and parts outside ordinary user messages are counted as `other`.
+
+Counts travel as a separate dispatcher argument. They do not enter provider
+options, model/job fingerprints, native protocol or saved continuation state.
+The existing journalled factory logs `[Bob image input attempt]` after its
+dispatch/time gates. Completed journal replay skips the log. Pending async
+recovery/retries may enter again; these are attempts, not paid-call totals.
+Requests refused by the input ceiling never reach that log. No URLs, hashes,
+record IDs, titles, text, pixels or credentials are logged by this diagnostic.
+This adds observation only; it does not retire images or change model inputs.
+
+Validation: all **6 image tests** pass, including numeric-only diagnostics,
+exact request equality with/without observation, public/inline/ineligible
+classification, invalid native protocol, empty input, JSON restarts and journal
+replay. **56 related existing tests** pass (complete requests, context/native
+wire, checkpoint state, model budgets and replay CPU). Both Edge entrypoint
+type checks pass. No paid model/CAD probe, full suite or workflow was started.
+The known pre-existing catalog parity fixture failure above is outside this
+increment; catalog/SQL/publication remain unchanged. Hosted installation is not
+yet claimed; compare the next ordinary run's counts with input growth before
+judging deduplication savings. C1–C4 and R1–R6 remain open lifecycle work.

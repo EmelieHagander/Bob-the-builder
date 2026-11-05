@@ -17,7 +17,7 @@ import { createConstructionViews } from './construction-views.ts'
 import {createProjectCalculator,hasCalculatorContract} from './project-calculator.ts'
 import { readPhysicalCadSources } from './cad-physical-lineage.ts'
 import { parameterSourcePins } from './cad-parameters.ts'
-import { bobCompleteRequestVersions } from './bob-complete-request.ts'
+import { bobCompleteRequestVersions, type BobImageInputCounts } from './bob-complete-request.ts'
 import { createConstructionTools, checkedConstructionForDrawing, constructionCurrentReader, constructionChangeReaders } from './construction-draft.ts'
 import {parseDesignReadiness,type DesignPurpose,type DesignReadiness} from './project-design-intent.ts'
 import { readBudgetStop } from './bob-budget-stop.ts'
@@ -224,7 +224,7 @@ export async function answerWithOpenAi(opts: {
   let promptCacheKey: string | undefined
   // Construction reads in the model step being executed (page budget share).
   let constructionReadsInStep = 1
-  const dispatchModel = async (requested: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>) => {
+  const dispatchModel = async (requested: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>, imageInputs?:BobImageInputCounts) => {
    const options = applyCatalogModelOptions(aiCatalog, requested)
    const drawingAuthority:DrawingBudgetAuthority|undefined=drawingRequestId&&drawingBudget
     ?{requestId:drawingRequestId,options}:undefined
@@ -254,6 +254,10 @@ export async function answerWithOpenAi(opts: {
     const allowed = window ? window.timeoutMs : Math.max(1000, Math.min(timeout, wall))
     let result,usageEventId:string|null=null
     try {
+      // Out-of-band: never part of provider/journal/job fingerprints or saved
+      // context. Completed journal replays skip this factory. Pending async
+      // recovery can enter again, so these are attempts, not billable-call counts.
+      if(imageInputs)console.log('[Bob image input attempt]',JSON.stringify(imageInputs))
       const invoke=(recovery?:{key?:string;context?:Record<string,unknown>;expiresAt?:string;fingerprint?:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage, resolveImageInline, onUsageLogged:(id:string)=>{usageEventId=id},
         // Routing hint only, added after the journal, job and drawing-budget
         // fingerprints so recorded steps of in-flight jobs still match.
