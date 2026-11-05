@@ -277,3 +277,75 @@ network/model responses. No full CI, publication workflow or paid run was starte
 Owner facade/visual acceptance (#438), frontend publication and O5 whole-run
 CPU/cost measurement remain open. These corrections do not approve construction
 safety or prove a complete real Bob delivery.
+
+
+<a id="live-retry-2026-11-05"></a>
+## Owner retry — 2026-11-05: execution completed, visual delivery failed
+
+Read-only investigation of job `c085aae0-eb0b-45a8-88aa-bbf5727b3cc3`, turn
+`be3cfe4c-43b8-44c2-8a82-dec00164e80d`, 06:24–06:26 UTC
+(07:24–07:26 Europe/Stockholm), on worker v198 / ask-bob v230 and the
+installed manifest above. The owner requested another attempt. The job ended
+`completed` with no error code, seven claims and an explicitly **partial**
+delivery. Execution completion is not owner acceptance or complete delivery.
+
+The sole write was `drawing_link`: existing drawing revision 3 was linked to
+`Placera och granska fasadöppningarna`. Construction revision 5 and drawing
+revision 3 remain unchanged; saved isometric/front views exist. This is actual
+acceptance evidence for the restored code-owned work-link path (A1), not for
+the whole drawing workflow. There were zero CAD consultations, renders or CAD
+reviews. All six Rita model calls succeeded. Her trace contains read/section
+calls, including two `too_large` results, and the successful link; it contains
+no `open_project_item`, `design_project_cad` or `save_cad_design` call.
+
+Two separate visual gaps are confirmed:
+
+1. **Published web is old.** The latest successful Pages publication is
+   [run 41465780179](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/41465780179),
+   commit `3d114f2a3ddbc451484433cc4ccda2c3d912b314`, November 2.
+   A direct HTTP read of the live Pages document and its
+   `assets/index-D_8n-qmv.js` confirms it lacks the `bob-chat-drawing` component
+   marker. The merged #458 preview has not reached this published UI. No browser
+   rendering proof or publication workflow was run in this investigation.
+2. **The assistants cannot reopen a saved CAD view as pixels.** Both shared
+   context registries in `ask-openai.ts` register only `mediaAdapter()`;
+   `project-context/media.ts` opens `image:<media-id>` from ordinary media.
+   There is no saved-CAD-view adapter there. JSON section reads expose text,
+   not a visual model input. Bob's final reply correctly discloses that neither
+   Bob nor Rita actually saw the images. Publishing the frontend fixes the
+   owner's viewing path, but does not add model vision by itself.
+
+The retained function logs show orderly `background_continue` / `worker_step`
+continuations and successful completion. The captured Shutdown is `EarlyDrop`
+after a recorded continuation, not CPUTime. This run does not demonstrate
+another CPU-limit failure; it also does not close O5's full CPU attribution.
+The recorded model-event cost totals approximately USD 0.89354. Working model
+packets/checkpoints were cleaned at completion; content-free execution events,
+write receipts and final chat evidence remain. No attempt was made to recover
+cleared private model reasoning or reconstruct unrecorded tool arguments.
+
+Next acceptance work: publish the already merged web preview; provide a
+caller-authorized, exact-revision saved-view opening path for Bob/Rita with
+bounded image delivery and existing checkpoint/provider handling; verify the
+owner's view and actual model visual input separately. Preserve the current
+geometry and the owner's facade acceptance gate. A repeated prompt alone does
+not supply either missing capability. This investigation changed no runtime,
+project data or deployed version and started no paid call/workflow.
+
+### Flexibility findings carried forward
+
+- Separate broad authorized reading from the exact Construction write pin;
+  Konrad/Mattias currently also lose cross-construction reads after binding.
+- Distinguish an exact retry from a new drawing intent/view selection;
+  the completed-operation cache currently keys only by source reference.
+- Move declarative tool/field binding metadata toward its existing catalog
+  owner where appropriate; the current adapter explicitly names roles/tools.
+  Keep authorization and exact write invariants executable in code.
+- The earlier Ladan facade policy is explicit project configuration installed
+  by a one-off migration, not a general building rule. Its configured bounds
+  must not silently become universal constraints.
+
+None of these flexibility mechanisms has been established as the cause of this
+specific visual-delivery failure. The [active State](bob-delivery-flow.md#state)
+owns the next actions; no additional behavior rule or mandatory owner prompt
+was introduced as a substitute for capability.
