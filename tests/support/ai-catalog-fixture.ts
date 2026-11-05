@@ -1070,6 +1070,18 @@ for(const migration of migrations){
    const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'cad-build-guide-v2'};versions.set(row.key,versions.get(row.key)!+1)
   }
  }
+ const stageContext=source.match(/\$stage_context_spec\$([\s\S]+?)\$stage_context_spec\$/)
+ if(stageContext){
+  const spec=JSON.parse(stageContext[1])
+  seed.push({key:spec.tool.key,kind:'tool_contract',content:'',variables:[],definition:spec.tool.definition,metadata:{...spec.tool.metadata,publication:'stage-context-v1'}})
+  versions.set(spec.tool.key,1)
+  for(const item of [spec.contract,spec.preview,spec.history]){
+   const row=seed.find(row=>row.key===item.key)
+   if(!row)throw Error('stage_context_dependency_missing')
+   row.definition={...row.definition,...item.definition};row.metadata={...row.metadata,...item.metadata,publication:'stage-context-v1'}
+   versions.set(item.key,versions.get(item.key)!+1)
+  }
+ }
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.

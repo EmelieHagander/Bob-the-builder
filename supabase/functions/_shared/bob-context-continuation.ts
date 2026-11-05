@@ -4,6 +4,7 @@ import { contextTokenPrefix, countContextTokens, countSerializedTokens } from '.
 import { stableJsonValue } from './bob-job-journal.ts'
 import { buildBobRequest, type BobImageInputCounts } from './bob-complete-request.ts'
 import { readResponseItems } from './openai-content.ts'
+import { STAGE_CONTEXT_TOOL, parseStageContextNote, prepareStageContext, type StageContextNote } from './bob-stage-context.ts'
 import { bobResultPage, projectBobResult, prepareBobResult, selectBobResultWindow, supersededBobResult, BOB_RESULT_PAGE_TOKENS, type BobArchivedOperation } from './bob-result-references.ts'
 
 type Message = NonNullable<OpenAIServiceOptions['messages']>[number]
@@ -18,6 +19,7 @@ type Chain = {
   operations: Map<string, Operation>
   historicalImages?: Message[]
   resultReferences?: 1
+  stageNote?: StageContextNote
 }
 /** Only live provider heads are retained. Map entries are arrays on disk so
  * a worker can restore a chain without replaying completed model/tool calls. */
@@ -26,6 +28,7 @@ export interface BobContextContinuationState {
   strategyVersion: number;
   resultReferenceVersion?: 1;
   imageInputDedupVersion?: 1;
+  stageContextVersion?: 1;
   chains: [string, Omit<Chain, 'operations'> & { operations: [string, Operation][] }][];
 }
 const HISTORY_TOOL = 'get_work_history'
@@ -207,6 +210,9 @@ export function createBobContextContinuation(opts: {
   mainResultReferences?: 1
   /** New execution identities only; old journalled requests remain exact. */
   imageInputDedupVersion?: 1
+  /** Explicit, source-bound stage handoff; published only for new main jobs. */
+  stageContextVersion?: 1
+  imageSource?: (url: string) => string | undefined
   onInternalTool?:(input:{name:string;status:string;callId:string;role:string;ms:number})=>Promise<void>
   /** Pinned per execution. Older results stay whole, newest first, up to this
    * many tokens before they become references. A fixed two-exchange window
@@ -246,9 +252,11 @@ export function createBobContextContinuation(opts: {
   const resultTokens = new Map<string, number>()
   const enabled = opts.version === 1
   if (opts.imageInputDedupVersion !== undefined && opts.imageInputDedupVersion !== 1) throw new Error('image_input_dedup_version_invalid')
+  if (opts.stageContextVersion !== undefined && (opts.stageContextVersion !== 1 || opts.mainResultReferences !== 1 || opts.imageInputDedupVersion !== 1)) throw new Error('stage_context_version_invalid')
   const exportState = (): BobContextContinuationState => clone({ version: 1, strategyVersion: opts.version ?? 0,
     ...(opts.mainResultReferences === 1 ? { resultReferenceVersion: 1 as const } : {}),
     ...(opts.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
+    ...(opts.stageContextVersion === 1 ? { stageContextVersion: 1 as const } : {}),
     chains: [...chains].map(([id, chain]) => [id, { ...chain, operations: [...chain.operations] }]),
   })
   const restoreState = (state: BobContextContinuationState): void => {
@@ -262,7 +270,7 @@ export function createBobContextContinuation(opts: {
     const messages = (value: unknown): boolean => Array.isArray(value) && value.every(message)
     const natural = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0
     if (!state || state.version !== 1 || state.strategyVersion !== (opts.version ?? 0)
-      || state.resultReferenceVersion !== opts.mainResultReferences || state.imageInputDedupVersion !== opts.imageInputDedupVersion || !Array.isArray(state.chains)
+      || state.resultReferenceVersion !== opts.mainResultReferences || state.imageInputDedupVersion !== opts.imageInputDedupVersion || state.stageContextVersion !== opts.stageContextVersion || !Array.isArray(state.chains)
       || new Set(state.chains.map(entry => Array.isArray(entry) ? entry[0] : null)).size !== state.chains.length) throw new Error('context_checkpoint_invalid')
     const restored = new Map<string, Chain>()
     for (const entry of state.chains) {
@@ -271,6 +279,7 @@ export function createBobContextContinuation(opts: {
       if (typeof chain.identity !== 'string' || !messages(chain.seed) || !Array.isArray(chain.groups) || !chain.groups.every(messages)
         || chain.resultReferences !== undefined && (chain.resultReferences !== 1 || opts.mainResultReferences !== 1 || chain.compacted || chain.handoff !== undefined)
         || chain.historicalImages !== undefined && !messages(chain.historicalImages)
+        || chain.stageNote !== undefined && (opts.stageContextVersion !== 1 || chain.resultReferences !== 1 || !parseStageContextNote(chain.stageNote))
         || typeof chain.compacted !== 'boolean' || !messages(chain.pendingInternal) || !natural(chain.inputTokens) || !natural(chain.outputTokens)
         || !Array.isArray(chain.operations) || new Set(chain.operations.map(entry => Array.isArray(entry) ? entry[0] : null)).size !== chain.operations.length
         || chain.handoff !== undefined && (!object(chain.handoff) || typeof chain.handoff.summary !== 'string'
@@ -428,7 +437,8 @@ export function createBobContextContinuation(opts: {
       const replay = replaysMessages(options)
       const identity = JSON.stringify([options.app, options.coworkerId, options.functionName, options.catalogRoleKey ?? options.functionName,
         ...(native ? ['complete-request-v1'] : []), ...(references ? ['result-references-v1'] : []),
-        ...(native && opts.imageInputDedupVersion === 1 ? ['image-input-dedup-v1'] : [])])
+        ...(native && opts.imageInputDedupVersion === 1 ? ['image-input-dedup-v1'] : []),
+        ...(references && opts.stageContextVersion === 1 ? ['stage-context-v1'] : [])])
       let chain: Chain
       if (options.previousResponseId) {
         const previous = chains.get(options.previousResponseId)
@@ -592,7 +602,8 @@ export function createBobContextContinuation(opts: {
       }
       if (chain.compacted || references) {
         const history = opts.aiCatalog.tool(HISTORY_TOOL, references ? { card: false, include_manual: true } : undefined)
-        options = { ...options, tools: [...(options.tools ?? []).filter(tool => tool.function.name !== HISTORY_TOOL), history],
+        const stage = references && opts.stageContextVersion === 1 ? opts.aiCatalog.tool(STAGE_CONTEXT_TOOL) : null
+        options = { ...options, tools: [...(options.tools ?? []).filter(tool => tool.function.name !== HISTORY_TOOL && (!stage || tool.function.name !== STAGE_CONTEXT_TOOL)), history, ...(stage ? [stage] : [])],
           ...(references ? { catalogToolParameters: { ...options.catalogToolParameters, [HISTORY_TOOL]: { card: false, include_manual: true } } } : {}),
           ...(options.catalogSchemaKey || options.schema ? { structuredToolOutput: true } : {}) }
       }
@@ -607,7 +618,11 @@ export function createBobContextContinuation(opts: {
       if (native) options = buildBobRequest(options, {
         seed: chain.seed, history: chain.groups.flat(), historicalImages: chain.historicalImages,
         ...(opts.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
-        ...(chain.handoff ? { handoff: { role: 'user', content: JSON.stringify({
+        ...(chain.stageNote ? { handoff: { role: 'user', content: JSON.stringify(stableJsonValue({
+          stage_handoff: chain.stageNote, unverified_working_note: true, approval_not_implied: true,
+          original_assignment_preserved: true, operation_archive: { tool: HISTORY_TOOL, list: { call_id: null, after: null } },
+          ...(opts.snapshot ? { confirmed_work_state: opts.snapshot({ functionName: options.functionName, role: options.catalogRoleKey ?? options.functionName }) } : {}),
+        })) } as Message } : chain.handoff ? { handoff: { role: 'user', content: JSON.stringify({
           context_handoff: chain.handoff, original_assignment_preserved: true,
           completed_operations: [...chain.operations.values()].slice(-40).map(statusOf),
           operation_archive: { tool: HISTORY_TOOL, list: { call_id: null, after: null } },
@@ -628,12 +643,34 @@ export function createBobContextContinuation(opts: {
       chain.inputTokens = Math.max(0, response.usage.input_tokens)
       chain.outputTokens = Math.max(0, response.usage.output_tokens)
       chain.groups.push([resultMessage(response)])
-      const internal: ToolCall[] = chain.compacted || references ? response.toolCalls?.filter(tool => tool.function.name === HISTORY_TOOL) ?? [] : []
+      const internal: ToolCall[] = chain.compacted || references ? response.toolCalls?.filter(tool => tool.function.name === HISTORY_TOOL
+        || references && opts.stageContextVersion === 1 && tool.function.name === STAGE_CONTEXT_TOOL) ?? [] : []
       const external = response.toolCalls?.filter(tool => !internal.includes(tool)) ?? []
+      let refreshedSurface: ContextSurface | undefined
       for (const tool of internal) {
         let input: unknown
         try { input = JSON.parse(tool.function.arguments) } catch { input = null }
-        const began=Date.now(),result=readArchivedOperation(input,chain)
+        const began=Date.now()
+        let result: Record<string, unknown>
+        if (tool.function.name === STAGE_CONTEXT_TOOL) {
+          const prepared = response.toolCalls?.length === 1
+            ? prepareStageContext({ value: input, seed: chain.seed, history: [...(chain.historicalImages ?? []), ...chain.groups.flat()], callIds: new Set(chain.operations.keys()), imageSource: opts.imageSource ?? (() => undefined) })
+            : { status: 'invalid' as const, reason: 'handoff_must_be_only_call' }
+          if (prepared.status !== 'ready') result = prepared
+          else {
+            // Refresh tools/manuals and their invocation gates together. Keep
+            // the handoff's native call/output pair; older pairs leave whole.
+            refreshedSurface = await opts.refreshSurface?.({ functionName: options.functionName, role: options.catalogRoleKey ?? options.functionName })
+            chain.seed = prepared.seed
+            chain.stageNote = prepared.note
+            chain.groups = [chain.groups.at(-1)!]
+            chain.historicalImages = undefined
+            result = { status: 'advanced', saved: false, approval_not_implied: true, kept_image_refs: prepared.note.keep_image_refs,
+              original_assignment_preserved: true, operation_archive_retained: true }
+            opts.onRollover?.({ functionName: options.functionName, role: options.catalogRoleKey ?? options.functionName })
+            console.log('[Bob stage handoff]', JSON.stringify({ before: prepared.before, after: prepared.after, released: prepared.before - prepared.after }))
+          }
+        } else result=readArchivedOperation(input,chain)
         chain.pendingInternal.push({ role: 'tool', tool_call_id: tool.id, content: JSON.stringify(result) })
         await opts.onInternalTool?.({name:HISTORY_TOOL,status:String(result.status??'returned'),callId:tool.id,role:options.functionName,ms:Date.now()-began})
       }
@@ -652,7 +689,7 @@ export function createBobContextContinuation(opts: {
       // History-only calls stay inside this adapter. Mixed batches deliver the
       // remaining calls to the owning loop, then join both exact output sets
       // on its next invocation. The journal always sees the raw model result.
-      options = { ...options, previousResponseId: response.responseId, messages: [], prompt: undefined }
+      options = { ...options, ...refreshedSurface, previousResponseId: response.responseId, messages: [], prompt: undefined }
     }
   }
   // Native readers are implicitly bound to their own chain. This explicit
