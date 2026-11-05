@@ -1,6 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {buildBobRequest} from '../supabase/functions/_shared/bob-complete-request.ts'
+import {buildBobRequest,type BobImageInputCounts} from '../supabase/functions/_shared/bob-complete-request.ts'
+import {createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 import {createBobContextContinuation,estimateBobRequestInput} from '../supabase/functions/_shared/bob-context-continuation.ts'
 import {anthropicRequestBody} from '../supabase/functions/_shared/anthropic-service.ts'
 import {responseMessageContent,prepareResponseImages} from '../supabase/functions/_shared/openai-content.ts'
@@ -28,14 +29,50 @@ test('exact private image inputs collapse once while metadata, distinct versions
   {role:'user',content:[{type:'text',text:'Source is now historical; unchanged pixels do not prove the current model.'},image(),{type:'image_url',image_url:{url:A,detail:'auto'}},image(B),
    {type:'image_url',image_url:{url:A,detail:'high'}},{type:'image_url',image_url:{url:A,detail:'low'}},image('https://example.invalid/mutable.png'),image('https://example.invalid/mutable.png')]},
   {role:'user',content:[image()]}]}
- const before=disk(state),legacy=buildBobRequest(seed,state),next=buildBobRequest(seed,{...state,imageInputDedupVersion:1})
+ const counts:BobImageInputCounts[]=[]
+ const before=disk(state),legacy=buildBobRequest(seed,state,c=>counts.push(c)),next=buildBobRequest(seed,{...state,imageInputDedupVersion:1},c=>counts.push(c))
+ assert.deepEqual(counts,[{before:9,after:9,removed:0,unique_private:4,other:2,dedup_version:0},
+  {before:9,after:6,removed:3,unique_private:4,other:2,dedup_version:1}])
+ assert.deepEqual(next,buildBobRequest(seed,{...state,imageInputDedupVersion:1}),'observability does not alter provider options')
  assert.equal(images(legacy).length,9);assert.equal(images(next).length,6)
  assert.deepEqual(state,before);assert.deepEqual(next.messages!.slice(0,4),legacy.messages!.slice(0,4))
  assert(JSON.stringify(next.messages).includes('Source is now historical'));assert.equal(next.messages!.length,5,'empty duplicate-only message is omitted')
  assert(images(next).some(p=>p.image_url===B));assert.deepEqual(buildBobRequest(seed,state),legacy,'old pins remain byte-identical')
  const malformed:any={seed:seed.messages,history:[{role:'user',content:[image()],nativeOutput:[{type:'message',role:'assistant',content:[]}]}],imageInputDedupVersion:1}
- assert.throws(()=>buildBobRequest(seed,malformed),/bob_native_output_role_invalid/,'dedup cannot hide invalid native protocol')
+ assert.throws(()=>buildBobRequest(seed,malformed,()=>assert.fail('invalid input has no dispatch diagnostic')),/bob_native_output_role_invalid/,'dedup cannot hide invalid native protocol')
  assert.throws(()=>buildBobRequest(seed,{...state,imageInputDedupVersion:2} as any),/image_input_dedup_version_invalid/)
+})
+
+test('image diagnostics contain only numbers, distinguish ineligible inputs and cover empty requests',()=>{
+ const counts:BobImageInputCounts[]=[]
+ const state:any={seed:[{role:'user',content:[image(),image()]},{role:'assistant',content:[image()]},
+  {role:'user',tool_call_id:'do-not-deduplicate',content:[image()]},{role:'user',content:[image('data:image/png;base64,SECRET_PIXELS'),image('https://private.example/SECRET_URL')]}],history:[],imageInputDedupVersion:1}
+ const result=buildBobRequest(seed,state,c=>counts.push(c))
+ assert.equal(images(result).length,5)
+ buildBobRequest(seed,{seed:[{role:'user',content:'PRIVATE_ASSIGNMENT'}],history:[]},c=>counts.push(c))
+ assert.deepEqual(counts,[{before:6,after:5,removed:1,unique_private:1,other:4,dedup_version:1},
+  {before:0,after:0,removed:0,unique_private:0,other:0,dedup_version:0}])
+ assert(counts.every(c=>Object.values(c).every(Number.isSafeInteger)))
+ assert(!/private-image|SECRET|PRIVATE_ASSIGNMENT|image_url/.test(JSON.stringify(counts)))
+})
+
+test('counts travel outside provider options and checkpoints; completed journal replay emits no new attempt',async()=>{
+ const entries:JournalEntry[]=[],attempts:BobImageInputCounts[]=[],requests:OpenAIServiceOptions[]=[]
+ let firstState:unknown
+ for(let segment=0;segment<2;segment++){
+  const journal=createBobJournal({entries,save:async e=>{entries.push(e)}},Date.now()+60000)
+  const manager=createBobContextContinuation({version:1,mainResultReferences:1,imageInputDedupVersion:1,aiCatalog:catalog(),
+   callModel:(o,before,counts)=>journal.run('model:ask-bob',o,async()=>{
+    await before?.();assert(counts);attempts.push(counts);requests.push(disk(o));return reply('recorded')
+   })})
+  await manager.call({...seed,messages:[...seed.messages!,{role:'user',content:[image()]}]})
+  const state=disk(manager.exportState())
+  assert(!JSON.stringify(state).includes('unique_private'),'counts are not continuation state')
+  if(segment===0)firstState=state;else assert.deepEqual(state,firstState)
+ }
+ assert.deepEqual(attempts,[{before:2,after:1,removed:1,unique_private:1,other:0,dedup_version:1}])
+ assert.equal(requests.length,1)
+ assert(!JSON.stringify(requests).includes('unique_private'),'counts are not journal/provider input')
 })
 
 test('both provider request shapes contain real pixels once per exact private view',async()=>{

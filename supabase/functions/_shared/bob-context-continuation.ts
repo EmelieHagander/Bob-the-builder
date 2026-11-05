@@ -2,13 +2,13 @@ import { applyCatalogModelOptions, textContinuationMode, type AiCatalogSession }
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import { contextTokenPrefix, countContextTokens, countSerializedTokens } from './bob-token-budget.ts'
 import { stableJsonValue } from './bob-job-journal.ts'
-import { buildBobRequest } from './bob-complete-request.ts'
+import { buildBobRequest, type BobImageInputCounts } from './bob-complete-request.ts'
 import { readResponseItems } from './openai-content.ts'
 import { bobResultPage, projectBobResult, prepareBobResult, selectBobResultWindow, supersededBobResult, BOB_RESULT_PAGE_TOKENS, type BobArchivedOperation } from './bob-result-references.ts'
 
 type Message = NonNullable<OpenAIServiceOptions['messages']>[number]
 type ToolCall = NonNullable<OpenAIServiceResponse['toolCalls']>[number]
-type ModelCall = (options: OpenAIServiceOptions, beforeDispatch?: () => Promise<void>) => Promise<OpenAIServiceResponse<any>>
+type ModelCall = (options: OpenAIServiceOptions, beforeDispatch?: () => Promise<void>, imageInputs?: BobImageInputCounts) => Promise<OpenAIServiceResponse<any>>
 export type ContextSurface = Pick<OpenAIServiceOptions, 'systemMessage' | 'tools' | 'catalogSchemaParameters' | 'catalogToolParameters' | 'catalogRuntimeSurface'>
 type Handoff = { summary: string; open_questions: string[]; next_steps: string[]; source_refs: string[] }
 type Operation = BobArchivedOperation
@@ -603,6 +603,7 @@ export function createBobContextContinuation(opts: {
         const { previousResponseId: _pointer, prompt: _prompt, ...rest } = options
         options = { ...rest, messages: [...clone(chain.seed), ...clone(chain.groups.flat())] }
       }
+      let imageInputs: BobImageInputCounts | undefined
       if (native) options = buildBobRequest(options, {
         seed: chain.seed, history: chain.groups.flat(), historicalImages: chain.historicalImages,
         ...(opts.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
@@ -612,7 +613,7 @@ export function createBobContextContinuation(opts: {
           operation_archive: { tool: HISTORY_TOOL, list: { call_id: null, after: null } },
           ...(opts.snapshot ? { confirmed_work_state: opts.snapshot({ functionName: options.functionName, role: options.catalogRoleKey ?? options.functionName }) } : {}),
         }) } as Message } : {}),
-      })
+      }, counts => { imageInputs = counts })
       // Compaction preserves the exact seed and native tool exchanges. If
       // these indispensable inputs themselves exceed the configured envelope,
       // report it rather than silently trimming the assignment or tool result.
@@ -621,7 +622,7 @@ export function createBobContextContinuation(opts: {
         const freshTokens = estimateBobRequestInput(fresh).total
         if (freshTokens > roleCeiling) throw new Error('context_input_too_large')
       }
-      const response = await opts.callModel(options, beforeDispatch)
+      const response = await opts.callModel(options, beforeDispatch, imageInputs)
       if (!response.success || !response.responseId) return response
       if (native) readResponseItems(response.outputItems)
       chain.inputTokens = Math.max(0, response.usage.input_tokens)
