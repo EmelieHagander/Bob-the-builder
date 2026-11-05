@@ -1454,6 +1454,13 @@ are rechecked after export and before cached bytes return. Output has no public
 URL and HTTP caching is disabled. This derivative never changes an Artifact
 revision, design workflow, CAD source, STEP or saved drawing.
 
+The Edge bundle includes `_shared/cad-adapter.ts` and `_shared/cad-wireframe.ts`.
+When the saved recipe or supported view names change, include `cad-viewer` in
+the deployment for that contract. Check the deployed bundle against the intended
+commit. A stale validator rejected left, back and corner views before any 3D
+export started. The viewer request regression covers six saved view names on
+one revision, including a front-left and a rear-right view.
+
 The first opening may pay for one on-demand CAD preparation. Concurrent openings
 share one lease; later openings reuse the database export. Rotation, zoom and an
 idle view run on the device. Metadata/auth/cache requests and storage still have

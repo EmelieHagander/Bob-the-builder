@@ -67,6 +67,29 @@ function SavedDrawing({projectId,id,revision,view:requestedView}:{projectId:stri
 }
 /** Transcript stores exact receipts, never picture bytes or generated URL text. */
 export function BobChatDrawings({projectId,receipts,sources}:{projectId:string;receipts?:ProjectWriteReceipt[];sources?:ProjectSource[]}){
- const {seen,concepts,drawings}=bobChatViews(projectId,receipts,sources)
- return <>{seen.map(s=>s.visual!.kind==='concept'?<SavedConcept key={s.visual!.ref} projectId={projectId} id={s.recordId} revision={s.visual!.revision} view={s.visual!.view}/>:<SavedDrawing key={s.visual!.ref} projectId={projectId} id={s.recordId} revision={s.visual!.revision} view={s.visual!.view}/>)}{concepts.map(r=><SavedConcept key={`${projectId}:solution:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!}/>)}{drawings.map(r=><SavedDrawing key={`${projectId}:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!}/>)}</>
+ const [expanded, setExpanded] = useState(false)
+ const {seen, concepts, earlierConcepts, drawings} = bobChatViews(projectId, receipts, sources)
+ const views = seen.map(source => {
+   const visual = source.visual!
+   const Preview = visual.kind === 'concept' ? SavedConcept : SavedDrawing
+   return <Preview key={visual.ref} projectId={projectId} id={source.recordId} revision={visual.revision} view={visual.view} />
+ })
+ const primary = views.slice(0, 1), secondary = views.slice(1)
+ const latestDrawing = new Map<string, number>()
+ for (const r of drawings) latestDrawing.set(r.recordId, Math.max(latestDrawing.get(r.recordId) ?? 0, r.revision!))
+ for (const r of [...concepts, ...drawings, ...earlierConcepts]) {
+   const isConcept = r.dataset === 'solutions'
+   const Preview = isConcept ? SavedConcept : SavedDrawing
+   const preview = <Preview key={`${r.dataset}:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!} />
+   const isLatest = isConcept ? concepts.includes(r) : latestDrawing.get(r.recordId) === r.revision
+   // Keep a newer save visible when Bob explicitly compared an older version.
+   const shownRevisions = seen.filter(s => s.recordId === r.recordId && (s.visual!.kind === 'concept') === isConcept).map(s => s.visual!.revision)
+   const newerThanShown = shownRevisions.length > 0 && r.revision! > Math.max(...shownRevisions)
+   if (isLatest && (!views.length || newerThanShown)) primary.push(preview)
+   else secondary.push(preview)
+ }
+ if (!primary.length) return null
+ return <>{primary}{secondary.length > 0 && <details className="chat-earlier-results" onToggle={e => setExpanded(e.currentTarget.open)}>
+   <summary>Other views and versions · {secondary.length}</summary>{expanded && secondary}
+ </details>}</>
 }

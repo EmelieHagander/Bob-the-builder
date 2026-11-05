@@ -134,7 +134,7 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
           const row=rows.find(r=>r.id===eq('id')&&r.revision===Number(eq('revision')))
           if(!row)return reply({status:406,json:{message:'Drawing changed'}})
           const c=cad.get(generationKey(row.id,row.revision))
-          return reply({json:{preview_svg:c?.files?.isometric??c?.files?.front??null,parametric_recipe:parametric.get(generationKey(row.id,row.revision))?.recipe??null,source_media_id:row.source_media_id}})
+          return reply({json:{id:row.id,project_id:row.project_id,revision:row.revision,title:row.title,status:row.status,...sourceStatus(row.id),preview_svg:c?.files?.isometric??c?.files?.front??null,parametric_recipe:parametric.get(generationKey(row.id,row.revision))?.recipe??null,source_media_id:row.source_media_id}})
         }
         assert.equal(url.searchParams.get('limit'),'4','Overview stays bounded, with previews and source checks in one read')
         assert(!url.searchParams.get('select').split(',').some(field=>['files','recipe','*'].includes(field)),'Overview never fetches CAD export bytes')

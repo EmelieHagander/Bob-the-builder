@@ -7,30 +7,27 @@ import {openBobForCurrentSurface} from '../lib/bobSurface'
 import { drawingRequestStatusLabel } from '../lib/labels'
 import { userErrorMessage } from '../lib/userErrors'
 
-export function DrawingRequests({projectId,taskId}:{projectId:string;taskId?:string}){
- const navigate=useNavigate()
- const [version,setVersion]=useState(0),[after,setAfter]=useState<string|null>(null)
- const [busy,setBusy]=useState(false),[error,setError]=useState('')
- const {data,loading,error:loadError}=useAsync(()=>db.getDrawingRequests(projectId,after,taskId??null),[projectId,taskId,after,version])
- useEffect(()=>{const timer=setInterval(()=>{if(document.visibilityState!=='hidden')setVersion(v=>v+1)},15000);return()=>clearInterval(timer)},[projectId])
- const act=async(work:()=>Promise<void>)=>{if(busy)return;setBusy(true);setError('');try{await work();setVersion(v=>v+1)}catch(e){setError(userErrorMessage(e,'The request could not be updated.'))}finally{setBusy(false)}}
- if(loading&&!data)return <section aria-label="Drawing requests"><Loading label="Loading drawing requests…" /></section>
- if(loadError)return <section className="card" aria-label="Drawing requests" style={{padding:'var(--panel-padding)',marginTop:'var(--section-gap)'}}><p role="status">Drawing requests are unavailable.</p><button className="btn" onClick={()=>setVersion(v=>v+1)}>Retry requests</button></section>
- if(!data?.items.length&&!after)return null
- return <section aria-label="Drawing requests" style={{marginTop:'var(--section-gap)'}}>
-  <h2 className="font-display">Drawing requests</h2>
-  {error&&<p role="alert">{error}</p>}
-  <div className="grid" style={{gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,280px),1fr))',gap:'var(--layout-gap)'}}>
-   {data?.items.map(work=>{
-    const r=work.request,b=work.budget,terminal=['saved','cancelled'].includes(r.status)
-    const gaps=work.gaps.filter(g=>g.blocking)
-    const scopeStep=work.gaps.find(g=>g.step_id===r.scope.step_id&&g.step_title)?.step_title
+function RequestCard({projectId, work, taskId, refresh}: {
+  projectId: string; work: db.DrawingRequestWork; taskId?: string; refresh: () => void
+}) {
+  const navigate = useNavigate()
+  const [busy,setBusy] = useState(false), [error,setError] = useState('')
+  const act = async (action: () => Promise<void>) => {
+    if (busy) return
+    setBusy(true); setError('')
+    try { await action(); refresh() } catch (e) { setError(userErrorMessage(e, 'The request could not be updated.')) }
+    finally { setBusy(false) }
+  }
+  const r = work.request, b = work.budget, terminal = db.isClosedDrawingRequest(r.status)
+  const gaps = work.gaps.filter(g=>g.blocking)
+  const scopeStep = work.gaps.find(g=>g.step_id===r.scope.step_id&&g.step_title)?.step_title
     const stateText=b?.outcome_unknown?'Waiting for a model charge to be reconciled. No new paid attempt will start.':r.status==='paused'?'Ask Bob to restore the requirements from the current Plan.':work.resume_state==='running'?'Bob is checking the changed information.':work.resume_state==='authorization_needed'?'Waiting to reconnect the initiating member’s signed-in session.':r.status==='retrieval_failed'?'A source or service could not be read. This does not mean measurements are missing. Ask Bob to check the source before collecting new data.':r.status==='draft'?'A candidate exists. It has not passed review or been saved as a drawing.':r.status==='reviewed'?'The candidate has passed review but has not yet been saved. Current sources must still be checked at save.':r.status==='ready_to_design'?'The last assessment found enough information for design. No drawing has been saved yet.':'Complete the saved information below. Bob resumes the same request when relevant information changes. Marking a task done does not supply its missing measurements.'
-    return <article className="card drawing-request-card" key={r.id} style={{padding:'var(--panel-padding)'}}>
+  return <article className="card drawing-request-card" style={{padding:'var(--panel-padding)'}}>
+     {error && <p role="alert">{error}</p>}
      <h3>{drawingRequestStatusLabel(r.status)}</h3>
      {r.scope.step_id&&<p><Link to={'/project?step='+encodeURIComponent(r.scope.step_id)}>{scopeStep??'Open destination Step'}</Link></p>}
      {!terminal&&<p>{stateText}</p>}
-     {b&&<p className="foundation-hint">{`${b.calls} calls · ${b.unpriced ? 'known cost ' : ''}$${Number(b.spent_usd).toFixed(2)}`}</p>}
+     {b&&<details className="request-diagnostics"><summary>Run details</summary><p className="foundation-hint">{`${b.calls} calls · ${b.unpriced ? 'known cost ' : ''}$${Number(b.spent_usd).toFixed(2)}`}</p></details>}
      {gaps.length>0&&!terminal&&<ul className="drawing-request-gaps">{gaps.map((g,i)=><li key={g.id}>
       <strong>{g.label??g.task_name??(g.action==='measurement'?`Measurement complement ${i+1}`:g.action==='owner_decision'?`Decision complement ${i+1}`:`Project prerequisite ${i+1}`)}</strong>
       <p className="foundation-hint">{g.owner_label?`Responsible: ${g.owner_label}`:g.action==='bob_decision'?'Bob resolves this work choice.':'Responsible person not assigned in the shared Plan.'}{g.observed_revision<r.revision&&' — awaiting current assessment'}</p>
@@ -49,8 +46,47 @@ export function DrawingRequests({projectId,taskId}:{projectId:string;taskId?:str
       {work.can_manage&&<button className="btn" disabled={busy} onClick={()=>void act(()=>db.cancelDrawingRequest(projectId,r.id,r.revision))}>Cancel request</button>}
      </div>}
     </article>
-   })}
-  </div>
-  {(after||data?.next_cursor)&&<div className="foundation-actions">{after&&<button className="btn" onClick={()=>setAfter(null)}>First requests</button>}{data?.next_cursor&&<button className="btn" onClick={()=>setAfter(data.next_cursor)}>More requests</button>}</div>}
- </section>
+
+}
+
+function PastRequest({projectId, request, taskId, refresh}: {
+  projectId: string; request: db.DrawingRequestWork['request']; taskId?: string; refresh: () => void
+}) {
+  const [open, setOpen] = useState(false), [retry, setRetry] = useState(0)
+  const {data,error,loading} = useAsync(() => open ? db.getDrawingRequestWork(projectId,request.id) : Promise.resolve(null),
+    [open, projectId, request.id, request.revision, retry])
+  return <details id={`past-request-${request.id}`} className="past-request" onToggle={e => setOpen(e.currentTarget.open)}>
+    <summary>{drawingRequestStatusLabel(request.status)}{request.artifact_revision ? ` · v${request.artifact_revision}` : ''}</summary>
+    {open && (error ? <p role="alert">Request unavailable. <button className="btn" onClick={() => setRetry(n=>n+1)}>Retry</button></p>
+      : loading || !data ? <Loading label="Loading request…" /> : <RequestCard projectId={projectId} work={data} taskId={taskId} refresh={refresh} />)}
+  </details>
+}
+
+export function DrawingRequests({projectId, taskId, stepId}: {projectId:string; taskId?:string; stepId?:string}) {
+  const [version,setVersion] = useState(0)
+  const refresh = () => setVersion(v=>v+1)
+  const {data,loading,error} = useAsync(() => db.getDrawingRequests(projectId,taskId), [projectId,taskId,version])
+  useEffect(() => {
+    const timer = setInterval(() => { if (document.visibilityState !== 'hidden') refresh() }, 15000)
+    return () => clearInterval(timer)
+  }, [projectId])
+  if (error) return <section aria-label="Drawing requests"><p role="alert">Drawing requests are unavailable. <button className="btn" onClick={refresh}>Retry requests</button></p></section>
+  if (loading && !data) return <Loading label="Loading drawing requests…" />
+  if (!data || (!data.active.length && !data.closed.length)) return null
+  const relevant = (w: db.DrawingRequestWork) => !stepId || w.request.scope.step_id === stepId || w.gaps.some(g => g.blocking && g.step_id === stepId)
+  const here = data.active.filter(relevant), other = data.active.filter(w => !relevant(w))
+  const card = (w: db.DrawingRequestWork) => {
+    const gap = w.gaps.find(g => g.blocking && g.step_id === stepId) ?? w.gaps.find(g => g.blocking)
+    return <details className="request-item" id={`open-request-${w.request.id}`} key={w.request.id}>
+      <summary>{gap?.label || gap?.task_name || drawingRequestStatusLabel(w.request.status)}</summary>
+      <RequestCard projectId={projectId} work={w} taskId={taskId} refresh={refresh} />
+    </details>
+  }
+  return <section aria-label="Drawing requests" className="project-requests">
+    {!!here.length && <><h2 className="guide-request-heading">Drawing requests</h2>{here.map(card)}</>}
+    {!!other.length && <details className="request-history"><summary>Open requests in other steps · {other.length}</summary>{other.map(card)}</details>}
+    {!!data.closed.length && <details className="request-history" id="past-drawing-requests"><summary>Past drawing requests · {data.closed.length}</summary>
+      {data.closed.map(r => <PastRequest key={r.id} projectId={projectId} request={r} taskId={taskId} refresh={refresh} />)}
+    </details>}
+  </section>
 }

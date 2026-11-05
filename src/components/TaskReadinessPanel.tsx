@@ -112,17 +112,18 @@ export function TaskReadinessPanel({ projectId, taskId, areaId, refreshKey = 0 }
 
   return <section className="card foundation-section" aria-label="Task readiness">
     <div className="foundation-heading">
-      <div><h2 style={{ marginBottom: 4 }}>Readiness</h2><div className="foundation-actions"><Icon name={copy.icon} size={18} /><strong>{copy.title}</strong></div></div>
+      <div className="foundation-actions"><Icon name={copy.icon} size={18} /><strong>{copy.title}</strong></div>
       {data.readiness.state === 'unreviewed' && <button className="btn btn-primary" disabled={busy} onClick={() => void act(() => db.editTaskWorkPlan(projectId, taskId, 'confirm_readiness', null, 0, {}))}>Confirm ready</button>}
     </div>
-    <p className="foundation-hint">{copy.text}</p>
-    {data.readiness.reviewedAt && <p className="foundation-hint">Last confirmed {formatDateTime(data.readiness.reviewedAt)}{data.readiness.reviewedBy ? ` by ${data.readiness.reviewedBy}` : ''}.</p>}
+
     {actionError && <div role="alert"><FormError>{actionError}</FormError></div>}
 
     {data.readiness.blockers.length > 0 && <div className="fact-details"><h3 style={{ marginTop: 0 }}>What blocks this task</h3>{data.readiness.blockers.map(blocker => <p key={`${blocker.kind}:${blocker.id}`}><Icon name="warning-circle" size={15} /> {blocker.label}</p>)}</div>}
 
-    <details open={data.readiness.state === 'blocked'} style={{ marginTop: 'var(--section-gap)' }}>
+    <details style={{ marginTop: 'var(--section-gap)' }}>
       <summary style={{ cursor: 'pointer', fontWeight: 750 }}>Readiness details</summary>
+      <p className="foundation-hint">{copy.text}</p>
+      {data.readiness.reviewedAt && <p className="foundation-hint">Last confirmed {formatDateTime(data.readiness.reviewedAt)}{data.readiness.reviewedBy ? ` by ${data.readiness.reviewedBy}` : ''}.</p>}
       <div style={{ display: 'grid', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)' }}>
         <div className="fact-source">
           <div className="foundation-heading"><strong>Prerequisites</strong><button className="btn" disabled={busy || !(tasks?.some(task => task.id !== taskId))} onClick={() => setDialog('dependency')}><Icon name="plus" size={14} /> Add</button></div>

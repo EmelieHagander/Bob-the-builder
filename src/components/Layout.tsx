@@ -223,6 +223,7 @@ export function Layout({ children, project, notice }: { children: ReactNode; pro
   useDrawingReturnPosition(project?.id ?? '')
   const surfaces: Record<string, BobScreenSurface> = { '/project': 'project', '/areas': 'areas', '/facts': 'facts', '/solutions': 'solutions', '/artifacts': 'drawings', '/people': 'people', '/events': 'events', '/shopping': 'shopping', '/today': 'today', '/announcements': 'announcements', '/building': 'building', '/material-plan': 'material-plan' }
   const showBob = !!project && location.pathname !== '/' && !location.pathname.startsWith('/account')
+  const guideNav = showBob && (location.pathname === '/project' || location.pathname.startsWith('/tasks/'))
   const surface = surfaces[location.pathname] ?? 'project'
   useBobSurface(project?.id ?? '', showBob ? { surface } : null, 'Project context', 0)
   const [bobOpen, setBobOpen] = useState(false)
@@ -256,7 +257,7 @@ export function Layout({ children, project, notice }: { children: ReactNode; pro
   },[project?.id,authTick])
 
   return (
-    <div className="app-shell">
+    <div className={guideNav ? "app-shell guide-shell" : "app-shell"}>
       <Sidebar project={project} />
       <div className="main-col">{showBob && <div className="workspace-nav-frame"><ProjectWorkspaceNav /></div>}{notice}<ErrorBoundary><Suspense fallback={<Loading label="Loading page…" />}>{children}</Suspense></ErrorBoundary></div>
 
@@ -265,26 +266,8 @@ export function Layout({ children, project, notice }: { children: ReactNode; pro
         aria-label="Ask bob"
         aria-describedby={bobUnread ? 'bob-unread-status' : undefined}
         onClick={() => { setBobStarted(true); setBobOpen(true) }}
-        style={{
-          position: 'fixed',
-          right: 'clamp(16px, 3vw, 30px)',
-          bottom: 'clamp(74px, 4vw, 28px)',
-          zIndex: 50,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--layout-gap)',
-          background: 'var(--accent)',
-          border: 'none',
-          borderRadius: 999,
-          padding: '13px 20px 13px 16px',
-          fontSize: 15,
-          fontWeight: 800,
-          color: 'var(--accent-ink)',
-          fontFamily: "'Baloo 2', cursive",
-          boxShadow: '0 8px 22px -6px rgba(40,30,10,.5), 0 3px 0 var(--accent-2)',
-        }}
       >
-        <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span className="bob-launcher-avatar">
           <Icon name="tree-evergreen" weight="fill" size={18} color="var(--accent)" />
         </span>
         Ask bob

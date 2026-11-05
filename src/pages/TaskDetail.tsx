@@ -1,13 +1,14 @@
-import { openBobForCurrentSurface, useBobSurface } from '../lib/bobSurface'
+import { openBobForCurrentSurface, openBobWithDraft, useBobSurface } from '../lib/bobSurface'
 import {DrawingRequests} from '../components/DrawingRequests'
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
 import type { TaskDetail as Detail, TaskStatus, TaskStep } from '../data/types'
 import { Field, FormError, inputStyle } from '../components/form'
 import { Modal } from '../components/Modal'
+import { GuideVisuals } from '../components/GuideVisuals'
+import { GuidePager } from '../components/GuidePager'
 import { ProjectImages } from '../components/ProjectImages'
-import { StepDrawings } from '../components/StepDrawings'
 import { PhasePill } from '../components/PhaseUI'
 import { TaskModal } from '../components/editors'
 import { TaskReadinessPanel } from '../components/TaskReadinessPanel'
@@ -78,12 +79,12 @@ function StepImages({ projectId, stepId }: { projectId: string; stepId: string }
 
 export function TaskDetail() {
   const { taskId = '' } = useParams()
-  const [bobInstruction, setBobInstruction] = useState<{ taskId: string; id: string } | null>(null)
+  const [params, setParams] = useSearchParams()
   const projectId = db.getActiveProjectId() ?? ''
   const [version, setVersion] = useState(0)
   const { data: detail, loading, error: loadError } = useAsync(() => db.getTaskDetail(projectId, taskId), [projectId, taskId, version])
   const { data: areas } = useAsync(() => db.getAreas({ includeArchived: true }), [projectId])
-  const { data: work, loading: workLoading, error: workError } = useAsync(() => db.getProjectStepWorkspace(projectId), [projectId, version])
+  const { data: work } = useAsync(() => db.getProjectWork(projectId), [projectId, version])
   const [dialog, setDialog] = useState<{ kind: 'step' | 'delete'; step?: TaskStep } | { kind: 'instructions' | 'task' } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -94,72 +95,92 @@ export function TaskDetail() {
     try { await action(); reload() } catch (err) { setError(errorText(err)) } finally { setBusy(false) }
   }
   const focusedPlanStep = work?.steps.find(step => step.id === detail?.task.primaryStepId)
-  const focusedInstruction = bobInstruction?.taskId === taskId ? detail?.steps.find(step => step.id === bobInstruction.id) : undefined
-  useBobSurface(projectId, detail && !loading && !loadError ? { surface: 'task', taskId: detail.task.id, ...(detail.task.areaId ? { areaId: detail.task.areaId } : {}), ...(focusedPlanStep ? { planStepId: focusedPlanStep.id } : {}), ...(focusedInstruction ? { instructionId: focusedInstruction.id } : {}) } : null, focusedInstruction ? `Instruction · ${focusedInstruction.title}` : detail ? `Task · ${detail.task.name}` : 'Task loading')
-  if (loading && !detail) return <div className="page"><Loading /></div>
-  if (!detail || loadError) return <div className="page"><h1 className="page-title">Task unavailable</h1>
+  const requested = params.get('instruction')
+  const savedSteps = detail?.task.id === taskId ? detail.steps : []
+  const active = savedSteps.find(s => s.id === requested) ?? savedSteps.find(s => !s.completedAt) ?? savedSteps.at(-1)
+  const focusedInstruction = params.get('context') === 'task' ? undefined : active
+  const instructionUrl = (step?: TaskStep) => {
+    if (!step) return undefined
+    const next = new URLSearchParams(params)
+    next.set('instruction', step.id)
+    next.delete('context')
+    next.delete('visual')
+    return `/tasks/${encodeURIComponent(taskId)}?${next}`
+  }
+  const selectContext = (wholeTask: boolean) => {
+    const next = new URLSearchParams(params)
+    if (active) next.set('instruction', active.id)
+    if (wholeTask) next.set('context','task')
+    else next.delete('context')
+    setParams(next, {replace:true})
+  }
+  useBobSurface(projectId, detail?.task.id === taskId && !loading && !loadError ? { surface: 'task', taskId: detail.task.id, ...(detail.task.areaId ? { areaId: detail.task.areaId } : {}), ...(focusedPlanStep ? { planStepId: focusedPlanStep.id } : {}), ...(focusedInstruction ? { instructionId: focusedInstruction.id } : {}) } : null, focusedInstruction ? `Instruction · ${focusedInstruction.title}` : detail ? `Task · ${detail.task.name}` : 'Task loading')
+  if (loading && detail?.task.id !== taskId) return <div className="page"><Loading /></div>
+  if (!detail || detail.task.id !== taskId || loadError) return <div className="page"><h1 className="page-title">Task unavailable</h1>
     <p role="alert">{loadError ? userErrorMessage(loadError, 'This task may have been removed, or your project access changed.') : 'This task may have been removed, or your project access changed.'}</p>
     <div className="foundation-actions"><Link to="/areas" className="btn">Back to areas</Link><button className="btn" onClick={reload}>Reload task</button></div>
   </div>
   const { task, steps } = detail
+  const instructionIndex = active ? steps.indexOf(active) : -1
   const area = areas?.find(a => a.id === task.areaId)
   const planStep = work?.steps.find(s => s.id === task.primaryStepId)
   const editable = db.authEnabled()
   return <div className="page task-detail">
     <Link to={planStep ? '/project?step='+planStep.id : area ? '/areas/' + area.slug : '/project'} className="task-back"><Icon name="arrow-left" size={16} /> {planStep?.title ?? area?.name ?? 'Project plan'}</Link>
-    <div className="page-head"><div><h1 className="page-title">{task.name}</h1>
-      <div className="foundation-actions"><SkillPill level={task.skill} /><span>{task.hours}</span>{area && <PhasePill phase={area.phase} prefix="Area" />}</div></div>
-      <button className="btn" onClick={() => setDialog({ kind: 'task' })}>Edit task</button>
-    </div>
-    {!editable && <p className="foundation-hint">This demo shows the task layout. Saved instructions, checks and images are available in connected projects.</p>}
+    <div className="page-head"><h1 className="page-title">{task.name}</h1></div>
     {error && <div role="alert"><FormError>{error}</FormError><button className="btn" onClick={reload}>Reload task</button></div>}
-    {busy && <p role="status">Saving changes…</p>}
-    <div className="task-state"><Field label="Task status"><select aria-label="Task status" style={inputStyle} value={task.status} disabled={busy || loading}
-      onChange={e => void act(() => db.setTaskStatus(task.id, e.target.value as TaskStatus))}>
-      <option value="todo">To do</option><option value="doing">In progress</option><option value="done">Done</option><option value="blocked">Blocked</option>
-    </select></Field></div>
-    {task.primaryStepId && <section className="card foundation-section" aria-label="Task drawings">
-      <h2>Drawings for this task</h2>
-      {workError ? <div role="alert"><p>Task drawings could not be checked.</p><button className="btn" onClick={() => setVersion(v => v + 1)}>Reload drawings</button></div>
-        : workLoading || !work ? <p role="status">Loading task drawings…</p>
-          : work.drawings.some(d => d.step_id === task.primaryStepId) ? <StepDrawings projectId={projectId} drawings={work.drawings.filter(d => d.step_id === task.primaryStepId)} returnLabel={task.name} returnKey={`task:${task.id}`} />
-            : <p className="foundation-hint">No drawing is linked to this task’s current step yet.</p>}
-    </section>}
+    {busy && <p role="status">Saving…</p>}
     <TaskReadinessPanel projectId={projectId} taskId={task.id} areaId={task.areaId} refreshKey={version} />
-    {db.authEnabled()&&<DrawingRequests key={task.id} projectId={projectId} taskId={task.id} />}
-    <section className="card foundation-section" aria-label="Task instructions">
-      <div className="foundation-heading"><h2>Instructions</h2><button className="btn" disabled={!editable} onClick={() => setDialog({ kind: 'instructions' })}>Edit instructions</button></div>
-      {detail.instructions ? <p className="instruction-text">{detail.instructions}</p> : <p className="foundation-hint">Describe the scope and the result this task should achieve.</p>}
-    </section>
-    <section className="foundation-section" aria-label="Instructions and checks">
-      <div className="foundation-heading"><h2>Instructions and checks <span className="foundation-hint">{steps.filter(s => s.completedAt).length} / {steps.length}</span></h2>
-        <button className="btn btn-primary" disabled={!editable || busy} onClick={() => setDialog({ kind: 'step' })}><Icon name="plus" size={16} /> Add instruction</button></div>
-      {!steps.length && <p className="foundation-hint">Add instructions and checkpoints in order. Each can have its own text and images.</p>}
-      <ol className="task-step-list">
-        {steps.map((step, index) => <li className="card task-step" key={step.id} data-step-id={step.id}>
-          <div className="foundation-heading">
-            <label className="foundation-check step-completion"><input type="checkbox" checked={Boolean(step.completedAt)} disabled={busy || !editable}
-              onChange={e => void act(() => db.editTaskSteps(projectId, task.id, 'complete', step.id, { revision: step.revision, completed: e.target.checked }))} />
-              <span><span className="step-number">{index + 1}.</span> <strong>{step.title}</strong></span></label>
-            <div className="foundation-actions">
-              <button className="btn" aria-label={'Move ' + step.title + ' up'} disabled={!editable || busy || index === 0}
-                onClick={() => void act(() => db.editTaskSteps(projectId, task.id, 'move', step.id, { revision: step.revision, direction: 'up' }))}><Icon name="arrow-up" size={17} /></button>
-              <button className="btn" aria-label={'Move ' + step.title + ' down'} disabled={!editable || busy || index === steps.length - 1}
-                onClick={() => void act(() => db.editTaskSteps(projectId, task.id, 'move', step.id, { revision: step.revision, direction: 'down' }))}><Icon name="arrow-down" size={17} /></button>
-              <button className="btn" disabled={!editable || busy} onClick={() => setDialog({ kind: 'step', step })}>Edit instruction</button>
-              <button className="btn" onClick={() => { setBobInstruction({ taskId, id: step.id }); openBobForCurrentSurface() }}>Ask Bob about this instruction</button>
-              <button className="btn" aria-label={'Remove instruction: ' + step.title} disabled={!editable || busy} onClick={() => setDialog({ kind: 'delete', step })}><Icon name="trash" size={16} /></button>
-            </div>
+    <section className="card project-plan-panel" aria-label="Instructions and checks">
+      {active ? <article key={active.id} className="task-step current-plan-step" data-step-id={active.id}>
+        <GuidePager label="Browse instructions" previous={instructionUrl(steps[instructionIndex-1])} next={instructionUrl(steps[instructionIndex+1])}><strong>Instruction {instructionIndex+1} of {steps.length}</strong>
+          {active.isCheckpoint && <span>{active.required ? 'Required check' : 'Optional check'}</span>}
+        </GuidePager>
+        <h2>{active.title}</h2>
+        <GuideVisuals projectId={projectId} planStepId={task.primaryStepId} taskId={task.id} target={{kind:'step',id:active.id}} returnLabel={active.title} returnKey={`instruction:${active.id}`} />
+        {active.instructions && <p className="instruction-text">{active.instructions}</p>}
+        <label className="foundation-check"><input type="checkbox" checked={Boolean(active.completedAt)} disabled={busy || !editable}
+          onChange={e => {
+            const completed = e.currentTarget.checked
+            // Keep the instruction on screen when it is checked; browsing is separate.
+            selectContext(params.get('context') === 'task')
+            void act(() => db.editTaskSteps(projectId, task.id, 'complete', active.id, {revision:active.revision,completed}))
+          }} /> Completed</label>
+        <details className="step-support" id={`instruction-options-${active.id}`}><summary>Instruction details</summary>
+          <div className="foundation-actions">
+            <button className="btn" onClick={() => {selectContext(false);openBobForCurrentSurface()}}>Ask Bob about this instruction</button>
+            {focusedInstruction && <button className="btn" onClick={() => selectContext(true)}>Use whole Task</button>}
+            <button className="btn" disabled={!editable || busy} onClick={() => setDialog({ kind:'step',step:active })}>Edit instruction</button>
+            <button className="btn" aria-label={`Move ${active.title} up`} disabled={!editable || busy || active.id === steps[0].id}
+              onClick={() => void act(() => db.editTaskSteps(projectId,task.id,'move',active.id,{revision:active.revision,direction:'up'}))}><Icon name="arrow-up" size={16}/></button>
+            <button className="btn" aria-label={`Move ${active.title} down`} disabled={!editable || busy || active.id === steps.at(-1)?.id}
+              onClick={() => void act(() => db.editTaskSteps(projectId,task.id,'move',active.id,{revision:active.revision,direction:'down'}))}><Icon name="arrow-down" size={16}/></button>
+            <button className="btn" aria-label={`Remove instruction: ${active.title}`} disabled={!editable || busy} onClick={() => setDialog({kind:'delete',step:active})}><Icon name="trash" size={16}/></button>
           </div>
-          {step.isCheckpoint && <p className="checkpoint-label">{step.required ? 'Required completion check' : 'Optional check'}</p>}
-          {focusedInstruction?.id === step.id && <div className="foundation-actions"><span className="foundation-hint">Bob’s selected instruction</span><button className="btn" onClick={() => setBobInstruction(null)}>Use whole Task</button></div>}
-          {step.instructions && <p className="instruction-text">{step.instructions}</p>}
-          {step.completedAt && <p className="foundation-hint">Completed {formatDateTime(step.completedAt)}</p>}
-          <StepImages projectId={projectId} stepId={step.id} />
-        </li>)}
-      </ol>
+          {active.completedAt && <p className="foundation-hint">Completed {formatDateTime(active.completedAt)}</p>}
+          <StepImages projectId={projectId} stepId={active.id} />
+        </details>
+      </article> : <>
+        <GuideVisuals key={task.id} projectId={projectId} planStepId={task.primaryStepId} target={{kind:'task',id:task.id}} returnLabel={task.name} returnKey={`task:${task.id}`} />
+        {detail.instructions && <p className="instruction-text">{detail.instructions}</p>}
+        {!detail.instructions && <button className="btn" onClick={() => openBobWithDraft('Show me how to do this task, one step at a time. What do I do first?')}>Ask Bob how</button>}
+      </>}
     </section>
-    <div className="card foundation-section"><ProjectImages projectId={projectId} target={{ kind: 'task', id: task.id }} title="Task images" /></div>
+    {db.authEnabled() && <DrawingRequests key={task.id} projectId={projectId} taskId={task.id} />}
+    <details className="project-reference" id="task-options"><summary>Task details</summary>
+      <div className="foundation-actions"><SkillPill level={task.skill}/><span>{task.hours}</span>{area && <PhasePill phase={area.phase} prefix="Area" />}</div>
+      <Field label="Task status"><select aria-label="Task status" style={inputStyle} value={task.status} disabled={busy || loading}
+        onChange={e => void act(() => db.setTaskStatus(task.id,e.target.value as TaskStatus))}>
+        <option value="todo">To do</option><option value="doing">In progress</option><option value="done">Done</option><option value="blocked">Blocked</option>
+      </select></Field>
+      {active && detail.instructions && <p className="instruction-text">{detail.instructions}</p>}
+      <div className="foundation-actions">
+        <button className="btn" disabled={!editable} onClick={() => setDialog({kind:'task'})}>Edit task</button>
+        <button className="btn" disabled={!editable} onClick={() => setDialog({kind:'instructions'})}>Edit instructions</button>
+        <button className="btn" disabled={!editable || busy} onClick={() => setDialog({kind:'step'})}>Add instruction</button>
+      </div>
+      <ProjectImages projectId={projectId} target={{kind:'task',id:task.id}} title="Task images" />
+    </details>
     {dialog?.kind === 'step' && <StepEditor projectId={projectId} taskId={task.id} step={dialog.step} onClose={() => setDialog(null)} onSaved={reload} />}
     {dialog?.kind === 'instructions' && <InstructionsEditor projectId={projectId} detail={detail} onClose={() => setDialog(null)} onSaved={reload} />}
     {dialog?.kind === 'task' && <TaskModal task={task} areas={areas ?? []} onClose={() => setDialog(null)} onDone={reload} />}

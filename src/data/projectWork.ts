@@ -21,7 +21,7 @@ export interface WorkStep {
   responsible_person_id: string | null
   tasks: WorkTask[]
   related_tasks: WorkTask[]
-  requirements: { id: string; title: string; status: { state: string } }[]
+  requirements: { id: string; title: string; responsible_kind?: WorkStep['responsible_kind']; responsible_person_id?: string | null; status: { state: string } }[]
 }
 export interface ProjectWork {
   project_id: string
@@ -33,6 +33,12 @@ export interface ProjectWork {
   steps: WorkStep[]
   unorganised_tasks: WorkTask[]
 }
-export interface ProjectStepWorkspace extends ProjectWork {
-  drawings: (DrawingSourceStatus & { artifact_id: string; artifact_revision: number; step_id: string; title: string; status: string; area_id: string | null })[]
+export interface StepDrawing extends DrawingSourceStatus {
+  artifact_id: string
+  artifact_revision: number
+  step_id: string
+  title: string
+  status: string
+  area_id: string | null
+  isConstruction: boolean
 }

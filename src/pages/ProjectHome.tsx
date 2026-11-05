@@ -1,13 +1,11 @@
 import { formatEventDay } from '../lib/eventDay'
 import { useBobSurface } from '../lib/bobSurface'
-import {DrawingRequests} from '../components/DrawingRequests'
 import { ProjectStepWorkspace } from '../components/ProjectStepWorkspace'
 import { ProjectDrawings } from '../components/ProjectDrawings'
 import { useEffect, useState, type ReactNode } from 'react'
 import type { BuildEvent } from '../data/types'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
-import type { Measurement } from '../data/projectFacts'
 import { PhasePill, PhaseRail, PhaseTransitionDialog, NextActionCard } from '../components/PhaseUI'
 import { ProjectThumbnail } from '../components/ProjectThumbnail'
 import { ProjectMetadata } from '../components/ProjectMetadata'
@@ -17,7 +15,6 @@ import { FormError } from '../components/form'
 import { AvatarStack, Icon, Loading, SectionTitle, useAsync, useProjectVersion } from '../components/ui'
 import { areaNextAction, areaPhaseSummary, projectFocus } from '../lib/projectPhase'
 import { userErrorMessage } from '../lib/userErrors'
-import { nextProjectPlanningAction } from '../domain/projectPlanningAction'
 
 export function ProjectHome() {
   const projectVersion = useProjectVersion()
@@ -27,10 +24,20 @@ export function ProjectHome() {
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState('')
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const media = params.get('media')
+  const showingMedia = db.authEnabled() && (media === 'photos' || media === 'drawings')
+  const mediaUrl = (section?: 'photos' | 'drawings') => {
+    const next = new URLSearchParams(params)
+    if (section) next.set('media', section)
+    else next.delete('media')
+    return { pathname: '/project', search: next.toString() }
+  }
   const { data: project, loading: projectLoading, error: projectError } = useAsync(() => db.getProject(), [projectVersion, version])
   const { data: areas, loading: areasLoading, error: areasError } = useAsync(() => db.getAreas(), [projectVersion, version])
   const { data: people } = useAsync(() => db.getPeople(), [projectVersion])
-  const { data: tasks } = useAsync(() => db.getTasks(), [projectVersion, version])
+  const connected = db.authEnabled()
+  const { data: demoTasks } = useAsync(() => connected ? Promise.resolve(null) : db.getTasks(), [connected, projectVersion, version])
   const { data: next } = useAsync(() => db.getNextEvent(), [projectVersion])
   const { data: announcements } = useAsync(() => db.getAnnouncements(), [projectVersion])
   const projectId = project?.id ?? ''
@@ -43,18 +50,6 @@ export function ProjectHome() {
   const { data: overview } = useAsync(() => db.getAccountProjectOverview(projectId ? [projectId] : []), [projectId, projectVersion, version, mediaVersion])
   const { data: thumbnailId } = useAsync(() => projectId ? db.getProjectThumbnail(projectId) : Promise.resolve(null), [projectId, projectVersion, mediaVersion])
   useBobSurface(projectId, { surface: 'project' }, 'Project')
-  const { data: planning, loading: planningLoading, error: planningError } = useAsync(
-    () => projectId && db.authEnabled()
-      ? Promise.all([
-          db.getProjectFacts(projectId, 'measurement', { status: 'missing', requiredOnly: true }, 0),
-          db.getProjectTargetScopes(projectId),
-          db.getProjectArtifacts(projectId, '', false, 0),
-          db.getBuildConstructions(projectId),
-        ]).then(([missing, targets, artifacts, constructions]) => ({ missing, targets, artifacts, constructions }))
-      : Promise.resolve(null),
-    [projectId, projectVersion, version],
-  )
-
   if (projectLoading && !project) return <div className="page"><Loading label="Loading project…" /></div>
   if (!project || projectError) return <div className="page"><h1 className="page-title">Project unavailable</h1><p role="alert">{projectError ? userErrorMessage(projectError, 'This project may no longer be available.') : 'This project may no longer be available.'}</p></div>
 
@@ -76,40 +71,50 @@ export function ProjectHome() {
   }
   const focus = projectFocus(project.phase, areaItems)
   const byId = new Map((people ?? []).map(person => [person.id, person]))
-  const areaById = new Map(areaItems.map(area => [area.id, area.name]))
   const resolve = (ids: string[]) => ids.map(id => byId.get(id)).filter((person): person is NonNullable<typeof person> => Boolean(person))
-  const missingMeasurements = (planning?.missing.items ?? []).filter((item): item is Measurement => item.kind === 'measurement' && item.required)
-  const nextPlanningAction = nextProjectPlanningAction({
-    missing: missingMeasurements,
-    targets: planning?.targets ?? [],
-    constructions: planning?.constructions ?? [],
-    artifacts: planning?.artifacts.items ?? [],
-  }, areaById)
-
-  return <div className="page project-home">
+  const areaSummary = areasLoading ? 'Loading Areas…' : areasError ? 'Area status unavailable' : areaPhaseSummary(areaItems)
+  const startButton = startSize === 'small' && <button className={connected ? 'btn' : 'btn btn-primary'} disabled={starting} onClick={() => void startBuild()}>
+    <Icon name="hammer" size={16} /> {starting ? 'Starting…' : 'Start this build'}
+  </button>
+  return <div className={connected ? "page project-home project-home-connected" : "page project-home"}>
     <div className="page-head">
       <div className="project-header-identity">
-        <ProjectThumbnail projectId={project.id} mediaId={thumbnailId} />
+        {thumbnailId && <ProjectThumbnail projectId={project.id} mediaId={thumbnailId} />}
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 7 }}>
-          <PhasePill phase={project.phase} prefix="Project" />
-          {project.location && <span className="foundation-hint">{project.location}</span>}
+        <div className="project-phase-row">
+          <button className="project-phase-control" aria-label={project.phase ? 'Review phase' : 'Set project phase'}
+            title={project.phase ? 'Review phase' : 'Set project phase'} onClick={() => setPhaseOpen(true)}>
+            <PhasePill phase={project.phase} prefix="Project" /><Icon name="caret-down" size={12} />
+          </button>
+
         </div>
         <h1 className="page-title">{project.name}</h1>
-        <ProjectMetadata overview={overview?.[0]} />
-        <p className="page-sub project-area-summary">{areasLoading ? 'Loading Areas…' : areasError ? 'Area status unavailable' : areaPhaseSummary(areaItems)}</p>
+        {!connected && <><ProjectMetadata overview={overview?.[0]} /><p className="page-sub project-area-summary">{areaSummary}</p></>}
       </div></div>
       <div className="cluster no-print">
-        {db.authEnabled() && <button className={`btn ${startSize || building ? '' : 'btn-primary'}`} aria-label="Go to Plan" onClick={() => { const plan = document.getElementById('project-plan'); plan?.focus(); plan?.scrollIntoView({ block: 'start' }) }}>Plan</button>}
-        {startSize === 'small' && <button className="btn btn-primary" disabled={starting} onClick={() => void startBuild()}><Icon name="hammer" size={16} /> {starting ? 'Starting…' : 'Start this build'}</button>}
-        <Link className="btn" to="/artifacts">Drawings</Link>
-        <button className="btn" aria-label={project.phase ? 'Review phase' : 'Set project phase'} onClick={() => setPhaseOpen(true)}>
-          {project.phase ? 'Review phase' : 'Set phase'}
-        </button>
+        {!connected && startButton}
+        {connected
+          ? <Link className="btn media-entry" aria-label={showingMedia ? 'Back to plan' : 'Images & drawings'} to={mediaUrl(showingMedia ? undefined : 'drawings')}>
+              <Icon name={showingMedia ? 'arrow-left' : 'images'} size={16} />{showingMedia ? 'Back to plan' : <span>Images &amp; drawings</span>}
+            </Link>
+          : <Link className="btn" to="/artifacts">Drawings</Link>}
+
       </div>
     </div>
 
+    {showingMedia ? <section className="project-media" aria-label="Images and drawings">
+      <nav aria-label="Project media" className="media-tabs">
+        <Link to={mediaUrl('drawings')} replace aria-current={media === 'drawings' ? 'page' : undefined}>Drawings</Link>
+        <Link to={mediaUrl('photos')} replace aria-current={media === 'photos' ? 'page' : undefined}>Photos</Link>
+      </nav>
+      {media === 'drawings' ? <ProjectDrawings key={project.id} projectId={project.id} />
+        : <ProjectImages key={project.id} projectId={project.id} target={{kind:'project',id:project.id}} title="Project images" allowUpload allowThumbnail />}
+    </section> : <>
     {startError && <FormError>Could not start the build: {startError}</FormError>}
+
+    {building && <BuildFocus next={next} />}
+    {connected && <ProjectStepWorkspace key={`plan:${project.id}`} projectId={project.id} building={building} />}
+    {!connected && !building && areas && demoTasks && !areas.length && !demoTasks.length && <ProjectStart />}
 
     {startSize === 'large' && next && <section className="card build-start" aria-labelledby="build-start-title">
       <div className="build-start-copy">
@@ -121,18 +126,17 @@ export function ProjectHome() {
       </button>
     </section>}
 
-    {building && <BuildFocus next={next} />}
-    {building && db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
-
-    {!building && areas && tasks && !areas.length && !tasks.length && <ProjectStart />}
-
+    <details className="project-reference" id="project-information" open={!connected || undefined}>
+      <summary>Project information</summary>
+    {project.location && <p className="foundation-hint">{project.location}</p>}
     {project.description && <details id="project-description" className="project-description">
       <summary>Project description</summary>
       <p className="instruction-text">{project.description}</p>
       <Link to="/facts" className="project-detail-link">Measurements &amp; existing parts <Icon name="arrow-right" size={15} /></Link>
     </details>}
 
-    <PlanningTools folded={building}>
+    <PlanningTools folded={connected || building}>
+    {connected && startButton}
     <nav className="project-shortcuts" aria-label="Project tools">
       <Link className="btn" to="/build-lists"><Icon name="package" size={18} /><span>Cut list &amp; purchasing</span></Link>
       <Link className="btn" to="/facts" aria-label="Measurements & existing parts"><Icon name="ruler" size={18} /><span>Measurements</span></Link>
@@ -142,6 +146,7 @@ export function ProjectHome() {
 
     <details id="project-context" className="project-context-details">
       <summary>Project focus &amp; lifecycle</summary>
+      {connected && <><ProjectMetadata overview={overview?.[0]} /><p className="foundation-hint">{areaSummary}</p></>}
       <section aria-label="Project lifecycle"><PhaseRail phase={project.phase} compact /></section>
       <section style={{ marginTop: 'var(--section-gap)' }}>
       <NextActionCard
@@ -155,56 +160,12 @@ export function ProjectHome() {
       <Link to="/building" className="project-detail-link"><Icon name="house" size={16} /> Building &amp; spaces <Icon name="arrow-right" size={15} /></Link>
     </details>
 
-    {db.authEnabled() && <section aria-label="Planning next steps" style={{ marginTop: 'var(--section-gap)' }}>
-      {planningLoading ? <div className="card" style={{ padding: 'var(--panel-padding)' }}><Loading label="Checking project evidence…" /></div>
-        : planningError ? <div className="card" role="status" style={{ padding: 'var(--panel-padding)' }}>
-          <strong>Planning status is unavailable</strong><div className="foundation-hint">Your saved project data is unchanged. Open the project tools directly while this summary is unavailable.</div>
-        </div>
-          : <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 'var(--layout-gap)' }}>
-            <Link to={nextPlanningAction.to} className="card" style={{ padding: 'var(--panel-padding)', display: 'block', borderColor: 'var(--accent-2)' }}>
-              <div style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'flex-start' }}>
-                <div style={{ width: 42, height: 42, borderRadius: 'var(--r)', background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
-                  <Icon name={nextPlanningAction.icon} size={21} color="var(--accent-2)" />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--accent-2)' }}>{nextPlanningAction.eyebrow}</div>
-                  <h2 className="font-display" style={{ fontSize: 20, lineHeight: 1.12, margin: '4px 0 5px' }}>{nextPlanningAction.title}</h2>
-                  <p className="foundation-hint" style={{ margin: 0 }}>{nextPlanningAction.text}</p>
-                  <div style={{ marginTop: 11, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13 }}>Open <Icon name="arrow-right" size={14} /></div>
-                </div>
-              </div>
-            </Link>
-            <div className="card" style={{ padding: 'var(--panel-padding)' }}>
-              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--clay)' }}>Still missing</div>
-              <h2 className="font-display" style={{ fontSize: 19, margin: '4px 0 8px' }}>{missingMeasurements.length ? `${missingMeasurements.length} to measure` : 'No recorded measurement blockers'}</h2>
-              {missingMeasurements.length ? <div style={{ display: 'grid', gap: 8 }}>
-                {missingMeasurements.slice(0, 3).map(measurement => <Link key={measurement.id} to={`/facts?kind=measurement&status=missing${measurement.areaId ? `&area=${measurement.areaId}` : ''}`}
-                  style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', padding: '8px 0', borderTop: '1px solid var(--line)', color: 'inherit' }}>
-                  <Icon name={measurement.required ? 'warning-circle' : 'circle-dashed'} size={17} color={measurement.required ? 'var(--clay)' : 'var(--ink-faint)'} />
-                  <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>{measurement.subject}</div>
-                    <div className="foundation-hint">{measurement.truth === 'estimated' ? 'Estimated — verify' : 'Not measured yet'}{measurement.areaId ? ` · ${areaById.get(measurement.areaId) ?? 'Area'}` : ''}</div></div>
-                  <Icon name="arrow-right" size={14} color="var(--ink-faint)" />
-                </Link>)}
-              </div> : <p className="foundation-hint" style={{ marginBottom: 0 }}>No recorded required measurements currently need checking. Other design or safety prerequisites may still be unresolved.</p>}
-            </div>
-          </div>}
-    </section>}
     </PlanningTools>
 
-    {!building && db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
-
-    {/* Drawings and open drawing requests stay visible on site. */}
-    {db.authEnabled() && <>
-      <ProjectDrawings key={project.id} projectId={project.id} />
-      <DrawingRequests key={project.id+':requests'} projectId={project.id} />
-    </>}
-
-
-
-    <details className="card project-photo-details" id="project-images" onToggle={event => setImagesOpen(event.currentTarget.open)}>
+    {!connected && <details className="card project-photo-details project-disclosure" id="project-images" onToggle={event => setImagesOpen(event.currentTarget.open)}>
       <summary>Project images</summary>
       {imagesOpen && <ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" allowUpload allowThumbnail />}
-    </details>
+    </details>}
 
     {!db.authEnabled() && <section style={{ marginTop: 'var(--section-gap)' }}>
       <SectionTitle action={<Link to="/areas" style={{ fontSize: 13, color: 'var(--accent-2)', fontWeight: 700 }}>All Areas</Link>}>
@@ -259,6 +220,10 @@ export function ProjectHome() {
       </section>}
     </div>
 
+    </details>
+
+    </>}
+
     {phaseOpen && <PhaseTransitionDialog title="Review Project phase" current={project.phase} onClose={() => setPhaseOpen(false)}
       onSave={async (phase, reason) => { await db.setProjectPhase(phase, reason); setPhaseOpen(false); setVersion(value => value + 1) }} />}
   </div>
@@ -268,7 +233,7 @@ function PlanningTools({ folded, children }: { folded: boolean; children: ReactN
   if (!folded) return <>{children}</>
   return <details id="planning-tools" className="card planning-tools">
     <summary>Planning tools</summary>
-    <p className="foundation-hint">Measurements, drawings, materials and the project target. Still here while you build.</p>
+    <p className="foundation-hint">Measurements, materials and the selected design.</p>
     {children}
   </details>
 }

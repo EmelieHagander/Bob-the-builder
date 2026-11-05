@@ -30,6 +30,12 @@ try{
   const tasks=[{id:'cut',project_id:'P',primary_step_id:root.id,area_id:null,name:'Cut panels',status:'doing',skill:'novice',hours:'1h',materials:'0 / 0',task_assignees:[],instructions:'Follow the saved cutting list',updated_at:'2026-09-24T00:00:00Z'},
    {id:'legacy',project_id:'P',primary_step_id:null,area_id:'kitchen',name:'Inspect existing floor',status:'done',skill:'novice',hours:'1h',materials:'0 / 0',task_assignees:[],instructions:'',updated_at:'2026-09-24T00:00:00Z'}]
   let creates=0,reads=0,requestsVisible=false,cancels=0,contextFailures=0
+  let offlineLinks=false, planOnly=false, pendingPlan=false, showDocuments=false
+  const photo={id:'floor-photo',project_id:'P',title:'Floor corner',state:'ready',purpose:'instruction',bucket_id:'project-media',object_path:'P/floor.png',content_type:'image/png',media_links:[{id:'link-photo',plan_step_id:grouped.id}]}
+  const instructionPhoto={...photo,id:'trim-photo',title:'Trim detail',media_links:[{id:'instruction-link',step_id:'first-instruction'}]}
+  const taskPhoto={...photo,id:'room-photo',title:'Whole room',purpose:'reference',media_links:[{id:'task-link',task_id:'cut'}]}
+  const mixedPhotos=[photo,instructionPhoto,taskPhoto,{...photo,id:'unlinked-photo',title:'Other step only',media_links:[{id:'other-link',plan_step_id:root.id}]}]
+  let mixedMedia=false
   const sentScreens=[]
   const requestWork={request:{id:'40000000-0000-4000-8000-000000000001',revision:3,status:'needs_data',reason:null,artifact_id:null,artifact_revision:null,scope:{step_id:root.id}},gaps:[
    {id:'50000000-0000-4000-8000-000000000002',action:'prerequisite',blocking:true,observed_revision:3,task_id:null,task_name:null,label:'Inspect floor before placing drawers',owner_label:null,step_title:grouped.title,area_id:'kitchen',step_id:grouped.id},
@@ -38,6 +44,7 @@ try{
   await context.route('https://fonts.googleapis.com/**',r=>r.abort())
   await context.route(`${api}/**`,async route=>{
       const inboxPath = new URL(route.request().url()).pathname
+      if (inboxPath === '/rest/v1/rpc/drawing_request_work') return route.fulfill({status:200,json:requestWork,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'}})
       if (inboxPath === '/rest/v1/rpc/read_construction_draft') return route.fulfill({status:200,json:{status:'ok',projectId:route.request().postDataJSON().p_project,items:[],truncated:false,next_cursor:null},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
       if (inboxPath === '/rest/v1/rpc/drawing_work_list') return route.fulfill({status:200,json:{items:requestsVisible?[requestWork]:[],next_cursor:null},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
       if (inboxPath === '/functions/v1/ask-bob' && route.request().method()==='POST' && route.request().postDataJSON()?.action==='renew_requests') return route.fulfill({status:200,json:{ok:true,renewed:0},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
@@ -59,7 +66,31 @@ try{
    if(path==='/rest/v1/bob_threads')return respond(null)
    if(path==='/rest/v1/projects')return respond(req.headers().accept?.includes('object+json')?project:[project])
    if(path==='/rest/v1/account')return respond({id:'account',name:'Work fixture',owner_name:'',email:''})
-   if(path==='/rest/v1/areas')return respond([area])
+   if(path==='/rest/v1/project_plan_revisions')return respond(pendingPlan?[{summary:'Review the proposed sequence'}]:[])
+   if (path==='/rest/v1/media_assets' && mixedMedia) {
+    if(url.searchParams.has('id')) return respond(mixedPhotos.find(p=>'eq.'+p.id===url.searchParams.get('id')))
+    return respond(mixedPhotos) // Include unrelated links to exercise the UI scope check.
+   }
+   if (path.endsWith('/P/floor.png')) return route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAoAAAAICAIAAABPmPnhAAAAFElEQVR4nGNc7mbEgBsw4ZEb0tIAHQYBLxJvyIQAAAAASUVORK5CYII=','base64'),headers:{'Access-Control-Allow-Origin':'*'}})
+   if(path==='/rest/v1/task_steps'&&mixedMedia) return respond(['first-instruction','second-instruction'].map((id,index)=>({
+    id,task_id:'cut',position:index+1,title:index?'Place panel':'Remove trim',instructions:'Keep the edge visible.',revision:1
+   })))
+   if(path==='/rest/v1/current_drawing_overview'&&showDocuments&&url.searchParams.has('id')){
+    assert.equal(url.searchParams.get('id'),'eq.drawing-id')
+    assert.equal(url.searchParams.get('revision'),'eq.3')
+    const sheet='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 200" data-page-height="100" data-page-count="2"><defs><g id="ModelGeometry"><path d="M0 0 L20 0 L20 10 Z"/></g></defs><g id="DrawingPage1"><g id="Geometry" transform="translate(20 25)"><use href="#ModelGeometry"/></g><text>Sheet notes</text></g><g id="DrawingPage2" transform="translate(0 100)"><text>Second sheet</text></g></svg>'
+    return respond([{id:'drawing-id',project_id:'P',revision:3,title:'Same title',status:'concept',source_state:'changed',preview_svg:Buffer.from(sheet).toString('base64')}])
+   }
+   if(path==='/rest/v1/current_drawing_steps'&&showDocuments&&!offlineLinks)return respond([
+    {artifact_id:'drawing-id',artifact_revision:3,step_id:grouped.id,title:'Same title',status:'concept',source_state:'changed',source_reasons:['target_changed']}])
+   if(path==='/rest/v1/current_drawing_overview'&&showDocuments)return respond([
+    {id:'drawing-id',project_id:'P',revision:3,title:'Same title',status:'concept',steps:[],source_state:'changed',source_reasons:['target_changed']},
+    {id:'model-id',project_id:'P',revision:20,title:'Same title',status:'concept',steps:[],source_state:'current',source_reasons:[]},
+   ])
+   if(path==='/rest/v1/artifact_construction_revisions'&&showDocuments)return respond([{artifact_id:'model-id',artifact_revision:20}])
+   if(path==='/rest/v1/artifact_construction_drawings'&&showDocuments)return respond([{drawing_artifact_id:'drawing-id',drawing_revision:3,construction_artifact_id:'model-id',construction_revision:16}])
+   if(path==='/rest/v1/areas')return respond(planOnly?[]:[area])
+   if(path==='/rest/v1/current_drawing_steps'&&offlineLinks)return respond({message:'link read failed'},503)
    if(path==='/rest/v1/events')return respond(['one','two'].map(id=>({id:`day-${id}`,project_id:'P',slug:`day-${id}`,title:`Build day ${id}`,day:'Saturday',time:'10:00',place:'Workshop',spots:'0 / 8',status:'open',food:'Bring lunch',event_attendees:[]})))
    if(path==='/rest/v1/event_tasks'){
     assert.equal(url.searchParams.get('project_id'),'eq.P')
@@ -70,6 +101,7 @@ try{
    if(path==='/rest/v1/rpc/project_invitations')return respond([])
    if(path==='/rest/v1/rpc/project_work_read'){
     assert.equal(req.postDataJSON().p_project,'P');reads++
+    if(pendingPlan)return respond({project_id:'P',status:'not_initialized',revision:null,focus_step_id:null,areas:[],steps:[],unorganised_tasks:[]})
     root.tasks=tasks.filter(t=>t.primary_step_id===root.id)
     grouped.related_tasks=[root.tasks[0]]
     return respond({project_id:'P',vocabulary_version:'2026-09-24.1',status:'approved',revision:1,focus_step_id:grouped.id,areas:[area],steps:[root,grouped],unorganised_tasks:tasks.filter(t=>!t.primary_step_id)})
@@ -82,6 +114,7 @@ try{
     const row={...tasks[0],id:'new-task',name:b.p_name,status:'todo'};tasks.push(row);creates++;return respond(row)
    }
    if(path==='/rest/v1/tasks'){
+    if(planOnly)return respond([])
     if(url.searchParams.get('project_id')==='in.(P)')return respond(tasks)
     assert.equal(url.searchParams.get('project_id'),'eq.P');assert(!url.searchParams.get('select')?.includes('areas!inner'))
     return respond(req.headers().accept?.includes('object+json')?tasks.find(t=>'eq.'+t.id===url.searchParams.get('id')):tasks)
@@ -93,12 +126,13 @@ try{
   await page.goto(base+'#/signin');await page.getByRole('button',{name:'Continue as guest',exact:true}).click()
   await page.getByRole('heading',{name:'Home',exact:true}).waitFor()
   await page.getByRole('button',{name:'Open project Build together',exact:true}).click()
-  const plan=page.getByRole('region',{name:'Project plan',exact:true}),drawers=plan.locator('.work-step').filter({hasText:'Complete drawers'})
-  await drawers.getByRole('link',{name:'Cut panels',exact:true}).waitFor()
+  const plan=page.getByRole('region',{name:'Project plan',exact:true}),drawers=plan.locator('#step-'+root.id)
+  await plan.getByRole('heading',{name:'Floor',exact:true}).waitFor()
   const projectDescription=page.locator('.project-description')
   assert.equal(await projectDescription.getAttribute('open'),null,'Long saved notes do not push the Plan off the opening screen')
   const planBox=await plan.boundingBox()
   assert(planBox && planBox.y<520,`Plan is easy to reach at ${width}px: ${JSON.stringify(planBox)}`)
+  await page.locator('#project-information > summary').click()
   await page.locator('details.planning-tools > summary').click()
   const shortcuts=page.getByRole('navigation',{name:'Project tools',exact:true})
   assert.equal(await shortcuts.getByRole('link').count(),4,'All planning shortcuts remain available in Build mode')
@@ -112,13 +146,18 @@ try{
   await projectDescription.getByText('Project description',{exact:true}).click()
   assert.equal(await projectDescription.locator('.instruction-text').textContent(),description,'All saved notes and dimensions remain available verbatim')
   await projectDescription.getByText('Project description',{exact:true}).click()
-  await page.getByRole('button',{name:'Go to Plan',exact:true}).click()
-  assert.equal(await plan.evaluate(el=>el===document.activeElement),true)
-  assert.equal(await page.getByRole('heading',{name:'Workstreams',exact:true}).count(),0)
-  assert.equal(await drawers.getByText('Bob’s focus',{exact:true}).count(),0)
-  await plan.locator('.work-step').filter({hasText:'Complete floor'}).getByText('Bob’s focus',{exact:true}).waitFor()
+  await plan.getByText('Step 2 of 2',{exact:true}).waitFor()
+  await plan.getByRole('navigation',{name:'Browse plan steps'}).getByRole('link',{name:'Previous',exact:true}).click()
+  await plan.getByRole('heading',{name:'Drawers',exact:true}).waitFor()
+  await plan.getByRole('navigation',{name:'Browse plan steps'}).getByRole('link',{name:'Next',exact:true}).click()
+  await plan.getByRole('heading',{name:'Floor',exact:true}).waitFor()
+  assert.equal(await plan.locator('.step-goal:visible').count(),0)
+  await plan.getByText('Full plan · 2 steps',{exact:true}).click()
   await plan.getByText('Tasks to organise · 1',{exact:true}).click()
   await plan.getByRole('link',{name:'Inspect existing floor',exact:true}).waitFor()
+  await plan.getByRole('link',{name:/Drawers/}).click()
+  await page.waitForURL('**?step='+root.id)
+  await drawers.locator('.step-support > summary').first().click()
   await drawers.getByRole('button',{name:'Add task',exact:true}).click()
   const modal=page.getByRole('dialog',{name:'Add task',exact:true})
   assert.equal(await modal.getByLabel('Area *',{exact:true}).count(),0)
@@ -129,14 +168,18 @@ try{
   await page.getByRole('heading',{name:'Cut panels',exact:true}).waitFor()
   await page.getByText('Follow the saved cutting list',{exact:true}).waitFor()
   await page.getByRole('link',{name:'Drawers',exact:true}).click()
+  await drawers.locator('.step-support > summary').first().click()
   await drawers.getByRole('link',{name:'Assemble drawers',exact:true}).waitFor()
-  await page.reload();await drawers.getByRole('link',{name:'Assemble drawers',exact:true}).waitFor()
-  await drawers.getByText('In progress · 2 tasks',{exact:true}).waitFor()
+  await page.reload()
+  await drawers.locator('.step-support > summary').first().click()
+  await drawers.getByRole('link',{name:'Assemble drawers',exact:true}).waitFor()
+  await drawers.getByText('Step details',{exact:true}).waitFor()
   assert(reads>=4)
-  const floor=plan.locator('.work-step').filter({hasText:'Complete floor'})
-  await floor.getByText('In progress · 0 tasks',{exact:true}).waitFor()
+  await drawers.getByRole('link',{name:'Back to Bob’s focus',exact:true}).click()
+  const floor=plan.locator('#step-'+grouped.id)
+  await floor.locator('.step-support > summary').first().click()
   await floor.getByText('Related work',{exact:true}).click()
-  assert.equal(await plan.getByRole('link',{name:'Cut panels',exact:true}).count(),2,'One primary plus one reference, never a second owned Task')
+  assert.equal(await floor.getByRole('link',{name:'Cut panels',exact:true}).count(),1,'Floor only exposes the related Task')
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),'No horizontal overflow')
   await page.screenshot({animations:'disabled',path:`test-results/project-work-${width}.png`,fullPage:true})
   await page.goto(base+'#/events/day-one')
@@ -153,8 +196,10 @@ try{
   requestsVisible=true
   await page.goto(base+'#/project');await page.reload()
   const requests=page.getByRole('region',{name:'Drawing requests',exact:true})
+  const openRequest=async () => {const request=requests.locator('.request-item').first();await request.waitFor(); if(!await request.evaluate(e=>e.open)) await request.locator(':scope > summary').click()}
+  await openRequest()
   await requests.getByRole('heading',{name:'Waiting for information',exact:true}).waitFor()
-  await requests.getByText('Record panel width',{exact:true}).waitFor()
+  await requests.locator('.drawing-request-gaps').getByText('Record panel width',{exact:true}).waitFor()
   await requests.getByText('Responsible: Bob',{exact:true}).waitFor()
   await requests.getByRole('link',{name:'Open linked task',exact:true}).waitFor()
   const requestDestination=requests.locator('.drawing-request-card > p').getByRole('link',{name:root.title,exact:true})
@@ -165,6 +210,8 @@ try{
   await page.getByRole('region',{name:'Project plan',exact:true}).waitFor()
   // Drawing work has no budget (owner decision 2026-10-18): even an old exhausted
   // allocation shows only its cost log, with no top-up and no limit message.
+  await openRequest()
+  await requests.getByText('Run details',{exact:true}).click()
   await requests.getByText('24 calls · $0.35',{exact:true}).waitFor()
   assert.equal(await requests.getByRole('button',{name:'Add request budget',exact:true}).count(),0,'No budget top-up exists')
   assert.equal(await requests.getByText('The request has reached its cost or call limit.',{exact:true}).count(),0,'Old allocations do not imply a work limit')
@@ -172,6 +219,8 @@ try{
   await page.screenshot({animations:'disabled',path:`test-results/drawing-requests-${width}.png`,fullPage:true})
   requestWork.budget={...requestWork.budget,unlimited_work:true,calls:64,spent_usd:14.50}
   await page.reload()
+  await openRequest()
+  await requests.getByText('Run details',{exact:true}).click()
   await requests.getByText('64 calls · $14.50',{exact:true}).waitFor()
   assert.equal(await requests.getByText('The request has reached its cost or call limit.',{exact:true}).count(),0,'Historical totals do not imply a current work limit')
   await page.screenshot({animations:'disabled',path:`test-results/drawing-requests-unlimited-${width}.png`,fullPage:true})
@@ -215,9 +264,114 @@ try{
   await drawer.getByRole('button',{name:'Close Ask bob',exact:true}).click()
   await page.goto(base+'#/tasks/cut')
   await page.getByRole('heading',{name:'Cut panels',exact:true}).waitFor()
-  await page.getByRole('region',{name:'Drawing requests',exact:true}).getByRole('button',{name:'Cancel request',exact:true}).click()
-  await page.getByRole('heading',{name:'Cancelled',exact:true}).waitFor();assert.equal(cancels,1)
-  await page.reload();await page.getByRole('heading',{name:'Cancelled',exact:true}).waitFor()
+  await openRequest()
+  await requests.getByRole('button',{name:'Cancel request',exact:true}).click()
+  await page.getByText('Past drawing requests · 1',{exact:true}).waitFor();assert.equal(cancels,1)
+  await page.reload();await page.getByText('Past drawing requests · 1',{exact:true}).click()
+  await page.locator('.past-request > summary').click()
+  await page.getByRole('heading',{name:'Cancelled',exact:true}).waitFor()
+  // A saved focus can be planned even with no tasks or areas returned by the project inventory.
+  project.phase='planning';grouped.state='planned';planOnly=true;offlineLinks=true
+  await page.goto(base+'#/project');await page.reload()
+  await plan.getByRole('heading',{name:'Floor',exact:true}).waitFor()
+  await plan.getByLabel('Responsible: Bob',{exact:true}).waitFor()
+  assert.equal(await page.getByRole('heading',{name:'What do you want to build?'}).count(),0)
+  assert.equal(await page.getByRole('region',{name:'Planning next steps'}).count(),0)
+  await plan.getByRole('alert').getByText('Linked drawings could not be loaded.',{exact:false}).waitFor()
+  offlineLinks=false
+  await plan.getByRole('button',{name:'Reload drawings'}).click()
+  await plan.getByRole('alert').waitFor({state:'hidden'})
+  await plan.getByText('Full plan · 2 steps',{exact:true}).click()
+  await plan.getByRole('link',{name:/Drawers/}).click()
+  await plan.getByText('Step details',{exact:true}).click()
+  await plan.getByRole('button',{name:'Ask Bob about this step'}).click()
+  await drawer.getByLabel('Bob page context').getByText('Plan Step · Drawers',{exact:true}).waitFor()
+  await drawer.getByRole('button',{name:'Close Ask bob'}).click()
+  await page.reload()
+  await plan.getByRole('heading',{name:'Drawers',exact:true}).waitFor()
+  await plan.getByRole('link',{name:'Back to Bob’s focus'}).click()
+  await plan.getByRole('heading',{name:'Floor',exact:true}).waitFor()
+  showDocuments=true
+  await page.reload()
+  const figure=plan.locator('.guide-image img')
+  await figure.waitFor()
+  const svg=await figure.evaluate(async img=>{await img.decode();return decodeURIComponent(img.src.slice(img.src.indexOf(',')+1))})
+  assert(svg.includes('ModelGeometry') && !svg.includes('Sheet notes') && !svg.includes('Second sheet'),'Guide uses only the saved vector geometry')
+  assert((await plan.locator('.guide-drawing a').getAttribute('href')).endsWith('drawing=drawing-id&revision=3'))
+  await plan.getByText('Sources changed — review drawing',{exact:true}).waitFor()
+  mixedMedia=true
+  await page.reload()
+  const hero=plan.locator('.guide-image img')
+  await plan.getByRole('button',{name:'Open image: Floor corner'}).waitFor()
+  await hero.evaluate(img=>img.decode())
+  assert((await hero.boundingBox()).height>=200,'The active figure fills the working card')
+  if (width < 860) {
+    const dock=await page.locator('.mobile-nav').boundingBox()
+    const bob=await page.getByRole('button',{name:'Ask bob',exact:true}).boundingBox()
+    assert(bob.y>=dock.y && bob.height>=44 && bob.width>=44,'Chat leaves the picture unobstructed')
+    for (const tab of await page.locator('.mobile-nav a').all()) {
+      const box=await tab.boundingBox()
+      assert(box.width>=44 && box.x+box.width<=bob.x,'Every tab remains reachable beside chat')
+    }
+  }
+  const choices=plan.getByRole('group',{name:'Choose a picture or drawing'})
+  assert.equal(await choices.getByRole('button').count(),2,'Only exact step attachments appear')
+  const drawChoice=choices.getByRole('button',{name:/Drawing: Same title · v3/})
+  await drawChoice.locator('img').evaluate(img=>img.decode())
+  await plan.getByRole('button',{name:'Open image: Floor corner'}).click()
+  await page.getByRole('dialog').getByRole('img').waitFor()
+  await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
+  await drawChoice.click()
+  await plan.getByText('Sources changed — review drawing',{exact:true}).waitFor()
+  assert.equal(await plan.locator('.guide-image').count(),1)
+  await page.reload()
+  await plan.getByText('Sources changed — review drawing',{exact:true}).waitFor()
+  assert.equal(await drawChoice.getAttribute('aria-pressed'),'true')
+  const planUrl=page.url()
+  await page.getByRole('link',{name:'Images & drawings',exact:true}).click()
+  await page.getByRole('navigation',{name:'Project media'}).getByRole('link',{name:'Photos'}).click()
+  await page.getByRole('region',{name:'Project images',exact:true}).waitFor()
+  await page.getByRole('link',{name:'Back to plan'}).click()
+  assert.equal(page.url(),planUrl)
+  await plan.getByText('Sources changed — review drawing',{exact:true}).waitFor()
+  await page.getByRole('navigation',{name:'Browse plan steps'}).getByRole('link',{name:'Previous',exact:true}).click()
+  assert(!page.url().includes('visual='))
+  assert.equal(await plan.getByRole('button',{name:'Open image: Floor corner'}).count(),0)
+  // The instruction image wins over the whole-task reference and parent plan
+  // drawing. Browse all three, then verify the next instruction's own scope.
+  planOnly=false
+  tasks[0].primary_step_id=grouped.id
+  await page.goto(base+'#/tasks/cut')
+  const taskGuide=page.getByRole('region',{name:'Task images and drawings'})
+  await taskGuide.getByRole('button',{name:'Open image: Trim detail'}).waitFor()
+  assert.equal(await taskGuide.locator('.visual-choice').count(),3)
+  await taskGuide.getByRole('button',{name:'Photo: Whole room'}).click()
+  await taskGuide.getByText('Task photo · Whole room',{exact:true}).waitFor()
+  await taskGuide.getByRole('button',{name:/Drawing: Same title · v3/}).click()
+  await taskGuide.getByRole('link',{name:'Same title · v3'}).waitFor()
+  await taskGuide.getByText(/Plan step · Concept drawing/).waitFor()
+  assert((await taskGuide.locator('.guide-image').boundingBox()).y < (await page.locator('.task-step .instruction-text').boundingBox()).y)
+  await page.reload()
+  await taskGuide.getByRole('link',{name:'Same title · v3'}).waitFor()
+  await page.getByRole('navigation',{name:'Browse instructions'}).getByRole('link',{name:'Next'}).click()
+  await page.getByRole('heading',{name:'Place panel'}).waitFor()
+  await taskGuide.getByRole('button',{name:'Open image: Whole room'}).waitFor()
+  assert.equal(await taskGuide.getByRole('button',{name:'Photo: Trim detail'}).count(),0)
+  assert(!page.url().includes('visual='))
+  planOnly=true
+  tasks[0].primary_step_id=root.id
+  await page.goto(base+'#/project')
+  mixedMedia=false
+  await page.getByRole('link',{name:'Images & drawings',exact:true}).click()
+  const documents=page.getByRole('region',{name:'Project drawings'})
+  await documents.getByRole('link',{name:'Open drawing: Same title · v3'}).waitFor()
+  await documents.getByRole('link',{name:'Open model: Same title · v20'}).waitFor()
+  const sourceLink=documents.getByRole('link',{name:'Source model · v16'})
+  assert.equal(await sourceLink.getAttribute('href'),'#/artifacts?drawing=model-id&revision=16','Source opens the pinned model, even when its latest revision is newer')
+  pendingPlan=true;await page.goto(base+'#/project');await page.reload()
+  await plan.getByRole('heading',{name:'Plan proposal'}).waitFor()
+  assert.equal(await page.getByRole('heading',{name:'What do you want to build?'}).count(),0)
+  project.phase='build'
   assert.deepEqual(errors,[]);await context.close()
   console.log(`Unified work ${width}px: root/Area Steps, Task creation/readback, navigation/reload, references, legacy work and focus OK`)
  }

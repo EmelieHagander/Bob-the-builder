@@ -4,6 +4,14 @@
  * `birch` is the default. Switch by setting data-theme on <html>.
  */
 
+.bob-launcher {
+  display: flex; align-items: center; position: fixed; z-index: 50;
+  right: clamp(16px, 3vw, 30px); bottom: clamp(74px, 4vw, 28px);
+  gap: var(--layout-gap); border: 0; border-radius: 999px; padding: 13px 20px 13px 16px;
+  background: var(--accent); color: var(--accent-ink); font: 800 15px 'Baloo 2', cursive;
+  box-shadow: 0 8px 22px -6px rgba(40,30,10,.5), 0 3px 0 var(--accent-2);
+}
+.bob-launcher-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--brand); display: grid; place-items: center; }
 .bob-unread-badge {
   background: var(--brand);
   color: var(--brand-ink);
@@ -984,19 +992,31 @@ select {
 .project-home .page-title { overflow-wrap: anywhere; }
 .project-area-summary { font-size: 13px; }
 .project-description, .project-context-details { margin-top: 8px; border-bottom: 1px solid var(--line); }
-.project-description > summary, .project-context-details > summary, .project-photo-details > summary { min-height: 44px; padding: 12px 0; font-size: 13px; font-weight: 700; cursor: pointer; }
+.project-description > summary, .project-context-details > summary, .project-disclosure > summary { min-height: 44px; padding: 12px 0; font-size: 13px; font-weight: 700; cursor: pointer; }
 .project-description .instruction-text { font-size: 14px; }
 .project-shortcuts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: var(--section-gap); }
 .project-shortcuts .btn { min-width: 0; min-height: 48px; justify-content: flex-start; padding: 8px 12px; }
 .project-shortcuts .btn span { min-width: 0; overflow-wrap: anywhere; }
 .project-detail-link { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; font-weight: 700; color: var(--accent-2); }
 .project-home #project-plan { scroll-margin-top: var(--section-gap); }
-.project-home .project-photo-details { margin-top: var(--section-gap); padding: 0 16px 12px; }
-.project-home .project-photo-details:not([open]) { padding-bottom: 0; }
+.project-home .project-disclosure { margin-top: var(--section-gap); padding: 0 16px 12px; }
+.project-home .project-disclosure:not([open]) { padding-bottom: 0; }
 .project-home summary:focus-visible, .project-home a:focus-visible, .project-home button:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
 @media (max-width: 860px) {
   .main-col { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
-  .bob-launcher { bottom: calc(78px + env(safe-area-inset-bottom)) !important; min-height: 48px; padding: 7px 12px 7px 9px !important; gap: 7px !important; font-size: 14px !important; }
+  .bob-launcher { bottom: calc(78px + env(safe-area-inset-bottom)); min-height: 48px; padding: 7px 12px 7px 9px; gap: 7px; font-size: 14px; }
+  /* Give chat its own touch target outside the drawing on guide pages. */
+  .guide-shell .mobile-nav { padding-right: 60px !important; }
+  .guide-shell .bob-launcher {
+    bottom: calc(8px + env(safe-area-inset-bottom)); right: 6px; width: 48px; min-height: 44px;
+    flex-direction: column; justify-content: center; gap: 2px; padding: 2px;
+    border-radius: var(--r); box-shadow: none; font-size: 10px;
+  }
+  .guide-shell .bob-launcher-avatar { width: 21px; height: 21px; }
+  .guide-shell .bob-unread-badge {
+    position: absolute; top: 2px; right: 3px; width: 9px; height: 9px; padding: 0;
+    border: 1px solid var(--brand); background: var(--surface); font-size: 0;
+  }
 }
 @media (max-width: 560px) {
   .page { padding: var(--page-padding-block) var(--page-padding-inline) 80px; }
@@ -1113,3 +1133,89 @@ select {
 .step-drawings { padding: var(--space-2); border-left: 3px solid var(--brand); background: var(--surface-2); }
 .step-drawings a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; }
 .drawing-return { max-width: 100%; white-space: normal; }
+
+/* Project work leads with the single step the person has opened or Bob is focusing. */
+.project-plan-panel { padding: var(--panel-padding); margin: var(--section-gap) 0; }
+.current-plan-step { min-width: 0; overflow-wrap: anywhere; }
+.plan-step-label, .document-kind { color: var(--accent-2); font-size: 13px; font-weight: 700; margin: 0 0 6px; }
+.current-plan-step h2 { font-size: clamp(21px, 4vw, 28px); line-height: 1.15; margin: 0 0 8px; }
+.step-responsibility, .step-goal { margin: 6px 0 10px; }
+.step-responsibility { font-size: 14px; color: var(--ink-soft); }
+.step-need { border-left: 3px solid var(--honey); padding-left: 10px; }
+.step-support > summary, .full-project-plan summary, .request-history > summary, .request-diagnostics > summary, .chat-earlier-results > summary {
+  cursor: pointer; min-height: 44px; padding: 12px 0; font-weight: 650;
+}
+.full-project-plan { margin-top: 8px; border-top: 1px solid var(--line); }
+.plan-step-link { display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 8px 0; min-height: 44px; border-bottom: 1px solid var(--line); text-decoration: none; }
+.plan-step-link[aria-current="step"] { font-weight: 750; }
+.plan-step-link small { color: var(--ink-soft); }
+.step-drawings { list-style: none; padding: 0; }
+.step-drawings a { display: inline-flex; align-items: center; min-height: 44px; }
+.request-history { margin: var(--section-gap) 0; }
+@media (max-width: 560px) {
+  .project-workbench-nav a { flex: 1; justify-content: center; padding-inline: 3px; font-size: 13px; }
+  .project-home .project-header-identity .ui-thumbnail { width: 44px; height: 44px; flex-basis: 44px; }
+}
+
+.past-request > summary { min-height: 44px; padding: 10px 0; cursor: pointer; }
+.project-requests { margin: var(--section-gap) 0; }
+
+.project-model-source { display: inline-flex; align-items: center; min-height: 44px; margin-inline: var(--panel-padding); text-decoration: underline; }
+
+.project-phase-control { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; border: 0; background: transparent; padding: 0; color: var(--ink-soft); }
+
+.guide-counter { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 10px; color: var(--ink-soft); font-size: 13px; }
+.guide-counter strong { color: var(--accent-2); }
+.guide-counter .step-responsibility { margin: 0; font-size: inherit; }
+.guide-visuals { margin: 12px 0 16px; min-width: 0; }
+.guide-photo, .guide-drawing { margin: 0; }
+.guide-expand { position: absolute; bottom: 6px; right: 6px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); color: var(--brand); background: var(--surface); pointer-events: none; }
+.visual-choices { display: flex; gap: 8px; overflow-x: auto; max-width: 100%; padding: 4px 2px; scroll-snap-type: x proximity; }
+.visual-choice { flex: 0 0 62px; min-height: 60px; padding: 2px; display: grid; gap: 2px; justify-items: center; border-radius: var(--r); border: 2px solid var(--line); background: var(--surface); color: var(--ink-soft); font: inherit; font-size: 11px; cursor: pointer; scroll-snap-align: start; }
+.visual-choice[aria-pressed=true] { border-color: var(--brand); color: var(--ink); }
+.choice-thumb { display: grid; place-items: center; width: 100%; height: 34px; overflow: hidden; background: white; border-radius: 3px; }
+.choice-thumb img { width: 100%; height: 34px; object-fit: contain; }
+.choice-thumb .image-loading, .choice-thumb .image-failure { font-size: 0; min-height: 0; }
+.media-tabs { display: flex; gap: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.media-tabs a { display: grid; align-items: center; min-height: 44px; padding: 0 8px; color: var(--ink-soft); font-weight: 650; }
+.media-tabs a[aria-current=page] { box-shadow: inset 0 -3px var(--brand); color: var(--ink); }
+.project-phase-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 7px; }
+.media-entry { min-height: 44px; }
+@media (max-width: 560px) {
+  .project-home-connected .media-entry { font-size: 13px; gap: 5px; padding-inline: 8px; }
+}
+.guide-image { position: relative; cursor: zoom-in; display: grid; place-items: center; border: 1px solid var(--line); border-radius: var(--r); width: 100%; padding: 4px; overflow: hidden; background: white; }
+.guide-image img { display: block; width: 100%; height: clamp(204px, 36svh, 380px); object-fit: contain; background: white; }
+.guide-image .stored-image { display: block; width: 100%; }
+.guide-drawing a { display: block; text-decoration: none; min-height: 44px; }
+.guide-figure-label, .guide-photo figcaption { display: block; padding: 8px 2px; font-size: 14px; color: var(--ink-soft); }
+.guide-figure-label { color: var(--accent-2); font-weight: 700; }
+.guide-caution { border-left: 3px solid var(--honey); padding: 4px 10px; color: var(--ink); margin: 4px 0; font-weight: 650; }
+.guide-task { display: flex; gap: 12px; justify-content: space-between; align-items: center; padding: 12px 0; color: var(--ink); font-weight: 700; }
+.guide-task small { display: block; font-size: 12px; font-weight: 500; color: var(--ink-soft); }
+.guide-pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.guide-pager .guide-counter { flex: 1; flex-direction: column; align-items: center; gap: 0; margin: 0; }
+.guide-pager .btn { min-height: 44px; min-width: 44px; justify-content: center; }
+.guide-pager [aria-hidden=true].btn { color: var(--ink-faint); background: transparent; border-color: transparent; }
+.guide-return { display: inline-flex; align-items: center; min-height: 44px; }
+.project-reference { margin: var(--section-gap) 0; border-top: 1px solid var(--line); }
+.project-reference > summary, .request-item > summary { cursor: pointer; min-height: 44px; padding: 12px 0; font-weight: 650; }
+.guide-request-heading { font-size: 15px; }
+.guide-drawing.step-drawings { padding: 0; border: 0; background: none; }
+.guide-drawing.step-drawings a { display: block; }
+.guide-drawing .guide-figure-label { padding-bottom: 4px; }
+.guide-visuals .guide-caution { font-size: 14px; }
+
+@media (max-width: 560px) {
+  .project-home-connected .page-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; }
+  .project-home-connected .page-head:has(.ui-thumbnail) { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .project-home-connected .project-header-identity, .project-home-connected .project-header-identity > div:not(.ui-thumbnail) { display: contents; }
+  .project-home-connected .project-phase-row { grid-area: 1 / 1 / 2 / -2; margin-bottom: 0; }
+  .project-home-connected .page-head > .cluster { grid-area: 1 / -2 / 2 / -1; }
+  .project-home-connected .page-head .page-title { grid-area: 2 / 1 / 3 / -1; margin: 0; }
+  .project-home-connected .page-head:has(.ui-thumbnail) .page-title { grid-column-start: 2; }
+  .project-home-connected .page-head .ui-thumbnail { grid-area: 2 / 1 / 3 / 2; }
+  .media-entry { max-width: 124px; line-height: 1.1; }
+}
+.current-plan-step > h2 { margin-bottom: 8px; }
+.guide-help { display: inline-flex; align-items: center; min-height: 44px; border: 0; padding: 0; color: var(--accent-2); background: none; text-decoration: underline; text-underline-offset: 3px; font: inherit; }

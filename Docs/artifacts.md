@@ -999,20 +999,19 @@ A 4B1 CI/browser gate additionally requires:
 Deployed 4A and 4B1 evidence is recorded in [`Docs/foundation-verification.md`](foundation-verification.md), including hosted migrations, browser proof and ordinary Auth/PostgREST live verification. The downstream 4B2b net-wall-area release is recorded there separately and owned behaviorally by [`Docs/material-planning.md`](material-planning.md).
 # Project-home drawings and work links — September 24, 2026
 
-Saved, non-archived drawings appear on Project home below the Plan, with a stable **Drawings** entrance in the Project header. The three most recently updated drawings show their title, saved version, fidelity and related work Steps; **All drawings** opens the complete existing archive. CAD previews use one saved SVG view, storage-box previews reuse the deterministic renderer, and image-backed artifacts reuse authorised media. Other artifact kinds open their existing full viewer. A preview is not a new artifact or evidence of measured fit. Loading or preview failure leaves the saved drawing link available.
+The Project header opens **Images & drawings**. Its Drawings view shows the three most recently updated saved drawings or models with title, version, fidelity and related work Steps. **All drawings** opens the complete archive. CAD previews use one saved SVG view, storage-box previews reuse the deterministic renderer, and image-backed artifacts reuse authorised media. Other artifact kinds open their existing full viewer. A preview is not a new artifact or evidence of measured fit. Loading or preview failure leaves the saved drawing link available.
 
 `artifact_step_links` is the current work relationship for **all** artifact kinds. A drawing can support several Steps without duplicate geometry. `current_drawing_steps` and `current_drawing_overview` are caller/RLS-bound projections of the same links and current, non-archived revisions. Project-home queries do not download CAD recipes or STEP export bytes. The card query returns at most four cards with their one preview SVG/recipe in the same read, so the source check runs once instead of once per card (2026-10-21); only source-image previews are fetched separately, when visible. Links open an exact revision. Existing CAD `step_id` is retained as revision provenance; current CAD links are backfilled and new scoped CAD saves populate the work relationship. Archive/restore copies do not resurrect a deliberately removed work link.
 
-Bob uses `link_project_drawing` to add/remove a work link without re-rendering. It goes through the normal named-member, claimed-turn, current-request quote, revision check and receipt path (`bob_project_write_v11`). Existing links are readable through `read_project_record_section`, dataset `drawing`, Artifact UUID and exact current revision. Steps describe the work; Planning is a phase, so a drawing remains attached when work moves into Build. A project-wide drawing can remain unlinked while still appearing on Project home. Removing a Step from the current plan hides its live link without deleting the drawing/history.
+Bob uses `link_project_drawing` to add/remove a work link without re-rendering. It goes through the normal named-member, claimed-turn, current-request quote, revision check and receipt path (`bob_project_write_v11`). Existing links are readable through `read_project_record_section`, dataset `drawing`, Artifact UUID and exact current revision. Steps describe the work; Planning is a phase, so a drawing remains attached when work moves into Build. A project-wide drawing can remain unlinked and still appear under **Images & drawings**. Removing a Step from the current plan hides its live link without deleting the drawing/history.
 
 ## Drawing access, reader and return
 
-Project and Area headers expose Drawings without opening planning menus. The
-Reference workspace keeps its four reference destinations visible and preserves
-the Area query. Plan Steps show their named drawings before the Task list. Normal
-Tasks consume the same authorized Step workspace projection to show current
-primary-Step drawings near the Task header; they do not depend on a saved Bob
-request. A failed workspace read is a visible retry state, never an empty-link claim.
+The Project header opens the project’s photos and drawings. Area headers link
+directly to Drawings. The Reference workspace keeps its four destinations visible
+and preserves the Area query. Each Plan Step shows one linked image or drawing
+before the Task list. Tasks use the same authorized projection for their primary
+Step’s drawings and distinguish them from instruction photos and whole-Task photos. A failed workspace read is a visible retry state, never an empty-link claim.
 The existing volunteer reader and its narrower capabilities remain unchanged.
 
 **Open drawing** consistently opens the exact saved revision. The first reader
