@@ -260,6 +260,58 @@ schema migration or public request-history logging is introduced.
 
 ### PR3 — bound result payloads without an AI history summary
 
+**First context-release increment, installed 2026-11-05:** newly created
+durable complete-request execution identities pin `imageInputDedupVersion: 1`.
+Only exact private image resolver references with the same detail level are
+deduplicated in the assembled model request, before its capacity estimate. The
+first occurrence stays in place; all text, source-status notices, distinct
+revisions/views and detail levels remain. Public URLs and execution archives are
+unchanged. The pin survives checkpoints; a mismatched restore is refused. Old
+execution identities omit the pin and retain byte-identical requests. This is
+deduplication only, not retirement of unique images or whole-stage renewal.
+The [audit increment](bob-runtime-path-audit-2026-11-04.md#image-dedup-increment-2026-11-05)
+owns test/release evidence; C1–C4 and R1–R6 remain the wider lifecycle work.
+
+**Next diagnostic increment, installed 2026-11-05:** complete-request
+assembly supplies content-free image counts separately from provider options.
+`[Bob image input attempt]` logs numeric `before`, `after`, `removed`,
+`unique_private`, `other` and `dedup_version` inside the existing journalled
+dispatcher, after the dispatch/time gates. Counts cover message `image_url`
+parts, not pixel bytes or token savings. `unique_private` means eligible exact
+private reference/detail identities; public, inline and ineligible-role parts
+are `other`. Completed journal replays produce no new attempt log; pending
+async recovery can produce another attempt, so log-row count is not billable
+model-call count. Capacity refusals before dispatch have no attempt log.
+Counts are neither checkpoint state nor provider/journal fingerprint input.
+No URLs, hashes, source IDs, text or pixels enter this diagnostic. The audit
+increment owns deployment status and the next ordinary owner-run comparison.
+
+**Explicit stage release, source verified 2026-11-05:** new published durable
+main executions pin `stageContextVersion: 1`. `advance_work_stage` is an internal
+read-only context operation, called alone when a question is settled. Its
+bounded replacement note holds source-bound findings, unresolved matters and
+the next step. `keep_image_refs` copies immutable `context_ref` handles supplied
+with successfully opened image metadata. Stable media IDs with different pixel
+versions have different handles. Unknown/public image identities remain literal.
+The original seed text and later user constraints remain verbatim; older tool
+payloads and assistant exchanges leave active input together, while the exact
+operation archive remains reachable through `get_work_history`. Kept pixels
+remain for ongoing comparison; released sources require a fresh canonical open
+when needed again. A new native handoff call/output pair and refreshed tool
+surface form the next request. Backend receipts, candidates, conflict stops and
+authorization gates are unchanged. The note is unverified working memory and
+cannot grant approval or project-write authority. Stage notes serialize in
+stable key order so JSONB restoration preserves journal fingerprints.
+
+Main `open_project_item` also reports that the app renders successfully viewed
+sources with its answer; the model need not generate a URL or a replacement
+ASCII sketch. Source evidence is still recorded only after actual pixel
+delivery. Colleagues retain their own private image delivery and existing
+renewal contracts. [Stage increment evidence](bob-runtime-path-audit-2026-11-04.md#stage-context-increment-2026-11-05)
+owns activation and acceptance; a single unsettled oversized question can still
+require narrower reads. Seed/directory size and whole-task model acceptance
+remain separate from this mechanism.
+
 **Prepared, not activated.** The explicit catalog opt-in above pins
 `resultReferenceVersion: 1` together with complete requests. Their native main-turn adapter never invokes
 the AI compactor and offers `get_work_history` from the first request. Legacy jobs

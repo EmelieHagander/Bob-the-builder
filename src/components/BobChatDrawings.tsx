@@ -7,6 +7,7 @@ import { Modal } from './Modal'
 import { ZoomableImage } from './ZoomableImage'
 import { SolutionConcept } from './SolutionConcept'
 import { conceptSvg } from '../../supabase/functions/_shared/solution-concept'
+import {bobChatViews} from '../lib/bobChatViews'
 
 function usePreviewVisibility(){
  const ref=useRef<HTMLDivElement>(null),[visible,setVisible]=useState(false)
@@ -67,38 +68,25 @@ function SavedDrawing({projectId,id,revision,view:requestedView}:{projectId:stri
 /** Transcript stores exact receipts, never picture bytes or generated URL text. */
 export function BobChatDrawings({projectId,receipts,sources}:{projectId:string;receipts?:ProjectWriteReceipt[];sources?:ProjectSource[]}){
  const [expanded, setExpanded] = useState(false)
- const shown = new Map<string, ProjectSource>()
- for (const source of sources ?? []) {
-   if (source.projectId === projectId && source.visual) shown.set(source.visual.ref, source)
- }
- const views = [...shown.values()].map(source => {
+ const {seen, concepts, earlierConcepts, drawings} = bobChatViews(projectId, receipts, sources)
+ const views = seen.map(source => {
    const visual = source.visual!
    const Preview = visual.kind === 'concept' ? SavedConcept : SavedDrawing
    return <Preview key={visual.ref} projectId={projectId} id={source.recordId} revision={visual.revision} view={visual.view} />
  })
- const shownVersions = new Set([...shown.values()].map(s => `${s.visual!.kind}:${s.recordId}:${s.visual!.revision}`))
- const saved = new Map<string, ProjectWriteReceipt>()
- for (const r of receipts ?? []) {
-   if (r.projectId !== projectId || r.operation === 'deleted' || !r.revision) continue
-   if (r.dataset !== 'solutions' && r.dataset !== 'artifacts') continue
-   const key = `${r.dataset === 'solutions' ? 'concept' : 'cad'}:${r.recordId}:${r.revision}`
-   if (!shownVersions.has(key)) saved.set(key,r)
- }
- // An explicit presentation pins the view, even if a later revision was saved.
- // With receipts alone, each distinct document can contribute its latest view.
- // A construction receipt has no drawing preview and must not bury a separate drawing.
  const primary = views.slice(0, 1), secondary = views.slice(1)
- const latest = new Map<string,number>()
- for (const r of saved.values()) {
-   const id = r.dataset + ':' + r.recordId
-   latest.set(id, Math.max(latest.get(id) ?? 0, r.revision!))
- }
- for (const [key,r] of saved) {
-   const Preview = r.dataset === 'solutions' ? SavedConcept : SavedDrawing
-   const preview = <Preview key={key} projectId={projectId} id={r.recordId} revision={r.revision!} />
-   const document = r.dataset + ':' + r.recordId
-   if (views.length || r.revision !== latest.get(document)) secondary.push(preview)
-   else primary.push(preview)
+ const latestDrawing = new Map<string, number>()
+ for (const r of drawings) latestDrawing.set(r.recordId, Math.max(latestDrawing.get(r.recordId) ?? 0, r.revision!))
+ for (const r of [...concepts, ...drawings, ...earlierConcepts]) {
+   const isConcept = r.dataset === 'solutions'
+   const Preview = isConcept ? SavedConcept : SavedDrawing
+   const preview = <Preview key={`${r.dataset}:${r.recordId}:${r.revision}`} projectId={projectId} id={r.recordId} revision={r.revision!} />
+   const isLatest = isConcept ? concepts.includes(r) : latestDrawing.get(r.recordId) === r.revision
+   // Keep a newer save visible when Bob explicitly compared an older version.
+   const shownRevisions = seen.filter(s => s.recordId === r.recordId && (s.visual!.kind === 'concept') === isConcept).map(s => s.visual!.revision)
+   const newerThanShown = shownRevisions.length > 0 && r.revision! > Math.max(...shownRevisions)
+   if (isLatest && (!views.length || newerThanShown)) primary.push(preview)
+   else secondary.push(preview)
  }
  if (!primary.length) return null
  return <>{primary}{secondary.length > 0 && <details className="chat-earlier-results" onToggle={e => setExpanded(e.currentTarget.open)}>

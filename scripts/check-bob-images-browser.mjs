@@ -5,6 +5,8 @@ import { bobHistoryRows } from './bob-history-fixture.mjs'
 import { spawn } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium } from 'playwright-core'
+import {tsImport} from 'tsx/esm/api'
+const {conceptFixture}=await tsImport('../tests/support/solution-concept-fixtures.ts',import.meta.url)
 
 const base='http://127.0.0.1:4181/Bob-the-builder/',api='https://pwa-proof.invalid'
 const server=spawn(process.execPath,['node_modules/vite/bin/vite.js','preview','--base','/Bob-the-builder/','--host','127.0.0.1','--port','4181','--strictPort'],{stdio:'ignore'})
@@ -21,6 +23,8 @@ try{
   browser=await chromium.launch({executablePath:process.env.CHROME_PATH??'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'})
   await mkdir('test-results',{recursive:true})
   for(const viewport of [{width:320,height:568},{width:390,height:844},{width:1280,height:900}]){
+    const conceptId=crypto.randomUUID(),intent=conceptFixture('box')
+    intent.model.views.push({id:'front',label:'Front exact saved view',plane:'XZ',kind:'projection',at:null})
     const context=await browser.newContext({viewport,isMobile:viewport.width<860,hasTouch:viewport.width<860,serviceWorkers:'block'})
     const images=new Map(),threads=new Map(['A','B'].map(id=>[id,{id:crypto.randomUUID(),messages:[]}]))
     const errors=[],sends=[],uploadPaths=[],reservations=[],downloads=[]
@@ -36,6 +40,11 @@ try{
       if(url.pathname==='/rest/v1/account')return respond({json:{id:'account',name:'Photo fixture',owner_name:'',email:''}})
       if(url.pathname==='/rest/v1/people')return respond({json:[{id:`member${url.searchParams.get('project_id')?.replace('eq.','')??'A'}`,name:'Photo member',initials:'PM',color:'#41513f',role:'Organiser',diet:'',person_skills:[]}]})
       if(url.pathname==='/rest/v1/bob_threads')return respond({json:{id:threads.get(url.searchParams.get('project_id')?.replace('eq.',''))?.id}})
+      if(url.pathname==='/rest/v1/solution_revisions'){
+        assert.equal(url.searchParams.get('project_id'),'eq.A');assert.equal(url.searchParams.get('solution_id'),`eq.${conceptId}`);assert.equal(url.searchParams.get('revision'),'eq.21')
+        return respond({json:{project_id:'A',solution_id:conceptId,revision:21,title:'Current entry facade',design_intent:intent,archived:false}})
+      }
+      if(url.pathname==='/rest/v1/current_solutions')return respond({json:{project_id:'A',solution_id:conceptId,revision:21,archived:false}})
       if(url.pathname==='/rest/v1/bob_messages'){
         const project=url.searchParams.get('bob_threads.project_id')?.replace(/^eq\./,'')
         if(project){
@@ -80,7 +89,7 @@ try{
         // Bob also opened the owner's attachment and an earlier saved sketch: only the sketch is shown again.
         const earlier=crypto.randomUUID();images.set(earlier,{...source,id:earlier,object_path:`A/${earlier}`,title:'Earlier sketch',source_kind:'ai_generated',purpose:'proposal',state:'ready'})
         const opened=id=>({projectId:'A',dataset:'image_pixels',recordId:id,label:'Image opened',truth:'unknown',updatedAt:null,retrievedAt:new Date().toISOString()})
-        const evidence={kind:'ai_assessment',sources:[opened(v.imageIds[0]),opened(earlier)],partial:false,writes:[{projectId:'A',dataset:'media',recordId:illustration,label:'Build in the place',operation:'updated',savedAt:new Date().toISOString()}]}
+        const evidence={kind:'ai_assessment',sources:[opened(v.imageIds[0]),opened(earlier),{...opened(conceptId),label:'Current entry facade',truth:'ai_assessment',visual:{kind:'concept',ref:`concept:${conceptId}:21:front`,revision:21,view:'front'}}],partial:false,writes:[{projectId:'A',dataset:'media',recordId:illustration,label:'Build in the place',operation:'updated',savedAt:new Date().toISOString()}]}
         for(const revision of [1,2]) evidence.writes.push({projectId:'A',dataset:'artifacts',recordId:'90000000-0000-4000-8000-000000000002',label:'Elevation',revision,areaId:null,operation:'updated',savedAt:new Date().toISOString()})
         const thread=threads.get(v.projectId)
         thread.messages.push({role:'user',text:v.message,turn_id:v.clientTurnId,image_ids:v.imageIds,seq:1,delivery_state:'completed'},
@@ -134,11 +143,12 @@ try{
     await drawer.getByRole('button',{name:'Open attached image 1'}).locator('img').waitFor()
     await drawer.getByRole('button',{name:'Open project illustration 1'}).scrollIntoViewIfNeeded()
     await drawer.getByRole('button',{name:'Open project illustration 1'}).locator('img').waitFor()
-    const otherViews=drawer.getByText('Other views and versions · 1',{exact:true})
+    const otherViews=drawer.getByText('Other views and versions · 2',{exact:true})
     await otherViews.scrollIntoViewIfNeeded()
-    await drawer.getByText('Elevation · v2',{exact:true}).waitFor()
+    assert.equal(await drawer.getByText('Elevation · v2',{exact:true}).count(),0)
     assert.equal(await drawer.getByText('Elevation · v1 · historical revision',{exact:true}).count(),0)
     await otherViews.click()
+    await drawer.getByText('Elevation · v2',{exact:true}).waitFor()
     await drawer.getByText('Elevation · v1 · historical revision',{exact:true}).waitFor()
     await otherViews.click()
     assert.equal(await drawer.getByRole('button',{name:'Open image bob looked at 1'}).count(),0,'Earlier references stay behind the delivered image')
@@ -147,6 +157,11 @@ try{
     await drawer.getByRole('button',{name:'Open image bob looked at 1'}).locator('img').waitFor()
     assert.equal(await drawer.getByRole('button',{name:'Open image bob looked at 2'}).count(),0,'the owner attachment is not repeated')
     await drawer.getByText('Reference images · 1',{exact:true}).waitFor()
+    // Read-only image evidence renders without a Solution write or a model URL.
+    const savedConcept=drawer.getByRole('button',{name:'Enlarge concept: Current entry facade · v21',exact:true})
+    await savedConcept.scrollIntoViewIfNeeded();await savedConcept.locator('img').waitFor()
+    assert.equal(await savedConcept.locator('img').getAttribute('alt'),'Current entry facade · v21 — Front exact saved view')
+    assert(await savedConcept.locator('img').evaluate(img=>img.complete&&img.naturalWidth>0),'the saved SVG actually renders')
     const sendBox=await drawer.getByRole('button',{name:'Send',exact:true}).boundingBox()
     assert(sendBox&&sendBox.height>=44&&sendBox.x+sendBox.width<=viewport.width)
     assert(await drawer.evaluate(el=>el.scrollWidth<=el.clientWidth),'no horizontal overflow')
@@ -165,6 +180,8 @@ try{
     await page.getByRole('dialog',{name:'Project illustration',exact:true}).getByRole('button',{name:'Close',exact:true}).click()
 
     await page.reload();drawer=await open()
+    await drawer.getByRole('button',{name:'Enlarge concept: Current entry facade · v21',exact:true}).scrollIntoViewIfNeeded()
+    await drawer.getByRole('button',{name:'Enlarge concept: Current entry facade · v21',exact:true}).locator('img').waitFor()
     await drawer.getByRole('button',{name:'Open attached image 1'}).scrollIntoViewIfNeeded()
     await drawer.getByRole('button',{name:'Open attached image 1'}).locator('img').waitFor()
     await drawer.getByRole('button',{name:'Open project illustration 1'}).click()

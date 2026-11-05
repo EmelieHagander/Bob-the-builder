@@ -17,7 +17,8 @@ import { createConstructionViews } from './construction-views.ts'
 import {createProjectCalculator,hasCalculatorContract} from './project-calculator.ts'
 import { readPhysicalCadSources } from './cad-physical-lineage.ts'
 import { parameterSourcePins } from './cad-parameters.ts'
-import { bobCompleteRequestVersions } from './bob-complete-request.ts'
+import { bobCompleteRequestVersions, type BobImageInputCounts } from './bob-complete-request.ts'
+import { bobStageContextVersion, stageImageRef } from './bob-stage-context.ts'
 import { createConstructionTools, checkedConstructionForDrawing, constructionCurrentReader, constructionChangeReaders } from './construction-draft.ts'
 import {parseDesignReadiness,type DesignPurpose,type DesignReadiness} from './project-design-intent.ts'
 import { readBudgetStop } from './bob-budget-stop.ts'
@@ -224,7 +225,7 @@ export async function answerWithOpenAi(opts: {
   let promptCacheKey: string | undefined
   // Construction reads in the model step being executed (page budget share).
   let constructionReadsInStep = 1
-  const dispatchModel = async (requested: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>) => {
+  const dispatchModel = async (requested: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>, imageInputs?:BobImageInputCounts) => {
    const options = applyCatalogModelOptions(aiCatalog, requested)
    const drawingAuthority:DrawingBudgetAuthority|undefined=drawingRequestId&&drawingBudget
     ?{requestId:drawingRequestId,options}:undefined
@@ -254,6 +255,10 @@ export async function answerWithOpenAi(opts: {
     const allowed = window ? window.timeoutMs : Math.max(1000, Math.min(timeout, wall))
     let result,usageEventId:string|null=null
     try {
+      // Out-of-band: never part of provider/journal/job fingerprints or saved
+      // context. Completed journal replays skip this factory. Pending async
+      // recovery can enter again, so these are attempts, not billable-call counts.
+      if(imageInputs)console.log('[Bob image input attempt]',JSON.stringify(imageInputs))
       const invoke=(recovery?:{key?:string;context?:Record<string,unknown>;expiresAt?:string;fingerprint?:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage, resolveImageInline, onUsageLogged:(id:string)=>{usageEventId=id},
         // Routing hint only, added after the journal, job and drawing-budget
         // fingerprints so recorded steps of in-flight jobs still match.
@@ -377,7 +382,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -398,6 +403,7 @@ export async function answerWithOpenAi(opts: {
       lookupReuseVersion: 1 as const,
       ...(checkpoint ? { groundingReadOrderVersion: 1 as const, modelDeadlineVersion: 1 as const } : {}),
       ...bobCompleteRequestVersions(!!checkpoint, contract),
+      ...bobStageContextVersion(!!checkpoint, contract),
       // Window 2 (2026-10-29): superseded repeat reads leave first; the latest result per record stays whole.
       ...(checkpoint && contract.result_reference_version === 1 ? { resultWindowVersion: contract.result_window_version === 2 ? 2 as const : 1 as const } : {}),
       // Owner-set spending stop, pinned when the job starts (2026-10-20).
@@ -443,6 +449,8 @@ export async function answerWithOpenAi(opts: {
   if (execution.completeRequestVersion !== undefined && execution.completeRequestVersion !== 1) throw new Error('complete_request_version_invalid')
   if (execution.resultReferenceVersion !== undefined && (execution.resultReferenceVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('result_reference_version_invalid')
   if (execution.resultWindowVersion !== undefined && (![1, 2].includes(execution.resultWindowVersion) || execution.resultReferenceVersion !== 1)) throw new Error('result_window_version_invalid')
+  if (execution.imageInputDedupVersion !== undefined && (execution.imageInputDedupVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('image_input_dedup_version_invalid')
+  if (execution.stageContextVersion !== undefined && (execution.stageContextVersion !== 1 || execution.imageInputDedupVersion !== 1 || execution.resultReferenceVersion !== 1)) throw new Error('stage_context_version_invalid')
   if(execution.continuedWorkVersion!==undefined&&execution.continuedWorkVersion!==1)throw Error('continued_work_version_invalid')
   if(execution.solutionWorkVersion!==undefined&&execution.solutionWorkVersion!==1)throw new Error('solution_work_version_invalid')
   if(execution.operationPathsVersion!==undefined&&![1,2].includes(execution.operationPathsVersion))throw new Error('operation_paths_version_invalid')
@@ -474,6 +482,8 @@ export async function answerWithOpenAi(opts: {
   const contextStrategy = execution.contextStrategyVersion === 1 && contract.context_strategy_version === 1
   if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel,onInternalTool:value=>metrics?.internalTool(value)??Promise.resolve(),
     ...(execution.resultReferenceVersion === 1 ? { mainResultReferences: 1 } : {}),
+    ...(execution.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
+    ...(execution.stageContextVersion === 1 ? { stageContextVersion: 1 as const, imageSource: (url: string) => imageRefs.has(url) ? stageImageRef(url) : undefined } : {}),
     ...(execution.resultWindowVersion === 1 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS } : {}),
     ...(execution.resultWindowVersion === 2 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS, resultWindowVersion: 2 as const } : {}),
     ...(execution.constructionPageVersion === 1 ? { literalResultTokens: { [CONSTRUCTION_VIEW_TOOL.function.name]: BOB_CONSTRUCTION_RESULT_TOKENS } } : {}),
@@ -600,7 +610,7 @@ export async function answerWithOpenAi(opts: {
     read: input => rpc('read_bob_edit_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
     readSelected: areaId => rpc('read_bob_selected_edit_context', { p_project: opts.projectId, p_area: areaId }, AbortSignal.timeout(12000)),
   })
-  const projectContext = createProjectContext({ unlimitedWork,
+  const projectContext = createProjectContext({ unlimitedWork, chatPreviews: execution.stageContextVersion === 1,
     reviewInstruction: aiCatalog.text('drawing-review.instruction'),
     imageEvidenceInstruction: aiCatalog.text('images.evidence-intro'), reviewLabel: aiCatalog.text('images.review-label'),
     adapters: [mediaAdapter(),...(execution.operationPathsVersion===2?[drawingAdapter()]:[]),...(execution.solutionWorkVersion===1?[drawingAdapter(true)]:[])],
