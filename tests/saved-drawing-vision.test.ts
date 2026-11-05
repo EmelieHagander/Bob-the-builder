@@ -9,7 +9,8 @@ import {createDrawingViewAdapter,resolveDrawingViewImage,drawingViewRef} from '.
 import {createProjectContext} from '../supabase/functions/_shared/project-context/dispatcher.ts'
 import {createDrawingViewTransport} from '../supabase/functions/_shared/project-context/drawing-transport.ts'
 import {applyCatalogModelOptions} from '../supabase/functions/_shared/ai-catalog.ts'
-import {catalogFixture} from './support/ai-catalog-fixture.ts'
+import {runWorker} from '../supabase/functions/_shared/bob-workers.ts'
+import {catalogCall,catalogFixture} from './support/ai-catalog-fixture.ts'
 const require=createRequire(import.meta.url),id='10000000-0000-4000-8000-000000000001'
 const svg='<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="200" height="300" viewBox="0 0 200 300" data-page-height="100"><rect width="200" height="100" fill="red"/><g transform="translate(0,100)"><rect width="200" height="100" fill="green"/></g><g transform="translate(0,200)"><rect width="200" height="100" fill="blue"/><text x="20" y="50" fill="black" font-size="30">Lada Åäö 6×3</text></g></svg>'
 const hash=createHash('sha256').update(svg).digest('hex')
@@ -80,4 +81,25 @@ test('drawing transport pins project/view/hash and rejects oversized or mismatch
   const t=createDrawingViewTransport({} as any,{projectId:'p',url:'https://project.invalid',key:'public',authHeader:'Bearer member',fetcher:async()=>new Response(png,{headers:{'content-type':'image/png','x-drawing-source-sha256':hash,'x-drawing-view':'front',...headers}})})
   await assert.rejects(t.raster(pin,AbortSignal.timeout(1000)))
  }
+})
+
+
+test('Rita can list, open and consume a saved drawing sheet through the actual worker and catalog reconstruction',async()=>{
+ const transport={list:async()=>({projectId:'p',total:1,records:[{id,revision:3,title:'Ladan',area_id:null,views:['front','front.sheet2'],source_state:'current',source_reasons:[]}]}),read:async(_id:string,_rev:number,view:string)=>({...row,view}),raster:async()=>render(savedSvgPage(svg,'front.sheet2')).png}
+ const context=createProjectContext({adapters:[createDrawingViewAdapter('p',transport)],hasAccess:async()=>true,sources:[],imageEvidenceInstruction:'Saved drawing evidence'})
+ const catalog=catalogFixture();let step=0
+ const tool=(name:string,args:unknown)=>({success:true,model:'fixture',usage:{input_tokens:1,output_tokens:1,total_tokens:2},responseId:'r'+step,toolCalls:[{id:'t'+step,type:'function' as const,function:{name,arguments:JSON.stringify(args)}}]})
+ const result=await runWorker({aiCatalog:catalog,worker:{role:'drawing-worker',tool:'ask_drawing_worker',tools:['open_project_item'],reads:['list_project_category'],max_steps:4},userId:'owner',variables:{project_name:'Ladan'},job:{job:'Inspect the saved facade sheet',findings:null},history:[],deadline:Date.now()+60000,hasAccess:async()=>true,readKnowledge:async()=>({}),readCurrent:async()=>({}),session:{prepare:async()=>context.tools,execute:(name,args)=>context.execute(name,args)},images:context,
+  callModel:catalogCall(async options=>{
+   step++
+   const categories=(options.tools!.find(t=>t.function.name==='list_project_category')!.function.parameters as any).properties.category.enum
+   assert.deepEqual(categories,['drawing_views'],'the final provider catalog must retain the registered drawing adapter')
+   if(step===1)return tool('list_project_category',{category:'drawing_views',query:null,area_id:null,after_id:null})
+   if(step===2){assert(JSON.stringify(options.messages).includes('front.sheet2'));return tool('open_project_item',{refs:[drawingViewRef(id,3,'front.sheet2')]})}
+   const carrier=options.messages!.filter(m=>Array.isArray(m.content)).flatMap(m=>m.content as any[]),image=carrier.find(p=>p.type==='image_url')
+   assert(image?.image_url.startsWith('private-image:drawing:'))
+   const pixels=await resolveDrawingViewImage('p',transport,context.exportState().pending[0],AbortSignal.timeout(1000));assert(pixels.startsWith('data:image/png;base64,'))
+   return{success:true,model:'fixture',usage:{input_tokens:1,output_tokens:1,total_tokens:2},responseId:'r3',data:'Inspected the saved facade sheet.'}
+  },catalog)})
+ assert.equal(result.status,'ok');assert.equal(step,3);assert.equal(context.exportState().pending.length,0);assert.equal(context.exportState().delivered.length,1)
 })
