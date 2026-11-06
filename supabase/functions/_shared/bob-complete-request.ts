@@ -43,6 +43,11 @@ export type BobRequestState = {
   handoff?: Message
   historicalImages?: Message[]
   imageInputDedupVersion?: 1
+  /** Pinned per execution (owner decision 2026-11-06). Marks the last message
+   * before the history (the job start) and the last of the first
+   * `settledHistory` history messages (the settled compaction) as stable
+   * prefixes, so the provider keeps a cache read point at each. */
+  cacheBoundaries?: { settledHistory: number }
 }
 
 /** Deduplicate only private resolver identities in this complete request.
@@ -74,8 +79,13 @@ export function buildBobRequest(options: OpenAIServiceOptions, state: BobRequest
   onImageInputs?: (counts: BobImageInputCounts) => void): OpenAIServiceOptions {
   const { previousResponseId: _cursor, prompt: _prompt, ...request } = options
   if (state.imageInputDedupVersion !== undefined && state.imageInputDedupVersion !== 1) throw new Error('image_input_dedup_version_invalid')
-  const original = structuredClone([...state.seed, ...(state.handoff ? [state.handoff] : []),
-    ...(state.historicalImages ?? []), ...state.history])
+  const prefix = [...state.seed, ...(state.handoff ? [state.handoff] : []), ...(state.historicalImages ?? [])]
+  const original = structuredClone([...prefix, ...state.history])
+  if (state.cacheBoundaries) {
+    const settled = state.cacheBoundaries.settledHistory
+    if (!Number.isInteger(settled) || settled < 0 || settled > state.history.length) throw new Error('cache_boundary_invalid')
+    for (const index of new Set([prefix.length - 1, prefix.length + settled - 1])) if (index >= 0) original[index] = { ...original[index], cacheBoundary: 1 }
+  }
   const messages = state.imageInputDedupVersion === 1 ? uniqueImageInputs(original) : original
   const calls = new Set<string>(), outputs = new Set<string>()
   for (const message of messages) {

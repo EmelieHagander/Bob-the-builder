@@ -227,6 +227,11 @@ export function createBobContextContinuation(opts: {
   imageSource?: (url: string) => string | undefined
   /** New executions only: opened pixels leave after use (owner decision 2026-11-06). */
   imageReleaseVersion?: 1
+  /** New executions only (owner decision 2026-11-06): each native request marks
+   * the job start and the settled compaction as stable prefixes, so the
+   * provider keeps a cache read point at each beside its automatic one at the
+   * end. Wire form only; nothing is stored in the chain or checkpoint. */
+  promptCachePointsVersion?: 1
   onInternalTool?:(input:{name:string;status:string;callId:string;role:string;ms:number})=>Promise<void>
   /** Pinned per execution. Older results stay whole, newest first, up to this
    * many tokens before they become references. A fixed two-exchange window
@@ -269,6 +274,7 @@ export function createBobContextContinuation(opts: {
   if (opts.stageContextVersion !== undefined && (opts.stageContextVersion !== 1 || opts.mainResultReferences !== 1 || opts.imageInputDedupVersion !== 1)) throw new Error('stage_context_version_invalid')
   if (opts.workerStageContextVersion !== undefined && (opts.workerStageContextVersion !== 1 || opts.stageContextVersion !== 1)) throw new Error('worker_stage_context_version_invalid')
   if (opts.imageReleaseVersion !== undefined && (opts.imageReleaseVersion !== 1 || opts.stageContextVersion !== 1 || !opts.imageSource)) throw new Error('image_release_version_invalid')
+  if (opts.promptCachePointsVersion !== undefined && opts.promptCachePointsVersion !== 1) throw new Error('prompt_cache_points_version_invalid')
   const exportState = (): BobContextContinuationState => clone({ version: 1, strategyVersion: opts.version ?? 0,
     ...(opts.mainResultReferences === 1 ? { resultReferenceVersion: 1 as const } : {}),
     ...(opts.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
@@ -477,9 +483,13 @@ export function createBobContextContinuation(opts: {
         chain = { identity, seed: initialMessages(options), groups: [], compacted: false, pendingInternal: [], inputTokens: 0, outputTokens: 0, operations: new Map(),
           ...(references ? { resultReferences: 1 as const } : {}) }
       }
+      // History messages before the settled boundary are byte-stable between
+      // compaction batches; the request marks that point for the prompt cache.
+      let settledMessages = 0
       if (references) {
         // Groups before this index are compacted; the newest two always stay whole.
         const settled = opts.compactionBatch ? Math.floor(Math.max(0, chain.groups.length - 2) / opts.compactionBatch) * opts.compactionBatch : chain.groups.length - 2
+        settledMessages = chain.groups.slice(0, Math.max(0, settled)).reduce((count, group) => count + group.length, 0)
         // Original results live once in the private operation archive. Keep
         // only bounded projections in the model transcript/checkpoint; native
         // assistant items, images and user constraints remain literal.
@@ -648,6 +658,7 @@ export function createBobContextContinuation(opts: {
       if (native) options = buildBobRequest(options, {
         seed: chain.seed, history: chain.groups.flat(), historicalImages: chain.historicalImages,
         ...(opts.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
+        ...(opts.promptCachePointsVersion === 1 ? { cacheBoundaries: { settledHistory: settledMessages } } : {}),
         ...(chain.stageNote ? { handoff: { role: 'user', content: JSON.stringify(stableJsonValue({
           stage_handoff: chain.stageNote, unverified_working_note: true, approval_not_implied: true,
           original_assignment_preserved: true, operation_archive: { tool: HISTORY_TOOL, list: { call_id: null, after: null } },

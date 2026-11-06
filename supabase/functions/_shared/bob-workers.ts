@@ -23,10 +23,11 @@ export interface WorkerDefinition { role: string; tool: string; tools: string[];
 type Messages = NonNullable<OpenAIServiceOptions['messages']>
 type ModelCall = (options: OpenAIServiceOptions, beforeDispatch?: () => Promise<void>) => Promise<OpenAIServiceResponse<string>>
 const NAME = /^[a-z][a-z0-9_]{0,63}$/
-/** An answer cut at the output limit, or still streaming when its request
- * window closed, ran nothing. Bob and colleagues get this once per pending
- * step, so the same job continues in smaller pieces (bed, 2026-11-06). */
-export const MODEL_OUTPUT_LIMIT_NOTE = 'Your previous answer was too long to finish in one response and was discarded: none of its tool calls ran and nothing was saved. Continue the same task with a shorter answer: one change per tool call, with brief commentary.'
+/** An answer cut at the output limit, or not finished (streaming or still
+ * thinking) when its request window closed, ran nothing. Bob and colleagues
+ * get this once per pending step, so the same job continues in smaller pieces
+ * (bed and entry, 2026-11-06). */
+export const MODEL_OUTPUT_LIMIT_NOTE = 'Your previous answer did not finish within one response and was discarded: none of its tool calls ran and nothing was saved. Continue the same task in smaller steps: one change per tool call, with brief commentary.'
 const CUT_ANSWER = new Set(['model_output_limit', 'model_output_window'])
 export function withOutputLimitNote(messages: Messages, error: string | undefined): Messages | null {
   if (!CUT_ANSWER.has(error ?? '') || messages.some(m => m.role === 'user' && m.content === MODEL_OUTPUT_LIMIT_NOTE)) return null
