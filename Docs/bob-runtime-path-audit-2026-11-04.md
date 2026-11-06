@@ -1821,3 +1821,101 @@ Remaining: ordinary entry and bed turns measure, against the
 start 28.2k, Konrad 57.5k, cache 65 % / 83 %), the combined effect of the
 19:47 and 21:43 publications: image release and descriptions, the cut-answer
 retry, and Konrad's start input (expected about 10k Claude tokens lower).
+
+<a id="cache-points-2026-11-06"></a>
+### Owner runs after #486 and #488: cache misses and silent aborts — 2026-11-06
+
+Two ordinary owner turns ran after the 21:43 publication (read back from
+`bob.execution_events`, `shared.ai_usage_events` and the job rows; no model
+was run for the analysis).
+
+| | Bed (`749d3bea`, job `65f2d501`) | Entry (`c4216d67`, job `4dfc4cb7`) |
+|---|---|---|
+| Wall time | 22:00:45–22:12:34 UTC, 706 s | 22:01:23–22:24:23 UTC, 1,380 s |
+| Saved | 1 record | 8 records |
+| Bob | 8 calls, start 33,023, peak 41,100, cache 71 %, USD 0.59 | 28 calls, start 34,428, peak 87,170, cache 72 %, USD 3.22 |
+| Konrad | 27 calls, start 59,485, peak 109,664, cache 77 %, USD 3.26, 2 aborted | 5 calls, start 75,842, 2 aborted, USD 0.50 |
+| Total | ≈ USD 3.84 | ≈ USD 3.76 |
+
+**What the publications fixed.** The bed edit conflict is repaired live:
+`target_revision_required` at 22:02:59, the resend saved at 22:03:17. Konrad's
+start input fell to 59,485 tokens (71–78k before the schema deduplication).
+Aborted Claude calls are now visible in the ledger (four rows, cost null).
+
+**What still failed.**
+
+1. *Silent aborts.* Konrad's last job in both runs stopped after two 120 s
+   deadlines (bed: input 85,340; entry: 94,219). The ledger says
+   `local_timeout`, not `model_output_window`: the stream had started
+   (`message_start`, usage known) but no content delta arrived in the last
+   10 s, so the adapter treated it as a lost connection and the worker resent
+   the identical request, which timed out identically. The model was thinking
+   in silence (adaptive thinking streams no deltas while it thinks). Nothing
+   from those jobs was saved; Bob's bed answer asks the owner to choose a
+   stair option a–d (recommendation a). In the entry run Bob's turn ended
+   without Konrad's part.
+2. *Full cache misses.* Calls with `cached_input_tokens` 0 at 40k+ input:
+   bed Konrad steps 6, 10, 12, 18 and every Konrad job start, Bob step 4
+   (≈ 53 % of the bed's cost); entry Bob steps 2, 6, 10, 14, 18 — every fourth
+   step, which is the compaction batch (`BOB_COMPACTION_BATCH` 4) — plus step
+   16 (tool list 19 → 21) and Konrad's job start (≈ 76 % of the entry's cost).
+   The offered tool lists at the compaction misses were identical (25 tools,
+   same order), so the tool list is not the cause there. The cause is how
+   Claude caches: it keeps a read point only where an earlier request wrote
+   one, and Bob's request wrote only the automatic point at its end. When a
+   compaction batch rewrites older results, the new request's prefix matches
+   no earlier end point, so tools (Konrad ≈ 43k tokens of definitions after
+   the deduplication), system prompt and job start are paid at full price
+   again; a new Konrad job's different start has the same effect. OpenAI
+   matched these prefixes by itself, which is why the design never needed
+   fixed points before.
+3. *Unexplained.* Entry Bob steps 22 and 26 read 72,273 cached tokens (the
+   step-18 end point) although their input was 79–82k: the transcript
+   between steps 18 and 21 had changed after a three-minute idle gap. Bob
+   stands still for two to three minutes about six times per run, roughly
+   half the wall time, and did so on earlier days too (gaps over 100 s per
+   hour since 2026-11-04: 5, 4, 2, 6, 3, 4, 2, 2, 2, 6). Function logs are
+   not readable through the management API in this session, so the cause is
+   open and needs its own investigation.
+4. *Image descriptions.* None were written: Bob never listed the project's
+   images in either run, so the describer had nothing to do. Not a defect;
+   the live path is still unverified.
+
+**Owner direction (2026-11-06).** The whole fix: A to reach the footing GPT
+had (fixed cache points, and the note retry after a silent abort), then B to
+improve beyond it (Konrad plans first in his workpad, about eight tools
+instead of 25, Bob's tool list fixed from step 1). Measured tool use since
+2026-11-02 supports B: Konrad's 25 offered tools serve 9,617 calls, of which
+two tools (`read_construction_draft` 386, `edit_construction_parts` 57) are
+75 % and thirteen tools are used seven times or fewer; Bob saw 52 distinct
+tools, about 30 of them fewer than ten times, and called `describe_tool` 97
+times. B is a proposal for owner review before it is built.
+
+**Correction A (source; not yet deployed).**
+
+- *Fixed cache points*, pinned `promptCachePointsVersion: 1` for new
+  executions on checkpointed jobs. The Claude request puts an explicit point
+  on the system prompt's last block (tools render before the system prompt,
+  so tools and system become one read point), on the last message of the job
+  start (seed, stage handoff, historical images) and on the last settled
+  history message (the compaction boundary, byte-stable between batches),
+  beside the automatic point at the end: at most four, the provider's limit.
+  Points are wire form only; nothing is stored in a chain or checkpoint.
+  Tests prove that unpinned executions send identical bytes, that the points
+  sit where stated through eleven exchanges and a checkpoint restore, and
+  that the settled point moves one batch at a time. Expected effect: a
+  compaction miss costs the transcript after the settled boundary instead of
+  everything, and a Konrad job start costs its seed instead of tools, system
+  and seed; roughly one dollar per run of the two above. To be measured.
+- *Silent aborts*: a local deadline after Claude's first stream event is
+  reported as `model_output_window` whether text was still streaming or the
+  model was thinking in silence (ledger `model_output_window` /
+  `model_output_window_silent`); a deadline before the first event keeps
+  `local_timeout` and the identical retry. Bob and the workers then continue
+  with the note, reworded to cover both: "Your previous answer did not finish
+  within one response and was discarded … Continue the same task in smaller
+  steps".
+- Not changed: Bob's tool list still grows within a turn (step B).
+
+Remaining: publish A, run the same two turns, read back cache share and cost
+per role against this table; then the B proposal.

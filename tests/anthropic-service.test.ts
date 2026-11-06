@@ -73,7 +73,10 @@ test('streamed tool turn returns tool calls, replayable native items, usage, cos
   assert.equal(ledger.length, 1); assert.equal(ledger[0].success, true)
 })
 
-test('a locally timed-out Claude stream reports only content-free timing and progress', async () => {
+// Entry, 2026-11-06: Konrad thought in silence past our 120 s twice; the
+// identical resend repeated it. After message_start the deadline means the
+// answer did not fit the window, so the caller retries with a note instead.
+test('a locally timed-out Claude stream after message_start reports content-free timing and the silent window code', async () => {
   const originalError = console.error
   const diagnostics: string[] = []
   const fetch = (async (_url: string, init: RequestInit) => {
@@ -90,8 +93,9 @@ test('a locally timed-out Claude stream reports only content-free timing and pro
     const logged: any[] = []
     const result = await callAnthropicMessages({ ...base, prompt: 'private prompt' }, ctx({ fetch, timeoutMs: 40, log: async r => { logged.push(r) } }))
     assert.equal(result.success, false)
-    assert.match(result.error ?? '', /^Network error:/)
-    assert.deepEqual(logged.map(r => [r.errorCode, r.costUsd, r.success]), [['local_timeout', null, false]])
+    assert.equal(result.error, 'model_output_window')
+    assert.deepEqual((result as any).failure, { code: 'model_output_window' })
+    assert.deepEqual(logged.map(r => [r.errorCode, r.costUsd, r.success]), [['model_output_window_silent', null, false]])
     assert.equal(diagnostics.length, 1)
     const diagnostic = JSON.parse(diagnostics[0].slice('[Anthropic Service] Request error '.length))
     assert.equal(diagnostic.kind, 'local_timeout')
@@ -243,4 +247,39 @@ test('structured helper failures retain safe codes, field paths and ledger laten
   const response=await callAnthropicMessages({...base,aiFunction:'tool-picker',prompt:'PRIVATE PROMPT',schemaName:'bob_tool_pick',structuredToolOutput:true,schema:{type:'object',additionalProperties:false,required:['tools'],properties:{tools:{type:'array',items:{type:'string'}}}}},ctx({log:async r=>{ledger.push(r)},fetch:(async()=>sse({type:'message_start',message:{id:'msg_diag',model:claude.model_name,content:[],usage:{input_tokens:10,output_tokens:0}}},{type:'content_block_start',index:0,content_block:{type:'text',text}},{type:'content_block_stop',index:0},{type:'message_delta',delta:{stop_reason:'end_turn'},usage:{output_tokens:5}})) as typeof fetch}))
   assert.equal(response.success,false);assert.equal(response.failure?.code,code);assert.deepEqual(response.failure?.schemaPaths,paths);assert.equal(ledger[0].errorCode,code);assert(ledger[0].latencyMs>=0);assert(!JSON.stringify({failure:response.failure,ledger}).includes('PRIVATE'))
  }
+})
+
+test('a deadline before Claude sends anything keeps the plain network code, so the identical retry stays allowed', async () => {
+  const originalError = console.error
+  console.error = () => {}
+  const fetch = (async (_url: string, init: RequestInit) => new Response(new ReadableStream<Uint8Array>({
+    start(controller) { init.signal?.addEventListener('abort', () => controller.error(new DOMException('aborted', 'AbortError')), { once: true }) },
+  }), { status: 200 })) as typeof globalThis.fetch
+  try {
+    const logged: any[] = []
+    const result = await callAnthropicMessages({ ...base, prompt: 'x' }, ctx({ fetch, timeoutMs: 40, log: async r => { logged.push(r) } }))
+    assert.equal(result.success, false)
+    assert.match(result.error ?? '', /^Network error:/)
+    assert.equal((result as any).failure, undefined)
+    assert.deepEqual(logged.map(r => [r.errorCode, r.inputTokens, r.costUsd]), [['local_timeout', 0, null]])
+  } finally { console.error = originalError }
+})
+
+// Owner decision 2026-11-06: fixed cache points beside the automatic one.
+test('fixed cache points mark the system prompt and flagged messages only under the pin; the automatic tail point stays', async () => {
+  const messages = [{ role: 'user' as const, content: 'Job start.', cacheBoundary: 1 as const }, { role: 'assistant' as const, content: 'Reading.' }, { role: 'user' as const, content: 'More.' }]
+  const plain: any = await anthropicRequestBody({ ...base, messages }, ctx())
+  const pinned: any = await anthropicRequestBody({ ...base, messages, promptCachePoints: 1 }, ctx())
+  assert.equal(plain.system, 'Du är Bob.')
+  assert.deepEqual(plain.cache_control, { type: 'ephemeral' })
+  assert.ok(plain.messages.every((m: any) => m.content.every((b: any) => b.cache_control === undefined)), 'a flag without the pin changes nothing')
+  assert.deepEqual(pinned.system, [{ type: 'text', text: 'Du är Bob.', cache_control: { type: 'ephemeral' } }])
+  assert.deepEqual(pinned.cache_control, { type: 'ephemeral' })
+  assert.deepEqual(pinned.messages.map((m: any) => m.content.map((b: any) => b.cache_control ? 1 : 0)), [[1], [0], [0]])
+  // A flagged tool result keeps its point on that block even when the next user text merges into the same message.
+  const merged: any = await anthropicRequestBody({ ...base, promptCachePoints: 1, messages: [{ role: 'user', content: 'a' },
+    { role: 'assistant', content: 'b', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'save_note', arguments: '{}' } }] },
+    { role: 'tool', tool_call_id: 'c1', content: '{"ok":true}', cacheBoundary: 1 }, { role: 'user', content: 'next' }] }, ctx())
+  assert.deepEqual(merged.messages.map((m: any) => m.content.map((b: any) => [b.type, b.cache_control ? 1 : 0])),
+    [[['text', 0]], [['text', 0], ['tool_use', 0]], [['tool_result', 1], ['text', 0]]])
 })

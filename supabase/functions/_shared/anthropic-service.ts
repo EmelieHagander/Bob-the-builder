@@ -40,6 +40,8 @@ const ANTHROPIC_BETA = 'thinking-binding-controls-2026-08-01'
 const MAX_RETRIES = 2
 /** Answer text or thinking arrived this recently when our deadline closed. */
 const CLAUDE_ACTIVE_STREAM_MS = 10_000
+/** One cache point; the five-minute default so every point shares one TTL. */
+const cachePoint = (): Json => ({ type: 'ephemeral' })
 // 5-minute cache writes cost 1.25x the base input price.
 const CACHE_WRITE_MULTIPLIER = 1.25
 
@@ -190,6 +192,13 @@ export async function anthropicMessages(options: OpenAIServiceOptions, ctx: Anth
         for (const call of msg.tool_calls ?? []) blocks.push({ type: 'tool_use', id: call.id, name: call.function.name, input: JSON.parse(call.function.arguments || '{}') })
         push('assistant', blocks)
       } else push('user', await contentBlocks(msg.content, ctx))
+      // A fixed cache point on the last block of a stable prefix (owner
+      // decision 2026-11-06): a read point that outlives a later rewrite of
+      // the transcript. Only pinned executions mark; others send the same bytes.
+      if (options.promptCachePoints === 1 && msg.cacheBoundary === 1) {
+        const block = out.at(-1)?.content.at(-1)
+        if (block) block.cache_control = cachePoint()
+      }
     }
   } else {
     const blocks: Block[] = []
@@ -221,11 +230,17 @@ export async function anthropicRequestBody(options: OpenAIServiceOptions, ctx: A
     // handoffs), so a replayed thinking block can belong to another prefix.
     // Drop it instead of failing the turn (live 400, 2026-11-02 21:23).
     thinking: { type: 'adaptive', block_binding: { prefix_mismatch_behavior: 'drop_block' } },
-    // Automatic prompt caching of the longest stable prefix.
-    cache_control: { type: 'ephemeral' },
+    // Automatic prompt caching at the end of the request (the growing tail).
+    cache_control: cachePoint(),
     stream: true,
   }
-  if (ctx.systemMessage) body.system = ctx.systemMessage
+  // Tools render before the system prompt, so a point on the system prompt's
+  // last block keeps tools and system readable whatever changes later in the
+  // transcript (every compaction and job start paid for them again, 2026-11-06).
+  // With the automatic point that is at most four: system, job start, settled
+  // compaction, tail.
+  if (ctx.systemMessage) body.system = options.promptCachePoints === 1
+    ? [{ type: 'text', text: ctx.systemMessage, cache_control: cachePoint() }] : ctx.systemMessage
   const outputConfig: Json = {}
   if (ctx.effort) outputConfig.effort = ctx.effort
   const tools = options.tools ?? []
@@ -394,10 +409,14 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
       request_id: response?.headers.get('request-id') ?? null,
       error: msg.slice(0, 120),
     }))
-    // Our own deadline closed while the answer was still streaming: it was too
-    // long for one window. Resending the same request repeats that (bed,
-    // 2026-11-06: twice 120 s, nothing saved), so callers get a distinct code.
-    const cut = controller.signal.aborted && lastOutputAt !== null && Date.now() - lastOutputAt <= CLAUDE_ACTIVE_STREAM_MS
+    // Our own deadline closed after the provider had begun the answer: it did
+    // not fit one window, whether text was still streaming or the model was
+    // still thinking in silence. Resending the same request repeats that
+    // (bed, 2026-11-06: twice 120 s, nothing saved; entry the same evening,
+    // silent both times), so callers get a distinct code and retry with a
+    // note. A deadline before the first event keeps the plain network code.
+    const cut = controller.signal.aborted && response?.ok === true && firstEventAt !== null
+    const active = lastOutputAt !== null && Date.now() - lastOutputAt <= CLAUDE_ACTIVE_STREAM_MS
     // A request that reached the provider may be billed. Record it with its
     // known input and an unknown cost rather than leave the ledger silent.
     if (response?.ok) {
@@ -405,7 +424,8 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
       const read = Number(raw.cache_read_input_tokens ?? 0)
       const input = Number(raw.input_tokens ?? 0) + Number(raw.cache_creation_input_tokens ?? 0) + read
       try { await ctx.log({ model, inputTokens: input, cachedInputTokens: read, outputTokens: 0, reasoningTokens: 0, totalTokens: input,
-        costUsd: null, success: false, errorCode: cut ? 'model_output_window' : controller.signal.aborted ? 'local_timeout' : 'network_or_stream', latencyMs: Date.now() - startedAt }) }
+        costUsd: null, success: false, latencyMs: Date.now() - startedAt,
+        errorCode: cut ? active ? 'model_output_window' : 'model_output_window_silent' : controller.signal.aborted ? 'local_timeout' : 'network_or_stream' }) }
       catch { /* the ledger never decides the call outcome */ }
     }
     if (cut) return { ...fail<T>(model, 'model_output_window'), failure: { code: 'model_output_window' } }
