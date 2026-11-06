@@ -165,6 +165,15 @@ export function latestObservations<T extends {artifact_id:string;revision:number
  for(const o of rows)latest.set(o.artifact_id,Math.max(latest.get(o.artifact_id)??0,o.revision))
  return rows.filter(o=>o.revision===latest.get(o.artifact_id))
 }
+/** A failed construction preparation keeps the model-facing status mapping.
+ * The server's two named write conflicts pass through so the repair can be
+ * named; every other database detail stays behind the generic reason. */
+const NAMED_PREPARATION_CONFLICTS=new Set(['construction_changed','operation_reused'])
+export function constructionPreparationFailure(error:{code?:string|null;message?:string|null},fallback:string){
+ const code=error.code??''
+ return {status:code==='42501'?'denied':['PT409','40001'].includes(code)?'conflict':code==='22023'?'invalid':'unavailable',
+  reason:code==='PT409'&&NAMED_PREPARATION_CONFLICTS.has(error.message??'')?error.message as string:fallback}
+}
 type SavedConstructionResult = Omit<ConstructionObservation,'output'>
 export type ConstructionToolsState = { version:1; used:number } | { version:2; used:number; observations:ConstructionObservation[] }
  | {version:3;used:number;observations:ConstructionObservation[];savedResults:SavedConstructionResult[]}
@@ -467,6 +476,18 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     }
     const {payload,domain,prepared}=change
     if(!await opts.hasAccess())return {status:'denied'}
+    // Bob may first save the owner's decisions in the selected Solution; the
+    // unchanged construction then points at an older target and the server
+    // refuses target_revision:null. That is a missing input, not a write race,
+    // so it stays repairable in the same job (bed, 2026-11-06).
+    if(opts.coherentWork&&payload.kind==='construction_edit'&&v.target_revision===null&&prepared.status==='conflict'&&prepared.reason==='construction_changed'){
+     const current=await (opts.readCurrent?.(v.record_id)??opts.read(v.record_id,null,null)) as Record<string,any>
+     if(!await opts.hasAccess())return {status:'denied'}
+     if(current?.projectId===opts.projectId&&current.status==='ok'&&current.artifact_id===v.record_id
+      &&current.revision===v.expected_revision&&current.archived===false&&current.source_state==='changed')
+      return {status:'invalid',reason:'target_revision_required',source_state:current.source_state,
+       message:'No construction changed. This revision still uses an older selected Solution or changed sources, so target_revision:null (keep the old pin) is refused. Read view=work for the current selected Solution and resend this same edit with its current target_revision. Changed measurements use change_construction_parameters with their newer revisions.'}
+    }
     if(prepared.status!=='ready'&&prepared.status!=='saved')return prepared
     if(prepared.status==='ready'){
      const draft=prepared.draft,next=prepared.next
