@@ -19,7 +19,7 @@ const row:SavedViewRecord={status:'ready',projectId:'p',artifact_id:id,revision:
 test('main chat reports its exact preview capability but attaches evidence only after pixel delivery, including restore',async()=>{
  const sources:any[]=[]
  const transport:any={read:async()=>row,raster:async()=>new Uint8Array(),list:async()=>({projectId:'p',total:1,records:[]})}
- const make=(chatPreviews:boolean)=>createProjectContext({chatPreviews,adapters:[createDrawingViewAdapter('p',transport)],hasAccess:async()=>true,sources,imageEvidenceInstruction:'Evidence'})
+ const make=(chatPreviews:boolean,imageContextRefs=false)=>createProjectContext({chatPreviews,imageContextRefs,adapters:[createDrawingViewAdapter('p',transport)],hasAccess:async()=>true,sources,imageEvidenceInstruction:'Evidence'})
  const main=make(true),ref=drawingViewRef(id,3,'front')
  const result:any=await main.execute('open_project_item',{refs:[ref]})
  assert.equal(result.items[0].chat_preview.status,'attached_to_answer_after_pixel_delivery')
@@ -30,6 +30,11 @@ test('main chat reports its exact preview capability but attaches evidence only 
  assert.equal(restored.carrier().length,1);restored.confirmDelivery()
  assert.equal(sources[0].visual.ref,ref)
  const worker:any=await make(false).execute('open_project_item',{refs:[ref]})
+ assert(!Object.hasOwn(worker.items[0],'context_ref'),'old workers keep their exact tool payload')
+ const staged=make(false,true),opened:any=await staged.execute('open_project_item',{refs:[ref]})
+ assert.equal(opened.items[0].context_ref,result.items[0].context_ref)
+ assert(!Object.hasOwn(opened.items[0],'chat_preview'))
+ assert(JSON.stringify(staged.carrier()).includes(opened.items[0].context_ref),'the worker can retain its exact pixels at a stage transition')
  assert(!Object.hasOwn(worker.items[0],'chat_preview'),'workers do not promise their own private images in the main reply')
 })
 let font:Uint8Array

@@ -1423,3 +1423,40 @@ Next priorities from this audit:
 This audit used direct source/contract review, not an independent reviewer
 agent. It does not change the prior unrun Node regression or unobserved browser
 acceptance into a pass. Current worker source readback remains v204.
+
+
+<a id="three-project-corrections-2026-11-06"></a>
+### Corrections prepared after the three-project audit — 2026-11-06
+
+Source changes are prepared for review; this section is **not hosted deployment
+or ordinary model acceptance**. No owner project records, messages, summaries,
+presentations or approvals were rewritten and no paid model run was started.
+
+| Finding | Correction and evidence | Remaining acceptance |
+|---|---|---|
+| F1: answer visibility | A deterministic test reproduces a late same-thread tail (99–103) replacing an already received 102–106 tail. `refreshHistoryPage` now rejects older and empty stale tails; AskBob also retains delivery/read/recovery state and does not stop polling from a rejected result. New/reset threads still replace old history. | This race is reproducible, but is not proven to be the cause on the owner's device. Browser refresh/reopen/send acceptance remains. |
+| F2: repeated questions | Immutable catalog revisions reconcile later owner answers against old questions, distinguish answered/open/deferred matters in memory folds, and tell the completion gate that already answered questions are not human blockers. The startup role remains within the existing 700-token limit. | Prompt semantics require a normal model run. Existing immutable summaries remain historical; exact source retrieval is still needed when their gist conflicts. Entry seq83/91/96 and bed's no-panel decision remain the named acceptance cases. |
+| F3: stale workpads | A claim-fenced reader omits a private note after a later successful Bob write in the same project. It retains the original note and CAS revision; explicit reaffirmation after current-source reading advances CAS, and retries remain idempotent. Old pinned jobs retain the old RPC. | This is a conservative freshness fence for Bob writes, not a semantic decision store or detection of every manual project edit. Current records and exact conversation remain authoritative. |
+| F4: worker evidence lifetime | A separate immutable worker pin enables native requests, exact result archive and `advance_work_stage` for structure, materials and drawing. Worker image carriers now expose exact context refs without promising main-chat previews. Real worker/grounding/continuation/catalog tests exercise stage dispatch, refreshed tool gates, source receipt facts, release, reopening, restart and old-protocol isolation. Stage telemetry now records the actual tool name. | Main Bob and colleagues must use transitions effectively in ordinary work. Large seed/knowledge/user-text payloads and an unfinished large stage remain C3/C4 work; no whole-run cost improvement is claimed. |
+| F5: material calls | Catalog operation bindings can override the description at an exact schema path. The final material schema and manual omit the generic instruction to supply source/target IDs; the job still injects them and still rejects overrides. Bound and unbound source tests pass. | A normal material run must demonstrate that the 18 repeated invalid calls disappear. Other invalid/no-change calls are not conflated with this specific defect. |
+| F6: final handoff | Both completion continuation notes explicitly identify the candidate answer as unsent and require one self-contained whole-task final result. They retain targeted work and do not repeat completed operations. | The output of a real resumed completion must cover construction, drawing, comparison and genuine remaining questions together. Scripted model responses prove the runtime instruction path, not the model's judgement. |
+| F7: historical visual feedback | A read-only hosted check found **zero** `solution_presentations` for the barn. There is no exact recorded presentation to retroactively approve. The feedback manual now distinguishes an unavailable current-turn feedback binding from permission to perform ordinary requested edits; earlier intent still comes from conversation and current decisions from readiness. | Do not fabricate a presentation/approval or accept a changed revision. Verify that a mockup response allows the requested design correction without a spurious global approval stop. |
+
+Verification: 100 distinct focused local tests pass across the affected history,
+worker, continuation, image, memory, catalog and workpad seams; the new catalog
+publication is exercised with the full synthetic database validator, preserves
+prior versions and is idempotent. The eight changed catalog keys were compared
+read-only with their hosted predecessors; every expected old content/definition
+matched. Frontend build and PWA checks pass. Both affected Edge entrypoints pass
+Deno type checking with the same pinned Supabase 2.49.8 and tokenizer 3.4.0 types
+from locally installed packages: this environment cannot fetch esm.sh directly.
+No dependency change is shipped. Chromium is absent, so browser acceptance is
+not reported as passed. Full CI/workflows and live models were not run.
+
+Release order: install `20261106110808_bob_workpad_freshness.sql`, publish matching
+ask-bob/bob-worker code, activate `20261106111110_bob_audit_followup_catalog.sql`,
+then publish the frontend and read back exact versions. Activation refuses a
+missing workpad RPC or changed expected catalog content. Existing execution and
+checkpoint pins remain unchanged. Check active jobs and source parity before
+any deployment. The frontend/Edge/catalog changes are one reviewable package;
+new worker stage mode must not be activated against the old runtime.

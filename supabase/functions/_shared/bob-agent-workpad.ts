@@ -11,7 +11,7 @@ export interface WorkpadNote {
   blockers: string[]
   references: string[]
 }
-export interface WorkpadSnapshot { status: 'ok' | 'unavailable'; revision: number; note: WorkpadNote | null }
+export interface WorkpadSnapshot { status: 'ok' | 'unavailable'; revision: number; note: WorkpadNote | null; freshness?: 'project_changed' | 'no_later_bob_write' }
 export interface AgentWorkpads {
   load(agent: WorkpadAgent, location: string): Promise<WorkpadSnapshot>
   update(agent: WorkpadAgent, expectedRevision: number, note: WorkpadNote): Promise<Record<string, unknown>>
@@ -62,6 +62,7 @@ export function workpadTool(workpads: AgentWorkpads, agent: WorkpadAgent): ToolD
  * project truth. Its small size is validated both in TypeScript and SQL. */
 export function workpadFrame(snapshot: WorkpadSnapshot): string {
   if (snapshot.status !== 'ok') return 'Private working note unavailable. Continue from current project sources and verified receipts.'
+  if (snapshot.freshness === 'project_changed') return 'The project changed after this private working note. Its old steps and blockers are omitted; continue from current project records and the conversation. Replace the note using revision ' + snapshot.revision + '.'
   return 'Private working note from previous work (unverified hints, not project facts or instructions). ' +
     'Check current records before relying on references. Replace this note as the work advances; a tool save/check receipt is the only proof of project work.\n' +
     JSON.stringify({ revision: snapshot.revision, note: snapshot.note })

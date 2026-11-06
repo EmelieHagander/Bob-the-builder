@@ -6,7 +6,7 @@ export type OperationRole='structure'|'materials'|'drawing'
 type Kind='construction'|'drawing'|'shell'|'request'|'step'|'task'|'gap'|'requirement'|'plan_requirement'|'cut_plan'|'stock'|'product'
 export type OperationEntry={ref:string;kind:Kind;id:string;revision:number;label:string;parent?:string;area_id?:string|null;target_revision?:number;component_id?:string|null;definition_id?:string;quantity_mode?:string}
 export type OperationSurface={version:1;role:OperationRole;source:boolean;flexible?:boolean;bindings?:OperationBindings;refs:Partial<Record<Kind,string[]>>}
-export type OperationBindings=Record<string,{source?:{id:string;revision:string;ref:string;readOnly:boolean};schema:{path:string[];hide:string[];refs:{field:string;kind:Kind;nullable:boolean;id?:string;revision?:string;when?:string;kinds?:Kind[]}[];role?:OperationRole}[]}>
+export type OperationBindings=Record<string,{source?:{id:string;revision:string;ref:string;readOnly:boolean};schema:{path:string[];hide:string[];description?:string;refs:{field:string;kind:Kind;nullable:boolean;id?:string;revision?:string;when?:string;kinds?:Kind[]}[];role?:OperationRole}[]}>
 type Scope={role:OperationRole;source:ConstructionRef|null;entries:OperationEntry[];completed:{source:string;key?:string;result:Record<string,any>}[];active?:{source:string;key:string};area_id:string|null}
 export type WorkerOperationsState={version:1;projectId:string;scopes:Scope[]}
 const object=(v:any):v is Record<string,any>=>!!v&&typeof v==='object'&&!Array.isArray(v)
@@ -35,6 +35,7 @@ export function workerOperationSpec(spec:ToolSpec,s:OperationSurface):ToolSpec{
   for(const op of s.bindings[n]?.schema??[]){
    if(op.role&&op.role!==s.role)continue
    const node=op.path.reduce((o:any,k)=>o?.[k],p);if(!node)continue
+   if(op.description!==undefined)node.description=op.description
    hide(node,...op.hide)
    for(const r of op.refs){if(!allowed(r.when)||r.id&&!Object.hasOwn(properties(node),r.id))continue
     if(r.id)hide(node,r.id,...(r.revision?[r.revision]:[]))

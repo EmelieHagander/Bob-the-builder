@@ -493,7 +493,9 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   }, [project.id, historyAttempt])
 
   function applyServerHistory(history: Awaited<ReturnType<typeof db.getAskBobConversation>>) {
-    historyPage.current = refreshHistoryPage(historyPage.current, history)
+    const accepted = refreshHistoryPage(historyPage.current, history)
+    if (accepted === historyPage.current) return false
+    historyPage.current = accepted
     setHasOlder(!!historyPage.current.hasMore)
     setOlderError('')
     serverThread.current = history.threadId ?? null
@@ -511,6 +513,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     setHistoryNotice(held ? 'Your new message is kept in this tab, but receipt is not confirmed. Use Retry request when Bob is free.'
       : history.pending?.paused ? 'Bob is paused because the session expired. Reconnect to continue the same request; saved work is retained.'
       : history.retry ? 'The previous answer was interrupted. Retry to continue without repeating saved changes.' : '')
+    return true
   }
 
   async function loadOlder() {
@@ -607,8 +610,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           const history = await db.getAskBobConversation(project.id)
           if (!current()) return
           if (history.mode !== 'server') throw new Error('Conversation unavailable')
-          applyServerHistory(history)
-          if (!history.pending) {
+          if (applyServerHistory(history) && !history.pending) {
             if (history.messages.some(message => message.evidence?.writes?.length)) setNeedsRefresh(true)
             return
           }
@@ -652,8 +654,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       try {
         const history = await db.getAskBobConversation(project.id)
         if (isCurrent() && history.mode === 'server') {
-          applyServerHistory(history)
-          if (!history.pending) { setNeedsRefresh(true); return }
+          if (applyServerHistory(history) && !history.pending) { setNeedsRefresh(true); return }
         }
       } catch { /* Keep the same job and an honest unconfirmed stop. */ }
       if (isCurrent()) setWorkError(userErrorMessage(error, 'Could not confirm the stop. Bob may still be working.'))
@@ -789,7 +790,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         const history = await db.getAskBobConversation(project.id)
         if (!isCurrent()) return
         if (history.mode === 'server') {
-          applyServerHistory(history)
+          if (!applyServerHistory(history)) return
           if (history.messages.some(message => message.from === 'bob' && message.turnId === clientTurnId && message.evidence?.writes?.length)) setNeedsRefresh(true)
           if (result.unavailable === 'turn_in_flight' && outgoing.current?.turnId === clientTurnId) holdUntilFree({ text, turnId: clientTurnId, screen, imageIds })
           else if (waitingFree?.turnId === clientTurnId) setWaitingFree(null)

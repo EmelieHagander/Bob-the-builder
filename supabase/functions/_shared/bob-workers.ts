@@ -5,6 +5,7 @@ import { countSerializedTokens } from './bob-token-budget.ts'
 import { workpadFrame, type WorkpadSnapshot } from './bob-agent-workpad.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import { toolRejection, type ToolRejection } from './tool-rejection.ts'
+import type {ContextSurface} from './bob-context-continuation.ts'
 
 /** Owner decision 2026-10-30: pilot of Bob as coordinator with workers, Mattias
  * (materials) first. A worker has its own fixed native tools and instructions
@@ -20,7 +21,7 @@ import { toolRejection, type ToolRejection } from './tool-rejection.ts'
 export interface WorkerKnowledge { label: string; tool: string; arguments: Record<string, unknown> }
 export interface WorkerDefinition { role: string; tool: string; tools: string[]; reads: string[]; max_steps: number; knowledge?: WorkerKnowledge[] }
 type Messages = NonNullable<OpenAIServiceOptions['messages']>
-type ModelCall = (options: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<string>>
+type ModelCall = (options: OpenAIServiceOptions, beforeDispatch?: () => Promise<void>) => Promise<OpenAIServiceResponse<string>>
 const NAME = /^[a-z][a-z0-9_]{0,63}$/
 
 /** Workers published by the pinned manifest, or null for manifests before the pilot.
@@ -234,6 +235,8 @@ export async function runWorker(opts: {
   /** Pinned per job (workerCheckpointVersion): the place saved after each step, and the save. */
   boundDrawingWork?:boolean;
   runtimeSurface?:()=>import('./runtime-tool-surface.ts').RuntimeToolSurface;
+  stageContext?: boolean;
+  registerContextSurface?: (role: string, refresh: () => Promise<ContextSurface>) => () => void;
   progress?: { restored?: WorkerProgress; save(progress: WorkerProgress): Promise<void>; afterStep?(): void }
   /** Drops the worker's model chain once it has returned; it is never continued. */
   releaseChain?: (responseId: string) => void
@@ -312,6 +315,16 @@ export async function runWorker(opts: {
       return finish(terminalResult({ status: 'needs_verification', reason: 'interrupted_piece_verification', receiptIndex: index }))
     }
   }
+  const validateStage = async () => {
+    if (!await opts.hasAccess()) throw new Error('project_denied')
+    if (opts.images?.validate && !await opts.images.validate()) throw new Error('visual_context_unavailable')
+  }
+  const unregister = opts.stageContext ? opts.registerContextSurface?.(roleKey,async()=>{
+    await validateStage(); specs=await offer()
+    return {tools:specs,catalogSchemaParameters:params,catalogToolParameters:toolParams(),
+      ...(opts.runtimeSurface?{catalogRuntimeSurface:opts.runtimeSurface()}:{})}
+  }) : undefined
+  try {
   for (let step = restored ? restored.step + 1 : 0; step < opts.worker.max_steps; step++) {
     if (!await opts.hasAccess()) throw new Error('project_denied')
     if (Date.now() + 15_000 >= opts.deadline) return finish({ status: 'time_budget', worker: roleKey, calls })
@@ -319,9 +332,10 @@ export async function runWorker(opts: {
     if(opts.images?.validate&&!await opts.images.validate())return finish({status:'unavailable',worker:roleKey,reason:'visual_context_unavailable',calls})
     const images = opts.images?.carrier() ?? []
     const response = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: roleKey, aiFunction: roleKey, module: 'global', userId: opts.userId,
+      ...(opts.stageContext ? { responseItemsMode: 'preserve' as const } : {}),
       catalogRoleKey: roleKey, ...(opts.runtimeSurface?{catalogRuntimeSurface:opts.runtimeSurface()}:{}), ...(opts.boundDrawingWork?{catalogDrawingWork:true}:{}), ...(opts.variables ? { catalogVariables: opts.variables } : {}), messages: [...messages, ...images], tools: specs, catalogSchemaParameters: params, catalogToolParameters: toolParams(),
       ...(previous ? { previousResponseId: previous } : {}), maxOutputTokens: 8000,
-      timeoutMs: Math.max(1000, Math.min(opts.modelTimeoutMs ?? 45_000, opts.deadline - Date.now())) })
+      timeoutMs: Math.max(1000, Math.min(opts.modelTimeoutMs ?? 45_000, opts.deadline - Date.now())) }, opts.stageContext ? validateStage : undefined)
     if (!response.success) {
       if (response.error === 'turn_budget_exhausted' && opts.stopAsResult) return finish({ status: 'paused_at_limit', worker: roleKey, calls })
       if (response.error === 'turn_budget_exhausted') throw new Error('turn_budget_exhausted')
@@ -529,6 +543,7 @@ export async function runWorker(opts: {
     if (step + 1 < opts.worker.max_steps) opts.progress?.afterStep?.()
   }
   return finish({ status: 'step_budget', worker: roleKey, calls })
+  } finally { unregister?.() }
 }
 
 const RECEIPT_KEYS = ['artifact_id', 'record_id', 'id', 'revision', 'construction_revision', 'request_id', 'step_id']

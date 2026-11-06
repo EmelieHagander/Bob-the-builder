@@ -41,6 +41,8 @@ export function createProjectContext(opts: {
   unlimitedWork?: boolean;
   /** Only the main chat's opened evidence is automatically shown with its answer. */
   chatPreviews?: boolean;
+  /** Exact private pixel identities for a worker's stage handoff, without chat previews. */
+  imageContextRefs?: boolean;
   reviewInstruction?:string;
   imageEvidenceInstruction?:string;
   reviewLabel?:string;
@@ -180,7 +182,8 @@ export function createProjectContext(opts: {
         byteCount += opened.bytes
         pending.push(opened)
         items.push({ ...opened.item, status: 'prepared', delivery: 'pixels_on_next_model_call',
-          ...(opts.chatPreviews ? { context_ref: stageImageRef(opened.image.image_url), chat_preview: { status: 'attached_to_answer_after_pixel_delivery', ref: opened.item.ref,
+          ...(opts.chatPreviews || opts.imageContextRefs ? { context_ref: stageImageRef(opened.image.image_url) } : {}),
+          ...(opts.chatPreviews ? { chat_preview: { status: 'attached_to_answer_after_pixel_delivery', ref: opened.item.ref,
             revision: opened.source.visual?.revision ?? null, view: opened.source.visual?.view ?? null,
             rendered_by: 'app', generated_url_required: false, approval_not_implied: true } } : {}) })
       }
@@ -221,7 +224,7 @@ export function createProjectContext(opts: {
         { type: 'text', text: opts.imageEvidenceInstruction??(()=>{throw new Error('ai_prompt_missing: images.evidence-intro')})() },
         ...(pending.some(r => r.item.source_kind === 'ai_generated' || ['instruction', 'proposal'].includes(String(r.item.purpose)))
           ? [{ type: 'text' as const, text:[opts.reviewLabel??(()=>{throw new Error('ai_prompt_missing: images.review-label')})(),opts.reviewInstruction??(()=>{throw new Error('ai_prompt_missing: drawing-review.instruction')})()].join('\n') }] : []),
-        ...pending.flatMap(r => [{ type: 'text' as const, text: JSON.stringify({ ref: r.item.ref, ...(opts.chatPreviews ? { context_ref: stageImageRef(r.image.image_url) } : {}), title: r.item.title, version: r.version,
+        ...pending.flatMap(r => [{ type: 'text' as const, text: JSON.stringify({ ref: r.item.ref, ...(opts.chatPreviews || opts.imageContextRefs ? { context_ref: stageImageRef(r.image.image_url) } : {}), title: r.item.title, version: r.version,
           project_id: r.item.project_id, purpose: r.item.purpose, source_kind: r.item.source_kind, artifact_revision:r.item.artifact_revision,current_revision:r.item.current_revision,historical:r.item.historical,archived:r.item.archived,view:r.item.view,source_state:r.item.source_state,source_reasons:r.item.source_reasons, links: r.item.links, links_truncated: r.item.links_truncated }) }, r.image]),
       ] }]
     },

@@ -469,6 +469,14 @@ old pinned jobs and guest/local chat do not use this store. An equal retry is
 idempotent and a stale competing update conflicts. A new conversation gets a
 new workpad, while a resumed worker keeps its already checkpointed model input.
 
+**Prepared follow-up, 2026-11-06 (not deployment evidence):** new manifests pin
+`workpad_freshness_version=1`. The claim-fenced `bob_agent_workpad_current`
+reader suppresses the old note if a later Bob write receipt exists in the same
+project, retaining its original stored content and CAS revision. A deliberate
+same-note reaffirmation after current-source reading advances the revision;
+a retry does not. This conservative fence does not infer which decisions are
+settled and does not detect every manual edit. Older jobs keep the original RPC.
+
 A note is **not** a second project memory: every reference is a hint to reopen
 the exact source, and neither a note nor its `noted` response counts as a
 construction save, check, approval or verified receipt. Canonical project
@@ -1513,3 +1521,16 @@ The same version enables thin drawing-identity reads and SQL-selected CAD
 sections (24 kB payload bound); Edge no longer downloads a full CAD envelope to
 answer these particular routing/section reads. This is a transport correction,
 not a measured cure for every CPU shutdown. See the [runtime correction evidence](bob-runtime-path-audit-2026-11-04.md#corrections).
+
+
+**Prepared worker stage lifecycle, 2026-11-06:** new claimed/checkpointed jobs
+may separately pin `worker_stage_context_version=1`. Structure, drawing and
+materials then use native request replay, the immutable result archive and the
+same explicit stage handoff as main Bob. Each worker refreshes its own offered
+tool fence and exact operation surface; stage calls remain inside that worker's
+chain, with live access/image checks before dispatch. Known private pixels may
+leave active input, and exact saved-source refs are supplied to the worker
+without claiming a main-chat preview. Original assignments, uncertainty,
+code-derived receipt identities and exact history reopening survive restart.
+An absent pin retains the previous worker protocol. Installation and ordinary
+behavior acceptance are tracked in the [audit correction evidence](bob-runtime-path-audit-2026-11-04.md#three-project-corrections-2026-11-06).

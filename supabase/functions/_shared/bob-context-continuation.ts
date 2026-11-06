@@ -2,6 +2,7 @@ import { applyCatalogModelOptions, textContinuationMode, type AiCatalogSession }
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import { contextTokenPrefix, countContextTokens, countSerializedTokens } from './bob-token-budget.ts'
 import { stableJsonValue } from './bob-job-journal.ts'
+import { saveReceipt } from './bob-workers.ts'
 import { buildBobRequest, type BobImageInputCounts } from './bob-complete-request.ts'
 import { readResponseItems } from './openai-content.ts'
 import { STAGE_CONTEXT_TOOL, parseStageContextNote, prepareStageContext, type StageContextNote } from './bob-stage-context.ts'
@@ -29,6 +30,7 @@ export interface BobContextContinuationState {
   resultReferenceVersion?: 1;
   imageInputDedupVersion?: 1;
   stageContextVersion?: 1;
+  workerStageContextVersion?: 1;
   chains: [string, Omit<Chain, 'operations'> & { operations: [string, Operation][] }][];
 }
 const HISTORY_TOOL = 'get_work_history'
@@ -155,6 +157,12 @@ function readStatus(operation: Operation): Record<string, unknown> {
     ...(object(output) && typeof output.saved === 'boolean' ? { saved: output.saved } : {}) }
 }
 
+function workerStageFacts(operation: Operation): Record<string, unknown> {
+  let output: unknown = operation.output
+  try { if (typeof output === 'string') output = JSON.parse(output) } catch { /* exact output remains archived */ }
+  return { ...statusOf(operation), ...saveReceipt(operation.tool_name, output) }
+}
+
 function resultMessage(result: OpenAIServiceResponse): Message {
   return { role: 'assistant', content: typeof result.data === 'string' ? result.data : result.data === null ? '' : JSON.stringify(result.data),
     ...(result.toolCalls?.length ? { tool_calls: clone(result.toolCalls) } : {}),
@@ -212,6 +220,8 @@ export function createBobContextContinuation(opts: {
   imageInputDedupVersion?: 1
   /** Explicit, source-bound stage handoff; published only for new main jobs. */
   stageContextVersion?: 1
+  /** New worker chains use the same exact archive and explicit stage lifecycle. */
+  workerStageContextVersion?: 1
   imageSource?: (url: string) => string | undefined
   onInternalTool?:(input:{name:string;status:string;callId:string;role:string;ms:number})=>Promise<void>
   /** Pinned per execution. Older results stay whole, newest first, up to this
@@ -253,10 +263,12 @@ export function createBobContextContinuation(opts: {
   const enabled = opts.version === 1
   if (opts.imageInputDedupVersion !== undefined && opts.imageInputDedupVersion !== 1) throw new Error('image_input_dedup_version_invalid')
   if (opts.stageContextVersion !== undefined && (opts.stageContextVersion !== 1 || opts.mainResultReferences !== 1 || opts.imageInputDedupVersion !== 1)) throw new Error('stage_context_version_invalid')
+  if (opts.workerStageContextVersion !== undefined && (opts.workerStageContextVersion !== 1 || opts.stageContextVersion !== 1)) throw new Error('worker_stage_context_version_invalid')
   const exportState = (): BobContextContinuationState => clone({ version: 1, strategyVersion: opts.version ?? 0,
     ...(opts.mainResultReferences === 1 ? { resultReferenceVersion: 1 as const } : {}),
     ...(opts.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
     ...(opts.stageContextVersion === 1 ? { stageContextVersion: 1 as const } : {}),
+    ...(opts.workerStageContextVersion === 1 ? { workerStageContextVersion: 1 as const } : {}),
     chains: [...chains].map(([id, chain]) => [id, { ...chain, operations: [...chain.operations] }]),
   })
   const restoreState = (state: BobContextContinuationState): void => {
@@ -270,7 +282,7 @@ export function createBobContextContinuation(opts: {
     const messages = (value: unknown): boolean => Array.isArray(value) && value.every(message)
     const natural = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0
     if (!state || state.version !== 1 || state.strategyVersion !== (opts.version ?? 0)
-      || state.resultReferenceVersion !== opts.mainResultReferences || state.imageInputDedupVersion !== opts.imageInputDedupVersion || state.stageContextVersion !== opts.stageContextVersion || !Array.isArray(state.chains)
+      || state.resultReferenceVersion !== opts.mainResultReferences || state.imageInputDedupVersion !== opts.imageInputDedupVersion || state.stageContextVersion !== opts.stageContextVersion || state.workerStageContextVersion !== opts.workerStageContextVersion || !Array.isArray(state.chains)
       || new Set(state.chains.map(entry => Array.isArray(entry) ? entry[0] : null)).size !== state.chains.length) throw new Error('context_checkpoint_invalid')
     const restored = new Map<string, Chain>()
     for (const entry of state.chains) {
@@ -423,8 +435,10 @@ export function createBobContextContinuation(opts: {
     // The compactor is deliberately not recursive. Other callers can use this
     // adapter without rewriting their schema, specialist loop or old journal.
     if (!enabled || requested.catalogRoleKey === 'context-compactor') return opts.callModel(requested, beforeDispatch)
+    const role = requested.catalogRoleKey ?? requested.functionName
     const references = opts.mainResultReferences === 1 && requested.responseItemsMode === 'preserve'
-      && requested.functionName === 'ask-bob' && (requested.catalogRoleKey ?? requested.functionName) === 'ask-bob'
+      && requested.functionName === role && (role === 'ask-bob' || opts.workerStageContextVersion === 1
+        && ['structure-worker','materials-worker','drawing-worker'].includes(role))
     let options = requested
     const isBob = (requested.catalogRoleKey ?? requested.functionName) === 'ask-bob'
     const roleCeiling = isBob ? ceiling : Math.max(ceiling, SPECIALIST_INPUT_CEILING_TOKENS)
@@ -621,6 +635,7 @@ export function createBobContextContinuation(opts: {
         ...(chain.stageNote ? { handoff: { role: 'user', content: JSON.stringify(stableJsonValue({
           stage_handoff: chain.stageNote, unverified_working_note: true, approval_not_implied: true,
           original_assignment_preserved: true, operation_archive: { tool: HISTORY_TOOL, list: { call_id: null, after: null } },
+          ...(!isBob ? { completed_operations: [...chain.operations.values()].slice(-40).map(workerStageFacts) } : {}),
           ...(opts.snapshot ? { confirmed_work_state: opts.snapshot({ functionName: options.functionName, role: options.catalogRoleKey ?? options.functionName }) } : {}),
         })) } as Message } : chain.handoff ? { handoff: { role: 'user', content: JSON.stringify({
           context_handoff: chain.handoff, original_assignment_preserved: true,
@@ -672,7 +687,7 @@ export function createBobContextContinuation(opts: {
           }
         } else result=readArchivedOperation(input,chain)
         chain.pendingInternal.push({ role: 'tool', tool_call_id: tool.id, content: JSON.stringify(result) })
-        await opts.onInternalTool?.({name:HISTORY_TOOL,status:String(result.status??'returned'),callId:tool.id,role:options.functionName,ms:Date.now()-began})
+        await opts.onInternalTool?.({name:tool.function.name,status:String(result.status??'returned'),callId:tool.id,role:options.functionName,ms:Date.now()-began})
       }
       // Specialists continue a chain only through their own tool calls; only
       // Bob's main loop resumes after a final message (nudges, completion
