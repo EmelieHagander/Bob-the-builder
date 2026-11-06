@@ -103,6 +103,29 @@ test('a locally timed-out Claude stream reports only content-free timing and pro
   } finally { console.error = originalError }
 })
 
+test('an answer still streaming when our deadline closes is reported as too long, not as a lost connection', async () => {
+  const originalError = console.error
+  console.error = () => {}
+  const fetch = (async (_url: string, init: RequestInit) => {
+    const encode = (e: object) => new TextEncoder().encode('event: x\ndata: ' + JSON.stringify(e) + '\n\n')
+    let timer: ReturnType<typeof setInterval> | undefined
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encode({ type: 'message_start', message: { id: 'm', content: [] } }))
+        controller.enqueue(encode({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }))
+        timer = setInterval(() => controller.enqueue(encode({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'del ' } })), 5)
+        init.signal?.addEventListener('abort', () => { clearInterval(timer); controller.error(new DOMException('aborted', 'AbortError')) }, { once: true })
+      },
+    })
+    return new Response(stream, { status: 200 })
+  }) as typeof globalThis.fetch
+  try {
+    const result = await callAnthropicMessages({ ...base, prompt: 'x' }, ctx({ fetch, timeoutMs: 60 }))
+    assert.equal(result.success, false); assert.equal(result.error, 'model_output_window')
+    assert.deepEqual((result as any).failure, { code: 'model_output_window' })
+  } finally { console.error = originalError }
+})
+
 test('text, strict JSON, refusal and output limit outcomes are honest', async () => {
   const reply = (stop: string, text: string) => (async () => sse(
     { type: 'message_start', message: { id: 'm', model: 'claude-opus-5-5', content: [], usage: { input_tokens: 1, output_tokens: 0 } } },

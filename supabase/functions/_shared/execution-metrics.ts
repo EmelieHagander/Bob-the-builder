@@ -34,7 +34,7 @@ const number=(n:unknown)=>typeof n==='number'&&Number.isFinite(n)&&n>=0?n:0
 const code=(s:unknown,fallback:string)=>typeof s==='string'&&/^[a-z][a-z0-9_]{0,39}$/.test(s)?s:fallback
 const label=(s:unknown)=>typeof s==='string'&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/.test(s)?s:null
 const toolNames=(tools:OpenAIServiceOptions['tools'])=>(tools??[]).slice(0,32).map(t=>code(t.function?.name,'invalid_name'))
-const failureCodes=new Set(['model_invalid_json','model_schema_violation','model_output_limit','model_refusal','model_reasoning_only','model_empty_response'])
+const failureCodes=new Set(['model_invalid_json','model_schema_violation','model_output_limit','model_output_window','model_refusal','model_reasoning_only','model_empty_response'])
 const failureKind=(result:OpenAIServiceResponse<unknown>)=>result.success?null:failureCodes.has(result.failure?.code??'')?result.failure!.code
   :/abort|timed?\s*out|timeout/i.test(result.error??'')?'request_aborted'
   :/OpenAI API error: 429/.test(result.error??'')?'rate_limited'

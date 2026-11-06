@@ -23,6 +23,15 @@ export interface WorkerDefinition { role: string; tool: string; tools: string[];
 type Messages = NonNullable<OpenAIServiceOptions['messages']>
 type ModelCall = (options: OpenAIServiceOptions, beforeDispatch?: () => Promise<void>) => Promise<OpenAIServiceResponse<string>>
 const NAME = /^[a-z][a-z0-9_]{0,63}$/
+/** An answer cut at the output limit, or still streaming when its request
+ * window closed, ran nothing. Bob and colleagues get this once per pending
+ * step, so the same job continues in smaller pieces (bed, 2026-11-06). */
+export const MODEL_OUTPUT_LIMIT_NOTE = 'Your previous answer was too long to finish in one response and was discarded: none of its tool calls ran and nothing was saved. Continue the same task with a shorter answer: one change per tool call, with brief commentary.'
+const CUT_ANSWER = new Set(['model_output_limit', 'model_output_window'])
+export function withOutputLimitNote(messages: Messages, error: string | undefined): Messages | null {
+  if (!CUT_ANSWER.has(error ?? '') || messages.some(m => m.role === 'user' && m.content === MODEL_OUTPUT_LIMIT_NOTE)) return null
+  return [...messages, { role: 'user', content: MODEL_OUTPUT_LIMIT_NOTE }]
+}
 
 /** Workers published by the pinned manifest, or null for manifests before the pilot.
  * Owner decision 2026-10-31: the structural designer and Rita (drawing) join
@@ -339,6 +348,8 @@ export async function runWorker(opts: {
     if (!response.success) {
       if (response.error === 'turn_budget_exhausted' && opts.stopAsResult) return finish({ status: 'paused_at_limit', worker: roleKey, calls })
       if (response.error === 'turn_budget_exhausted') throw new Error('turn_budget_exhausted')
+      const noted = withOutputLimitNote(messages, response.error)
+      if (noted) { messages = noted; continue }
       return finish({ status: 'unavailable', worker: roleKey, calls })
     }
     if (images.length) opts.images!.confirmDelivery()

@@ -27,7 +27,7 @@ import { humanTextIssues } from './human-text.ts'
 import { answerTextFragments, type AnswerTextOutcome } from './answer-text.ts'
 import { toolRejection } from './tool-rejection.ts'
 import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
-import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogReportReadback, catalogConstructionAutoCheck, catalogHandoverReadiness, handoverReadinessBlock, readbackReads, workerOwnedTools, parseWorkerJob, runWorker, validWorkerProgress, type WorkerProgress } from './bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogReportReadback, catalogConstructionAutoCheck, catalogHandoverReadiness, handoverReadinessBlock, readbackReads, workerOwnedTools, parseWorkerJob, runWorker, validWorkerProgress, type WorkerProgress, withOutputLimitNote } from './bob-workers.ts'
 import { focusedWorkerStep, savedFormPieceEvidence } from './worker-form-piece.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
@@ -901,6 +901,15 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         const priorMessages = request.messages
         if (!Array.isArray(priorMessages)) throw new Error('turn_checkpoint_invalid')
         request = { ...request, tool_choice: 'none', messages: [...priorMessages, ...note] }
+        pendingResponse = undefined
+        await save(step)
+        pendingResponse = await opts.callModel(request)
+      }
+      // A cut answer ran nothing: continue once, shorter.
+      const noted = !pendingResponse.success && Array.isArray(request.messages)
+        ? withOutputLimitNote(request.messages, pendingResponse.error) : null
+      if (noted) {
+        request = { ...request, messages: noted }
         pendingResponse = undefined
         await save(step)
         pendingResponse = await opts.callModel(request)

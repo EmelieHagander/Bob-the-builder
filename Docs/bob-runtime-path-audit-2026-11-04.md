@@ -1579,3 +1579,66 @@ Remaining: one ordinary bed turn to show Konrad's repaired edit, the
 Rita/Mattias follow-up and the cost. Entry's image load and context ceiling (C2)
 is the next separate increment. No paid model run, full CI, catalog publication
 or owner-data correction was performed.
+
+<a id="claude-window-cut-2026-11-06"></a>
+### Bed run after the edit repair: Konrad's answer outgrew the Claude window — 2026-11-06
+
+Read-only readback of the owner's bed turn at 15:59 UTC (job `32eef129`, run
+`a75d02e0`): 7.8 minutes, 20 model calls, USD 1.69 known cost, `saved` with one
+record (a catalog fastener). The construction is unchanged and Rita/Mattias
+were not called. The edit repair (#484) was never reached.
+
+- Konrad read the construction 11 times (input 71k → 113k), added the fastener,
+  then his next request was aborted by our own timer twice at exactly 120 s
+  (`request_aborted`, attempt 0 and the uncertain-billing resend). The worker
+  returned `unavailable`, and the turn's structure stop refused Bob's two
+  narrower retries. Both aborted requests are absent from `ai_usage_events`;
+  their cost is unknown (execution events mark them unpriced).
+- Claude calls stream synchronously inside one worker segment
+  (`CLAUDE_BACKGROUND_TIMEOUT_MS` 120 s, at least a 90 s window), while
+  unlimited Bob work sends the model's own `max_tokens` (128,000). A local
+  timeout during an active stream was reported as `Network error` and resent
+  identically.
+- A fixed output cap derived from the window was considered and rejected:
+  execution events show long Claude outputs streaming at 91–154 tokens/s and
+  successful outputs up to 16,618 tokens (112.6 s). A cap at a conservative rate
+  would have cut about 25 successful calls.
+
+**Correction (source; not yet deployed).**
+
+- The Claude adapter reports a local deadline that closes while answer text or
+  thinking is still streaming (last delta within 10 s) as
+  `model_output_window`, not as a lost connection. A stalled or never-started
+  stream keeps the existing `Network error` and its single resend.
+- Bob's main loop and the worker loop treat `model_output_window` and
+  `model_output_limit` as a cut answer that ran nothing: the same pending
+  request is sent once more with one short code-owned note to continue with one
+  change per tool call. A second cut answer stops as before. Other failures are
+  unchanged. The shortened-segment yield (`segment_wall`) still runs first.
+- The CAD design/review failure messages and execution-metric failure kinds
+  include the new code.
+- Tests: a streaming fixture returns `model_output_window` (the previous
+  adapter returns `Network error: aborted`); full-turn fixtures show Konrad and
+  Bob each continuing once with the note, a second cut stopping Konrad without a
+  third request, and other failures stopping without the note. With the retry
+  disabled the three loop cases fail. 133 of 134 focused tests across adapter,
+  turn, worker, CAD, budget, metrics, checkpoint and Claude continuation pass;
+  the remaining `bob-final-answer` spending-stop readback case fails identically
+  on unchanged main. All Edge entrypoints pass Deno type checking with the
+  temporary local import map.
+
+**Similar risks found (not changed).**
+
+- `plan-compiler` asks for up to 24,000 output tokens within at most 40 s; at
+  observed speeds about 4,000–6,000 tokens fit. It has had no Claude calls since
+  the provider switch.
+- Working-context and orientation summaries allow 3,000 tokens within 30 s;
+  observed helper outputs stay below 2,700 tokens, so the margin is small.
+- A first cut answer still spends its whole window before the note; long
+  answers remain slower than smaller tool calls.
+- Aborted Claude requests are not written to the usage ledger, so known cost
+  can understate a turn with timeouts.
+
+Remaining: Edge deploy (ask-bob + bob-worker) with the owner's OK, then one
+ordinary bed turn. No paid model run, full CI, catalog change or owner-data
+correction was performed.

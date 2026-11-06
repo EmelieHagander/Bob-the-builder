@@ -7,6 +7,7 @@ import { runProjectAnswer, seedToolPolicy, type BobAnswerState } from '../supaba
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createConstructionTools } from '../supabase/functions/_shared/construction-draft.ts'
+import { MODEL_OUTPUT_LIMIT_NOTE } from '../supabase/functions/_shared/bob-workers.ts'
 import type { AiCatalogSession } from '../supabase/functions/_shared/ai-catalog.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from '../supabase/functions/_shared/openai-service.ts'
 
@@ -202,4 +203,41 @@ test('a job that yields during the final call resumes with the grant and answers
   assert.deepEqual(resumed.dispatched.map(o => o.functionName), ['ask-bob'])
   assert.equal(resumed.dispatched[0].tool_choice, 'none')
   assert.equal(saved!.budget.finalAnswerUsed, true)
+})
+
+// Bed, 2026-11-06: Konrad's answer outgrew the Claude request window twice and
+// the job stopped with nothing saved. A cut answer ran nothing; one shorter retry.
+const cut = (error: string): Step => () => ({ success: false, data: null, model: 'fixture', usage, error })
+const cutOff = cut('model_output_limit')
+const smallSave: Step = () => ({ ...reply(.1), data: null, responseId: 'k1', toolCalls: [call('k1c', 'save_construction_draft', {})] })
+const konradDone: Step = () => ({ ...reply(.1, 'Lådan är sparad och kontrollerad.'), responseId: 'k2', outputPhase: 'final_answer' })
+const lastMessage = (o: OpenAIServiceOptions) => o.messages!.at(-1)!
+
+for (const code of ['model_output_limit', 'model_output_window']) test(`a colleague answer cut by ${code} continues once, shorter, in the same job`, async () => {
+  const { result, requested } = await turn({ finalAnswer: true, bob: [handOver, finalAnswer], konrad: [cut(code), smallSave, konradDone] })
+  assert(result.ok, JSON.stringify(result)); assert.equal(result.answer, ANSWER)
+  const konrad = requested.filter(o => o.functionName === 'structure-worker')
+  assert.equal(konrad.length, 3)
+  assert.equal(lastMessage(konrad[1]).role, 'user'); assert.equal(lastMessage(konrad[1]).content, MODEL_OUTPUT_LIMIT_NOTE)
+  assert.deepEqual(konrad[1].messages!.slice(0, -1), konrad[0].messages, 'the same pending request plus the note')
+  assert.equal(handOverResult(bobRequests(requested)[1]).status, 'ok')
+})
+
+test('Bob\'s own answer cut at the output limit is retried once with the note', async () => {
+  const { result, requested } = await turn({ finalAnswer: true, bob: [cutOff, handOver, finalAnswer], konrad: [smallSave, konradDone] })
+  assert(result.ok, JSON.stringify(result))
+  const bob = bobRequests(requested)
+  assert.deepEqual({ ...bob[1], messages: bob[1].messages!.slice(0, -1) }, bob[0])
+  assert.equal(lastMessage(bob[1]).content, MODEL_OUTPUT_LIMIT_NOTE)
+})
+
+test('a second cut answer still stops the colleague; no third request', async () => {
+  const { requested } = await turn({ finalAnswer: true, bob: [handOver, finalAnswer], konrad: [cutOff, cutOff] })
+  assert.equal(requested.filter(o => o.functionName === 'structure-worker').length, 2)
+  assert.equal(handOverResult(bobRequests(requested)[1]).status, 'unavailable')
+})
+
+test('other model failures still stop the colleague without the note', async () => {
+  const { requested } = await turn({ finalAnswer: true, bob: [handOver, finalAnswer], konrad: [cut('Network error: reset'), konradDone] })
+  assert.equal(requested.filter(o => o.functionName === 'structure-worker').length, 1)
 })

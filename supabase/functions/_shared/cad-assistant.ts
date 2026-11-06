@@ -645,7 +645,7 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
      opts.context?.confirmDelivery()
      if(!await checkAuthority()||opts.context&&!await opts.context.validate())throw new Error('project_denied')
      if(!checked.success&&checked.error==='turn_budget_exhausted')throw new Error(checked.error)
-     if(!checked.success&&['model_output_limit','model_reasoning_only'].includes(checked.error??'')){
+     if(!checked.success&&['model_output_limit','model_output_window','model_reasoning_only'].includes(checked.error??'')){
       candidate=null;partial=true;metrics.review_unavailable++
       return terminalFailure={status:'unavailable',stage:'review',reason:checked.error,saved:false,
        user_message:'Granskaren nådde sin svarsgräns utan att lämna ett användbart resultat. Ritningen kunde därför inte godkännas eller sparas från det försöket. Jag stoppade försöket utan att starta om samma arbete.'}
@@ -794,7 +794,7 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
    // 2026-11-02: a drawing that outgrows the stored request cannot be saved by
    // drawing it again; say so once instead of reporting a generic outage.
    const tooLarge=error instanceof Error&&error.message==='drawing_request_too_large'
-   const reason=runtimeFault?'design_runtime_error':tooLarge?'drawing_request_too_large':error instanceof Error&&['provider_retry_exhausted','turn_budget_exhausted','model_output_limit','model_reasoning_only','model_unavailable','deadline','too_many_tool_calls'].includes(error.message)?error.message:'design_failed'
+   const reason=runtimeFault?'design_runtime_error':tooLarge?'drawing_request_too_large':error instanceof Error&&['provider_retry_exhausted','turn_budget_exhausted','model_output_limit','model_output_window','model_reasoning_only','model_unavailable','deadline','too_many_tool_calls'].includes(error.message)?error.message:'design_failed'
    // 2026-10-20: a live request failed here after one render with no
    // recorded cause. Log the internal error so the next one is diagnosable.
    if(reason==='design_failed'||runtimeFault)console.error('[CAD design failed]',JSON.stringify({request_id:request?.id??null,renders:metrics.renders,
@@ -808,10 +808,10 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
     user_message:'Ritningen blev för stor för att sparas i ett stycke. Ingen ny ritning sparades. Konstruktionen finns kvar; den behöver delas i mindre delar, eller gränsen höjas, innan ritningen kan sparas.'}
    if(runtimeFault)return terminalFailure={...failure,request_id:request?.id??null,retryable:false,
     user_message:'Ett internt fel stoppade ritningsarbetet. Ingen ny ritning sparades. Det sparade konstruktionsunderlaget finns kvar, men felet behöver rättas innan ritningen kan tas fram.'}
-   if(['model_output_limit','model_reasoning_only','model_unavailable','provider_retry_exhausted','turn_budget_exhausted'].includes(reason)){
+   if(['model_output_limit','model_output_window','model_reasoning_only','model_unavailable','provider_retry_exhausted','turn_budget_exhausted'].includes(reason)){
     const message=reason==='turn_budget_exhausted'
      ?budgetStopMessage(readBudgetStop(error))
-     :['model_output_limit','model_reasoning_only'].includes(reason)
+     :['model_output_limit','model_output_window','model_reasoning_only'].includes(reason)
       ?'Granskaren nådde sin svarsgräns utan att lämna ett användbart resultat.'
       :'Granskarens modellanrop misslyckades.'
     return terminalFailure={...failure,user_message:message+' Ingen ny ritning sparades från det försöket. '+(metrics.renders===0?'CAD-motorn anropades aldrig. ':'')+'Jag stoppade försöket utan att starta om samma arbete.'}
