@@ -5,6 +5,7 @@ import {createAiCatalogSession,applyCatalogModelOptions,type AiCatalogSession,ty
 import type {OpenAIServiceOptions,OpenAIServiceResponse} from '../../supabase/functions/_shared/openai-service.ts'
 const migrationRoot=new URL('../../supabase/migrations/',import.meta.url)
 const migrations=readdirSync(migrationRoot).filter(name=>name.endsWith('.sql')).sort().map(name=>new URL(name,migrationRoot))
+migrations.push(new URL('../../scripts/publish-bob-stage-context-card.sql',import.meta.url))
 const seedFile=migrations.find(path=>readFileSync(path,'utf8').includes('$ai_catalog_seed$'))
 if(!seedFile)throw new Error('AI catalog migration seed is missing')
 const originalSeed=JSON.parse(readFileSync(seedFile,'utf8').match(/\$ai_catalog_seed\$([\s\S]+?)\$ai_catalog_seed\$/)![1]) as any[]
@@ -1069,6 +1070,14 @@ for(const migration of migrations){
    row.definition=structuredClone(row.definition);row.definition.parameters.properties.assembly_dependencies.description=spec.description
    const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'cad-build-guide-v2'};versions.set(row.key,versions.get(row.key)!+1)
   }
+ }
+ const stageCard=source.match(/\$stage_context_card_spec\$([\s\S]+?)\$stage_context_card_spec\$/)
+ if(stageCard){
+  const patch=JSON.parse(stageCard[1]),row=seed.find(row=>row.key===patch.key)
+  if(!row)throw Error('stage_context_tool_missing')
+  row.definition={...row.definition,...patch.definition}
+  row.metadata={...row.metadata,publication:'stage-context-card-v1'}
+  versions.set(row.key,versions.get(row.key)!+1)
  }
  const stageContext=source.match(/\$stage_context_spec\$([\s\S]+?)\$stage_context_spec\$/)
  if(stageContext){
