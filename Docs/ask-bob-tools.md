@@ -1211,7 +1211,7 @@ previous contract. [Correction evidence](bob-runtime-path-audit-2026-11-04.md#co
 separates local verification, installation and owner acceptance.
 
 
-**Prepared material binding correction, 2026-11-06:** catalog
+**Installed material binding correction, 2026-11-06:** catalog
 `worker_operation_bindings` may provide a `description` replacement at an exact
 schema `path`, applied during runtime projection of both manuals and native
 provider schemas. The material worker's `data` description lists its writable
