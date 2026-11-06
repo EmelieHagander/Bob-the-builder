@@ -1650,3 +1650,45 @@ but depend on the Supabase plan's Edge wall clock (the timing module assumes
 Remaining: Edge deploy (ask-bob + bob-worker) with the owner's OK, then one
 ordinary bed turn. No paid model run, full CI, catalog change or owner-data
 correction was performed.
+
+<a id="image-lifecycle-2026-11-06"></a>
+### Image lifecycle: look when needed, release after use — 2026-11-06
+
+**Owner decision.** Images keep their full resolution. Bob first sees a short
+description, opens only the images he needs, and does not keep pixels beyond
+their use; the description stays and he can reopen. Descriptions are made once
+per image by the smallest vision model (Haiku tier), kept short.
+
+**Measured cause (entry run 88761ca2).** One `open_project_item` delivered four
+images (mockup v4 and three phone photos, +30.3k provider tokens); reviewing
+mockup v5 added +14.2k. Every opened image then stayed in each later request:
+pixels left only through `advance_work_stage`, which was never used.
+`generate_project_image` already passes `reference_image_ids` straight to the
+image model, so opening references is not needed to generate. Of 48 ready
+project images, 6 have a cached description; the existing
+`describe_project_image` cache is only written when Bob chooses to after viewing.
+
+**Step 1: release after use (source; not yet deployed).** New execution
+identities with the stage contract pin `imageReleaseVersion: 1`. Before each
+native request the continuation replaces the pixels of an opened private image
+with a short text marker once a result was saved after the model saw it, or at
+the latest after three of its answers. The image's ref/title text stays and the
+marker names `open_project_item` for reopening. Seed messages (the owner's
+current message and its photos), tool results, native answers and unknown or
+public images are unchanged. The pin is part of the saved continuation state;
+jobs without it keep every opened image. Releases are logged content-free as
+`[Bob image release]`.
+
+Tests: rule cases (in use, save in the delivery group, later save, three
+answers, idempotence, untouched kinds), a native chain through a worker restart
+where the saved mockup releases mockup v4 and the window photo while the
+owner's photo stays (old pin: unchanged), and pin/state validation. Existing
+continuation, image, stage, drawing-preview, vision and turn suites pass except
+cases that fail identically on unchanged main. Both Edge entrypoints pass Deno
+type checking.
+
+**Step 2: descriptions first (planned).** Describe each ready image once with
+the Haiku tier, store it per image version (project-wide, from pixels only),
+list descriptions before opening and keep them as the released image's text.
+A one-time backfill of the 42 undescribed images needs the owner's OK at
+deployment (estimated about USD 0.10).

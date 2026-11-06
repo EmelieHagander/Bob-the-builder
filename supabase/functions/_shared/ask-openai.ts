@@ -382,7 +382,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -404,6 +404,8 @@ export async function answerWithOpenAi(opts: {
       ...(checkpoint ? { groundingReadOrderVersion: 1 as const, modelDeadlineVersion: 1 as const } : {}),
       ...bobCompleteRequestVersions(!!checkpoint, contract),
       ...bobStageContextVersion(!!checkpoint, contract),
+      // Opened pixels leave after use (owner decision 2026-11-06). Jobs without this pin keep every opened image.
+      ...(bobStageContextVersion(!!checkpoint, contract).stageContextVersion === 1 ? { imageReleaseVersion: 1 as const } : {}),
       // Window 2 (2026-10-29): superseded repeat reads leave first; the latest result per record stays whole.
       ...(checkpoint && contract.result_reference_version === 1 ? { resultWindowVersion: contract.result_window_version === 2 ? 2 as const : 1 as const } : {}),
       // Owner-set spending stop, pinned when the job starts (2026-10-20).
@@ -452,6 +454,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.imageInputDedupVersion !== undefined && (execution.imageInputDedupVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('image_input_dedup_version_invalid')
   if (execution.stageContextVersion !== undefined && (execution.stageContextVersion !== 1 || execution.imageInputDedupVersion !== 1 || execution.resultReferenceVersion !== 1)) throw new Error('stage_context_version_invalid')
   if (execution.workerStageContextVersion !== undefined && (execution.workerStageContextVersion !== 1 || execution.stageContextVersion !== 1)) throw new Error('worker_stage_context_version_invalid')
+  if (execution.imageReleaseVersion !== undefined && (execution.imageReleaseVersion !== 1 || execution.stageContextVersion !== 1)) throw new Error('image_release_version_invalid')
   if(execution.continuedWorkVersion!==undefined&&execution.continuedWorkVersion!==1)throw Error('continued_work_version_invalid')
   if(execution.solutionWorkVersion!==undefined&&execution.solutionWorkVersion!==1)throw new Error('solution_work_version_invalid')
   if(execution.operationPathsVersion!==undefined&&![1,2].includes(execution.operationPathsVersion))throw new Error('operation_paths_version_invalid')
@@ -486,6 +489,7 @@ export async function answerWithOpenAi(opts: {
     ...(execution.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
     ...(execution.workerStageContextVersion === 1 ? { workerStageContextVersion: 1 as const } : {}),
     ...(execution.stageContextVersion === 1 ? { stageContextVersion: 1 as const, imageSource: (url: string) => imageRefs.has(url) ? stageImageRef(url) : undefined } : {}),
+    ...(execution.imageReleaseVersion === 1 ? { imageReleaseVersion: 1 as const } : {}),
     ...(execution.resultWindowVersion === 1 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS } : {}),
     ...(execution.resultWindowVersion === 2 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS, resultWindowVersion: 2 as const } : {}),
     ...(execution.constructionPageVersion === 1 ? { literalResultTokens: { [CONSTRUCTION_VIEW_TOOL.function.name]: BOB_CONSTRUCTION_RESULT_TOKENS } } : {}),
