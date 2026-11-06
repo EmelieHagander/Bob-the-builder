@@ -373,6 +373,7 @@ select {
 .account-project-open > .ui-row-meta { display: block; }
 .meal-open { width: 100%; border: 0; padding: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; min-height: var(--control-height); }
 .account-project-open .pill { padding: 2px 5px; }
+.account-project-marks { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
 .account-building-group { margin-top: var(--space-2); }
 .account-building-group > summary { display: flex; align-items: center; gap: var(--space-2); min-height: var(--control-height); cursor: pointer; }
 .account-building-group > summary::before { content: '▸'; }
@@ -958,8 +959,6 @@ select {
 .bob-context { flex-shrink: 0; border-bottom: 1px solid var(--line); font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; color: var(--ink-soft); }
 .bob-context summary { min-height: 44px; padding: 12px 0; cursor: pointer; font-weight: 700; }
 .bob-context p { margin: 0 0 12px; }
-.bob-context-evidence { margin-top: 10px; font-size: 12px; color: var(--ink-soft); }
-.bob-context-evidence summary { cursor: pointer; min-height: 44px; padding: 10px 0; }
 .drawing-request-gaps { display: grid; gap: 10px; padding-left: 20px; margin: 12px 0; }
 .drawing-request-card { min-width: 0; overflow-wrap: anywhere; }
 .drawing-request-card .btn { min-height: 44px; }
