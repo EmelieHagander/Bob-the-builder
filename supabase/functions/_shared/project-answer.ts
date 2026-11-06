@@ -169,25 +169,40 @@ export interface TurnProgress { stage: 'thinking' | 'tool' | 'finishing'; tool?:
  * reads the owner's latest instruction and the tool cards and names up to four
  * tools for the turn, so the offered list is right from the first step and
  * stays fixed. Any failure, invalid answer or empty choice keeps the phase set. */
-export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], drawingRequests: unknown, deadline: number, exclude: Set<string> = new Set()): Promise<string[] | null> {
+export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], drawingRequests: unknown, deadline: number, exclude: Set<string> = new Set(), limit = 4): Promise<string[] | null> {
   const candidates = opts.aiCatalog.manifest().definitions.flatMap(row => {
     const name = row.prompt_key.startsWith('tools.') ? row.prompt_key.slice(6) : ''
     const card = row.definition.card_description
     return row.definition_kind === 'tool_contract' && name && !core.includes(name) && !exclude.has(name) && typeof card === 'string' && card ? [{ name, card }] : []
   })
   if (!candidates.length) return null
+  return pickFromCards(opts, { latest_instruction: opts.message, ...(opts.continuedWork?helperConversation(opts.context,true):{memory_summary:opts.context?.summary??null,recent_conversation:(opts.context?.recent??[]).slice(-4).map(({role,text})=>({role,text:text.slice(0,1000)}))}),
+    pending_drawing_requests: Array.isArray(drawingRequests) ? drawingRequests.length : 0, always_loaded: core }, candidates, deadline, limit)
+}
+
+/** Owner decision 2026-11-06 (worker focus): the same picker names, from Bob's
+ * request to a worker, which of the worker's optional tools the job needs,
+ * beside its core tools. The worker then keeps that list for the whole job. */
+export async function pickWorkerTools(opts: ProjectAnswerOptions, request: string, core: string[], optional: string[], deadline: number, limit: number): Promise<string[] | null> {
+  const candidates = optional.flatMap(name => {
+    const card = opts.aiCatalog.manifest().definitions.find(row => row.prompt_key === 'tools.' + name && row.definition_kind === 'tool_contract')?.definition.card_description
+    return typeof card === 'string' && card ? [{ name, card }] : []
+  })
+  if (!candidates.length) return null
+  return pickFromCards(opts, { latest_instruction: request, always_loaded: core }, candidates, deadline, limit)
+}
+
+async function pickFromCards(opts: ProjectAnswerOptions, input: Record<string, unknown>, candidates: { name: string; card: string }[], deadline: number, limit: number): Promise<string[] | null> {
   const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'tool-picker', aiFunction: 'tool-picker', module: 'global',
     userId: opts.userId, catalogRoleKey: 'tool-picker', catalogSchemaKey: 'bob_tool_pick',
-    messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, ...(opts.continuedWork?helperConversation(opts.context,true):{memory_summary:opts.context?.summary??null,recent_conversation:(opts.context?.recent??[]).slice(-4).map(({role,text})=>({role,text:text.slice(0,1000)}))}),
-      pending_drawing_requests: Array.isArray(drawingRequests) ? drawingRequests.length : 0,
-      always_loaded: core, candidates }) }],
+    messages: [{ role: 'user', content: JSON.stringify({ ...input, candidates }) }],
     timeoutMs: Math.max(1000, Math.min(opts.modelTimeoutMs ?? 45_000, 15_000, deadline - Date.now())) })
   let value: unknown = result.data
   try { if (typeof value === 'string') value = JSON.parse(value) } catch { return null }
   const names = (value as { tools?: unknown } | null)?.tools
   if (!result.success || !Array.isArray(names)) return null
   const known = new Set(candidates.map(c => c.name))
-  const picked = [...new Set(names.filter((name): name is string => typeof name === 'string' && known.has(name)))].slice(0, 4)
+  const picked = [...new Set(names.filter((name): name is string => typeof name === 'string' && known.has(name)))].slice(0, limit)
   return picked.length ? picked : null
 }
 /** Embedded seed is for injected/offline callers only. Production supplies the
@@ -289,6 +304,14 @@ export type ProjectAnswerOptions = {
   /** Production turns ask the small tool picker when the manifest publishes it;
    * offline callers keep the phase choice unless they opt in. */
   toolPicker?: boolean;
+  /** Pinned per execution (tool_pick_limit): how many tools the picker may name; four before the pin. */
+  toolPickLimit?: number;
+  /** Pinned per execution (workerFocusVersion): a worker with a catalog focus is
+   * offered its core tools and the optional ones picked from Bob's request. */
+  workerFocus?: boolean;
+  /** Pinned per execution (workerPlanVersion): a worker's construction write
+   * before a plan note in its workpad is refused with plan_required. */
+  workerPlan?: boolean;
   /** Pinned per execution: which buildings this project links, read once at turn start. */
   buildingLinks?: BuildingLinks;
   /** Pinned per execution (projectFactsVersion): orientation blocks are cut,
@@ -569,6 +592,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const report = await runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
         ...(opts.workerStageContext ? { stageContext: true, registerContextSurface: opts.registerWorkerContextSurface } : {}),
         ...(workerPads ? { workpadEnabled: true, ...(workerWorkpad ? { workpad: workerWorkpad } : {}) } : {}),
+        ...(opts.workerFocus && worker.focus && workerPads ? { focus: { pick: (candidates: string[]) => pickWorkerTools(opts, job.job, worker.focus!.core, candidates, deadline, worker.focus!.optional_limit) } } : {}),
+        ...(opts.workerPlan && workerPads ? { planGate: true } : {}),
         ...(opts.workerPieceProgress && key === 'structure' && workerPads && reportReadback && worker.knowledge
           ? { pieceProgress: { ...(opts.continuedWork?{unmappedReview:true}:{}), readSaved: async (receipt: Record<string, unknown>) => {
             const read = readbackReads([receipt])[0]
@@ -734,7 +759,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   if (phaseTools && Array.isArray(drawingRequests) && drawingRequests.length) drawingWork = true
   const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
   if (!restored && opts.toolPicker === true && phaseTools && coreTools
-    && opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.tool-picker')) toolPick = await pickTurnTools(opts, coreTools, drawingRequests, deadline, workerTools)
+    && opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.tool-picker')) toolPick = await pickTurnTools(opts, coreTools, drawingRequests, deadline, workerTools, opts.toolPickLimit ?? 4)
   if (restored?.initial.directory) {
     const directory = restoreOrientationDirectory(restored.initial.directory as Parameters<typeof restoreOrientationDirectory>[0], { projectId: opts.projectId, hasAccess: opts.hasAccess })
     orientationReader = directory.reader

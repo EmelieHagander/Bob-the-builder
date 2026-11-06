@@ -1919,3 +1919,105 @@ times. B is a proposal for owner review before it is built.
 
 Remaining: publish A, run the same two turns, read back cache share and cost
 per role against this table; then the B proposal.
+
+<a id="publication-491-2026-11-06"></a>
+#### Hosted publication of #491 — 2026-11-06, 23:43 UTC
+
+The owner authorized the whole fix ("Applicera alla", 2026-11-06): A now, B
+after it is built.
+
+- #491 is merged at `086915d036592fea6c5030df23516f91a7358223`; its tree
+  `b403ac8c57595e9ac864b75c0ff1c25a1f3aaf5c` equals the tested branch tree.
+  Safety branch `save/bob-before-cache-points-2026-11-06` retains the previous
+  published source `0fba851737b41af4eb64ff952c7df856f6b2012a`.
+- Preflight: zero active Bob jobs; the running bundles were the 21:43 ones
+  (bob-worker v210, ask-bob v242).
+- Published from the merged checkout (Supabase CLI 2.117.0, `--use-api`,
+  worker first):
+
+| Consumer | Version | Files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 211 | 150 | Existing private job capability, JWT false | `59b8fa317c4070a246654162bea414bebd868f9640349553a43d12086f7782a2` |
+| ask-bob | 243 | 152 | JWT true | `5b61fecce41985fe10b91fa434ab2eb06933b955cc4250aaf04dd65cea394d7b` |
+
+  Returned sources match the merged checkout byte for byte except the known
+  type-only `cad-intake.ts` erasure; both bundles contain the cache-point pin,
+  the `cacheBoundary` marking and the silent-window code. Zero active jobs
+  after publication. No migration, catalog change or frontend publication.
+
+Remaining: B (Konrad's plan gate, core and picked tools, Bob's picker up to
+eight), then the owner's own project turns read back against the
+[table above](#cache-points-2026-11-06).
+
+<a id="tool-focus-2026-11-06"></a>
+### B: Konrad plans first, a focused tool list, Bob's picker up to eight — 2026-11-06
+
+Owner decision 2026-11-06 ("Applicera alla"): B1 as a server rule with the
+same tool list, B2 as listed, B3 with the picker widened and loading kept as
+the reserve.
+
+**Measured basis (28 Bob turns with Konrad since 2026-11-02).** Konrad was
+offered 25 tools on every call. `read_construction_draft` (386 calls, every
+turn) and `edit_construction_parts` (57, 64 % of turns) were 75 % of his
+calls; `find_catalog_materials` 57 % of turns, `search_project_data` 32 %,
+`add_catalog_fastener` 29 %, `update_workpad` 25 %, `read_build_tree` 21 %,
+`read_solution_context` 18 %, four tools at 14 %, four at 4–11 %, and
+`create_sub_build`, `place_build`, `derive_construction_lists`,
+`transition_legacy_drawing` never. His persona asks for the next step in the
+workpad, but no job wrote a plan before its first write. Bob saw 52 distinct
+tools, about 30 fewer than ten times, and loaded tools through
+`describe_tool` 97 times; each load changed his tool list within the turn,
+which under Claude invalidates the whole cache (entry: 17 → 19 → 21 tools).
+
+**Correction (source; the catalog migration is applied at publication).**
+
+- *Catalog* (`20261107000000_bob_tool_focus_catalog.sql`, publication
+  `bob-tool-focus-v1`): `bob.tools` gets `worker_focus_version: 1` and
+  `build_workers.structure.focus` — core `read_construction_draft`,
+  `edit_construction_parts`, `save_construction_draft`,
+  `check_construction_draft`, `find_catalog_materials`,
+  `add_catalog_fastener`, `search_project_data`; optional
+  `change_construction_parameters`, `continue_construction_change`,
+  `read_build_tree`, `read_solution_context`, `read_construction_changes`,
+  `search_building_knowledge`, `open_project_item`, `list_project_category`,
+  `calculate_project`, `change_construction_roles`,
+  `read_construction_delivery`; `optional_limit` 4. The four never-used tools
+  stay owned by Konrad (so Bob does not get them) but are not offered.
+  `agent-contract.ask-bob` gets `worker_focus_version: 1`,
+  `worker_plan_version: 1`, `tool_pick_limit: 8`. `schema.bob_tool_pick`
+  allows eight names. `tool-picker.contract` OLD "Name at most four, only from
+  candidates; name fewer when fewer are needed." → NEW "Name at most eight,
+  only from candidates; name fewer when fewer are needed."
+  `structure-worker.persona` gains the paragraph: "Innan du ändrar något
+  skriver du din plan i anteckningsblocket: målet, stegen i ordning och nästa
+  steg. En ändring utan plan avvisas. Planen är ditt arbetsläge, inte ett
+  sparat resultat; uppdatera nästa steg efter varje sparad del."
+- *Runtime.* `catalogWorkers` validates a focus (known, owned, disjoint
+  names; limit 0–8). A pinned job (`workerFocusVersion: 1`) is offered its
+  core tools, the workpad and up to the limit of optional tools that the
+  tool-picker role names from Bob's request at job start (`pickWorkerTools`:
+  the same role and schema as Bob's picker, candidates only the optional
+  tools with their cards); the list is fixed for the job, and a resumed job
+  reads its picks from the offered order instead of asking again. A pinned
+  job (`workerPlanVersion: 1`) refuses a construction write (the worker's
+  tools except `check_construction_draft`) with `plan_required` until an
+  `update_workpad` note with status working or waiting, a goal and at least
+  one step is saved in this job; reads and checks pass; `planned` is saved in
+  the worker's progress. Bob's picker names up to the pinned `tool_pick_limit`
+  (eight) instead of four; loading through `describe_tool` stays as the
+  reserve and is measured. Pins: both worker pins need a checkpointed,
+  claimed job with `workpad_version 1`; older jobs and manifests change
+  nothing.
+- *Tests* (`tests/bob-worker-focus.test.ts`): the offered list is core plus
+  the first valid picks, fixed across steps and across a resume without a
+  second pick; unlisted and unpicked tools answer `not_offered`; the gate
+  refuses writes until a real plan (a done note or a note without steps does
+  not count), lets reads and checks through, persists `planned`, and is
+  absent without the pin; the fixture catalog carries the focus, the pins,
+  the eight and the persona paragraph; a bad focus is refused; the picker
+  limit and the worker pick's inputs.
+
+Expected: Konrad's tool definitions fall from about 43k to about 30k Claude
+tokens per call (to be measured), one `update_workpad` call more per job,
+and fewer tool-list changes in Bob's turns. Publication order: both runtimes
+first (older code ignores the new flags), then the migration.
