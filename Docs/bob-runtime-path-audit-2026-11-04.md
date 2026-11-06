@@ -1216,8 +1216,51 @@ stage boundaries remain acceptance work. The initial seed, directory and
 protected user text can still be large, and the private exact archive remains
 once per turn; this does not close all C1–C4 or claim constant memory/CPU.
 
-Hosted installation/activation is not yet claimed. Deploy matching runtimes and
-the frontend before catalog activation, then verify the complete file closures,
-JWT policies, four changed catalog heads, and the served frontend bundle.
+Hosted installation and activation are verified below. The preceding checks
+describe the pre-publication state, not the current activation.
 Rollback first disables the new contract, then drains pinned stage jobs before
 restoring older runtime code. No canonical project data is deleted by this fix.
+
+### Hosted readback and completed activation — 2026-11-06
+
+Resumed the interrupted publication against the verified project
+`yuobtgoidmmmwfqenkau`. PR #478 had already merged as
+`7a5690325e6d57e0e427dd495f73551de91e004f`. Both Edge functions and
+[Pages #396](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/42118610510)
+were installed on November 5; only the catalog publication remained.
+
+| Function | Version | Returned files | JWT |
+|---|---:|---:|---|
+| bob-worker | 204 | 148 | false, existing job capability |
+| ask-bob | 236 | 150 | true |
+
+Read back every returned file and compared its content to merged source.
+The only difference is `cad-intake.ts`: its type-only declarations are erased
+to an empty module in the hosted bundle. All executable source matches.
+The served frontend `assets/index-BOiMxWPi.js` contains the exact-revision
+comparison that prevents an older opened view suppressing a newer save,
+and is configured for the expected Supabase project. Pages #396 is successful
+at the exact #478 merge. The later #473 mobile UI merge is not part of that
+published frontend; this continuation did not publish it or `cad-viewer`.
+
+On November 6, publication generation parity and 12 targeted stage/catalog/
+preview tests passed against main `07f10ab`. The actual catalog transaction
+was validated and rolled back again before application. Source migration
+`20261105214237_bob_stage_context_catalog.sql` was then applied as managed
+ledger `20261106075147`, name `bob_stage_context_catalog`, at 07:51 UTC.
+Readback verifies all four heads and exact published tool definitions:
+`agent-contract.ask-bob` v25 with `stage_context_version=1`,
+`tools.advance_work_stage` v1, `tools.open_project_item` v5 and
+`tools.get_work_history` v4. Existing manifests and project data were not
+rewritten. The entrance job `beac9bc1-0b2d-4305-93c9-45a8de07fe68`
+started at 07:46 UTC before activation and cannot establish acceptance of
+the new pin.
+
+No new model/CAD call, CI or Pages run was started during this continuation.
+Chromium is still unavailable locally; the cloud app opened at sign-in, so
+private transcript rendering/reload and ordinary model choice of stage
+boundaries remain unverified. Next acceptance must use a job created after
+activation and measure stage transitions, exact displayed images, input growth
+and preservation of unresolved constraints. C1–C4 and whole-run CPU/cost
+acceptance remain open. Documentation reviewed directly using Archie's
+placement/State rules; no separate reviewer agent was run.
