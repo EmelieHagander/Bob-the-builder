@@ -1919,3 +1919,32 @@ times. B is a proposal for owner review before it is built.
 
 Remaining: publish A, run the same two turns, read back cache share and cost
 per role against this table; then the B proposal.
+
+<a id="publication-491-2026-11-06"></a>
+#### Hosted publication of #491 — 2026-11-06, 23:43 UTC
+
+The owner authorized the whole fix ("Applicera alla", 2026-11-06): A now, B
+after it is built.
+
+- #491 is merged at `086915d036592fea6c5030df23516f91a7358223`; its tree
+  `b403ac8c57595e9ac864b75c0ff1c25a1f3aaf5c` equals the tested branch tree.
+  Safety branch `save/bob-before-cache-points-2026-11-06` retains the previous
+  published source `0fba851737b41af4eb64ff952c7df856f6b2012a`.
+- Preflight: zero active Bob jobs; the running bundles were the 21:43 ones
+  (bob-worker v210, ask-bob v242).
+- Published from the merged checkout (Supabase CLI 2.117.0, `--use-api`,
+  worker first):
+
+| Consumer | Version | Files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 211 | 150 | Existing private job capability, JWT false | `59b8fa317c4070a246654162bea414bebd868f9640349553a43d12086f7782a2` |
+| ask-bob | 243 | 152 | JWT true | `5b61fecce41985fe10b91fa434ab2eb06933b955cc4250aaf04dd65cea394d7b` |
+
+  Returned sources match the merged checkout byte for byte except the known
+  type-only `cad-intake.ts` erasure; both bundles contain the cache-point pin,
+  the `cacheBoundary` marking and the silent-window code. Zero active jobs
+  after publication. No migration, catalog change or frontend publication.
+
+Remaining: B (Konrad's plan gate, core and picked tools, Bob's picker up to
+eight), then the owner's own project turns read back against the
+[table above](#cache-points-2026-11-06).
