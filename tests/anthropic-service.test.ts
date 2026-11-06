@@ -189,7 +189,7 @@ test('the shared service keeps Claude off unless the ANTHROPIC_ENABLED code swit
   try {
     const shared = (file: string) => new URL(`../supabase/functions/_shared/${file}.ts`, import.meta.url)
     const asModule = (code: string) => 'data:text/javascript;base64,' + Buffer.from(ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString('base64')
-    const adapterSource = (await readFile(shared('anthropic-service'), 'utf8')).replace("'./schema-issues.ts'", JSON.stringify(shared('schema-issues').href))
+    const adapterSource = (await readFile(shared('anthropic-service'), 'utf8')).replace("'./schema-issues.ts'", JSON.stringify(shared('schema-issues').href)).replace("'./tool-schema-dedup.ts'", JSON.stringify(shared('tool-schema-dedup').href))
     assert.match(adapterSource, /export const ANTHROPIC_ENABLED = (true|false)\n/, 'one literal switch')
     const load = async (enabled: boolean) => {
       let source = await readFile(shared('openai-service'), 'utf8')

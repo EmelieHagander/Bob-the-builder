@@ -31,6 +31,7 @@ export const ANTHROPIC_ENABLED = true
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { OpenAIResponseItem } from './openai-content.ts'
 import { schemaIssues,safeSchemaPaths } from './schema-issues.ts'
+import { dedupSchema } from './tool-schema-dedup.ts'
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 // Pinned so a wire-shape change is a deliberate code edit.
@@ -233,7 +234,9 @@ export async function anthropicRequestBody(options: OpenAIServiceOptions, ctx: A
       // No strict tools on Claude: Bob's large tool schemas exceed its grammar
       // limit (live 400 "compiled grammar is too large", 2026-11-02 21:30).
       // Each tool keeps its full schema, and Bob's validators check every call.
-      input_schema: tool.function.parameters }))
+      // Owner decision 2026-11-06: repeated sub-schemas go once as $defs (measured
+      // 44,096 -> 34,561 tokens for Bob's five write tools, lossless).
+      input_schema: options.toolSchemaDedup === 1 ? dedupSchema(tool.function.parameters) as Json : tool.function.parameters }))
     const parallel = (options.aiDefinition?.providerParameters as Json | undefined)?.parallel_tool_calls
     const choice = options.tool_choice
     // Forced tool choice is rejected by current Claude models unless the

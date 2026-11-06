@@ -1752,3 +1752,41 @@ windows, image release after use and image descriptions.
 Remaining: an ordinary entry turn (descriptions, image release, ceiling) and
 an ordinary bed turn (Konrad's repaired edit and any cut-answer retry), with
 cost. No paid model run, full CI or owner-data correction was performed.
+
+<a id="tool-schema-dedup-2026-11-06"></a>
+### Tool schemas: the same block sent seven times — 2026-11-06
+
+**Measured (o200k, pinned manifest).** Konrad's 25 tool definitions are 30,227
+tokens, 73 % of which are five write schemas (`edit_construction_parts` 8,024,
+`save_construction_draft` 6,762, `change_construction_parameters` 4,268,
+`calculate_project` 1,824, `transition_legacy_drawing` 1,330). Merging the 31
+read tools would save only 0.6–1.6k per role start, so the owner chose to look
+at the write tools first.
+
+**Cause.** `edit_construction_parts` is 28,653 schema characters, and 72 % are
+copies: the schema builder inlines the same sub-schemas wherever they are used
+(the placement block seven times; the box/cylinder shape three times; the
+whole Solution edit schema inside a construction tool). Description text is
+only 2,551 characters. The same copies recur across the sibling write tools.
+
+**Measured with Claude's token counter (one-off, owner-authorized, ≈USD 0.01;
+a temporary count function was deployed in the project and deleted with its
+secret).** For the five write tools, inline 44,096 tokens → with shared `$defs`
+34,561 (−22 %); `edit_construction_parts` alone 14,907 → 11,150 (−25 %). Across
+the whole bench the wire schemas go from 210,378 to 185,188 characters.
+
+**Correction (source; not yet deployed).** `tool-schema-dedup.ts` rewrites a
+tool schema losslessly: every sub-schema that occurs at least twice is written
+once under `$defs` and referenced, larger blocks first, so a shared block can
+use smaller shared blocks. Only the Claude adapter applies it, and only for
+executions pinned `toolSchemaDedupVersion: 1` (new executions on a checkpointed
+job); validators and old pins keep the inline schema. Tests prove the round
+trip is identical for every bound tool, that the rewrite is idempotent, that
+missing or cyclic refs are refused, and that the wire request carries `$defs`
+only under the pin.
+
+Remaining: an ordinary bed turn with the pin (Konrad start should fall by about
+10k Claude tokens); then step B, offering the rarely used write tools only when
+the job needs them (`save_construction_draft` 12 % of jobs,
+`change_construction_parameters` 15 %, `calculate_project` 4 %,
+`transition_legacy_drawing` 0 %), and a slimmer `solution_edit`.
