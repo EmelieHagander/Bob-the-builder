@@ -30,9 +30,11 @@ export interface ContextAdapter {
   list(input: ListRequest, signal: AbortSignal): Promise<{ items: Item[]; next_cursor: string | null }>
   open(ref: string, signal: AbortSignal): Promise<Opened>
   refresh?(record:Opened,signal:AbortSignal):Promise<Opened|null>
+  /** Short selection descriptions for listed items that have none (owner decision 2026-11-06). */
+  describeMissing?(items: Item[], signal: AbortSignal): Promise<Item[]>
   current(ref: string, version: string, signal: AbortSignal): Promise<boolean>
 }
-export const CONTEXT_LIMITS = { calls: 12, batch: 4, images: 8, bytes: 16 * 1024 * 1024, timeoutMs: 12000 } as const
+export const CONTEXT_LIMITS = { calls: 12, batch: 4, images: 8, bytes: 16 * 1024 * 1024, timeoutMs: 12000, describeTimeoutMs: 40000 } as const
 
 /** One registry and one dispatcher per authorised turn. No storage/provider/SQL knowledge here. */
 export function createProjectContext(opts: {
@@ -56,12 +58,12 @@ export function createProjectContext(opts: {
   const delivered = new Map<string, Opened>()
   const metadataChanges=new Map<string,Item>()
   const timeoutMs = opts.timeoutMs ?? CONTEXT_LIMITS.timeoutMs
-  async function bounded<T>(run: (signal: AbortSignal) => Promise<T>, checkpointed=false): Promise<T> {
+  async function bounded<T>(run: (signal: AbortSignal) => Promise<T>, checkpointed=false, ms=timeoutMs): Promise<T> {
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
       return await Promise.race([run(controller.signal), new Promise<never>((_, reject) => {
-        timer = setTimeout(() => { controller.abort(); if(!checkpointed)reject(new Error('unavailable')) }, timeoutMs)
+        timer = setTimeout(() => { controller.abort(); if(!checkpointed)reject(new Error('unavailable')) }, ms)
       })])
     } finally { if (timer) clearTimeout(timer) }
   }
@@ -159,7 +161,14 @@ export function createProjectContext(opts: {
         if (typeof v.category !== 'string' || !registry.has(v.category)) return invalid()
         for (const k of ['query', 'area_id', 'after_id']) if (v[k] !== null && (typeof v[k] !== 'string' || (v[k] as string).length > 200)) return invalid()
         try {
-          const page = await bounded(signal => registry.get(v.category as string)!.list(v as ListRequest, signal),registry.get(v.category as string)!.checkpointed)
+          const adapter = registry.get(v.category as string)!
+          let page = await bounded(signal => adapter.list(v as ListRequest, signal),adapter.checkpointed)
+          // Descriptions are a selection aid: a slow or failed description
+          // leaves the listing usable without it.
+          if (adapter.describeMissing && page.items.some(item => item.description === undefined)) {
+            try { page = { ...page, items: await bounded(signal => adapter.describeMissing!(page.items, signal), adapter.checkpointed, CONTEXT_LIMITS.describeTimeoutMs) } }
+            catch (error) { rethrowContinuation(error) }
+          }
           if (!await opts.hasAccess()) return { status: 'denied', saved: false }
           return { status: page.items.length ? 'ok' : 'empty', mode: 'metadata', saved: false, ...page, truncated: page.next_cursor !== null }
         } catch (error) { rethrowContinuation(error); partial = true; return { status: 'unavailable', mode: 'metadata', saved: false } }
@@ -224,7 +233,7 @@ export function createProjectContext(opts: {
         { type: 'text', text: opts.imageEvidenceInstruction??(()=>{throw new Error('ai_prompt_missing: images.evidence-intro')})() },
         ...(pending.some(r => r.item.source_kind === 'ai_generated' || ['instruction', 'proposal'].includes(String(r.item.purpose)))
           ? [{ type: 'text' as const, text:[opts.reviewLabel??(()=>{throw new Error('ai_prompt_missing: images.review-label')})(),opts.reviewInstruction??(()=>{throw new Error('ai_prompt_missing: drawing-review.instruction')})()].join('\n') }] : []),
-        ...pending.flatMap(r => [{ type: 'text' as const, text: JSON.stringify({ ref: r.item.ref, ...(opts.chatPreviews || opts.imageContextRefs ? { context_ref: stageImageRef(r.image.image_url) } : {}), title: r.item.title, version: r.version,
+        ...pending.flatMap(r => [{ type: 'text' as const, text: JSON.stringify({ ref: r.item.ref, ...(opts.chatPreviews || opts.imageContextRefs ? { context_ref: stageImageRef(r.image.image_url) } : {}), title: r.item.title, ...(r.item.description !== undefined ? { description: r.item.description } : {}), version: r.version,
           project_id: r.item.project_id, purpose: r.item.purpose, source_kind: r.item.source_kind, artifact_revision:r.item.artifact_revision,current_revision:r.item.current_revision,historical:r.item.historical,archived:r.item.archived,view:r.item.view,source_state:r.item.source_state,source_reasons:r.item.source_reasons, links: r.item.links, links_truncated: r.item.links_truncated }) }, r.image]),
       ] }]
     },

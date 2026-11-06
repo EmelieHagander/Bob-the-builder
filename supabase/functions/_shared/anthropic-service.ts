@@ -37,6 +37,8 @@ const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const ANTHROPIC_VERSION = '2023-06-01'
 const ANTHROPIC_BETA = 'thinking-binding-controls-2026-08-01'
 const MAX_RETRIES = 2
+/** Answer text or thinking arrived this recently when our deadline closed. */
+const CLAUDE_ACTIVE_STREAM_MS = 10_000
 // 5-minute cache writes cost 1.25x the base input price.
 const CACHE_WRITE_MULTIPLIER = 1.25
 
@@ -252,7 +254,7 @@ export async function anthropicRequestBody(options: OpenAIServiceOptions, ctx: A
 }
 
 /** Collect one streamed Messages response into the final message object. */
-export async function collectStream(response: Response, onEvent?: (type: string) => void): Promise<Json> {
+export async function collectStream(response: Response, onEvent?: (type: string, message: Json) => void): Promise<Json> {
   if (!response.body) throw new Error('anthropic_stream_missing')
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
   const message: Json = { content: [] as Block[], usage: {} }
@@ -301,7 +303,7 @@ export async function collectStream(response: Response, onEvent?: (type: string)
       const data = frame.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trim()).join('')
       if (data) {
         const event = JSON.parse(data) as Json
-        onEvent?.(String(event.type ?? 'unknown'))
+        onEvent?.(String(event.type ?? 'unknown'), message)
         handle(event)
       }
     }
@@ -351,7 +353,8 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
   let message: Json
   let response: Response | null = null
   const startedAt = Date.now()
-  let events = 0, firstEventAt: number | null = null, lastEventAt: number | null = null
+  let events = 0, firstEventAt: number | null = null, lastEventAt: number | null = null, lastOutputAt: number | null = null
+  let streamed: Json | null = null
   try {
     for (let attempt = 0; ; attempt++) {
       response = await doFetch(ANTHROPIC_URL, { method: 'POST', signal: controller.signal, body: JSON.stringify(body),
@@ -368,11 +371,13 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
       await response.body?.cancel()
       await sleep(retryDelayMs(response, attempt))
     }
-    message = await collectStream(response!, () => {
+    message = await collectStream(response!, (type, partial) => {
       const now = Date.now()
+      streamed = partial
       events++
       if (firstEventAt === null) firstEventAt = now
       lastEventAt = now
+      if (type === 'content_block_delta') lastOutputAt = now
     })
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Request failed'
@@ -386,6 +391,21 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
       request_id: response?.headers.get('request-id') ?? null,
       error: msg.slice(0, 120),
     }))
+    // Our own deadline closed while the answer was still streaming: it was too
+    // long for one window. Resending the same request repeats that (bed,
+    // 2026-11-06: twice 120 s, nothing saved), so callers get a distinct code.
+    const cut = controller.signal.aborted && lastOutputAt !== null && Date.now() - lastOutputAt <= CLAUDE_ACTIVE_STREAM_MS
+    // A request that reached the provider may be billed. Record it with its
+    // known input and an unknown cost rather than leave the ledger silent.
+    if (response?.ok) {
+      const raw = ((streamed as Json | null)?.usage ?? {}) as Json
+      const read = Number(raw.cache_read_input_tokens ?? 0)
+      const input = Number(raw.input_tokens ?? 0) + Number(raw.cache_creation_input_tokens ?? 0) + read
+      try { await ctx.log({ model, inputTokens: input, cachedInputTokens: read, outputTokens: 0, reasoningTokens: 0, totalTokens: input,
+        costUsd: null, success: false, errorCode: cut ? 'model_output_window' : controller.signal.aborted ? 'local_timeout' : 'network_or_stream', latencyMs: Date.now() - startedAt }) }
+      catch { /* the ledger never decides the call outcome */ }
+    }
+    if (cut) return { ...fail<T>(model, 'model_output_window'), failure: { code: 'model_output_window' } }
     return fail(model, `Network error: ${msg}`)
   } finally { clearTimeout(timer) }
 

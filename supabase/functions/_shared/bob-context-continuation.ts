@@ -6,6 +6,7 @@ import { saveReceipt } from './bob-workers.ts'
 import { buildBobRequest, type BobImageInputCounts } from './bob-complete-request.ts'
 import { readResponseItems } from './openai-content.ts'
 import { STAGE_CONTEXT_TOOL, parseStageContextNote, prepareStageContext, type StageContextNote } from './bob-stage-context.ts'
+import { releaseUsedImages } from './bob-image-release.ts'
 import { bobResultPage, projectBobResult, prepareBobResult, selectBobResultWindow, supersededBobResult, BOB_RESULT_PAGE_TOKENS, type BobArchivedOperation } from './bob-result-references.ts'
 
 type Message = NonNullable<OpenAIServiceOptions['messages']>[number]
@@ -31,6 +32,7 @@ export interface BobContextContinuationState {
   imageInputDedupVersion?: 1;
   stageContextVersion?: 1;
   workerStageContextVersion?: 1;
+  imageReleaseVersion?: 1;
   chains: [string, Omit<Chain, 'operations'> & { operations: [string, Operation][] }][];
 }
 const HISTORY_TOOL = 'get_work_history'
@@ -223,6 +225,8 @@ export function createBobContextContinuation(opts: {
   /** New worker chains use the same exact archive and explicit stage lifecycle. */
   workerStageContextVersion?: 1
   imageSource?: (url: string) => string | undefined
+  /** New executions only: opened pixels leave after use (owner decision 2026-11-06). */
+  imageReleaseVersion?: 1
   onInternalTool?:(input:{name:string;status:string;callId:string;role:string;ms:number})=>Promise<void>
   /** Pinned per execution. Older results stay whole, newest first, up to this
    * many tokens before they become references. A fixed two-exchange window
@@ -264,11 +268,13 @@ export function createBobContextContinuation(opts: {
   if (opts.imageInputDedupVersion !== undefined && opts.imageInputDedupVersion !== 1) throw new Error('image_input_dedup_version_invalid')
   if (opts.stageContextVersion !== undefined && (opts.stageContextVersion !== 1 || opts.mainResultReferences !== 1 || opts.imageInputDedupVersion !== 1)) throw new Error('stage_context_version_invalid')
   if (opts.workerStageContextVersion !== undefined && (opts.workerStageContextVersion !== 1 || opts.stageContextVersion !== 1)) throw new Error('worker_stage_context_version_invalid')
+  if (opts.imageReleaseVersion !== undefined && (opts.imageReleaseVersion !== 1 || opts.stageContextVersion !== 1 || !opts.imageSource)) throw new Error('image_release_version_invalid')
   const exportState = (): BobContextContinuationState => clone({ version: 1, strategyVersion: opts.version ?? 0,
     ...(opts.mainResultReferences === 1 ? { resultReferenceVersion: 1 as const } : {}),
     ...(opts.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
     ...(opts.stageContextVersion === 1 ? { stageContextVersion: 1 as const } : {}),
     ...(opts.workerStageContextVersion === 1 ? { workerStageContextVersion: 1 as const } : {}),
+    ...(opts.imageReleaseVersion === 1 ? { imageReleaseVersion: 1 as const } : {}),
     chains: [...chains].map(([id, chain]) => [id, { ...chain, operations: [...chain.operations] }]),
   })
   const restoreState = (state: BobContextContinuationState): void => {
@@ -282,7 +288,7 @@ export function createBobContextContinuation(opts: {
     const messages = (value: unknown): boolean => Array.isArray(value) && value.every(message)
     const natural = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0
     if (!state || state.version !== 1 || state.strategyVersion !== (opts.version ?? 0)
-      || state.resultReferenceVersion !== opts.mainResultReferences || state.imageInputDedupVersion !== opts.imageInputDedupVersion || state.stageContextVersion !== opts.stageContextVersion || state.workerStageContextVersion !== opts.workerStageContextVersion || !Array.isArray(state.chains)
+      || state.resultReferenceVersion !== opts.mainResultReferences || state.imageInputDedupVersion !== opts.imageInputDedupVersion || state.stageContextVersion !== opts.stageContextVersion || state.workerStageContextVersion !== opts.workerStageContextVersion || state.imageReleaseVersion !== opts.imageReleaseVersion || !Array.isArray(state.chains)
       || new Set(state.chains.map(entry => Array.isArray(entry) ? entry[0] : null)).size !== state.chains.length) throw new Error('context_checkpoint_invalid')
     const restored = new Map<string, Chain>()
     for (const entry of state.chains) {
@@ -629,6 +635,16 @@ export function createBobContextContinuation(opts: {
         options = { ...rest, messages: [...clone(chain.seed), ...clone(chain.groups.flat())] }
       }
       let imageInputs: BobImageInputCounts | undefined
+      if (native && opts.imageReleaseVersion === 1) {
+        const release = releaseUsedImages({ groups: chain.groups, imageSource: opts.imageSource!, saved: id => {
+          const operation = chain.operations.get(id)
+          if (!operation) return false
+          const status = statusOf(operation)
+          return status.status === 'saved' || status.saved === true
+        } })
+        chain.groups = release.groups
+        if (release.released) console.log('[Bob image release]', JSON.stringify({ role: options.catalogRoleKey ?? options.functionName, released: release.released }))
+      }
       if (native) options = buildBobRequest(options, {
         seed: chain.seed, history: chain.groups.flat(), historicalImages: chain.historicalImages,
         ...(opts.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),

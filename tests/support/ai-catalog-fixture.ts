@@ -701,6 +701,11 @@ for(const migration of migrations){
   preToolPickerRows=structuredClone(seed);preToolPickerVersions=new Map(versions)
   for(const addition of JSON.parse(toolPicker[1])){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-tool-picker-v1'}});versions.set(addition.key,1)}
  }
+ const imageDescriber=source.match(/\$image_describer_additions\$([\s\S]+?)\$image_describer_additions\$/)
+ if(imageDescriber)for(const addition of JSON.parse(imageDescriber[1])){
+  seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-image-describer-v1'}})
+  versions.set(addition.key,1)
+ }
  const completionGate=source.match(/\$completion_gate_additions\$([\s\S]+?)\$completion_gate_additions\$/)
  if(completionGate)for(const addition of JSON.parse(completionGate[1])){
   seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-completion-gate-v1'}})

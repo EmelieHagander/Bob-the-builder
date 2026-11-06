@@ -49,8 +49,8 @@ import { createCadGuideTransport, createCadTransport } from './cad-transport.ts'
 import { createMaterialCatalogReader, materialFindResult, parseMaterialShortlist, shortlistLine, shortlistRef } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
-import { createProjectContext, type Opened } from './project-context/dispatcher.ts'
-import { createMediaAdapter, resolveMediaImage, resolveMediaImageFile, type ProviderImageFiles } from './project-context/media.ts'
+import { createProjectContext, type Item, type Opened } from './project-context/dispatcher.ts'
+import { createMediaAdapter, imageDescriptionText, resolveMediaImage, resolveMediaImageFile, type ProviderImageFiles } from './project-context/media.ts'
 import { prepareChatImages } from './project-context/chat-images.ts'
 import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
@@ -312,17 +312,35 @@ export async function answerWithOpenAi(opts: {
   let mainContextEpoch = 0
   const callModel = (requested: OpenAIServiceOptions, beforeDispatch?: () => Promise<void>) =>
     contextContinuation ? contextContinuation.call(requested, beforeDispatch) : dispatchModel(requested, beforeDispatch)
+  // Owner decision 2026-11-06: a listed image without a description gets one
+  // short description from the smallest vision model, once per image version.
+  const describeListedImage = (listed: Item, open: (ref: string, signal: AbortSignal) => Promise<Opened>, signal: AbortSignal) =>
+    memo('media:auto-describe', { ref: listed.ref, updated_at: listed.updated_at ?? null }, async () => {
+      const opened = await open(listed.ref, signal)
+      const response = await dispatchModel({ app: 'bob', coworkerId: 'bob', functionName: 'image-describer', aiFunction: 'image-describer', module: 'global', userId: opts.userId,
+        catalogRoleKey: 'image-describer', catalogSchemaKey: 'bob_image_description', schemaName: 'bob_image_description',
+        messages: [{ role: 'user', content: [{ type: 'text', text: JSON.stringify({ title: opened.item.title, purpose: opened.item.purpose ?? null, source_kind: opened.item.source_kind ?? null }) }, opened.image] }],
+        maxOutputTokens: 300, timeoutMs: 30000 })
+      const text = imageDescriptionText(response)
+      if (text) await cacheImageDescription!(opened, text)
+      return text
+    })
   const mediaAdapter = () => {
-    const adapter = createMediaAdapter(opts.projectId, mediaTransport, true)
+    let wrappedOpen: ((ref: string, signal: AbortSignal) => Promise<Opened>) | undefined
+    const autoDescribe = execution.imageDescriptionVersion === 1 && cacheImageDescription
+      ? (listed: Item, signal: AbortSignal) => describeListedImage(listed, wrappedOpen!, signal) : undefined
+    const adapter = createMediaAdapter(opts.projectId, mediaTransport, true, autoDescribe)
+    const open = async (...args: Parameters<typeof adapter.open>) => {
+      const opened = await memo('media:open', args[0], () => adapter.open(...args),0,args[1])
+      // Rebuild the resolver registry from compact checkpoints on every resume.
+      if (opened.image.image_url.startsWith('private-image:')) imageRefs.set(opened.image.image_url, opened)
+      return opened
+    }
+    wrappedOpen = open
     return { ...adapter,checkpointed:!!journal,
       count: (signal: AbortSignal) => memo('media:count', {}, () => adapter.count(signal),0,signal),
       list: (...args: Parameters<typeof adapter.list>) => memo('media:list', args[0], () => adapter.list(...args),0,args[1]),
-      open: async (...args: Parameters<typeof adapter.open>) => {
-        const opened = await memo('media:open', args[0], () => adapter.open(...args),0,args[1])
-        // Rebuild the resolver registry from compact checkpoints on every resume.
-        if (opened.image.image_url.startsWith('private-image:')) imageRefs.set(opened.image.image_url, opened)
-        return opened
-      },
+      open,
       // current() remains live, including for already-replayed image evidence;
       // a replay re-checks every opened image per step within milliseconds.
       current: checkpoint ? adapter.current : reuseFresh(adapter.current, unchanged => unchanged, (ref, expected) => ref + '\u0000' + expected),
@@ -382,7 +400,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -404,6 +422,10 @@ export async function answerWithOpenAi(opts: {
       ...(checkpoint ? { groundingReadOrderVersion: 1 as const, modelDeadlineVersion: 1 as const } : {}),
       ...bobCompleteRequestVersions(!!checkpoint, contract),
       ...bobStageContextVersion(!!checkpoint, contract),
+      // Opened pixels leave after use (owner decision 2026-11-06). Jobs without this pin keep every opened image.
+      ...(bobStageContextVersion(!!checkpoint, contract).stageContextVersion === 1 ? { imageReleaseVersion: 1 as const } : {}),
+      // Listed images get one short description (owner decision 2026-11-06). Jobs without this pin describe nothing.
+      ...(checkpoint && aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.image-describer') ? { imageDescriptionVersion: 1 as const } : {}),
       // Window 2 (2026-10-29): superseded repeat reads leave first; the latest result per record stays whole.
       ...(checkpoint && contract.result_reference_version === 1 ? { resultWindowVersion: contract.result_window_version === 2 ? 2 as const : 1 as const } : {}),
       // Owner-set spending stop, pinned when the job starts (2026-10-20).
@@ -452,6 +474,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.imageInputDedupVersion !== undefined && (execution.imageInputDedupVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('image_input_dedup_version_invalid')
   if (execution.stageContextVersion !== undefined && (execution.stageContextVersion !== 1 || execution.imageInputDedupVersion !== 1 || execution.resultReferenceVersion !== 1)) throw new Error('stage_context_version_invalid')
   if (execution.workerStageContextVersion !== undefined && (execution.workerStageContextVersion !== 1 || execution.stageContextVersion !== 1)) throw new Error('worker_stage_context_version_invalid')
+  if (execution.imageReleaseVersion !== undefined && (execution.imageReleaseVersion !== 1 || execution.stageContextVersion !== 1)) throw new Error('image_release_version_invalid')
   if(execution.continuedWorkVersion!==undefined&&execution.continuedWorkVersion!==1)throw Error('continued_work_version_invalid')
   if(execution.solutionWorkVersion!==undefined&&execution.solutionWorkVersion!==1)throw new Error('solution_work_version_invalid')
   if(execution.operationPathsVersion!==undefined&&![1,2].includes(execution.operationPathsVersion))throw new Error('operation_paths_version_invalid')
@@ -486,6 +509,7 @@ export async function answerWithOpenAi(opts: {
     ...(execution.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
     ...(execution.workerStageContextVersion === 1 ? { workerStageContextVersion: 1 as const } : {}),
     ...(execution.stageContextVersion === 1 ? { stageContextVersion: 1 as const, imageSource: (url: string) => imageRefs.has(url) ? stageImageRef(url) : undefined } : {}),
+    ...(execution.imageReleaseVersion === 1 ? { imageReleaseVersion: 1 as const } : {}),
     ...(execution.resultWindowVersion === 1 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS } : {}),
     ...(execution.resultWindowVersion === 2 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS, resultWindowVersion: 2 as const } : {}),
     ...(execution.constructionPageVersion === 1 ? { literalResultTokens: { [CONSTRUCTION_VIEW_TOOL.function.name]: BOB_CONSTRUCTION_RESULT_TOKENS } } : {}),
@@ -520,6 +544,13 @@ export async function answerWithOpenAi(opts: {
   // Prompt tiers (2026-10-30): one key per project, so every thread of the project shares the fixed start and the locked snapshot.
   promptCacheKey = 'bob-ask-' + (await fingerprint(execution.promptTiersVersion === 1 ? { v: 2, project: opts.projectId } : { v: 1, scope: threadId ?? execution.id })).slice(0, 32)
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
+  const cacheImageDescription = claimedServer ? (record: Opened, description: string) => memo('media:describe', { ref: record.item.ref, version: record.version, description }, async () => {
+    const { error } = await internal.rpc('bob_describe_image', { ...binding, p_user: opts.userId,
+      p_media: record.source.recordId, p_version: record.version, p_updated_at: record.source.updatedAt, p_description: description,
+    }).abortSignal(AbortSignal.timeout(10000))
+    if (error) throw new Error('description_unavailable')
+    return true
+  }) : undefined
   const workpads: AgentWorkpads | undefined = execution.workpadVersion === 1 && claimedServer ? {
     load: async (agent, location): Promise<WorkpadSnapshot> => {
       const current = contract.workpad_freshness_version === 1
@@ -618,13 +649,7 @@ export async function answerWithOpenAi(opts: {
     imageEvidenceInstruction: aiCatalog.text('images.evidence-intro'), reviewLabel: aiCatalog.text('images.review-label'),
     adapters: [mediaAdapter(),...(execution.operationPathsVersion===2?[drawingAdapter()]:[]),...(execution.solutionWorkVersion===1?[drawingAdapter(true)]:[])],
     hasAccess, sources: lookup.sources,
-    ...(claimedServer ? { describe: (record: Opened, description: string) => memo('media:describe', { ref: record.item.ref, version: record.version, description }, async () => {
-      const { error } = await internal.rpc('bob_describe_image', { ...binding, p_user: opts.userId,
-        p_media: record.source.recordId, p_version: record.version, p_updated_at: record.source.updatedAt, p_description: description,
-      }).abortSignal(AbortSignal.timeout(10000))
-      if (error) throw new Error('description_unavailable')
-      return true
-    }) } : {}),
+    ...(cacheImageDescription ? { describe: cacheImageDescription } : {}),
   })
   let attachedImageIds:string[]=[]
   if (!opts.background?.drawingRequestId) {

@@ -157,7 +157,8 @@ export async function prepareWorkingContext(opts: {
             currentRequest: scopedPointers || gistOnly ? { text: state.recent.at(-1)!.text } : state.recent.at(-1),
             ...(scopedPointers ? { availableSequences } : {}), memoryPolicy: BRIEF_TOKEN_POLICY } : {}),
           ...(validationFeedback ? { validationFeedback } : {}) }) }],
-        maxOutputTokens: 3000, timeoutMs: Math.min(30000, opts.deadline - Date.now()),
+        // Claude streams ~90-130 tokens/s; a full 3,000-token brief needs up to ~38 s.
+        maxOutputTokens: 3000, timeoutMs: Math.min(45000, opts.deadline - Date.now()),
       })
       if (!response.success || response.toolCalls?.length) {
         if (gistOnly && response.error !== 'turn_budget_exhausted') {

@@ -1579,3 +1579,140 @@ Remaining: one ordinary bed turn to show Konrad's repaired edit, the
 Rita/Mattias follow-up and the cost. Entry's image load and context ceiling (C2)
 is the next separate increment. No paid model run, full CI, catalog publication
 or owner-data correction was performed.
+
+<a id="claude-window-cut-2026-11-06"></a>
+### Bed run after the edit repair: Konrad's answer outgrew the Claude window — 2026-11-06
+
+Read-only readback of the owner's bed turn at 15:59 UTC (job `32eef129`, run
+`a75d02e0`): 7.8 minutes, 20 model calls, USD 1.69 known cost, `saved` with one
+record (a catalog fastener). The construction is unchanged and Rita/Mattias
+were not called. The edit repair (#484) was never reached.
+
+- Konrad read the construction 11 times (input 71k → 113k), added the fastener,
+  then his next request was aborted by our own timer twice at exactly 120 s
+  (`request_aborted`, attempt 0 and the uncertain-billing resend). The worker
+  returned `unavailable`, and the turn's structure stop refused Bob's two
+  narrower retries. Both aborted requests are absent from `ai_usage_events`;
+  their cost is unknown (execution events mark them unpriced).
+- Claude calls stream synchronously inside one worker segment
+  (`CLAUDE_BACKGROUND_TIMEOUT_MS` 120 s, at least a 90 s window), while
+  unlimited Bob work sends the model's own `max_tokens` (128,000). A local
+  timeout during an active stream was reported as `Network error` and resent
+  identically.
+- A fixed output cap derived from the window was considered and rejected:
+  execution events show long Claude outputs streaming at 91–154 tokens/s and
+  successful outputs up to 16,618 tokens (112.6 s). A cap at a conservative rate
+  would have cut about 25 successful calls.
+
+**Correction (source; not yet deployed).**
+
+- The Claude adapter reports a local deadline that closes while answer text or
+  thinking is still streaming (last delta within 10 s) as
+  `model_output_window`, not as a lost connection. A stalled or never-started
+  stream keeps the existing `Network error` and its single resend.
+- Bob's main loop and the worker loop treat `model_output_window` and
+  `model_output_limit` as a cut answer that ran nothing: the same pending
+  request is sent once more with one short code-owned note to continue with one
+  change per tool call. A second cut answer stops as before. Other failures are
+  unchanged. The shortened-segment yield (`segment_wall`) still runs first.
+- The CAD design/review failure messages and execution-metric failure kinds
+  include the new code.
+- Tests: a streaming fixture returns `model_output_window` (the previous
+  adapter returns `Network error: aborted`); full-turn fixtures show Konrad and
+  Bob each continuing once with the note, a second cut stopping Konrad without a
+  third request, and other failures stopping without the note. With the retry
+  disabled the three loop cases fail. 133 of 134 focused tests across adapter,
+  turn, worker, CAD, budget, metrics, checkpoint and Claude continuation pass;
+  the remaining `bob-final-answer` spending-stop readback case fails identically
+  on unchanged main. All Edge entrypoints pass Deno type checking with the
+  temporary local import map.
+
+**Similar risks found and corrected in the same change.**
+
+- `plan-compiler` had at most 40 s; earlier compiled plans reached 5,402 output
+  tokens (p90 4,535), about 60 s at observed Claude speeds. Its window is now up
+  to 120 s, still bounded by the caller's deadline. The reviewer (max 1,740
+  tokens, 30 s) is unchanged.
+- Working-context and orientation summaries (3,000-token design, Claude
+  outputs up to 2,646 tokens in 17.7–22.7 s) now have 45 s instead of 30 s. The
+  memory stair (max 1,314 tokens) keeps 30 s.
+- An aborted Claude request that reached the provider is now written to the
+  usage ledger with its known input tokens, zero recorded output and
+  `cost_usd: null`, with error code `model_output_window`, `local_timeout` or
+  `network_or_stream`. No ledger trigger or Bob runtime reader is affected;
+  failed rows already existed.
+
+**Remaining decision.** A first cut answer still spends its whole window (up to
+120 s) before the note. Longer Claude segments would let long answers finish,
+but depend on the Supabase plan's Edge wall clock (the timing module assumes
+150 s); the plan could not be read with the session's access.
+
+Remaining: Edge deploy (ask-bob + bob-worker) with the owner's OK, then one
+ordinary bed turn. No paid model run, full CI, catalog change or owner-data
+correction was performed.
+
+<a id="image-lifecycle-2026-11-06"></a>
+### Image lifecycle: look when needed, release after use — 2026-11-06
+
+**Owner decision.** Images keep their full resolution. Bob first sees a short
+description, opens only the images he needs, and does not keep pixels beyond
+their use; the description stays and he can reopen. Descriptions are made once
+per image by the smallest vision model (Haiku tier), kept short.
+
+**Measured cause (entry run 88761ca2).** One `open_project_item` delivered four
+images (mockup v4 and three phone photos, +30.3k provider tokens); reviewing
+mockup v5 added +14.2k. Every opened image then stayed in each later request:
+pixels left only through `advance_work_stage`, which was never used.
+`generate_project_image` already passes `reference_image_ids` straight to the
+image model, so opening references is not needed to generate. Of 48 ready
+project images, 6 have a cached description; the existing
+`describe_project_image` cache is only written when Bob chooses to after viewing.
+
+**Step 1: release after use (source; not yet deployed).** New execution
+identities with the stage contract pin `imageReleaseVersion: 1`. Before each
+native request the continuation replaces the pixels of an opened private image
+with a short text marker once a result was saved after the model saw it, or at
+the latest after three of its answers. The image's ref/title text stays and the
+marker names `open_project_item` for reopening. Seed messages (the owner's
+current message and its photos), tool results, native answers and unknown or
+public images are unchanged. The pin is part of the saved continuation state;
+jobs without it keep every opened image. Releases are logged content-free as
+`[Bob image release]`.
+
+Tests: rule cases (in use, save in the delivery group, later save, three
+answers, idempotence, untouched kinds), a native chain through a worker restart
+where the saved mockup releases mockup v4 and the window photo while the
+owner's photo stays (old pin: unchanged), and pin/state validation. Existing
+continuation, image, stage, drawing-preview, vision and turn suites pass except
+cases that fail identically on unchanged main. Both Edge entrypoints pass Deno
+type checking.
+
+**Step 2: descriptions first (source; not yet deployed; owner chose Haiku and
+option C).** A new read-only catalog role `image-describer` (profile on the
+`nano` tier, production binding `claude-haiku-5-5`, 300 output tokens, 30 s,
+low effort) writes one Swedish phrase of at most 120 characters: subject, side,
+viewpoint and build state. A dimension appears only when written in the image
+itself; sizes are never estimated and people never identified. Publication
+`20261106180000_bob_image_describer_catalog.sql` adds six definitions and the
+function setting; it refuses a second run.
+
+- New executions pin `imageDescriptionVersion: 1` when the manifest contains the
+  role. When Bob lists images, up to six undescribed listed images per listing
+  are described after the metadata read, within 40 s, and stored through the
+  existing claim-fenced `bob_describe_image` cache (per owner and image
+  version; a changed image never shows an old description). A failed or slow
+  description leaves the listing usable without it. There is no separate
+  backfill: older images are described when first listed (about USD 0.002 each,
+  estimated).
+- An opened image carries its current description in the item and in the image
+  text, so the description remains after step 1 releases the pixels.
+- Tests: role shape and contract wording; the DB publication adds only the six
+  keys and the setting and refuses a rerun; the fixture matches the migration
+  for every new key (the fixture-replay test still fails on unchanged main for
+  older keys); description parsing; batch limit, reuse, failure and
+  continuation handling; opened-image description; dispatcher listing with a
+  failing describer and the carrier text. Both Bob Edge entrypoints pass Deno
+  type checking.
+
+Release order: publish ask-bob and bob-worker first, then apply the catalog
+migration (activation). Jobs pinned before it describe nothing.
