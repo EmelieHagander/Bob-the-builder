@@ -1264,3 +1264,40 @@ activation and measure stage transitions, exact displayed images, input growth
 and preservation of unresolved constraints. C1–C4 and whole-run CPU/cost
 acceptance remain open. Documentation reviewed directly using Archie's
 placement/State rules; no separate reviewer agent was run.
+
+## Stage tool card correction — 2026-11-06
+
+The first stage-enabled entrance job `e5e410f3-24b8-4c51-be63-92688543315f`
+(08:03:38–08:03:46 UTC) failed before its main model call. The picker succeeded,
+but the main request uses lazy catalog resolution with `card:true`.
+Published `tools.advance_work_stage` v1 lacked `card_description`, producing
+`ai_contract_missing: tools.advance_work_stage card` in a local reproduction;
+the job surfaced `ai_unavailable`. No main-model or project-write result was
+produced. The earlier 07:46 entrance job retained its old manifest, saved
+Solution v22 and mockup v4, then ended partial at 96,771 input tokens. It does
+not measure the new stage handoff.
+
+[PR #480](https://github.com/EmelieHagander/Bob-the-builder/pull/480) adds only the
+missing card through `scripts/publish-bob-stage-context-card.sql`. Existing
+versions are immutable; the publication refuses incompatible or independently
+changed definitions. Its exact SQL passed real catalog activation in a rolled
+back transaction before application to `yuobtgoidmmmwfqenkau`. Managed ledger
+`20261106084847`, name `bob_stage_context_card`, activated v2 at
+08:48:47 UTC. Readback confirms active ID
+`1ac8d5b5-78a9-4ff9-8507-1f24d95059aa`, retained `stage_context_version:1`,
+and an exact definition match to v1 after removing `card_description`.
+Content and flow are unchanged. All other 401 catalog heads match the
+pre-publication snapshot; original v1 remains unchanged.
+
+The fixture applies the additive publication. A new regression exercises
+`createBobContextContinuation` and actual `applyCatalogModelOptions` with
+lazy main settings: the missing card must reject before dispatch, and the
+corrected card must resolve through a stage handoff while retaining uncertainty.
+**This new Node test is authored and reviewed but not executed:** the local
+executor became unavailable. Earlier passing tests did not cover this path.
+No new Edge/frontend deployment, paid model/CAD call or CI run was started.
+
+Next acceptance requires a new job created after 08:48:47 UTC; replaying an
+old pinned manifest does not establish the correction. Startup, actual image
+delivery and bounded context across model-selected stage transitions still need
+that ordinary run. C1–C4 remain open.
