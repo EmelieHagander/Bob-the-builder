@@ -1790,3 +1790,34 @@ Remaining: an ordinary bed turn with the pin (Konrad start should fall by about
 the job needs them (`save_construction_draft` 12 % of jobs,
 `change_construction_parameters` 15 %, `calculate_project` 4 %,
 `transition_legacy_drawing` 0 %), and a slimmer `solution_edit`.
+
+<a id="publication-488-2026-11-06"></a>
+#### Hosted publication of #488 — 2026-11-06, 21:43 UTC
+
+The owner authorized publication of the tool-schema deduplication.
+
+- #488 is merged at `0fba851737b41af4eb64ff952c7df856f6b2012a`; its tree
+  `42c2c1cee062fb6b0369a6637717f40d204d1564` equals the tested branch tree.
+  Safety branch `save/bob-before-schema-dedup-2026-11-06` retains the previous
+  published source `ec0fb3d96d29e68921c37c35a3ab12467fc49f27`.
+- Preflight: zero active Bob jobs; the running bundles were the 19:47 ones
+  (bob-worker `9168dbbb…`, ask-bob `106a7955…`; their version numbers had
+  advanced to 209/241 during that same publication without a content change).
+- Published from the merged checkout (Supabase CLI 2.117.0, `--use-api`,
+  worker first):
+
+| Consumer | Version | Files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 210 | 150 | Existing private job capability, JWT false | `8f0d4654d13b4c810e5bea9a14dd87ee3c65a5b8cf4f144c9805fb2a582628a2` |
+| ask-bob | 242 | 152 | JWT true | `f5d1f732b5a7a6add610e5f929a677625e65ce29f728ea450253dd9c99d97276` |
+
+  Returned sources match the merged checkout byte for byte except the known
+  type-only `cad-intake.ts` erasure; both bundles contain the dedup module and
+  the execution pin. Zero active jobs after publication. No migration, catalog
+  change or frontend publication.
+
+Remaining: ordinary entry and bed turns measure, against the
+[baseline](#context-envelope-2026-11-05) and today's per-role figures (Bob
+start 28.2k, Konrad 57.5k, cache 65 % / 83 %), the combined effect of the
+19:47 and 21:43 publications: image release and descriptions, the cut-answer
+retry, and Konrad's start input (expected about 10k Claude tokens lower).
