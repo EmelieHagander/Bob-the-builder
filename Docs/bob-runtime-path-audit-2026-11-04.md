@@ -1716,3 +1716,39 @@ function setting; it refuses a second run.
 
 Release order: publish ask-bob and bob-worker first, then apply the catalog
 migration (activation). Jobs pinned before it describe nothing.
+
+<a id="publication-486-2026-11-06"></a>
+#### Hosted publication of #486 — 2026-11-06, 19:47 UTC
+
+The owner authorized publication of the cut-answer retry, fitted helper
+windows, image release after use and image descriptions.
+
+- #486 is merged at `af31e04e28559c14a76672eb20356ae64b3e7219`; its tree
+  `3518c88da28677beb5932f179fe5eb23af76d691` equals the tested branch tree.
+  Safety branch `save/bob-before-window-images-2026-11-06` retains the previous
+  published source `667e5dfc395ce1c2cef7dcb3e5e6abc100d03061`.
+- Preflight: zero active Bob jobs; running versions exactly bob-worker v206 /
+  ask-bob v238; none of the describer keys or its function setting existed.
+- Edge code published first from the merged checkout (Supabase CLI 2.117.0,
+  `--use-api`, worker first):
+
+| Consumer | Version | Files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 207 | 149 | Existing private job capability, JWT false | `9168dbbb1ee3577b6a1205fb5eb8a22e9f1b6a8f0311ed5d16a1e38eb6bce19f` |
+| ask-bob | 239 | 151 | JWT true | `106a7955a1c89d07e6732303030760e3f7f3b55f10d5ccd6b66f9414ae75b543` |
+
+  Returned sources match the merged checkout byte for byte except the known
+  type-only `cad-intake.ts` erasure; both bundles contain the new adapter code,
+  retry note, image release and description parser.
+- Catalog activation afterwards: `20261106180000_bob_image_describer_catalog.sql`
+  applied under hosted ledger version `20261106194717`
+  (`bob_image_describer_catalog`). Six definitions are active at version 1
+  with publication `bob-image-describer-v1`, and their content and definitions
+  equal the repository migration; the `image-describer` function setting is
+  enabled at `nano`; `tier.nano` remains `claude-haiku-5-5`.
+- Zero active Bob jobs after publication. No frontend publication was needed.
+  New jobs adopt the pins; existing manifests and jobs keep their behaviour.
+
+Remaining: an ordinary entry turn (descriptions, image release, ceiling) and
+an ordinary bed turn (Konrad's repaired edit and any cut-answer retry), with
+cost. No paid model run, full CI or owner-data correction was performed.
