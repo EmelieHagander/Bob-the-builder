@@ -4,7 +4,7 @@ set local lock_timeout='5s';
 set local statement_timeout='60s';
 do $stage_context_card_publication$
 declare
- patch jsonb := $stage_context_card_spec{"key":"tools.advance_work_stage","definition":{"card_description":"When a question is settled, carry source-bound findings and unresolved matters to the next stage, releasing older tool payloads and unneeded image pixels. Keep comparison images still needed. Original instructions and exact history remain. Call alone; this grants no approval."}}$stage_context_card_spec$::jsonb;
+ patch jsonb := $stage_context_card_spec${"key":"tools.advance_work_stage","definition":{"card_description":"When a question is settled, carry source-bound findings and unresolved matters to the next stage, releasing older tool payloads and unneeded image pixels. Keep comparison images still needed. Original instructions and exact history remain. Call alone; this grants no approval."}}$stage_context_card_spec$::jsonb;
  prior shared.ai_prompt_versions;
  new_id uuid;
  next_version integer;
