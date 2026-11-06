@@ -1426,10 +1426,10 @@ acceptance into a pass. Current worker source readback remains v204.
 
 
 <a id="three-project-corrections-2026-11-06"></a>
-### Corrections prepared after the three-project audit — 2026-11-06
+### Corrections and release after the three-project audit — 2026-11-06
 
-Source changes are prepared for review; this section is **not hosted deployment
-or ordinary model acceptance**. No owner project records, messages, summaries,
+The source corrections below were reviewed and merged in #482. Hosted release
+evidence is recorded below; ordinary owner/model acceptance remains open. No owner project records, messages, summaries,
 presentations or approvals were rewritten and no paid model run was started.
 
 | Finding | Correction and evidence | Remaining acceptance |
@@ -1460,3 +1460,45 @@ missing workpad RPC or changed expected catalog content. Existing execution and
 checkpoint pins remain unchanged. Check active jobs and source parity before
 any deployment. The frontend/Edge/catalog changes are one reviewable package;
 new worker stage mode must not be activated against the old runtime.
+
+
+#### Hosted publication — 2026-11-06
+
+The owner authorized publication after the prepared corrections. #482 is merged
+at `d98f70640cac3c8e73b02764f2a62ca91b7d5998`, with tested tree
+`61a75703c9e50227feef4a4be98f1802047ec251`. Audit #481 was included and is merged
+as well. The safety branch retains `07f8ef5be59611acbb5151879d9eaa17e5dc7749`.
+A fresh preflight found zero active Bob jobs and unchanged expected predecessors
+for all eight catalog keys.
+
+Publication followed the dependency order:
+
+1. Workpad migration applied under hosted ledger version `20261106122646`
+   (`bob_workpad_freshness`; repository filename `20261106110808_...`). Its
+   function body exactly matches the prepared SQL; only postgres/service_role
+   can execute the security-definer wrapper.
+2. Matching Edge code published as **bob-worker v205** and **ask-bob v237**.
+   JWT verification remains false/true respectively, with the existing custom
+   worker authentication unchanged. All returned runtime sources match the
+   prepared upload; the only content difference is the already-known erasure
+   of type-only `cad-intake.ts`. Additional type-only inputs may be omitted by
+   the bundler. Returned source counts are 148 and 150. Bundle SHA-256 values:
+   worker `0db463a27ceae8700e053d61dab3fdd217c99215cc7b47c59b4c84d8b3cf6f1f`;
+   ask `94643b8ef642d4c9a6c761adf9285ab7624a39415e9a50f5f38a87692c08ad52`.
+3. Catalog migration applied under hosted ledger version `20261106122806`
+   (`bob_audit_followup_catalog`; repository filename `20261106111110_...`).
+   Exact readback of content, definitions and preserved metadata passed:
+   `agent-contract.ask-bob` v26, `bob.context-principles` v6,
+   `bob.note.finish`/`bob.note.gate-gap` v2, `bob.tools` v50,
+   `completion-gate.contract`/`memory-stair.contract`/`tools.read_model_feedback`
+   v3. Publication tag is `bob-audit-followup-v1`; both new runtime pins are 1.
+   Existing execution manifests remain immutable; a fresh manifest is created
+   when a new job claims the current catalog, not merely on activation.
+
+4. **Pages #398 succeeded** from the exact merged source `d98f70640cac3c8e73b02764f2a62ca91b7d5998`:
+   https://github.com/EmelieHagander/Bob-the-builder/actions/runs/42218185648.
+   Both build and deployment passed. This was the authorized manual deployment
+   workflow only. No full CI or paid acceptance workflow was started.
+
+The acceptance cases in the table above remain open until ordinary owner runs.
+No paid model run, full CI or owner-project data correction was performed.

@@ -469,7 +469,7 @@ old pinned jobs and guest/local chat do not use this store. An equal retry is
 idempotent and a stale competing update conflicts. A new conversation gets a
 new workpad, while a resumed worker keeps its already checkpointed model input.
 
-**Prepared follow-up, 2026-11-06 (not deployment evidence):** new manifests pin
+**Installed follow-up, 2026-11-06:** new manifests pin
 `workpad_freshness_version=1`. The claim-fenced `bob_agent_workpad_current`
 reader suppresses the old note if a later Bob write receipt exists in the same
 project, retaining its original stored content and CAS revision. A deliberate
@@ -1523,7 +1523,7 @@ answer these particular routing/section reads. This is a transport correction,
 not a measured cure for every CPU shutdown. See the [runtime correction evidence](bob-runtime-path-audit-2026-11-04.md#corrections).
 
 
-**Prepared worker stage lifecycle, 2026-11-06:** new claimed/checkpointed jobs
+**Installed worker stage lifecycle, 2026-11-06:** new claimed/checkpointed jobs
 may separately pin `worker_stage_context_version=1`. Structure, drawing and
 materials then use native request replay, the immutable result archive and the
 same explicit stage handoff as main Bob. Each worker refreshes its own offered
