@@ -1,4 +1,5 @@
 import type { ContextAdapter, Item, ListRequest, Opened } from './dispatcher.ts'
+import { rethrowContinuation } from '../bob-job-journal.ts'
 
 export const MEDIA_BUCKET = 'bob-project-media'
 export const MEDIA_MAX_BYTES = 6 * 1024 * 1024
@@ -34,6 +35,20 @@ function item(row: MediaRow): Item {
     links: (row.media_links ?? []).slice(0, 25).map(l => ({ area_id: l.area_id, task_id: l.task_id, step_id: l.step_id, plan_step_id: l.plan_step_id ?? null })),
     links_truncated: (row.media_links?.length ?? 0) > 25 }
 }
+const described = (text: string) => ({ text, source: 'ai_visual_observation', verified: false,
+  note: 'Selection aid only. Open the image for visual detail; never treat this as a verified measurement.' })
+/** Listed images described per listing at most (owner decision 2026-11-06). */
+export const AUTO_DESCRIBE_BATCH = 6
+export const IMAGE_DESCRIPTION_MAX = 160
+/** One short description from the describer's structured answer, or null. */
+export function imageDescriptionText(response: { success: boolean; data: unknown }): string | null {
+  if (!response.success) return null
+  let data = response.data
+  if (typeof data === 'string') { try { data = JSON.parse(data) } catch { return null } }
+  const raw = data && typeof data === 'object' ? (data as Record<string, unknown>).description : undefined
+  const text = typeof raw === 'string' ? raw.replace(/\s+/g, ' ').trim() : ''
+  return text && text.length <= IMAGE_DESCRIPTION_MAX ? text : null
+}
 function version(row: MediaRow): string {
   const links = (row.media_links ?? []).map(l => JSON.stringify([l.area_id,l.task_id,l.step_id,l.plan_step_id??null])).sort()
   return JSON.stringify([row.updated_at,row.content_type,row.byte_size,row.width,row.height,row.title,row.purpose,row.source_kind??'unknown',links])
@@ -65,8 +80,19 @@ async function pixels(projectId: string, transport: MediaTransport, row: MediaRo
   return { bytes, sha256: Array.from(digest, b => b.toString(16).padStart(2, '0')).join('') }
 }
 /** Metadata checkpoints can defer pixels until a fresh provider submission. */
-export function createMediaAdapter(projectId: string, transport: MediaTransport, deferred = false): ContextAdapter {
+export function createMediaAdapter(projectId: string, transport: MediaTransport, deferred = false,
+  /** Writes and returns one short description of a listed image, or null. */
+  autoDescribe?: (item: Item, signal: AbortSignal) => Promise<string | null>): ContextAdapter {
   return {
+    ...(autoDescribe ? { async describeMissing(items: Item[], signal: AbortSignal): Promise<Item[]> {
+      const missing = items.filter(i => i.description === undefined).slice(0, AUTO_DESCRIBE_BATCH)
+      const made = await Promise.all(missing.map(async i => {
+        try { return [i.ref, await autoDescribe(i, signal)] as const }
+        catch (error) { rethrowContinuation(error); return [i.ref, null] as const }
+      }))
+      const texts = new Map(made.filter((entry): entry is readonly [string, string] => typeof entry[1] === 'string' && !!entry[1]))
+      return items.map(i => texts.has(i.ref) ? { ...i, description: described(texts.get(i.ref)!) } : i)
+    } } : {}),
     category: 'images', prefix: 'image', count: transport.count,
     async list(request, signal) {
       if (request.after_id && !UUID.test(request.after_id)) throw new Error('invalid_cursor')
@@ -75,22 +101,25 @@ export function createMediaAdapter(projectId: string, transport: MediaTransport,
       const descriptions = transport.descriptions && safe.length ? await transport.descriptions(safe.slice(0, 12).map(r => r.id), signal) : []
       return { items: safe.slice(0, 12).map(row => {
         const description = descriptions.find(d => d.media_id === row.id && d.source_version === version(row))
-        return { ...item(row), ...(description ? { description: { text: description.description, source: 'ai_visual_observation', verified: false,
-          note: 'Selection aid only. Open the image for visual detail; never treat this as a verified measurement.' } } : {}) }
+        return { ...item(row), ...(description ? { description: described(description.description) } : {}) }
       }), next_cursor: safe.length > 12 ? safe[11].id : null }
     },
     async open(ref, signal): Promise<Opened> {
       const id = imageId(ref), row = checked(await transport.read(id, signal), projectId, id)
       const source = { projectId, dataset: 'image_pixels' as const, recordId: id, label: `Bild öppnad: ${row.title}`,
         retrievedAt: new Date().toISOString(), updatedAt: row.updated_at, truth: 'unknown' as const }
+      // The description travels with the opened image, so it stays after its pixels leave.
+      const found = autoDescribe && transport.descriptions
+        ? (await transport.descriptions([id], signal)).find(d => d.media_id === id && d.source_version === version(row)) : undefined
+      const listed: Item = found ? { ...item(row), description: described(found.description) } : item(row)
       if (deferred) {
         const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(version(row))))
         const revision = Array.from(digest, b => b.toString(16).padStart(2, '0')).join('')
-        return { item: item(row), bytes: row.byte_size, version: version(row), source,
+        return { item: listed, bytes: row.byte_size, version: version(row), source,
           image: { type: 'image_url', image_url: `private-image:${id}/${revision}` } }
       }
       const { bytes, sha256 } = await pixels(projectId, transport, row, signal)
-      return { item: { ...item(row), sha256 }, bytes: bytes.byteLength, version: version(row),
+      return { item: { ...listed, sha256 }, bytes: bytes.byteLength, version: version(row),
         image: { type: 'image_url', image_url: `data:${row.content_type};base64,${base64(bytes)}` },
         source }
     },

@@ -1687,8 +1687,32 @@ continuation, image, stage, drawing-preview, vision and turn suites pass except
 cases that fail identically on unchanged main. Both Edge entrypoints pass Deno
 type checking.
 
-**Step 2: descriptions first (planned).** Describe each ready image once with
-the Haiku tier, store it per image version (project-wide, from pixels only),
-list descriptions before opening and keep them as the released image's text.
-A one-time backfill of the 42 undescribed images needs the owner's OK at
-deployment (estimated about USD 0.10).
+**Step 2: descriptions first (source; not yet deployed; owner chose Haiku and
+option C).** A new read-only catalog role `image-describer` (profile on the
+`nano` tier, production binding `claude-haiku-5-5`, 300 output tokens, 30 s,
+low effort) writes one Swedish phrase of at most 120 characters: subject, side,
+viewpoint and build state. A dimension appears only when written in the image
+itself; sizes are never estimated and people never identified. Publication
+`20261106180000_bob_image_describer_catalog.sql` adds six definitions and the
+function setting; it refuses a second run.
+
+- New executions pin `imageDescriptionVersion: 1` when the manifest contains the
+  role. When Bob lists images, up to six undescribed listed images per listing
+  are described after the metadata read, within 40 s, and stored through the
+  existing claim-fenced `bob_describe_image` cache (per owner and image
+  version; a changed image never shows an old description). A failed or slow
+  description leaves the listing usable without it. There is no separate
+  backfill: older images are described when first listed (about USD 0.002 each,
+  estimated).
+- An opened image carries its current description in the item and in the image
+  text, so the description remains after step 1 releases the pixels.
+- Tests: role shape and contract wording; the DB publication adds only the six
+  keys and the setting and refuses a rerun; the fixture matches the migration
+  for every new key (the fixture-replay test still fails on unchanged main for
+  older keys); description parsing; batch limit, reuse, failure and
+  continuation handling; opened-image description; dispatcher listing with a
+  failing describer and the carrier text. Both Bob Edge entrypoints pass Deno
+  type checking.
+
+Release order: publish ask-bob and bob-worker first, then apply the catalog
+migration (activation). Jobs pinned before it describe nothing.
