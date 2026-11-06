@@ -157,7 +157,7 @@ function buildManagedMessages(aiCatalog: AiCatalogSession, opts: {
       ? [{ role: 'user' as const, content: text('outstanding') + '\n' + JSON.stringify(opts.drawingRequests) }] : []),
   ]
 }
-export type ModelCall = (options: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<string>>
+export type ModelCall = (options: OpenAIServiceOptions, beforeDispatch?: () => Promise<void>) => Promise<OpenAIServiceResponse<string>>
 export type ProjectAnswer =
   | { ok: true; answer: string; projectId: string; evidence: AnswerEvidence; providerResponseId?: string }
   | { ok: false; error: string }
@@ -301,6 +301,8 @@ export type ProjectAnswerOptions = {
   finalAnswer?: boolean;
   /** Pinned per execution (workerCheckpointVersion): a worker's place is saved after each of its steps. */
   workerCheckpoint?: boolean;
+  workerStageContext?: boolean;
+  registerWorkerContextSurface?: (role: string, refresh: () => Promise<ContextSurface>) => () => void;
   compactToolState?: boolean;
   /** New claimed worker jobs only: restart Konrad's model chain after an exact
    * saved construction readback and a later private workpad update. */
@@ -565,6 +567,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const workerWorkpad = !resume && workerPads
         ? await workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}`) : undefined
       const report = await runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
+        ...(opts.workerStageContext ? { stageContext: true, registerContextSurface: opts.registerWorkerContextSurface } : {}),
         ...(workerPads ? { workpadEnabled: true, ...(workerWorkpad ? { workpad: workerWorkpad } : {}) } : {}),
         ...(opts.workerPieceProgress && key === 'structure' && workerPads && reportReadback && worker.knowledge
           ? { pieceProgress: { ...(opts.continuedWork?{unmappedReview:true}:{}), readSaved: async (receipt: Record<string, unknown>) => {

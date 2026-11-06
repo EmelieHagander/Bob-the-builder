@@ -29,7 +29,7 @@ export function createGroundedModelCall(opts: {
    * Older turns retain their original parallel execution contract. */
   readOrder?: 'serial' | 'parallel';
 }): ModelCall {
-  return async options => {
+  return async (options, beforeDispatch) => {
     if (Date.now() >= opts.deadline) throw new Error('context_unavailable')
     const messages = options.messages ?? []
     const hasPixels = messages.some(m => Array.isArray(m.content) && m.content.some(p => p.type === 'image_url'))
@@ -54,6 +54,6 @@ export function createGroundedModelCall(opts: {
     return opts.callModel({ ...options,
       messages: groundedMessages,
       timeoutMs: Math.min(options.timeoutMs ?? 45000, remaining),
-    })
+    }, beforeDispatch)
   }
 }

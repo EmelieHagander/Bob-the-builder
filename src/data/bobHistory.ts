@@ -6,6 +6,7 @@ export interface BobHistoryPage {
   threadId?: string
   messages: ChatMessage[]
   oldestSeq?: number
+  latestSeq?: number
   hasMore?: boolean
 }
 
@@ -18,7 +19,12 @@ export function readHistoryWindow(input: TranscriptRow[], size = BOB_HISTORY_PAG
 
 /** Refresh the tail while retaining older pages the reader explicitly opened. */
 export function refreshHistoryPage(current: BobHistoryPage, latest: BobHistoryPage): BobHistoryPage {
-  if (!latest.threadId || current.threadId !== latest.threadId || latest.oldestSeq === undefined) return latest
+  if (!latest.threadId || current.threadId !== latest.threadId) return latest
+  const tail = (page: BobHistoryPage) => Math.max(page.latestSeq ?? 0, ...page.messages.map(m => m.seq ?? 0))
+  // Reopen, inbox and recovery reads can finish out of order. A transcript is
+  // append-only within its thread; retain both the newer tail and its status.
+  if (tail(latest) < tail(current)) return current
+  if (latest.oldestSeq === undefined) return latest
   const earlier = current.messages.filter(m => m.seq !== undefined && m.seq < latest.oldestSeq!)
   return { ...latest, messages: [...earlier, ...latest.messages],
     oldestSeq: earlier.length ? current.oldestSeq : latest.oldestSeq,

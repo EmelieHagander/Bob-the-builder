@@ -48,6 +48,20 @@ const publishAs=(row:any,publication:string)=>{const{seed_version,source_revisio
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const auditFollowup=source.match(/\$audit_followup_spec\$([\s\S]+?)\$audit_followup_spec\$/)
+ if(auditFollowup){
+  for(const edit of JSON.parse(auditFollowup[1])){
+   const row=seed.find(row=>row.key===edit.key)
+   if(edit.content){if(row.content!==edit.content.before)throw Error('audit_followup_content_changed: '+edit.key);row.content=edit.content.after}
+   for(const patch of edit.patches??[]){
+    const parent=patch.path.slice(0,-1).reduce((o:any,k:string)=>o[k],row.definition),key=patch.path.at(-1)
+    if(JSON.stringify(sortKeys(parent[key]))!==JSON.stringify(sortKeys(patch.before)))throw Error('audit_followup_definition_changed: '+edit.key)
+    parent[key]=structuredClone(patch.after)
+   }
+   row.metadata={...row.metadata,...edit.metadata}
+   publishAs(row,'bob-audit-followup-v1');versions.set(row.key,versions.get(row.key)!+1)
+  }
+ }
  const textHygiene=source.match(/\$text_hygiene_spec\$([\s\S]+?)\$text_hygiene_spec\$/)
  if(textHygiene){
   preTextHygieneRows=structuredClone(seed);preTextHygieneVersions=new Map(versions)

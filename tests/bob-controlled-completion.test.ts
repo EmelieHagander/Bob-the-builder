@@ -65,6 +65,8 @@ test('a gap named by the gate sends one targeted note instead of the open-ended 
   assert.deepEqual(calls, ['ask-bob', 'ask-bob', 'ask-bob', 'completion-gate', 'ask-bob'])
   assert.equal(notes.length, 1)
   assert(notes[0].includes(reason)); assert(notes[0].includes('Do only that part now'))
+  assert.match(notes[0],/candidate reply has not been sent/)
+  assert.match(notes[0],/one self-contained final reply covering the whole requested result/)
   assert.doesNotMatch(notes[0], /fresh affected records|execute it now/)
   assert.equal(observation.completion_checks, 1); assert.equal(observation.completion_gate, 'review')
 })
@@ -87,6 +89,7 @@ test('a server-known rejected write gets the targeted finish note without asking
   assert(result.ok); assert.equal(result.answer, SECOND)
   assert.deepEqual(calls, ['ask-bob', 'ask-bob', 'ask-bob', 'ask-bob'])
   assert.equal(notes.length, 1); assert.match(notes[0], /save_project_task/)
+  assert.match(notes[0], /candidate reply has not been sent/)
   assert.equal(observation.completion_checks, 1); assert.equal(observation.completion_gate, undefined)
 })
 

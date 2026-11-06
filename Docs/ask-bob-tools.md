@@ -1209,3 +1209,13 @@ serializers. It carries operation references and the build-guide switch;
 catalog policy or accept arbitrary schemas. Old pinned executions retain their
 previous contract. [Correction evidence](bob-runtime-path-audit-2026-11-04.md#corrections)
 separates local verification, installation and owner acceptance.
+
+
+**Prepared material binding correction, 2026-11-06:** catalog
+`worker_operation_bindings` may provide a `description` replacement at an exact
+schema `path`, applied during runtime projection of both manuals and native
+provider schemas. The material worker's `data` description lists its writable
+values; source/target IDs remain server-owned. This does not alter parameters
+or weaken identity/optimistic-concurrency validation. The publication changes
+only the named binding, preserving every other toolbox contract. See the
+[audit correction evidence](bob-runtime-path-audit-2026-11-04.md#three-project-corrections-2026-11-06).

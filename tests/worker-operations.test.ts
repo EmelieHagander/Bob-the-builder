@@ -159,3 +159,21 @@ test('a catalog-defined reader alias projects and resolves its fields without a 
  assert.equal(f.exportState().scopes[0].source?.artifact_id,A)
  assert.equal((await f.before('structure','inspect_frame',{frame_id:B,frame_revision:2})).reason,'operation_identity_is_server_owned')
 })
+
+test('material manuals and the final provider schema describe the executable server-bound arguments',async()=>{
+ for(const bound of [false,true]){
+  const {f}=fixture(bound);await f.prepare('materials',[])
+  const catalog=catalogFixture(),surface=JSON.parse(JSON.stringify({version:1,buildGuides:false,operation:f.surface('materials')}))
+  const manual=workerOperationSpec(catalog.tool('derive_cad_material_requirement',{include_manual:true}),surface.operation)
+  const final=applyCatalogModelOptions(catalog,{app:'bob',functionName:'materials-worker',catalogVariables:{project_name:'Fixture'},catalogRuntimeSurface:surface,tools:[manual]})
+  const p:any=final.tools![0].function.parameters
+  assert.equal(p.properties.data.description,(manual.function.parameters as any).properties.data.description)
+  assert.match(p.properties.data.description,/server-bound; do not supply artifact_id, artifact_revision or target_revision/)
+  assert.doesNotMatch(p.properties.data.description,/artifact_id \(drawing or construction\)|revise exact requirement UUID|New record_id/)
+  assert.equal('source_ref' in p.properties,!bound)
+  const args={record_ref:null,expected_updated_at:null,data:{definition_id:'rail',quantity_mode:'pieces'},...(!bound?{source_ref:ref(f,'materials',A)}:{})}
+  const ready=await f.before('materials','derive_cad_material_requirement',args)
+  assert.equal(ready.status,'ready');assert.equal(ready.args?.data.artifact_id,A);assert.equal(ready.args?.data.artifact_revision,3)
+  for(const field of ['artifact_id','artifact_revision','target_revision'])assert.equal((await f.before('materials','derive_cad_material_requirement',{...args,data:{...args.data,[field]:1}})).reason,'operation_identity_is_server_owned')
+ }
+})

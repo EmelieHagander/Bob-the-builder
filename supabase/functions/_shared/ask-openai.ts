@@ -382,7 +382,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -451,6 +451,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.resultWindowVersion !== undefined && (![1, 2].includes(execution.resultWindowVersion) || execution.resultReferenceVersion !== 1)) throw new Error('result_window_version_invalid')
   if (execution.imageInputDedupVersion !== undefined && (execution.imageInputDedupVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('image_input_dedup_version_invalid')
   if (execution.stageContextVersion !== undefined && (execution.stageContextVersion !== 1 || execution.imageInputDedupVersion !== 1 || execution.resultReferenceVersion !== 1)) throw new Error('stage_context_version_invalid')
+  if (execution.workerStageContextVersion !== undefined && (execution.workerStageContextVersion !== 1 || execution.stageContextVersion !== 1)) throw new Error('worker_stage_context_version_invalid')
   if(execution.continuedWorkVersion!==undefined&&execution.continuedWorkVersion!==1)throw Error('continued_work_version_invalid')
   if(execution.solutionWorkVersion!==undefined&&execution.solutionWorkVersion!==1)throw new Error('solution_work_version_invalid')
   if(execution.operationPathsVersion!==undefined&&![1,2].includes(execution.operationPathsVersion))throw new Error('operation_paths_version_invalid')
@@ -483,6 +484,7 @@ export async function answerWithOpenAi(opts: {
   if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel,onInternalTool:value=>metrics?.internalTool(value)??Promise.resolve(),
     ...(execution.resultReferenceVersion === 1 ? { mainResultReferences: 1 } : {}),
     ...(execution.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
+    ...(execution.workerStageContextVersion === 1 ? { workerStageContextVersion: 1 as const } : {}),
     ...(execution.stageContextVersion === 1 ? { stageContextVersion: 1 as const, imageSource: (url: string) => imageRefs.has(url) ? stageImageRef(url) : undefined } : {}),
     ...(execution.resultWindowVersion === 1 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS } : {}),
     ...(execution.resultWindowVersion === 2 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS, resultWindowVersion: 2 as const } : {}),
@@ -520,16 +522,17 @@ export async function answerWithOpenAi(opts: {
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
   const workpads: AgentWorkpads | undefined = execution.workpadVersion === 1 && claimedServer ? {
     load: async (agent, location): Promise<WorkpadSnapshot> => {
-      const { data, error } = await memo('workpad:load', { agent, location }, async () => internal.rpc('bob_agent_workpad', {
+      const current = contract.workpad_freshness_version === 1
+      const { data, error } = await memo('workpad:load', { agent, location }, async () => internal.rpc(current ? 'bob_agent_workpad_current' : 'bob_agent_workpad', {
         ...binding, p_user: opts.userId, p_agent: agent, p_expected_revision: null, p_note: null,
       }).abortSignal(AbortSignal.timeout(12000)))
       if (error || !data || typeof data !== 'object' || (data as { status?: unknown }).status !== 'ok')
         return { status: 'unavailable', revision: 0, note: null }
       const result = data as WorkpadSnapshot
-      return { status: 'ok', revision: result.revision, note: result.note }
+      return { status: 'ok', revision: result.revision, note: result.note, ...(current ? { freshness: result.freshness } : {}) }
     },
     update: async (agent, expectedRevision, note) => {
-      const { data, error } = await memo('workpad:update', { agent, expectedRevision, note }, async () => internal.rpc('bob_agent_workpad', {
+      const { data, error } = await memo('workpad:update', { agent, expectedRevision, note }, async () => internal.rpc(contract.workpad_freshness_version === 1 ? 'bob_agent_workpad_current' : 'bob_agent_workpad', {
         ...binding, p_user: opts.userId, p_agent: agent, p_expected_revision: expectedRevision, p_note: note,
       }).abortSignal(AbortSignal.timeout(12000)))
       if (error || !data || typeof data !== 'object') return { status: 'unavailable', message: 'Private working note was not recorded.' }
@@ -1014,7 +1017,7 @@ export async function answerWithOpenAi(opts: {
       return {...data,current_step_ids:links}
     },
     catalog:createMaterialCatalogReader(opts.projectId,checkpointed((input:Record<string,unknown>,signal:AbortSignal)=>rpc('catalog_read',{p_project:opts.projectId,p_input:input},signal)),hasAccess,lookup.sources,undefined,{unlimitedWork}),
-    context:createProjectContext({ unlimitedWork,adapters:[mediaAdapter(),...(execution.operationPathsVersion===2?[drawingAdapter()]:[]),...(execution.solutionWorkVersion===1?[drawingAdapter(true)]:[])],hasAccess,sources:lookup.sources,reviewInstruction:aiCatalog.text('drawing-review.instruction'),imageEvidenceInstruction:aiCatalog.text('images.evidence-intro'),reviewLabel:aiCatalog.text('images.review-label')}),
+    context:createProjectContext({ unlimitedWork,imageContextRefs:execution.workerStageContextVersion===1,adapters:[mediaAdapter(),...(execution.operationPathsVersion===2?[drawingAdapter()]:[]),...(execution.solutionWorkVersion===1?[drawingAdapter(true)]:[])],hasAccess,sources:lookup.sources,reviewInstruction:aiCatalog.text('drawing-review.instruction'),imageEvidenceInstruction:aiCatalog.text('images.evidence-intro'),reviewLabel:aiCatalog.text('images.review-label')}),
     referenceImageRefs:()=>projectContext.openedImageRefs(),
   })
   if(opts.background?.drawingRequestId){
@@ -1265,6 +1268,7 @@ export async function answerWithOpenAi(opts: {
       } } : {}),
     } } : {}),
     ...(workpads ? { workpads } : {}),
+    ...(execution.workerStageContextVersion === 1 ? { workerStageContext: true, registerWorkerContextSurface: registerSpecialistContextSurface } : {}),
     ...(contextContinuation ? { releaseContext: (id: string) => contextContinuation!.release(id) } : {}),
     ...(contextStrategy ? { contextEpoch: () => mainContextEpoch,
       registerContextSurface: (refresh: () => Promise<ContextSurface>) => { refreshMainContextSurface = refresh },

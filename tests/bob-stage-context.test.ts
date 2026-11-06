@@ -118,6 +118,39 @@ test('only the new published pin enables stage release; absent and mismatched ch
  assert.throws(()=>createBobContextContinuation({...opts,stageContextVersion:2 as any,callModel:async()=>reply('no')}),/stage_context_version_invalid/)
 })
 
+test('each newly pinned worker releases only its own stage and preserves exact history across restart',async()=>{
+ for(const role of ['structure-worker','drawing-worker','materials-worker']){
+  const worker={...seed,functionName:role,catalogRoleKey:role,coworkerId:role}
+  let dispatches=0;const sent:OpenAIServiceOptions[]=[],events:string[]=[],refreshed:string[]=[]
+  const options={...opts,workerStageContextVersion:1 as const,
+   refreshSurface:async({role:r}:{role:string})=>{refreshed.push(r);return {tools:[spec('read_record')]}},
+   onInternalTool:async({name}:{name:string})=>{events.push(name)},
+   callModel:async(o:OpenAIServiceOptions)=>{
+    sent.push(disk(o));assert(o.tools!.some(t=>t.function.name===STAGE_CONTEXT_TOOL));dispatches++
+    if(dispatches===1)return reply(role+'1',[call('saved','edit_record',{})])
+    if(dispatches===2)return reply(role+'2',[call('stage',STAGE_CONTEXT_TOOL,{...note([]),findings:[{source_ref:'call:saved',observation:'Saved revision 19; measurement still deferred'}]})])
+    return reply(role+dispatches,[call('next','read_record',{})])
+   }}
+  let manager=createBobContextContinuation(options)
+  await manager.call(worker)
+  await manager.call({...worker,previousResponseId:role+'1',messages:[output('saved','{"status":"saved","receipt":{"revision":19},"large":"old payload"}')]})
+  assert.deepEqual(imageRefs(sent[2]),[]);assert.deepEqual(refreshed,[role]);assert.deepEqual(events,[STAGE_CONTEXT_TOOL])
+  assert(JSON.stringify(sent[2].messages).includes('measurements are deferred'))
+  assert(JSON.stringify(sent[2].messages).includes('completed_operations'))
+  const handoff=sent[2].messages!.map(m=>typeof m.content==='string'&&m.content.startsWith('{')?JSON.parse(m.content):null).find(m=>m?.stage_handoff)
+  assert.equal(handoff.completed_operations[0].revision,19,'source revision comes from the real tool receipt')
+  assert(!JSON.stringify(sent[2].messages).includes('old payload'))
+  const state=disk(manager.exportState());manager=createBobContextContinuation(options);manager.restoreState(state)
+  assert.equal(manager.readOperation({call_id:'saved',after:0},role+'3').status,'ok')
+  assert.equal(manager.readOperation({call_id:'saved',after:0},'other-worker').status,'not_found')
+  await manager.call({...worker,previousResponseId:role+'3',messages:[output('next','{"status":"ok"}'),{role:'user',content:[image('concept:A')]}]})
+  assert.deepEqual(imageRefs(sent[3]),['private-image:concept:A/version'])
+  const old=createBobContextContinuation({...opts,callModel:async o=>{assert(!o.tools?.some(t=>t.function.name===STAGE_CONTEXT_TOOL));return reply('legacy')}})
+  await old.call(worker)
+  assert.throws(()=>old.restoreState(state),/context_checkpoint_invalid/)
+ }
+})
+
 test('releasing evidence never bypasses the existing live pre-dispatch authority gate',async()=>{
  let gateCalls=0,dispatches=0
  const manager=createBobContextContinuation({...opts,callModel:async(_o,before)=>{

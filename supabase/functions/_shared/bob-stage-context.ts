@@ -3,10 +3,11 @@ import type { OpenAIServiceOptions } from './openai-service.ts'
 type Message = NonNullable<OpenAIServiceOptions['messages']>[number]
 export const STAGE_CONTEXT_TOOL = 'advance_work_stage'
 export {stageImageRef} from './image-context-ref.ts'
-export function bobStageContextVersion(checkpoint: boolean, metadata: Record<string, unknown>): { stageContextVersion?: 1 } {
+export function bobStageContextVersion(checkpoint: boolean, metadata: Record<string, unknown>): { stageContextVersion?: 1; workerStageContextVersion?: 1 } {
+  if (metadata.worker_stage_context_version !== undefined && (metadata.worker_stage_context_version !== 1 || metadata.stage_context_version !== 1)) throw new Error('worker_stage_context_contract_invalid')
   if (metadata.stage_context_version === undefined) return {}
   if (metadata.stage_context_version !== 1 || metadata.complete_request_version !== 1 || metadata.result_reference_version !== 1 || metadata.context_strategy_version !== 1) throw new Error('stage_context_contract_invalid')
-  return checkpoint ? { stageContextVersion: 1 } : {}
+  return checkpoint ? { stageContextVersion: 1, ...(metadata.worker_stage_context_version === 1 ? { workerStageContextVersion: 1 } : {}) } : {}
 }
 export type StageContextNote = {
   completed_question: string
