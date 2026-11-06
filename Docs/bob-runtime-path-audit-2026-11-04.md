@@ -1301,3 +1301,125 @@ Next acceptance requires a new job created after 08:48:47 UTC; replaying an
 old pinned manifest does not establish the correction. Startup, actual image
 delivery and bounded context across model-selected stage transitions still need
 that ordinary run. C1–C4 remain open.
+
+<a id="three-project-audit-2026-11-06"></a>
+## Three-project owner-message audit — 2026-11-06
+
+Read-only production audit of the latest entrance, Våningssäng2 and Lilla ladan
+messages, preceding owner answers, current canonical records, private workpads,
+conversation summaries, execution events and scoped Edge logs. The owner
+confirmed the allegedly missing entrance message is the window-measurement
+request, not a later message. Times below are UTC (Sweden is UTC+1).
+No model call, project mutation, workflow or deployment was started.
+
+| Project / latest job | Observed outcome | Acceptance |
+|---|---|---|
+| Entry, `bb36276a-38e3-492c-a0a4-9292a98364ef`, 08:58:15–08:59:00 | Owner message seq105 and answer seq106 are both completed. Five successful model calls, no writes; main input 54,976 tokens maximum. Answer compares mockup v4 windows with the sketch. | Startup correction works in an ordinary job. Delivery remains partial; actual owner-browser rendering is not observed. |
+| Våningssäng2, `b45c2cdc-4ee3-4c90-9f18-1c82b8bd0367`, 08:58:55–09:23:06 | Construction advanced from v14 through v19; drawing v5 saved and front view opened; requirements updated. 89 logged model calls, USD 13.704 model-event cost, 24 invalid tool calls, final answer seq16 partial. | Real progress, but incomplete hardware/fastener work and renewed owner questions; no whole-task success. Cost excludes anything not represented by those model events. |
+| Lilla ladan, latest job `7381e025-1e54-4983-8b37-9852ef1768b1`, same turn began 2026-11-05 18:14 and resumed 18:37–18:43 | Five mockup media entries appear in recovered receipts. Delivery failure code is `context_input_too_large`; final seq147 is a receipt recovery. Current construction remains v5 and drawing v3. | No ordinary run after the stage/card activation. Saved mockups do not establish agreement with updated construction or owner approval. |
+
+### Confirmed findings and remaining diagnosis
+
+**F1 — The entrance request arrived; the reported missing answer is a display
+investigation.** Thread `90ef43fe-d675-4f29-baeb-70e400c8a552`, turn
+`043d2d1a-9c24-4e4c-8188-e2d19ebd53d6`, has the owner's exact confirmed
+request and a 2,047-character completed answer. All three audited threads have
+no in-flight provider lock. A focused local probe fed the real last four entry
+rows through `readBobTranscript`: seq106 and its evidence survive, latestSeq is
+106 and unfinished is null. This excludes disappearance in that parser; it does
+not verify authenticated fetch, drawer state, browser cache, or actual rendering.
+Do not resend the work to diagnose display. Inspect that turn's retrieval and
+rendering in the affected browser.
+
+**F2 — Answered and deferred questions are reintroduced.** Entry seq91 explicitly
+defers window remeasurement until building starts; seq96 confirms preliminary
+height. Final seq106 nevertheless requests measurements now before changing the
+sketch. The active summary through seq95 also preserves already-answered
+questions: seq83 says the 3.16 m was to the roof underside, yet the summary still
+asks whether it was the ridge cap or underside (while elsewhere stating
+underside). This is a demonstrated summary-reconciliation error.
+
+In the bed, seq3 rejects panel, seq4/6 record no panel anywhere, and current
+Solution revision 13 explicitly retains that choice. Final seq16 again asks
+plain plywood versus panel. There is no active stair summary for this short
+thread: summary compression cannot explain this instance. Current source
+selection/precedence and question reconciliation must also be corrected.
+Not every repeated-looking question is old: the lower plank's end and changed
+stair spacing correspond to explicit uncertainties in construction v19 and
+deserve separate treatment, rather than silently treating them as answered.
+
+**F3 — Replaceable working notes are not being maintained.** Bed Bob's note still
+says construction v14 and drawing v4 are blocked after v19/v5 were saved; the
+structure note stops mid-edit at v16. Entry Bob's note still targets Solution v8
+and confuses front/side windows; barn notes retain an older no-geometry task and
+an assumed animal-end choice. The frame marks these notes unverified, so this
+does not prove they overrode canonical data. It does prove the supposedly
+current working note is stale. Reconcile completed receipts and superseded
+blockers at the work boundary; preserve deferred decisions as deferred.
+
+**F4 — Stage release is installed but not used in these owner runs.**
+Both new jobs pin manifest `46c3a797-f3b1-428a-9cc3-3a4f28b825e0`.
+All 19 main model requests offer `advance_work_stage`; none calls it.
+Bed main input starts at 33,035, peaks at 82,904, and ends at 76,829 tokens.
+Structure has 35 calls and reaches 151,969 input tokens; materials has 20 and
+reaches 98,855; drawing has 10 and reaches 90,577. Five context-summary calls
+also occur. The current implementation only exposes explicit stage release to
+main Bob (`references` checks function/role ask-bob); the workers have none.
+C1–C4 remain open. Main installation alone does not establish bounded active
+evidence or bounded colleague context.
+
+**F5 — Worker contract friction consumes substantial work.** Of the bed's 24
+invalid calls, 18 reject `derive_cad_material_requirement` with
+`operation_identity_is_server_owned`; others include human-text validation,
+unused parameter nodes, a no-change write and invalid drawing handoff.
+Both drawing and materials return `step_budget` once. The worker loop still
+has a `max_steps` boundary; these returns are not proof of task completion.
+Inspect the final catalog-transformed schema, generic data description/manual
+and server-owned identity binding together before weakening any write guard.
+The active material tool's generic data description still lists source IDs
+that the bound handler rejects; exact failed argument payloads were not
+retained for attribution in this audit.
+
+**F6 — Final answer is not a coherent whole-task handoff.** Bed seq16 concentrates
+on materials and refers to questions from a previous message, although only
+one answer was persisted for this turn. Telemetry shows a draft final at main
+step13, one completion review, more material work at step14 and a final at
+step15. Code keeps the draft as `reviewedAnswer` but persists the final answer;
+this is consistent with a partial follow-up replacing the integrated report.
+The discarded draft text was not retrieved, so its exact content is unverified.
+Add a completion-continuation case that requires one self-contained final
+delivery of changed construction, exact drawing, comparison findings and
+genuine remaining questions.
+
+**F7 — Barn's original visual-approval seam remains unresolved.** Seq142 gives
+positive feedback and defers chicken/rabbit end choice; seq144 authorizes
+standard working-size windows with final measurement later. Seq145 reports a
+requirement for a presentation bound to the current message, despite earlier
+chat feedback. The latest requested mockups were saved while actual
+construction still has the older single-window geometry. Audit historical
+presentation-to-feedback binding and label proposal images distinctly from
+current-construction evidence; never manufacture approval or remove source
+version checks. These incidents precede the latest stage release.
+
+### Continue the existing plan
+
+The original C1–C4/R1–R6 plan above remains the owner: small increments after
+safety branches, exact image deduplication, reliable image delivery, then
+stage-based release of obsolete images/read payloads while preserving original
+instructions, uncertainty, source versions and write receipts. Stage activation
+and the missing-card repair are installed; the ordinary behavior is not accepted.
+
+Next priorities from this audit:
+1. Reproduce the entrance answer's fetch/render path without a new model run.
+2. Reconcile answered/deferred questions against exact owner messages and current
+   project choices; use entry seq83/91/96 and bed no-panel decision as fixtures.
+3. Reproduce/fix the bound material schema/manual rejection and coherent final
+   answer after completion continuation; retain backend authority checks.
+4. Validate an actual stage handoff and refreshed work note, then extend bounded
+   active-evidence lifetime to colleagues before declaring C1/C2 complete.
+5. Finish C3/C4 tool/seed duplication and whole-request accounting, with exact
+   reopening/restart and no invented approval, measurement or blanket quotas.
+
+This audit used direct source/contract review, not an independent reviewer
+agent. It does not change the prior unrun Node regression or unobserved browser
+acceptance into a pass. Current worker source readback remains v204.
