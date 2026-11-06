@@ -2021,3 +2021,39 @@ Expected: Konrad's tool definitions fall from about 43k to about 30k Claude
 tokens per call (to be measured), one `update_workpad` call more per job,
 and fewer tool-list changes in Bob's turns. Publication order: both runtimes
 first (older code ignores the new flags), then the migration.
+
+<a id="publication-492-2026-11-06"></a>
+#### Hosted publication of #492 (B) — 2026-11-06, 23:55 UTC
+
+- #492 is merged at `46152aa6a61530bd420b1dccba17d387f6671aec`; its tree
+  `8f65ca86334c97e1614aca8796ed3afc77d73221` equals the tested branch tree.
+  Safety branch `save/bob-before-tool-focus-2026-11-06` retains the previous
+  published source `086915d036592fea6c5030df23516f91a7358223` (A).
+- Preflight: zero active Bob jobs; the running bundles were the 23:43 ones
+  (bob-worker v211, ask-bob v243).
+- Published from the merged checkout (Supabase CLI 2.117.0, `--use-api`,
+  worker first), before the catalog change:
+
+| Consumer | Version | Files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 212 | 150 | Existing private job capability, JWT false | `7ac04299a47b0e165658535bd04f98743330c3d40186d54c18ef8909c51de3ae` |
+| ask-bob | 244 | 152 | JWT true | `738d0b4b00aacb94602adf467bd61f81afa08a87c7f379bab8e30cb5dec8feda` |
+
+  Returned sources match the merged checkout byte for byte except the known
+  type-only `cad-intake.ts` erasure; both bundles contain the focus and plan
+  pins and the worker pick.
+- Catalog: `20261107000000_bob_tool_focus_catalog.sql` applied through the
+  management API as ledger version `20261106235617` (`bob_tool_focus_catalog`).
+  Active afterwards: `bob.tools` v51 (focus present, `worker_focus_version`
+  1), `agent-contract.ask-bob` v27 (`worker_focus_version` 1,
+  `worker_plan_version` 1, `tool_pick_limit` 8), `schema.bob_tool_pick` v3,
+  `tool-picker.contract` v2, `structure-worker.persona` v5 (plan paragraph
+  read back), all `bob-tool-focus-v1`. Zero active jobs after. No frontend
+  publication.
+
+Remaining: the owner's own project turns. Read back per role: Konrad's
+offered tool count (expect 11–12 plus the two continuation tools instead
+of 25), start input, `plan_required` rejections and the `update_workpad`
+note before his first write, cache share and cost against the
+[table above](#cache-points-2026-11-06); Bob's picked count and
+`describe_tool` loads per turn.
