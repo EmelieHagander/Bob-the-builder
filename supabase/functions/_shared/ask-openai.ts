@@ -19,7 +19,7 @@ import { readPhysicalCadSources } from './cad-physical-lineage.ts'
 import { parameterSourcePins } from './cad-parameters.ts'
 import { bobCompleteRequestVersions, type BobImageInputCounts } from './bob-complete-request.ts'
 import { bobStageContextVersion, stageImageRef } from './bob-stage-context.ts'
-import { createConstructionTools, checkedConstructionForDrawing, constructionCurrentReader, constructionChangeReaders } from './construction-draft.ts'
+import { createConstructionTools, checkedConstructionForDrawing, constructionCurrentReader, constructionChangeReaders, constructionPreparationFailure } from './construction-draft.ts'
 import {parseDesignReadiness,type DesignPurpose,type DesignReadiness} from './project-design-intent.ts'
 import { readBudgetStop } from './bob-budget-stop.ts'
 import {drawingResumeReply,confirmedDrawingReceipt} from './drawing-resume-reply.ts'
@@ -779,12 +779,12 @@ export async function answerWithOpenAi(opts: {
     observationTime:(input:unknown)=>memo('construction:observation',input,async()=>new Date().toISOString()),
     prepareEdit:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_edit',{...binding,p_payload:payload},AbortSignal.timeout(12000))
-      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_edit_preparation_failed'}
+      if(error)return constructionPreparationFailure(error,'construction_edit_preparation_failed')
       return data
     },
     prepareParameterChange:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_parameter_change',{...binding,p_payload:payload},AbortSignal.timeout(12000))
-      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_change_preparation_failed'}
+      if(error)return constructionPreparationFailure(error,'construction_change_preparation_failed')
       return data
     },
     // Each new check observes current sources once. Resuming reconstructs that

@@ -1502,3 +1502,54 @@ Publication followed the dependency order:
 
 The acceptance cases in the table above remain open until ordinary owner runs.
 No paid model run, full CI or owner-project data correction was performed.
+
+<a id="owner-runs-after-audit-release-2026-11-06"></a>
+### Owner runs after the audit release and the bed edit repair — 2026-11-06
+
+Read-only hosted readback (SELECT only; no project data, prompt, job or catalog
+changed) of the two owner turns after bob-worker v205 / ask-bob v237.
+
+| Run | Outcome | Model calls / known cost | Largest input | Observed |
+|---|---|---|---|---|
+| Entry, 13:44 UTC (`88761ca2`) | `recovered`, `context_input_too_large` at the model stage | 10 / USD 1.13 | Bob 93,383 (ceiling 96,000) | Mockup v5 (front windows 42 × 117 cm) was saved. Opening saved items raised Bob's input from 45.7k to 76.3k in one step. The final message is the recovery notice with no image attached. The recovery request had no cached input and cost USD 0.475 (42 %). F2 (repeated questions) could not be judged. The preceding 11:58 UTC owner message (measurements and photo) ended as `image_outcome_unknown` before the release and has no reply. |
+| Bed, 13:46 UTC (`492a597d`) | `saved` | 26 / USD 2.07 | Konrad 132,128 (77.8k → 132k in 9 calls) | Bob saved the three owner decisions in the selected Solution and reported honestly that the construction was unchanged. Konrad's `edit_construction_parts` was first rejected for `human_text`, then returned `conflict`; the worker stopped and further structure work was blocked for the turn. Mattias was not called, so F5 is untested. |
+
+Both runs offered `advance_work_stage` on every Bob and Konrad request; it was
+used 0 times. C1/C2 therefore remain open in ordinary work.
+
+**Bed conflict cause.** Construction v19 reads `source_state: changed` with the
+stored reason `target_changed`. `bob.prepare_construction_edit` refuses
+`target_revision: null` when the source state is not current
+(`construction_changed`, PT409), and the Edge wrapper collapsed that to
+`construction_edit_preparation_failed`. The active `tools.edit_construction_parts`
+v9 description explains `target_revision` only for joint Solution edits, so
+Konrad had no named repair. The RPC reason is inferred from the hosted function
+and the current stored state, not from a logged payload. A new "kör" alone would
+repeat it (R5).
+
+**Correction (source; not yet deployed).**
+
+- The Edge wrappers pass through only the server's named `construction_changed`
+  and `operation_reused` conflicts; every other database error keeps its generic
+  reason.
+- A construction-only edit with `target_revision: null` refused as
+  `construction_changed`, whose current construction is still at the expected
+  revision, unarchived and `changed`, returns `invalid` /
+  `target_revision_required` with the repair: read `view=work`, resend with the
+  current target revision. `invalid` keeps Konrad's job running. Revision races,
+  archives and unknown failures stay terminal conflicts. The server gate is
+  unchanged.
+- A real-database fixture saves an owner decision in the Solution first,
+  receives `target_revision_required` without a new revision, then saves
+  revision 5 with the current target and `source_state: current`. On the
+  previous code the same case returns the original `conflict`. Focused suites
+  for construction work, workers, edits, text, write state, fasteners, delivery
+  and stage context pass, except two catalog-publication cases in
+  `construction-edits` and `construction-fastener-tools` that fail identically
+  on unchanged main. Both Edge entrypoints pass Deno type checking with a
+  temporary local import map for the pinned packages.
+
+Remaining: an Edge deploy with the owner's OK, then one ordinary bed turn to
+show Konrad's repaired edit, the Rita/Mattias follow-up and the cost. Entry's
+image load and context ceiling (C2) is the next separate increment. No paid
+model run, full CI, catalog publication or owner-data correction was performed.
