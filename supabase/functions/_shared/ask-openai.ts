@@ -22,7 +22,7 @@ import { bobStageContextVersion, stageImageRef } from './bob-stage-context.ts'
 import { createConstructionTools, checkedConstructionForDrawing, constructionCurrentReader, constructionChangeReaders, constructionPreparationFailure } from './construction-draft.ts'
 import {parseDesignReadiness,type DesignPurpose,type DesignReadiness} from './project-design-intent.ts'
 import { readBudgetStop } from './bob-budget-stop.ts'
-import {drawingResumeReply,confirmedDrawingReceipt} from './drawing-resume-reply.ts'
+import {drawingResumeReply,drawingResumeDelivery,confirmedDrawingReceipt} from './drawing-resume-reply.ts'
 import {drawingRuntimeVersion} from './drawing-runtime.ts'
 import { hydrateCurrentView, createCurrentViewReader, type CurrentViewClient } from './current-view.ts'
 import { createCurrentViewGuard } from './current-view-guard.ts'
@@ -1070,9 +1070,9 @@ export async function answerWithOpenAi(opts: {
     }
     journal?.check()
     const saved=!!drawingReceipt
-    const answer=await drawingResumeReply({projectId:opts.projectId,message:opts.message,userId:opts.userId,outcome,drawingReceipt,receipts:writer?.receipts,hasAccess,callModel})
+    const {answer,notice}=await drawingResumeDelivery({projectId:opts.projectId,message:opts.message,userId:opts.userId,outcome,drawingReceipt,receipts:writer?.receipts,hasAccess,callModel})
     await metrics.finish({ok:true,partial:!saved,writes:writer?.receipts.length??0,cad:cadAssistant.metrics})
-    return {ok:true,projectId:opts.projectId,answer,evidence:{kind:'ai_assessment',references:[],sources:cadAssistant.sources,partial:!saved,writes:writer?.receipts??[]}}
+    return {ok:true,projectId:opts.projectId,answer,evidence:{kind:'ai_assessment',references:[],sources:cadAssistant.sources,partial:!saved,writes:writer?.receipts??[],...(notice?{notices:[notice]}:{})}}
   }
   const imageTools=writer?createProjectImageTools({ unlimitedWork,
     ...(execution.operationPathsVersion!==undefined?{delivery:{

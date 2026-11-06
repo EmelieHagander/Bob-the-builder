@@ -6,7 +6,7 @@ import type { ProjectEdits } from './project-edits.ts'
 import type { AiCatalogSession } from './ai-catalog.ts'
 import type { AgentWorkpads } from './bob-agent-workpad.ts'
 import type { ConstructionTools } from './construction-draft.ts'
-import { createDeliveryLanguage } from './delivery-language.ts'
+import { answerNotice, createDeliveryLanguage, withNotice, type NoticeInput } from './delivery-language.ts'
 import type { KnowledgeReader } from './building-knowledge.ts'
 import type { OperationalReader } from './project-operations.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
@@ -103,10 +103,14 @@ export async function runClaimedProjectTurn(opts: { continuedWork?:boolean;
   // settlement/commit without replacing prior writes or buying a new reply.
   const cadFailureNotice=result.ok&&typeof opts.cadAssistant?.failure?.user_message==='string'
     &&result.answer===opts.cadAssistant.failure.user_message
-  let recoveryAnswer:string|undefined
+  let recovery:{input:NoticeInput;text:string}|undefined
+  // A replacement answer that is only a notice carries exactly that one marker.
+  const noticeOnly=(evidence:AnswerEvidence,input:NoticeInput,text:string):AnswerEvidence=>({...evidence,notices:[answerNotice(input,text)]})
   try {
-    if(opts.writer?.receipts.length&&((recovered&&!opts.resume)||opts.writer.uncertain||!result.ok||(!result.providerResponseId&&!cadFailureNotice)))
-      recoveryAnswer=await formatNotice({notice:opts.writer.uncertain?'uncertain':'recovered',receipts:opts.writer.receipts})
+    if(opts.writer?.receipts.length&&((recovered&&!opts.resume)||opts.writer.uncertain||!result.ok||(!result.providerResponseId&&!cadFailureNotice))){
+      const input:NoticeInput={notice:opts.writer.uncertain?'uncertain':'recovered',receipts:opts.writer.receipts}
+      recovery={input,text:await formatNotice(input)}
+    }
   } catch(error) {
     rethrowContinuation(error)
     await fail()
@@ -121,8 +125,9 @@ export async function runClaimedProjectTurn(opts: { continuedWork?:boolean;
       failed('settle', error)
       await fail()
       if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
-      return { ok: true, projectId: opts.projectId, answer: formatNotice.fallback({notice:'uncertain',receipts:opts.writer.receipts}),
-        evidence: { kind: 'ai_assessment', references: opts.knowledgeReader?.references ?? [], sources: [], partial: true, writes: compactReceipts(opts.writer.receipts) } }
+      const input:NoticeInput={notice:'uncertain',receipts:opts.writer.receipts}, answer=formatNotice.fallback(input)
+      return { ok: true, projectId: opts.projectId, answer,
+        evidence: noticeOnly({ kind: 'ai_assessment', references: opts.knowledgeReader?.references ?? [], sources: [], partial: true, writes: compactReceipts(opts.writer.receipts) }, input, answer) }
     }
     if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
     const evidence: AnswerEvidence = { kind: 'ai_assessment', references: opts.knowledgeReader?.references ?? [], sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
@@ -132,9 +137,10 @@ export async function runClaimedProjectTurn(opts: { continuedWork?:boolean;
       let notice: string
       try { notice = await formatNotice({ notice: 'uncertain', receipts: opts.writer.receipts }) }
       catch (error) { rethrowContinuation(error); notice = formatNotice.fallback({ notice: 'uncertain', receipts: opts.writer.receipts }) }
-      result = { ...result, answer: result.answer + '\n\n' + notice, evidence }
+      result = { ...result, answer: result.answer + '\n\n' + notice, evidence: withNotice(evidence, answerNotice({ notice: 'uncertain', receipts: opts.writer.receipts }, notice)) }
     } else if (opts.writer.receipts.length && ((recovered && !opts.resume) || uncertain || !result.ok || (!result.providerResponseId&&!cadFailureNotice))) {
-      result = { ok: true, projectId: opts.projectId, answer: recoveryAnswer??formatNotice.fallback({notice:'recovered',receipts:opts.writer.receipts}), evidence }
+      const input:NoticeInput=recovery?.input??{notice:'recovered',receipts:opts.writer.receipts}, answer=recovery?.text??formatNotice.fallback(input)
+      result = { ok: true, projectId: opts.projectId, answer, evidence: noticeOnly(evidence, input, answer) }
     } else if (uncertain && !opts.writer.receipts.length) result = { ok: false, error: 'write_not_saved' }
     else if (result.ok) result = { ...result, evidence }
   }
@@ -146,17 +152,19 @@ export async function runClaimedProjectTurn(opts: { continuedWork?:boolean;
       if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
       if (!result.evidence.writes?.length) { await fail(); return { ok: false, error: 'context_unavailable' } }
       // Preserve committed changes while withholding a reply based on a changed focus.
-      result = { ok: true, projectId: opts.projectId, answer: formatNotice.fallback({ notice: 'recovered', receipts: opts.writer?.receipts ?? [] }),
-        evidence: { ...result.evidence, sources: [], partial: true, currentView: { status: 'unavailable', projectId: opts.projectId,
-          surface: opts.currentView.surface, focus: {}, sources: [], warnings: ['focus_changed_after_read'], retrievedAt: new Date().toISOString() } } }
+      const input:NoticeInput={ notice: 'recovered', receipts: opts.writer?.receipts ?? [] }, answer=formatNotice.fallback(input)
+      result = { ok: true, projectId: opts.projectId, answer,
+        evidence: noticeOnly({ ...result.evidence, sources: [], partial: true, currentView: { status: 'unavailable', projectId: opts.projectId,
+          surface: opts.currentView.surface, focus: {}, sources: [], warnings: ['focus_changed_after_read'], retrievedAt: new Date().toISOString() } }, input, answer) }
     } else result = { ...result, evidence: { ...result.evidence, currentView: opts.getCurrentViewEvidence?.() ?? opts.currentView } }
   }
   if (opts.projectContext && !await opts.projectContext.validate()) {
     failed('project_context', 'context_unavailable')
     if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
     if (opts.writer?.receipts.length) {
-      result = { ok: true, projectId: opts.projectId, answer: formatNotice.fallback({notice:'recovered',receipts:opts.writer.receipts}),
-        evidence: { kind: 'ai_assessment', references: opts.knowledgeReader?.references ?? [], sources: [], partial: true, writes: compactReceipts(opts.writer.receipts) } }
+      const input:NoticeInput={notice:'recovered',receipts:opts.writer.receipts}, answer=formatNotice.fallback(input)
+      result = { ok: true, projectId: opts.projectId, answer,
+        evidence: noticeOnly({ kind: 'ai_assessment', references: opts.knowledgeReader?.references ?? [], sources: [], partial: true, writes: compactReceipts(opts.writer.receipts) }, input, answer) }
     } else { await fail(); return { ok: false, error: 'context_unavailable' } }
   }
   if (opts.commit) {
@@ -171,7 +179,7 @@ export async function runClaimedProjectTurn(opts: { continuedWork?:boolean;
       let notice: string
       try { notice = await formatNotice({ notice: 'chat_unsynced' }) }
       catch (error) { rethrowContinuation(error); notice = formatNotice.fallback({ notice: 'chat_unsynced' }) }
-      return { ...result, evidence:{...result.evidence,partial:true}, answer: result.answer + '\n\n' + notice }
+      return { ...result, evidence: withNotice({...result.evidence,partial:true}, answerNotice({ notice: 'chat_unsynced' }, notice)), answer: result.answer + '\n\n' + notice }
     }
   }
   return result

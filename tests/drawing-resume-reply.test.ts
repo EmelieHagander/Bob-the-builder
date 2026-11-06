@@ -1,6 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {drawingResumeReply,drawingNotice,createDeliveryLanguage,type DeliveryLexicon} from './support/colleague-catalog-fixture.ts'
+import {drawingResumeReply,drawingResumeDelivery,drawingNotice,createDeliveryLanguage,type DeliveryLexicon} from './support/colleague-catalog-fixture.ts'
 import type {ProjectWriteReceipt} from '../src/data/provenance.ts'
 import {BobContinuation} from '../supabase/functions/_shared/bob-job-journal.ts'
 import {humanTextIssues} from '../supabase/functions/_shared/human-text.ts'
@@ -88,4 +88,13 @@ test('chat notices carry an owner meaning per outcome, never outcome codes, IDs 
   for(const internal of [String(result.reason??'_'),'needs_data','left_gable','11111111-1111','design_intent','check_construction_draft',guidance])assert(!answer.includes(internal),internal)
   assert.deepEqual(humanTextIssues(answer),[])
  }
+})
+test('an unsaved drawing reply carries the marker the chat replaces with one line; a saved one carries none',async()=>{
+ const stopped=await drawingResumeDelivery({...base,outcome:{status:'blocked',reason:'render_failed'}})
+ assert.deepEqual(stopped.notice,{kind:'failed',code:'drawing_unavailable',text:stopped.answer})
+ const missing=await drawingResumeDelivery(base)
+ assert.deepEqual(missing.notice?.missing,['Owner must choose depth.','Same missing depth.'])
+ assert.equal(missing.notice?.text,missing.answer)
+ const saved=await drawingResumeDelivery({...base,drawingReceipt:receipt,outcome:{status:'ready',saved:false}})
+ assert.equal(saved.notice,undefined)
 })

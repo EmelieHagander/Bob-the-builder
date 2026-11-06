@@ -22,6 +22,7 @@ import { readOutgoing, reconcileOutgoing, type OutgoingTurn } from '../lib/bobOu
 import { formatDateTime } from '../lib/format'
 import { BOB_IMAGE_LIMIT, BOB_IMAGE_BYTES_LIMIT, parseBobImageIds } from '../domain/bobImages'
 import { BobChatImages } from './BobChatImages'
+import { answerDisplay } from '../lib/bobNotice'
 import { StoredImage } from './ProjectImages'
 import { UserError, userErrorMessage } from '../lib/userErrors'
 
@@ -217,10 +218,13 @@ function Bubble({ msg, projectId, attachedBefore, onAction, onOpenDrawing }: { m
   const viewedImages = [...new Set(msg.evidence?.sources?.filter(s => s.dataset === 'image_pixels' && !s.visual).map(s => s.recordId) ?? [])].filter(id => !shown.has(id))
   const hasVisualResult = generatedImages.length > 0 || msg.evidence?.sources.some(source => source.visual)
     || msg.evidence?.writes?.some(write => ['artifacts','solutions'].includes(write.dataset) && write.operation !== 'deleted' && write.revision)
+  // Server delivery notices become one short line; the stored text keeps them.
+  const display = isUser ? { text: msg.text, line: null } : answerDisplay(msg.text, msg.evidence)
   return (
     <div className={`bob-message ${isUser ? 'bob-message-user' : 'bob-message-assistant'}`}>
       <div className="bob-bubble">
-        {isUser ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : <MarkdownText text={msg.text} />}
+        {isUser ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : display.text && <MarkdownText text={display.text} />}
+        {display.line && <p className="bob-dropped"><Icon name="hammer" weight="fill" size={16} color="var(--honey)" /><span>{display.line}</span></p>}
         <BobChatImages projectId={projectId} ids={parseBobImageIds(msg.imageIds)} />
         <BobChatImages projectId={projectId} ids={generatedImages} label="Project illustration" />
         {!isUser&&<BobChatDrawings projectId={projectId} receipts={msg.evidence?.writes} sources={msg.evidence?.sources}/>}

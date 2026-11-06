@@ -959,6 +959,8 @@ select {
 .bob-context { flex-shrink: 0; border-bottom: 1px solid var(--line); font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; color: var(--ink-soft); }
 .bob-context summary { min-height: 44px; padding: 12px 0; cursor: pointer; font-weight: 700; }
 .bob-context p { margin: 0 0 12px; }
+.bob-dropped { display: flex; gap: 8px; align-items: flex-start; margin: 0; }
+.bob-markdown + .bob-dropped { margin-top: 10px; }
 .drawing-request-gaps { display: grid; gap: 10px; padding-left: 20px; margin: 12px 0; }
 .drawing-request-card { min-width: 0; overflow-wrap: anywhere; }
 .drawing-request-card .btn { min-height: 44px; }

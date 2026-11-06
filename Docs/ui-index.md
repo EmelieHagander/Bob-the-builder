@@ -170,9 +170,9 @@ answer it shows Bob's text, the images and drawings he delivered, a saved image
 his reply is about, and links to saved records. Records consulted, page focus,
 building references and images Bob only looked at are not rendered; they stay
 in the stored answer evidence (`bob.bob_messages.evidence`) for debugging.
-Delivery notices that the server writes into the answer text (for example
-recovered or uncertain saves) still show; hiding them needs a server-side
-marker and is not built yet.
+Server-written delivery notices show as one line (*Bob dropped the hammer…*);
+the [notice contract](ask-bob-conversations.md#delivery-language-and-outcome-measurement--september-25)
+owns the marker and wording.
 
 Automatic work status stays above the composer even while reading older messages.
 It shows server activity, confirmed saved changes and the last activity time;

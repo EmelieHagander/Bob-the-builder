@@ -1,7 +1,8 @@
 import type {OpenAIServiceOptions,OpenAIServiceResponse} from './openai-service.ts'
 import type {ProjectWriteReceipt} from '../../../src/data/provenance.ts'
 import {isProjectWriteReceipt} from '../../../src/data/bobEvidence.ts'
-import {createDeliveryLanguage,type DeliveryFormatter,type NoticeInput} from './delivery-language.ts'
+import {answerNotice,createDeliveryLanguage,type DeliveryFormatter,type NoticeInput} from './delivery-language.ts'
+import type {AnswerNotice} from '../../../src/data/provenance.ts'
 import {humanTextIssues} from './human-text.ts'
 
 /** The receipt comes from the CAD writer/request store, never from the model's
@@ -20,7 +21,12 @@ export function drawingNotice(outcome:Record<string,any>):'drawing_unavailable'|
 
 /** Private status is composed from domain state and exact receipts. Localisation
  * prepares outcome-independent phrases; it cannot write the status answer. */
-export async function drawingResumeReply(opts:{
+export async function drawingResumeReply(opts:Parameters<typeof drawingResumeDelivery>[0]){
+ return (await drawingResumeDelivery(opts)).answer
+}
+
+/** The reply plus, for an unsaved drawing, the marker the chat shows as one line. */
+export async function drawingResumeDelivery(opts:{
  projectId:string;message:string;userId:string;outcome:Record<string,any>;
  drawingReceipt?:unknown;receipts?:ProjectWriteReceipt[];
  hasAccess:()=>Promise<boolean>;
@@ -42,5 +48,6 @@ export async function drawingResumeReply(opts:{
  // labels remain usable. Never return a free outcome.user_message/answer here.
  const answer=outcome.budget_stop||reason==='turn_budget_exhausted'||outcome.status==='already_saved'||outcome.stage==='cad_engine'?format.fallback(input):await format(input)
  if(!await opts.hasAccess())throw new Error('project_denied')
- return answer
+ const notice:AnswerNotice|undefined=input.notice?answerNotice(input,answer):undefined
+ return {answer,notice}
 }

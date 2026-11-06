@@ -87,6 +87,15 @@ try {
           storeCompletedTurn(body, response)
           return respond({ json: response })
         }
+        if (body.message === 'Dropped hammer fixture') {
+          // A recovered turn: the whole answer is a server notice, marked for the chat.
+          const notice='Det normala svaret kunde inte slutföras. Kvittona återställdes utan att ändringarna gjordes om.\n\nVerifierade sparade ändringar\n• Mockup v5'
+          const response=success(body.projectId,notice)
+          response.evidence={...response.evidence,sources:[],writes:[{projectId:body.projectId,dataset:'tasks',recordId:'10000000-0000-4000-8000-000000000002',label:'Measure the window',operation:'created',savedAt:'2026-11-06T22:00:00Z'}],
+            notices:[{kind:'failed',code:'recovered',text:notice}]}
+          storeCompletedTurn(body,response)
+          return respond({json:response})
+        }
         if (body.message === 'Inspect project photo') {
           const response=success(body.projectId,'Project photo inspected.')
           response.evidence.sources=[{projectId:body.projectId,dataset:'image_pixels',recordId:'10000000-0000-4000-8000-000000000001',label:'Bild öppnad: Fönsteranslutning',retrievedAt:'2026-09-20T12:00:00Z',updatedAt:'2026-09-20T11:00:00Z',truth:'unknown'}]
@@ -421,6 +430,13 @@ try {
     await drawer.getByText('Saved chosen plan once.', { exact: true }).waitFor()
 
     // Production source disclosure and persistence; HTTP fixture, not vision proof.
+    await send('Dropped hammer fixture')
+    await drawer.getByText('Bob dropped the hammer. Only this was saved: Measure the window.',{exact:true}).waitFor()
+    assert.equal(await drawer.getByText(/Kvittona återställdes/).count(),0,'The stored notice text stays out of chat')
+    await page.reload();drawer=await openBob('A')
+    await drawer.getByText('Bob dropped the hammer. Only this was saved: Measure the window.',{exact:true}).waitFor()
+    await settleVisual(page)
+    await page.screenshot({path:`test-results/ask-bob-dropped-hammer-${viewport.width}.png`,fullPage:true})
     await send('Inspect project photo')
     await drawer.getByText('Project photo inspected.',{exact:true}).waitFor()
     // The photo the answer is about is shown; its source record stays in stored evidence.
