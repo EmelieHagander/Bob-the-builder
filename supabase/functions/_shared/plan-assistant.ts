@@ -272,7 +272,8 @@ export function createPlanAssistant(opts:{
         prompt:JSON.stringify({mode,expected_revision:expectedRevision,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
           ...(mode==='compile_plan'&&repairFeedback?{repair_feedback:repairFeedback}:{})}),
         schemaName:'bob_plan_compilation',maxOutputTokens:24000,
-        timeoutMs:Math.max(5000,Math.min(40000,deadline-Date.now())),
+        // Compiled plans reached 5,400 tokens; at Claude's ~90 tokens/s that needs ~60 s.
+        timeoutMs:Math.max(5000,Math.min(120000,deadline-Date.now())),
       })
       if(!compiler.success||!compiler.data) {partial=true;return {status:'unavailable',saved:false,stage:'compiler'}}
       // Revision is transport/concurrency state, never a model-authored fact.

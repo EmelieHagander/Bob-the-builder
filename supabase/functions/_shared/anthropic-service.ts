@@ -254,7 +254,7 @@ export async function anthropicRequestBody(options: OpenAIServiceOptions, ctx: A
 }
 
 /** Collect one streamed Messages response into the final message object. */
-export async function collectStream(response: Response, onEvent?: (type: string) => void): Promise<Json> {
+export async function collectStream(response: Response, onEvent?: (type: string, message: Json) => void): Promise<Json> {
   if (!response.body) throw new Error('anthropic_stream_missing')
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
   const message: Json = { content: [] as Block[], usage: {} }
@@ -303,7 +303,7 @@ export async function collectStream(response: Response, onEvent?: (type: string)
       const data = frame.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trim()).join('')
       if (data) {
         const event = JSON.parse(data) as Json
-        onEvent?.(String(event.type ?? 'unknown'))
+        onEvent?.(String(event.type ?? 'unknown'), message)
         handle(event)
       }
     }
@@ -354,6 +354,7 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
   let response: Response | null = null
   const startedAt = Date.now()
   let events = 0, firstEventAt: number | null = null, lastEventAt: number | null = null, lastOutputAt: number | null = null
+  let streamed: Json | null = null
   try {
     for (let attempt = 0; ; attempt++) {
       response = await doFetch(ANTHROPIC_URL, { method: 'POST', signal: controller.signal, body: JSON.stringify(body),
@@ -370,8 +371,9 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
       await response.body?.cancel()
       await sleep(retryDelayMs(response, attempt))
     }
-    message = await collectStream(response!, type => {
+    message = await collectStream(response!, (type, partial) => {
       const now = Date.now()
+      streamed = partial
       events++
       if (firstEventAt === null) firstEventAt = now
       lastEventAt = now
@@ -392,8 +394,18 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
     // Our own deadline closed while the answer was still streaming: it was too
     // long for one window. Resending the same request repeats that (bed,
     // 2026-11-06: twice 120 s, nothing saved), so callers get a distinct code.
-    if (controller.signal.aborted && lastOutputAt !== null && Date.now() - lastOutputAt <= CLAUDE_ACTIVE_STREAM_MS)
-      return { ...fail<T>(model, 'model_output_window'), failure: { code: 'model_output_window' } }
+    const cut = controller.signal.aborted && lastOutputAt !== null && Date.now() - lastOutputAt <= CLAUDE_ACTIVE_STREAM_MS
+    // A request that reached the provider may be billed. Record it with its
+    // known input and an unknown cost rather than leave the ledger silent.
+    if (response?.ok) {
+      const raw = ((streamed as Json | null)?.usage ?? {}) as Json
+      const read = Number(raw.cache_read_input_tokens ?? 0)
+      const input = Number(raw.input_tokens ?? 0) + Number(raw.cache_creation_input_tokens ?? 0) + read
+      try { await ctx.log({ model, inputTokens: input, cachedInputTokens: read, outputTokens: 0, reasoningTokens: 0, totalTokens: input,
+        costUsd: null, success: false, errorCode: cut ? 'model_output_window' : controller.signal.aborted ? 'local_timeout' : 'network_or_stream', latencyMs: Date.now() - startedAt }) }
+      catch { /* the ledger never decides the call outcome */ }
+    }
+    if (cut) return { ...fail<T>(model, 'model_output_window'), failure: { code: 'model_output_window' } }
     return fail(model, `Network error: ${msg}`)
   } finally { clearTimeout(timer) }
 

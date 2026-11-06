@@ -87,9 +87,11 @@ test('a locally timed-out Claude stream reports only content-free timing and pro
   }) as typeof globalThis.fetch
   console.error = (...parts: unknown[]) => { diagnostics.push(parts.map(String).join(' ')) }
   try {
-    const result = await callAnthropicMessages({ ...base, prompt: 'private prompt' }, ctx({ fetch, timeoutMs: 40 }))
+    const logged: any[] = []
+    const result = await callAnthropicMessages({ ...base, prompt: 'private prompt' }, ctx({ fetch, timeoutMs: 40, log: async r => { logged.push(r) } }))
     assert.equal(result.success, false)
     assert.match(result.error ?? '', /^Network error:/)
+    assert.deepEqual(logged.map(r => [r.errorCode, r.costUsd, r.success]), [['local_timeout', null, false]])
     assert.equal(diagnostics.length, 1)
     const diagnostic = JSON.parse(diagnostics[0].slice('[Anthropic Service] Request error '.length))
     assert.equal(diagnostic.kind, 'local_timeout')
@@ -111,7 +113,7 @@ test('an answer still streaming when our deadline closes is reported as too long
     let timer: ReturnType<typeof setInterval> | undefined
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(encode({ type: 'message_start', message: { id: 'm', content: [] } }))
+        controller.enqueue(encode({ type: 'message_start', message: { id: 'm', content: [], usage: { input_tokens: 10, cache_read_input_tokens: 900, cache_creation_input_tokens: 90 } } }))
         controller.enqueue(encode({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }))
         timer = setInterval(() => controller.enqueue(encode({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'del ' } })), 5)
         init.signal?.addEventListener('abort', () => { clearInterval(timer); controller.error(new DOMException('aborted', 'AbortError')) }, { once: true })
@@ -120,8 +122,13 @@ test('an answer still streaming when our deadline closes is reported as too long
     return new Response(stream, { status: 200 })
   }) as typeof globalThis.fetch
   try {
-    const result = await callAnthropicMessages({ ...base, prompt: 'x' }, ctx({ fetch, timeoutMs: 60 }))
+    const logged: any[] = []
+    const result = await callAnthropicMessages({ ...base, prompt: 'x' }, ctx({ fetch, timeoutMs: 60, log: async r => { logged.push(r) } }))
     assert.equal(result.success, false); assert.equal(result.error, 'model_output_window')
+    // A possibly billed request is visible in the ledger: known input, unknown cost.
+    assert.equal(logged.length, 1)
+    assert.deepEqual({ ...logged[0], latencyMs: undefined }, { model: 'claude-opus-5-5', inputTokens: 1000, cachedInputTokens: 900, outputTokens: 0, reasoningTokens: 0,
+      totalTokens: 1000, costUsd: null, success: false, errorCode: 'model_output_window', latencyMs: undefined })
     assert.deepEqual((result as any).failure, { code: 'model_output_window' })
   } finally { console.error = originalError }
 })

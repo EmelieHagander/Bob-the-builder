@@ -215,7 +215,8 @@ export async function prepareProjectOrientation(opts: {
         const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'context-summary', aiFunction: 'context-summary', module: 'global', userId: opts.userId,
           catalogRoleKey: 'context-presentation', catalogSchemaKey: 'bob_context_presentation', schemaName: 'bob_context_presentation',
           messages: [{ role: 'user', content: JSON.stringify({ projectId: opts.projectId, blocks: oversized, ...(feedback ? { validationFeedback: feedback } : {}) }) }],
-          maxOutputTokens: 3000, timeoutMs: Math.min(30000, opts.deadline - Date.now()) })
+          // Claude streams ~90-130 tokens/s; 3,000 tokens need up to ~38 s.
+          maxOutputTokens: 3000, timeoutMs: Math.min(45000, opts.deadline - Date.now()) })
         const data: unknown = result.data
         if (!result.success || result.toolCalls?.length || !object(data) || Object.keys(data).some(key => key !== 'presentations')
           || !Array.isArray(data.presentations) || data.presentations.length !== oversized.length) throw new Error('presentation_shape')

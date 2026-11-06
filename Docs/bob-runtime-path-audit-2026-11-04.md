@@ -1627,17 +1627,25 @@ were not called. The edit repair (#484) was never reached.
   on unchanged main. All Edge entrypoints pass Deno type checking with the
   temporary local import map.
 
-**Similar risks found (not changed).**
+**Similar risks found and corrected in the same change.**
 
-- `plan-compiler` asks for up to 24,000 output tokens within at most 40 s; at
-  observed speeds about 4,000–6,000 tokens fit. It has had no Claude calls since
-  the provider switch.
-- Working-context and orientation summaries allow 3,000 tokens within 30 s;
-  observed helper outputs stay below 2,700 tokens, so the margin is small.
-- A first cut answer still spends its whole window before the note; long
-  answers remain slower than smaller tool calls.
-- Aborted Claude requests are not written to the usage ledger, so known cost
-  can understate a turn with timeouts.
+- `plan-compiler` had at most 40 s; earlier compiled plans reached 5,402 output
+  tokens (p90 4,535), about 60 s at observed Claude speeds. Its window is now up
+  to 120 s, still bounded by the caller's deadline. The reviewer (max 1,740
+  tokens, 30 s) is unchanged.
+- Working-context and orientation summaries (3,000-token design, Claude
+  outputs up to 2,646 tokens in 17.7–22.7 s) now have 45 s instead of 30 s. The
+  memory stair (max 1,314 tokens) keeps 30 s.
+- An aborted Claude request that reached the provider is now written to the
+  usage ledger with its known input tokens, zero recorded output and
+  `cost_usd: null`, with error code `model_output_window`, `local_timeout` or
+  `network_or_stream`. No ledger trigger or Bob runtime reader is affected;
+  failed rows already existed.
+
+**Remaining decision.** A first cut answer still spends its whole window (up to
+120 s) before the note. Longer Claude segments would let long answers finish,
+but depend on the Supabase plan's Edge wall clock (the timing module assumes
+150 s); the plan could not be read with the session's access.
 
 Remaining: Edge deploy (ask-bob + bob-worker) with the owner's OK, then one
 ordinary bed turn. No paid model run, full CI, catalog change or owner-data
