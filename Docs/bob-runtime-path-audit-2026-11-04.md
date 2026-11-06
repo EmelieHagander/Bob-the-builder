@@ -1527,7 +1527,7 @@ Konrad had no named repair. The RPC reason is inferred from the hosted function
 and the current stored state, not from a logged payload. A new "kör" alone would
 repeat it (R5).
 
-**Correction (source; not yet deployed).**
+**Correction (merged in #484; hosted publication below).**
 
 - The Edge wrappers pass through only the server's named `construction_changed`
   and `operation_reused` conflicts; every other database error keeps its generic
@@ -1549,7 +1549,33 @@ repeat it (R5).
   on unchanged main. Both Edge entrypoints pass Deno type checking with a
   temporary local import map for the pinned packages.
 
-Remaining: an Edge deploy with the owner's OK, then one ordinary bed turn to
-show Konrad's repaired edit, the Rita/Mattias follow-up and the cost. Entry's
-image load and context ceiling (C2) is the next separate increment. No paid
-model run, full CI, catalog publication or owner-data correction was performed.
+#### Hosted publication — 2026-11-06, 15:00 UTC
+
+The owner authorized publication of this correction alone (Entry/C2 remains a
+separate increment).
+
+- #484 is merged at `4bb0db5d4035375e952f8163aaa7d44eff688fa0`; its tree
+  `36aff2a149a34cf3692a728ad71f01892e80a01d` equals the tested branch tree.
+  Safety branch `save/bob-before-edit-repair-2026-11-06` retains the previous
+  published source `bf353885bdcb5a3deb7cf1deb8114f2c020182d4`.
+- Preflight: project `yuobtgoidmmmwfqenkau`, zero active Bob jobs, and the
+  running versions were exactly the recorded bob-worker v205 / ask-bob v237
+  bundles.
+- Published from the merged checkout with Supabase CLI 2.117.0
+  (`supabase functions deploy --use-api`), worker first.
+
+| Consumer | Version | Files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 206 | 148 | Existing private job capability, JWT false | `b1db3dbef23404358d2b34cffc5a86fcf08f7873c449722ce628b79756f0ed3f` |
+| ask-bob | 238 | 150 | JWT true | `f33c3e8795342a80d8e14b709df52bc6e11bd187a06ff8c83de2450915070c2a` |
+
+The returned runtime sources were compared byte for byte with the merged
+checkout: every file matches except the already-known type-only erasure of
+`cad-intake.ts`, and both bundles contain the new reason handling. Zero Bob jobs
+were active after publication. No migration, catalog change or frontend
+publication was needed: the change is Edge code only.
+
+Remaining: one ordinary bed turn to show Konrad's repaired edit, the
+Rita/Mattias follow-up and the cost. Entry's image load and context ceiling (C2)
+is the next separate increment. No paid model run, full CI, catalog publication
+or owner-data correction was performed.
