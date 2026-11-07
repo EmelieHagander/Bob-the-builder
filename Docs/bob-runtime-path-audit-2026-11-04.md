@@ -2760,3 +2760,59 @@ after. No migration.
 Returned sources match the merged checkout byte for byte except the known
 type-only `cad-intake.ts` erasure; both bundles contain `capCachePoints`.
 Remaining: a new owner turn shows no `cache_control` refusal.
+
+<a id="lean-construction-2026-11-07"></a>
+### Built: Konrad writes the construction, code writes what follows — 2026-11-07
+
+Owner, 2026-11-07, after the Entrén turn: five root measures, then "Kör B"
+(all in one change) "sen auditar vi det några gånger". Built and tested
+locally; not deployed, not applied. Pin: `lean_construction_version` 1 on
+`tools.save_construction_draft` (publication `bob-lean-construction-v1`).
+
+**Root cause, measured.** The saved 11-part wall (`d0e2fa57`, rev 1) holds 1,939
+characters of geometry, but the save Konrad typed was 26,590 characters
+(≈ 8,000 tokens): parameter plan 13,940 (40 nodes, 81 bindings, 27 derived),
+joints 6,714 (21 joints), policy 1,447, materials 748, questions 1,058. Typing
+that took 75–120 s per answer; three answers were cut by the 120 s window, and
+four refusals (`human_text`, `sketch_existing_construction`, twice
+`form_instance_unmapped`) threw away whole written payloads of 7,000–10,700
+output tokens.
+
+| Measure | What code now does | Source |
+|---|---|---|
+| 1. Joint rules | One rule per definition pair; code writes a joint for each touching pair without one, faces in local coordinates. Contact alone still declares nothing. | `construction-joint-rules.ts` |
+| 2. Formulas | A recipe number may be a formula over node names; code adds `fx.<hash>` derived nodes and bindings. Same stored graph. | `cad-formulas.ts` |
+| 3. FORM mapping | Code maps a new part to the component holding it; edits carry the mapping to the database; `form_assign` overrides. | `construction-form.ts`, `20261107150000_…sql` |
+| 4. Cost truth | A cut Claude answer is priced from its input and streamed output, `cost_basis = streamed_output_estimate`. | `anthropic-service.ts` |
+| 5. Kept payloads | A refused construction write stays in the sketch; corrections are small; commit re-checks text. A saved construction can be revised whole in a keyed sketch. | `construction-draft.ts` |
+
+**Dropped from the proposal, with the numbers.** *Trimming Konrad's own saved
+writes from his context* would save under USD 0.10 per job: an 8,000-token
+write read from cache costs about USD 0.003 per later call; measures 1 and 2
+shrink the writes themselves. *Separate thinking tokens* cannot be measured:
+Claude reports one output count, and thinking streams as a summary.
+
+**Size.** The two tool schemas grow from 27.8 to 37.3 kB (save) and 32.5 to
+41.5 kB (edit), mostly the formula alternative repeated at each number field;
+dispatch sends repeated sub-schemas once as `$defs` (`tool_schema_dedup`), and
+the schemas are read from cache within a job. The expected write for the same
+wall is about a third of the former 26,590 characters (formulas instead of 81
+bindings and 27 nodes; two rules instead of 21 joints); measured only after a
+live turn.
+
+**Verification (local, focused).** `lean-construction-units` 6/6 (formula
+graph, refusals by path, negative values and repeat spacing, edit upserts and
+unused formula nodes, rule joints accepted by the check, FORM mapping), and
+`lean-construction` 4/4 against the database: a frame saved with formulas and
+one rule; a part added by an edit, with its joints and mapping (the edit refused
+live at 13:48 and 13:59); a refused edit kept and corrected in the sketch,
+refused text re-checked at commit; a refused new save kept by key, and a saved
+construction revised whole by key. `construction-sketch` 12/12 asserts that code
+validates exactly the published schemas with the production pins.
+`anthropic-service` 11/11 (cut answers priced). Five suites fail identically on
+`main`.
+
+**Open.** Reads still show the stored graph (nodes and bindings), not formulas;
+an edit names nodes, not the formulas that made them. Instance roles
+(`instance_policy`, 1,447 characters for the wall) are still written per part.
+Live measurement of write size, refusals and cost is the next owner turn.

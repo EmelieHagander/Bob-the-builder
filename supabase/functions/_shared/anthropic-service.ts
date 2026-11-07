@@ -44,6 +44,10 @@ const CLAUDE_ACTIVE_STREAM_MS = 10_000
 const cachePoint = (): Json => ({ type: 'ephemeral' })
 // 5-minute cache writes cost 1.25x the base input price.
 const CACHE_WRITE_MULTIPLIER = 1.25
+/** Characters of streamed text, thinking or tool input per output token, for
+ * a cut answer that never reported its usage. Bob's output is mostly JSON and
+ * Swedish prose. */
+export const STREAMED_CHARS_PER_TOKEN = 3.5
 
 type Json = Record<string, unknown>
 type Block = Json & { type: string }
@@ -59,6 +63,8 @@ export interface AnthropicModelRow {
 export interface AnthropicUsageRecord {
   model: string; inputTokens: number; cachedInputTokens: number; outputTokens: number
   reasoningTokens: number; totalTokens: number; costUsd: number | null; success: boolean;errorCode?:string;latencyMs?:number
+  /** Set when the cost is estimated from streamed output, not reported. */
+  costBasis?: 'streamed_output_estimate'
 }
 export interface AnthropicCallContext {
   apiKey: string
@@ -293,7 +299,7 @@ function capCachePoints(body: Json): void {
 }
 
 /** Collect one streamed Messages response into the final message object. */
-export async function collectStream(response: Response, onEvent?: (type: string, message: Json) => void): Promise<Json> {
+export async function collectStream(response: Response, onEvent?: (type: string, message: Json, outputChars: number) => void): Promise<Json> {
   if (!response.body) throw new Error('anthropic_stream_missing')
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
   const message: Json = { content: [] as Block[], usage: {} }
@@ -342,7 +348,8 @@ export async function collectStream(response: Response, onEvent?: (type: string,
       const data = frame.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trim()).join('')
       if (data) {
         const event = JSON.parse(data) as Json
-        onEvent?.(String(event.type ?? 'unknown'), message)
+        const delta = event.type === 'content_block_delta' ? event.delta as Json : null
+        onEvent?.(String(event.type ?? 'unknown'), message, delta ? String(delta.text ?? delta.thinking ?? delta.partial_json ?? '').length : 0)
         handle(event)
       }
     }
@@ -393,7 +400,7 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
   let response: Response | null = null
   const startedAt = Date.now()
   let events = 0, firstEventAt: number | null = null, lastEventAt: number | null = null, lastOutputAt: number | null = null
-  let streamed: Json | null = null
+  let streamed: Json | null = null, outputChars = 0
   try {
     for (let attempt = 0; ; attempt++) {
       response = await doFetch(ANTHROPIC_URL, { method: 'POST', signal: controller.signal, body: JSON.stringify(body),
@@ -410,9 +417,10 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
       await response.body?.cancel()
       await sleep(retryDelayMs(response, attempt))
     }
-    message = await collectStream(response!, (type, partial) => {
+    message = await collectStream(response!, (type, partial, chars) => {
       const now = Date.now()
       streamed = partial
+      outputChars += chars
       events++
       if (firstEventAt === null) firstEventAt = now
       lastEventAt = now
@@ -438,14 +446,19 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
     // note. A deadline before the first event keeps the plain network code.
     const cut = controller.signal.aborted && response?.ok === true && firstEventAt !== null
     const active = lastOutputAt !== null && Date.now() - lastOutputAt <= CLAUDE_ACTIVE_STREAM_MS
-    // A request that reached the provider may be billed. Record it with its
-    // known input and an unknown cost rather than leave the ledger silent.
+    // A request that reached the provider is billed. Its input is known from
+    // the start of the stream; its output is estimated from what streamed
+    // (owner decision 2026-11-07: three cut Konrad answers had no price).
+    // Thinking that streamed as a summary counts at its summary length, so
+    // the estimate is a lower bound.
     if (response?.ok) {
       const raw = ((streamed as Json | null)?.usage ?? {}) as Json
       const read = Number(raw.cache_read_input_tokens ?? 0)
       const input = Number(raw.input_tokens ?? 0) + Number(raw.cache_creation_input_tokens ?? 0) + read
-      try { await ctx.log({ model, inputTokens: input, cachedInputTokens: read, outputTokens: 0, reasoningTokens: 0, totalTokens: input,
-        costUsd: null, success: false, latencyMs: Date.now() - startedAt,
+      const output = Math.ceil(outputChars / STREAMED_CHARS_PER_TOKEN)
+      const priced = firstEventAt !== null ? anthropicCostUsd(ctx.model, { ...raw, output_tokens: output }) : null
+      try { await ctx.log({ model, inputTokens: input, cachedInputTokens: read, outputTokens: priced === null ? 0 : output, reasoningTokens: 0, totalTokens: input + (priced === null ? 0 : output),
+        costUsd: priced, ...(priced === null ? {} : { costBasis: 'streamed_output_estimate' as const }), success: false, latencyMs: Date.now() - startedAt,
         errorCode: cut ? active ? 'model_output_window' : 'model_output_window_silent' : controller.signal.aborted ? 'local_timeout' : 'network_or_stream' }) }
       catch { /* the ledger never decides the call outcome */ }
     }

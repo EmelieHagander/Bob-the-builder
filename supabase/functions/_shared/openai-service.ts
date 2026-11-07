@@ -526,7 +526,7 @@ export async function callOpenAIResponses<T = unknown>(
       timeoutMs, resolveImage: options.resolveImageInline ?? options.resolveImage,
       log: (r) => logAIUsage(aiClient, { app: options.app, module, aiFunction, userId, model: r.model,
         inputTokens: r.inputTokens, cachedInputTokens: r.cachedInputTokens, outputTokens: r.outputTokens,
-        reasoningTokens: r.reasoningTokens, totalTokens: r.totalTokens, costUsd: r.costUsd,
+        reasoningTokens: r.reasoningTokens, totalTokens: r.totalTokens, costUsd: r.costUsd, costBasis: r.costBasis,
         inputPricePer1m: anthropicModel.input_cost_per_1m_tokens, outputPricePer1m: anthropicModel.output_cost_per_1m_tokens, success: r.success, errorCode:r.errorCode,latencyMs:r.latencyMs,onId:options.onUsageLogged }),
     });
   }
@@ -1234,6 +1234,7 @@ async function logAIUsage(
     reasoningTokens: number;
     totalTokens: number;
     costUsd: number | null;
+    costBasis?: 'streamed_output_estimate';
     inputPricePer1m: number;
     outputPricePer1m: number;
     success: boolean;
@@ -1257,6 +1258,7 @@ async function logAIUsage(
     input_price_per_1m: params.inputPricePer1m,
     output_price_per_1m: params.outputPricePer1m,
     cost_usd: params.costUsd,
+    ...(params.costBasis ? { cost_basis: params.costBasis } : {}),
     success: params.success,
     ...(params.errorCode?{error_code:params.errorCode}:{}),
     ...(Number.isFinite(params.latencyMs)?{latency_ms:Math.round(params.latencyMs!)}:{})

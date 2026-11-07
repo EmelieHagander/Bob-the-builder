@@ -287,6 +287,48 @@ tokens, and every box construction was glue only or screws only by chance.
 
 Pinned manifests keep the former schemas, rule fastener and lookups.
 
+<a id="konrad-lean-writing"></a>
+**Konrad writes the construction, code writes what follows — built 2026-11-07,
+not yet published** (`tools.save_construction_draft`
+`lean_construction_version` 1, owner: "Kör B"; needs `default_zero_version` 1,
+`joint_fastener_version` 2, the FORM refinement and both sketch stores).
+Entry turn 2026-11-07: an 11-part wall was 26,590 characters Konrad typed in
+75–120 s; half were bindings and derived nodes, a quarter joints
+([record](bob-runtime-path-audit-2026-11-04.md#lean-construction-2026-11-07)).
+
+- **Formulas.** A number in the recipe, or in an upserted definition or part,
+  may be a formula over parameter node names (`"D - st"`, `"(h - hdr) / two"`):
+  `+ - * /`, parentheses, spaces around a minus sign. Code compiles each
+  operation to a derived node named `fx.<hash>` (the same formula is the same
+  node in every save) and binds the field, so the saved graph, provenance and
+  read-back are unchanged. Numbers are not formula syntax: each needs a named
+  decision or measurement with its reason. A repeat's `spacing_mm` takes a
+  formula. Formula nodes nothing uses any more are removed by code; a declared
+  node nothing uses is still refused. Source: `cad-formulas.ts`.
+- **Joint rules.** `joint_rules` names how parts of two definitions are joined
+  (fasteners and reason); code writes one joint, id `jr.<a>.<b>`, for every
+  pair of such parts touching face to face that has no joint, with the faces in
+  local coordinates. A touching pair without a rule or a joint stays
+  `contact_without_joint`; two existing parts and reference geometry are never
+  joined. Rules last for the save or edit (and the sketch) they come with.
+  Source: `construction-joint-rules.ts`.
+- **FORM mapping kept by code.** A part no mapping names goes to the one active
+  concept component whose envelope holds it; a removed part leaves its mapping;
+  `form_assign` (part edits) moves a part on purpose. A part outside every
+  component, or inside several, is named, not guessed. A part edit now carries
+  the mapping to the database (`20261107150000_construction_edit_form_mapping.sql`),
+  whose readiness seam validates and stores it for the new revision.
+- **A refused write stays in the sketch.** A part edit or save refused for what
+  was written (`invalid`, `needs_data`, including a text that is not plain
+  prose) is kept in the sketch with its issues, so the next call sends only the
+  correction; commit checks the kept text again. A saved construction can be
+  revised whole in a keyed sketch (`save_construction_draft` with its
+  `record_id`, mode sketch), committed with its `new_key`.
+
+The cost ledger prices a Claude answer cut by our own deadline from its known
+input and the output that streamed, marked `cost_basis =
+streamed_output_estimate` (a lower bound: thinking streams as a summary).
+
 <a id="materials-worker"></a>
 **Superseded for new manifests by [the build team](#build-team) (built
 2026-10-31): Mattias's first form, kept by pinned manifests.**

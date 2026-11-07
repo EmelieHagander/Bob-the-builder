@@ -26,6 +26,12 @@ import { countSerializedTokens } from './bob-token-budget.ts'
 import { compactConstructionCheck } from './write-state.ts'
 import { recipeSize, staleSizeText, staleTextRejection, withConstructionText } from './construction-text.ts'
 import { CONSTRUCTION_SKETCH_COMMIT_TOOL, CONSTRUCTION_SKETCH_COMMIT_TOOL_V2, mergeNewConstruction, parseNewSketch, withNewConstructionSketch, type NewConstructionSketch, baseKeysOf, composeSketchChanges, parseSketch, sketchChangeCount, sketchSummary, withConstructionSketch, type ConstructionSketch, type ConstructionSketchStore } from './construction-sketch.ts'
+import { CadFormulaError, compileEditFormulas, compileSaveFormulas, definitionFields, instanceFields, unusedFormulaNodes } from './cad-formulas.ts'
+import { ruleJoints, type JointRule } from './construction-joint-rules.ts'
+import { extendFormMapping, type FormAssignment } from './construction-form.ts'
+import { withLeanEdit, withLeanSave } from './construction-lean.ts'
+import type { ParameterInput } from './cad-parameters.ts'
+import { frameParameterIds } from './cad-frames.ts'
 
 /** Reconstruct a historical tool check; a new check position still reads live.
  * CAD render/review gates use their independent fresh readers. Old executions
@@ -128,10 +134,10 @@ export const CONSTRUCTION_CUT_SAVE_TOOL=tool('save_construction_cut_plan','Save 
 /** Text people read in construction writes: titles, notes, reasons and open
  * questions (shown on drawings and source maps). Ids, keys and paths are typed. */
 const CONSTRUCTION_PROSE:Record<string,readonly string[]>={
- save_construction_draft:['title','description','change_note','parameter_plan.frames.*.reason','parameter_plan.nodes.*.reason','instance_policy.instances.*.reason','joints.*.reason','joints.*.fastener.reason','open_questions.*'],
+ save_construction_draft:['title','description','change_note','parameter_plan.frames.*.reason','parameter_plan.nodes.*.reason','instance_policy.instances.*.reason','joints.*.reason','joints.*.fastener.reason','joint_rules.*.reason','open_questions.*'],
  transition_legacy_drawing:['change_note','joints.*.reason','joints.*.fastener.reason','open_questions.*'],
  change_construction_parameters:['change_note','changes.*.reason','text.title','text.description','text.open_questions.*'],
- edit_construction_parts:['change_note','changes.nodes.upsert.*.reason','changes.joints.upsert.*.reason','changes.joints.upsert.*.fastener.reason','changes.roles.upsert.*.reason','text.title','text.description','text.open_questions.*'],
+ edit_construction_parts:['change_note','changes.nodes.upsert.*.reason','changes.joints.upsert.*.reason','changes.joints.upsert.*.fastener.reason','changes.roles.upsert.*.reason','joint_rules.*.reason','text.title','text.description','text.open_questions.*'],
  change_construction_roles:['change_note','changes.*.reason'],
  continue_construction_change:['change_note','review_note'],
  save_construction_cut_plan:['change_note','candidates.*.note'],
@@ -253,6 +259,11 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  serverTarget?:boolean;
  /** The current selected target revision of a project or area (null: none). */
  readCurrentTarget?:(areaId:string|null)=>Promise<number|null>;
+ /** Pinned per manifest (lean_construction_version 1, owner decision
+  * 2026-11-07; needs defaultZero, chosenJointFasteners, formRefinement and
+  * both sketch stores): formulas in the recipe, joint rules, code-kept FORM
+  * mapping, and refused construction writes kept in the sketch. */
+ leanConstruction?:boolean;
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
  const views=createConstructionViews(opts.projectId,opts.now,opts.fastPageFit)
@@ -267,14 +278,17 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  const zeroText=<T,>(tool:T)=>opts.defaultZero?withDefaultZeroText(tool,{path:(CAD_PARAMETERS_SCHEMA.properties.bindings as any).items.properties.path.description,arrays:CAD_ARRAYS_SCHEMA.description}):tool
  const placedSaveTool=(t=>opts.defaultZero&&opts.repeatStart?withRepeatStartSchema(t):t)(zeroText(opts.chosenJointFasteners?withChosenJointFasteners(formSaveTool):formSaveTool))
  const subBuildSaveTool=opts.placeIn?withSubBuild(placedSaveTool):placedSaveTool
- const saveTool=targetless(opts.newSketches?withNewConstructionSketch(subBuildSaveTool):subBuildSaveTool)
+ const lean=!!(opts.leanConstruction&&opts.defaultZero&&opts.chosenJointFasteners&&opts.formRefinement&&opts.sketches&&opts.newSketches)
+ const sketchedSaveTool=targetless(opts.newSketches?withNewConstructionSketch(subBuildSaveTool):subBuildSaveTool)
+ const saveTool=lean?withLeanSave(sketchedSaveTool):sketchedSaveTool
  const joints=(value:unknown)=>opts.chosenJointFasteners?storedChosenJoints(value):storedJoints(value)
  const baseParameterTool=opts.constructionSourceRefresh?CONSTRUCTION_PARAMETER_REFRESH_TOOL:CONSTRUCTION_PARAMETER_TOOL
  const withText=(tool:typeof CONSTRUCTION_EDIT_TOOL)=>opts.constructionText?withConstructionText(tool,opts.constructionNotes):tool
  const parameterTool=targetless(opts.coherentWork?withText(withConstructionWorkWrite(baseParameterTool)):baseParameterTool)
  const workEditTool=opts.coherentWork?withText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL)):CONSTRUCTION_EDIT_TOOL
  const fastenedEditTool=zeroText(opts.chosenJointFasteners?withChosenJointFasteners(workEditTool):workEditTool)
- const editTool=targetless(opts.sketches?withConstructionSketch(fastenedEditTool):fastenedEditTool)
+ const sketchedEditTool=targetless(opts.sketches?withConstructionSketch(fastenedEditTool):fastenedEditTool)
+ const editTool=lean?withLeanEdit(sketchedEditTool):sketchedEditTool
  const commitTool=opts.newSketches?CONSTRUCTION_SKETCH_COMMIT_TOOL_V2:CONSTRUCTION_SKETCH_COMMIT_TOOL
  const sketchTools=opts.writer&&opts.sketches?[commitTool]:[]
  const prepareChange=async(v:Record<string,any>,domain:WritePayload,prepare:(p:WritePayload)=>Promise<Record<string,any>>)=>{
@@ -346,6 +360,11 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  const prepareSave=async(v:Record<string,any>,sketching=false):Promise<{error:Record<string,any>}|{commit:WritePayload;recipe:Record<string,any>;parameters:unknown;readiness:DesignReadiness;pending:Record<string,any>[]}>=>{
   if(!opts.message.includes(v.request_quote)||!v.request_quote.trim()||(v.record_id===null?v.expected_revision!==0:v.expected_revision<1))return {error:{status:'invalid',message:'Use the current request and exact expected revision.'}}
   const pending:Record<string,any>[]=[]
+  // Lean writing: formulas become the same nodes and bindings a hand-written plan has.
+  if(lean){
+   try{const f=compileSaveFormulas(v.recipe,v.parameter_plan);v={...v,recipe:f.recipe,parameter_plan:f.plan}}
+   catch(e){if(e instanceof CadFormulaError)return {error:{status:'invalid',reason:'formula_invalid',issues:e.issues,message:'No construction saved. Correct the named formulas.'}};throw e}
+  }
   if(v.form_refinement?!opts.readConstructionReadiness:!opts.readDesignReadiness)return {error:{status:'unavailable',message:'Could not read the selected solution and expert advice. Recover that read before fixing construction geometry.'}}
   const read=v.form_refinement
    ? (await opts.readConstructionReadiness!(v.target_revision,v.area_id,v.form_refinement) as Record<string,unknown>|null)?.design_readiness
@@ -375,17 +394,40 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   const sources=await opts.readSources(parameterSourcePins(plan))
   const parameters=compileCadParameters(opts.projectId,recipe,plan,sources.project,sources.physical)
   if(!parseCadAssemblyRequest(recipe))return {error:{status:'invalid',message:'Computed dimensions or placement are outside the supported geometry contract.'}}
+  // Lean writing: joint rules become one joint per touching pair they cover.
+  let generated:Record<string,any>[]=[]
+  if(lean){
+   const roles=new Map(constructionInstancePolicy(recipe,v.instance_policy).instances.map(i=>[i.instance_id,i.role] as [string,string]))
+   const ruled=ruleJoints(recipe,Array.isArray(v.joints)?v.joints:[],(v.joint_rules??[]) as JointRule[],roles)
+   if(ruled.issues.length)return {error:{status:'invalid',reason:'joint_rule_invalid',issues:ruled.issues,message:'No construction saved. Correct the named joint rules.'}}
+   generated=ruled.joints
+  }
   if(readiness.design_intent?.model){
    const policy=constructionInstancePolicy(recipe,v.instance_policy)
    const references=new Set(policy.instances.filter(i=>i.role==='reference').map(i=>i.instance_id))
+   // Lean writing: code completes the FORM mapping from the parts' places.
+   if(lean&&v.form_refinement){
+    const ext=extendFormMapping(readiness.design_intent,recipe,v.form_refinement,references)
+    if(ext.issues.length)return {error:{status:'needs_data',reason:'form_mapping_incomplete',issues:ext.issues,message:'No construction saved. Move the named parts inside a concept component or name their component in form_refinement.'}}
+    const scope=(r:FormRefinement)=>r.mappings.map(m=>m.component_id).sort().join(',')
+    if(ext.changed&&scope(ext.refinement)!==scope(v.form_refinement)){
+     const again=parseDesignReadiness((await opts.readConstructionReadiness!(v.target_revision,v.area_id,ext.refinement) as Record<string,unknown>|null)?.design_readiness)
+     if(!await opts.hasAccess())return {error:{status:'denied'}}
+     if(!again||again.target_revision!==v.target_revision)return {error:{status:'unavailable',message:'Could not verify advice for the completed mapping. Read the current target and solution again.'}}
+     const scoped=constructionFormReadiness(again,ext.refinement)
+     if(scoped.status!=='ready')return {error:{status:scoped.status,readiness:scoped,issues:scoped.issues,
+      message:'No construction saved. A part sits in a concept component whose choices are still open; resolve them or move the part.'}}
+    }
+    v={...v,form_refinement:ext.refinement}
+   }
    const found=v.form_refinement?constructionFormIssues(readiness.design_intent,recipe,references,v.form_refinement,true,sketching):conceptConstructionIssues(readiness.design_intent,recipe,references)
    const issues=sketching?found.filter(i=>!PENDING_CONCEPT.has(i.code)):found
    pending.push(...(sketching?found.filter(i=>PENDING_CONCEPT.has(i.code)):[]))
    if(issues.length)return {error:{status:'needs_data',issues,message:'No construction saved. Preserve the selected concept component identities, dimensions and relations, or explicitly revise that Solution before handoff.'}}
   }
   if(!await opts.hasAccess())return {error:{status:'denied'}}
-  const {record_id,expected_revision,request_quote,parameter_plan:_plan,sub_build_id:_subBuild,...data}=v
-  return {commit:{kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,joints:joints(data.joints),recipe,parameters}} as WritePayload,recipe,parameters,readiness,pending}
+  const {record_id,expected_revision,request_quote,parameter_plan:_plan,sub_build_id:_subBuild,joint_rules:_rules,...data}=v
+  return {commit:{kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,joints:joints([...(Array.isArray(data.joints)?data.joints:[]),...generated]),recipe,parameters}} as WritePayload,recipe,parameters,readiness,pending}
  }
  const saveDraft=async(v:Record<string,any>):Promise<Record<string,any>>=>{
   const ready=await prepareSave(v)
@@ -393,13 +435,60 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   if(!await opts.hasAccess())return {status:'denied'}
   return await opts.writer!.commit(ready.commit)
  }
+ // Lean writing in a part edit: what follows from the merged construction.
+ // Formula nodes nothing uses go, rule joints are written for touching pairs
+ // without one, and the FORM mapping follows the parts.
+ const leanEdit=async(v:Record<string,any>,prepared:Record<string,any>,d:ReturnType<typeof zeroDefaults>):Promise<{error:Record<string,any>}|{unused:string[];joints:Record<string,any>[];formRefinement:FormRefinement|null}>=>{
+  const next=prepared.next,draft=prepared.draft,planIn=parseParameterPlan(next.parameter_plan)
+  const plan0={...planIn,nodes:[...planIn.nodes.filter(n=>!d.unused.includes(n.id)),...d.nodes],bindings:[...planIn.bindings.filter(b=>!d.stale.includes(b.path)),...d.bindings]}
+  const unused=unusedFormulaNodes(plan0.nodes,plan0.bindings,frameParameterIds(plan0.frames))
+  const plan={...plan0,nodes:plan0.nodes.filter(n=>!unused.includes(n.id))}
+  const recipe=parseCadAssemblyRequest(structuredClone(next.recipe))
+  if(!recipe)return {unused,joints:[],formRefinement:null}
+  // Geometry for contacts and envelopes; a plan that does not compile is
+  // reported by the normal path after this one.
+  try{
+   const sources=await opts.readSources(parameterSourcePins(plan))
+   compileCadParameters(opts.projectId,recipe,plan,sources.project,sources.physical)
+  }catch(error){rethrowContinuation(error);return {unused,joints:[],formRefinement:null}}
+  const policy=constructionInstancePolicy(recipe,next.instance_policy)
+  const roles=new Map(policy.instances.map(i=>[i.instance_id,i.role] as [string,string]))
+  const ruled=ruleJoints(recipe,Array.isArray(next.joints)?next.joints:[],(v.joint_rules??[]) as JointRule[],roles)
+  if(ruled.issues.length)return {error:{status:'invalid',reason:'joint_rule_invalid',issues:ruled.issues,message:'No construction changed. Correct the named joint rules.'}}
+  let formRefinement:FormRefinement|null=null
+  if(draft?.form_refinement&&Number.isSafeInteger(draft.target_revision)&&opts.readConstructionReadiness){
+   const read=parseDesignReadiness((await opts.readConstructionReadiness(draft.target_revision,draft.area_id??null,draft.form_refinement) as Record<string,unknown>|null)?.design_readiness)
+   if(!await opts.hasAccess())return {error:{status:'denied'}}
+   if(!read?.design_intent?.model)return {error:{status:'unavailable',message:'Could not read the concept this construction is mapped to; nothing changed.'}}
+   const references=new Set(policy.instances.filter(i=>i.role==='reference').map(i=>i.instance_id))
+   const ext=extendFormMapping(read.design_intent,recipe,draft.form_refinement,references,(v.form_assign??[]) as FormAssignment[])
+   if(ext.issues.length)return {error:{status:'needs_data',reason:'form_mapping_incomplete',issues:ext.issues,message:'No construction changed. Move the named parts inside a concept component, or name their component in form_assign.'}}
+   if(ext.changed)formRefinement=ext.refinement
+  }
+  return {unused,joints:ruled.joints,formRefinement}
+ }
+ // Lean writing: formulas in upserted definitions and parts become node and
+ // binding upserts. Names resolve against the saved revision and what the
+ // sketch already adds or removes.
+ const editFormulas=async(v:Record<string,any>,prior:ConstructionSketch|null):Promise<{error:Record<string,any>}|{changes:Record<string,any>}>=>{
+  const strings=(name:string,fields:(x:Record<string,any>)=>{obj:Record<string,unknown>;key:string}[])=>(Array.isArray(v.changes?.[name]?.upsert)?v.changes[name].upsert:[])
+   .some((x:any)=>x&&typeof x==='object'&&fields(x).some(f=>typeof f.obj[f.key]==='string'))
+  if(!lean||!strings('definitions',x=>definitionFields(x))&&!strings('instances',x=>instanceFields(x)))return {changes:v.changes}
+  const draft=await opts.read(v.record_id,v.expected_revision,null) as Record<string,any>
+  if(!await opts.hasAccess())return {error:{status:'denied'}}
+  if(draft?.projectId!==opts.projectId||draft.status!=='ok'||draft.artifact_id!==v.record_id||draft.revision!==v.expected_revision)return {error:{status:'conflict',message:'Read the current revision of this construction; nothing changed.'}}
+  const removed=new Set(prior?.changes.nodes?.remove??[]),added=(prior?.changes.nodes?.upsert??[]) as ParameterInput[]
+  const known=[...((draft.parameters?.nodes??[]) as ParameterInput[]).filter(n=>!removed.has(n.id)&&!added.some(a=>a.id===n.id)),...added]
+  try{return {changes:compileEditFormulas(v.changes,known) as Record<string,any>}}
+  catch(e){if(e instanceof CadFormulaError)return {error:{status:'invalid',reason:'formula_invalid',issues:e.issues,message:'No construction changed. Correct the named formulas.'}};throw e}
+ }
  // A part edit, prepared against its saved revision and compiled, not saved.
  // The same path serves a direct save, a sketched change and a sketch commit.
  const prepareParts=async(v:Record<string,any>):Promise<{error:Record<string,any>}|{payload:WritePayload;domain:WritePayload;prepared:Record<string,any>}>=>{
   if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {error:{status:'invalid',issues:[{code:'request_quote',path:'request_quote'}]}}
-  const editPayload=(changes:Record<string,any>):WritePayload=>({kind:'construction_edit',record_id:v.record_id,expected_revision:v.expected_revision,expected_updated_at:null,request_quote:v.request_quote,
+  const editPayload=(changes:Record<string,any>,formRefinement:FormRefinement|null=null):WritePayload=>({kind:'construction_edit',record_id:v.record_id,expected_revision:v.expected_revision,expected_updated_at:null,request_quote:v.request_quote,
    data:{key:v.key,change_note:v.change_note,changes:changes?.joints?{...changes,joints:{...changes.joints,upsert:joints(changes.joints.upsert)}}:changes,computed:null,
-    ...(opts.coherentWork?{target_revision:v.target_revision}:{}),...(opts.constructionText&&v.text?{text:v.text}:{})}})
+    ...(opts.coherentWork?{target_revision:v.target_revision}:{}),...(opts.constructionText&&v.text?{text:v.text}:{}),...(formRefinement?{form_refinement:formRefinement}:{})}})
   let change=await prepareChange(v,editPayload(v.changes),opts.prepareEdit!)
   if(change.error)return {error:change.error}
   // The server merges the plan, so zero defaults are known only after a first
@@ -407,13 +496,28 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   const merged=opts.defaultZero&&change.prepared.status==='ready'&&change.prepared.next?parseCadAssemblyRequest(structuredClone(change.prepared.next.recipe)):null
   if(merged){
    const d=zeroDefaults(merged,parseParameterPlan(change.prepared.next.parameter_plan))
+   const c=structuredClone(v.changes) as Record<string,any>,list=(k:string)=>c[k]??={upsert:[],remove:[]}
+   let added=false,formRefinement:FormRefinement|null=null
    if(d.bindings.length||d.nodes.length||d.unused.length||d.stale.length){
-    const c=structuredClone(v.changes) as Record<string,any>,list=(k:string)=>c[k]??={upsert:[],remove:[]}
+    added=true
     if(d.bindings.length)list('bindings').upsert.push(...d.bindings)
     if(d.stale.length)list('bindings').remove.push(...d.stale.filter(path=>!c.bindings.remove.includes(path)))
     if(d.nodes.length)list('nodes').upsert.push(...d.nodes)
     if(d.unused.length)list('nodes').remove.push(...d.unused.filter(id=>!c.nodes.remove.includes(id)))
-    change=await prepareChange(v,editPayload(c),opts.prepareEdit!)
+   }
+   if(lean){
+    const extra=await leanEdit(v,change.prepared,d)
+    if('error' in extra)return extra
+    for(const id of extra.unused){
+     const at=c.nodes?.upsert.findIndex((n:any)=>n?.id===id)??-1
+     if(at>=0)c.nodes.upsert.splice(at,1);else if(!list('nodes').remove.includes(id))c.nodes.remove.push(id)
+    }
+    if(extra.joints.length)list('joints').upsert.push(...extra.joints)
+    formRefinement=extra.formRefinement
+    added||=!!(extra.unused.length||extra.joints.length||formRefinement)
+   }
+   if(added){
+    change=await prepareChange(v,editPayload(c,formRefinement),opts.prepareEdit!)
     if(change.error)return {error:change.error}
    }
   }
@@ -462,6 +566,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   return {payload,domain,prepared}
  }
  const editParts=async(v:Record<string,any>):Promise<Record<string,any>>=>{
+  if(lean){const f=await editFormulas(v,null);if('error' in f)return f.error;v={...v,changes:f.changes}}
   const ready=await prepareParts(v)
   if('error' in ready)return ready.error
   if(!await opts.hasAccess())return {status:'denied'}
@@ -487,6 +592,30 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   return {...check,scope:'sketch'}
  }
  const SKETCH_KEPT='Nothing sketched; your sketch is unchanged.'
+ const KEPT_EDIT='This change is kept in your sketch of the construction; send only the corrections with mode sketch, then commit it with commit_construction_sketch.'
+ const KEPT_NEW='This construction is kept in your sketch under its key; send only the corrections with mode sketch and the same key, then commit it with commit_construction_sketch.'
+ // Refusals of what was written, which a correction fixes. Conflicts,
+ // denials and lookups that failed say nothing about the written content.
+ const keepable=(r:Record<string,any>)=>['invalid','needs_data'].includes(r?.status)&&!['key_already_saved','sketch_base_differs','sketch_construction_only'].includes(r?.reason)
+  &&!(Array.isArray(r?.issues)&&r.issues.some((i:any)=>i?.code==='request_quote'))
+ // A refused write stored in the sketch: the refusal stays the answer, with
+ // where the work now waits.
+ const keptAfter=async(refusal:Record<string,any>,store:()=>Promise<Record<string,any>>,note:string):Promise<Record<string,any>>=>{
+  const kept=await store()
+  const sketch=kept.status==='sketched'?{status:'kept',...(kept.new_key?{new_key:kept.new_key,part_count:kept.part_count}:{record_id:kept.record_id,base_revision:kept.base_revision,change_count:kept.change_count})}
+   :kept.sketch?.status==='kept_with_issues'?kept.sketch:null
+  if(!sketch)return refusal
+  return {...refusal,saved:false,sketch,message:[typeof refusal.message==='string'?refusal.message:null,note].filter(Boolean).join(' ')}
+ }
+ const savedKeys=async(id:string,revision:number)=>{
+  const draft=await opts.read(id,revision,null) as Record<string,any>
+  return draft?.projectId===opts.projectId&&draft.status==='ok'&&draft.artifact_id===id&&draft.revision===revision?baseKeysOf(draft):null
+ }
+ const byKey=(prior:unknown,next:unknown,key:string)=>{
+  const out=Array.isArray(prior)?structuredClone(prior) as Record<string,any>[]:[]
+  for(const item of Array.isArray(next)?next as Record<string,any>[]:[]){const at=out.findIndex(x=>x?.[key]===item?.[key]);if(at>=0)out[at]=structuredClone(item);else out.push(structuredClone(item))}
+  return out
+ }
  const sketchRefusal=(error:Record<string,any>)=>({...error,saved:false,sketched:false,
   message:[typeof error.message==='string'?error.message:null,SKETCH_KEPT].filter(Boolean).join(' ')})
  const readSketch=async(id:string):Promise<{error:Record<string,any>}|{revision:number;sketch:ConstructionSketch|null}>=>{
@@ -505,12 +634,26 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     :{status:'unavailable',saved:false,message:'The sketch could not be closed.'}
   }
   const ready=await prepareParts({...next,changes:count?next.changes:{instances:{upsert:[],remove:[]}}})
-  if('error' in ready)return sketchRefusal(ready.error)
+  const lean_fields=lean?{joint_rules:next.joint_rules??[],form_assign:next.form_assign??[]}:{}
+  if('error' in ready){
+   // Lean writing: a written change stays in the sketch with what is wrong,
+   // so the next call sends only the corrections.
+   if(!lean||!keepable(ready.error))return sketchRefusal(ready.error)
+   const base=baseKeys??prior?.base_keys??await savedKeys(next.record_id,next.expected_revision)
+   if(!base)return sketchRefusal(ready.error)
+   const kept:ConstructionSketch={version:1,base_revision:next.expected_revision,base_keys:base,changes:next.changes,change_count:count,
+    text:next.text??null,target_revision:next.target_revision??null,notes:notes.slice(-20),...lean_fields}
+   if(!await opts.hasAccess())return {status:'denied'}
+   const put=await opts.sketches!.put(next.record_id,storedRevision,kept)
+   if(put.status!=='stored')return sketchRefusal(ready.error)
+   return {...ready.error,saved:false,sketched:true,sketch:{status:'kept_with_issues',base_revision:kept.base_revision,change_count:count},
+    message:[typeof ready.error.message==='string'?ready.error.message:null,KEPT_EDIT].filter(Boolean).join(' ')}
+  }
   if(ready.prepared.status!=='ready')return sketchRefusal({status:'invalid',reason:'key_already_saved',message:'This key belongs to a change saved in this request; give the sketched change a new key.'})
   const draft=ready.prepared.draft,merged=ready.prepared.next,computed=ready.domain.data.computed as Record<string,any>
   const check=await sketchCheck({...draft,recipe:computed.recipe,parameters:computed.parameters,materials:merged.materials,joints:merged.joints,instance_policy:merged.instance_policy})
   const sketch:ConstructionSketch={version:1,base_revision:next.expected_revision,base_keys:baseKeys??prior?.base_keys??baseKeysOf(draft),changes:next.changes,
-   change_count:count,text:next.text??null,target_revision:next.target_revision??null,notes:notes.slice(-20)}
+   change_count:count,text:next.text??null,target_revision:next.target_revision??null,notes:notes.slice(-20),...lean_fields}
   if(!await opts.hasAccess())return {status:'denied'}
   const put=await opts.sketches!.put(next.record_id,storedRevision,sketch)
   if(put.status!=='stored')return {status:put.status,saved:false,message:'The sketch was not stored; read it with commit_construction_sketch action read before continuing.'}
@@ -526,6 +669,12 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   const prior=read.sketch
   if(prior&&prior.base_revision!==v.expected_revision)return sketchRefusal({status:'conflict',reason:'sketch_base_differs',base_revision:prior.base_revision,
    message:`Your sketch of this construction starts from revision ${prior.base_revision}. Send changes with that expected_revision, or commit, rebase or discard the sketch first.`})
+  if(lean){
+   const f=await editFormulas(v,prior)
+   if('error' in f)return sketchRefusal(f.error)
+   // Rules and assignments from earlier calls stay; a later one with the same id replaces it.
+   v={...v,changes:f.changes,joint_rules:byKey(prior?.joint_rules,v.joint_rules,'id'),form_assign:byKey(prior?.form_assign,v.form_assign,'instance_id')}
+  }
   let changes=v.changes
   if(prior){
    const composed=composeSketchChanges(prior.changes,v.changes,prior.base_keys)
@@ -538,15 +687,21 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  }
  const sketchCommit=async(v:Record<string,any>):Promise<Record<string,any>>=>{
   if(opts.newSketches){
-   if((v.record_id===null)===(v.new_key===null))return {status:'invalid',saved:false,validation:{code:'sketch_subject',fields:['new_key']},
+   // Lean writing: a keyed sketch may also revise a saved construction, and
+   // the job's construction is bound to record_id, so new_key decides.
+   if(lean?v.record_id===null&&v.new_key===null:(v.record_id===null)===(v.new_key===null))return {status:'invalid',saved:false,validation:{code:'sketch_subject',fields:['new_key']},
     message:'Name either an existing construction or, for a new one, new_key: the key its sketch used.'}
-   if(v.record_id===null)return await newSketchCommit(v)
+   if(lean?v.new_key!==null:v.record_id===null)return await newSketchCommit(v)
   }
   const read=await readSketch(v.record_id)
   if('error' in read)return read.error
   const sketch=read.sketch
   if(!sketch)return {status:'not_found',saved:false,message:'No sketch of this construction is open in this request.'}
   const kept={status:'kept',base_revision:sketch.base_revision,change_count:sketch.change_count}
+  if(lean&&(v.action==='commit'||v.action==='rebase')){
+   const prose=humanTextRejection(proseFields({changes:sketch.changes,text:sketch.text,joint_rules:sketch.joint_rules??[]},CONSTRUCTION_PROSE.edit_construction_parts))
+   if(prose)return {status:'invalid',saved:false,sketch:kept,validation:{code:'human_text',fields:prose.fields},message:'Not saved. '+prose.message+' Correct it with mode sketch; your sketch is kept.'}
+  }
   if(v.action==='read'){
    const full=countSerializedTokens(sketch.changes)<=6000
    return {status:'ok',saved:false,record_id:v.record_id,base_revision:sketch.base_revision,change_count:sketch.change_count,sketch:sketchSummary(sketch.changes),
@@ -560,7 +715,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   if(v.key===null||v.change_note===null)return {status:'invalid',saved:false,sketch:kept,
    validation:{code:'commit_fields_required',fields:['key','change_note'].filter(f=>v[f]===null)},message:'commit and rebase need a key and a change_note.'}
   const edit={record_id:v.record_id,key:v.key,change_note:v.change_note,request_quote:v.request_quote,
-   ...(opts.coherentWork?{solution_edit:null}:{}),...(opts.constructionText?{text:sketch.text}:{})}
+   ...(opts.coherentWork?{solution_edit:null}:{}),...(opts.constructionText?{text:sketch.text}:{}),
+   ...(lean?{joint_rules:sketch.joint_rules??[],form_assign:sketch.form_assign??[]}:{})}
   if(v.action==='rebase'){
    const current=await (opts.readCurrent?.(v.record_id)??opts.read(v.record_id,null,null)) as Record<string,any>
    if(!await opts.hasAccess())return {status:'denied'}
@@ -601,15 +757,26 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  const newSummary=(save:Record<string,any>)=>({definitions:(save.recipe?.definitions??[]).map((d:any)=>d.id).slice(0,200),
   instances:(save.recipe?.instances??[]).map((i:any)=>i.id).slice(0,200),joints:(save.joints??[]).map((j:any)=>j.id).slice(0,200)})
  const sketchNew=async(v:Record<string,any>):Promise<Record<string,any>>=>{
-  if(v.record_id!==null)return sketchRefusal({status:'invalid',reason:'sketch_existing_construction',
+  // Lean writing: a complete revision of a saved construction may be sketched
+  // by key too (entry, 13:53: a 10,711-token revision was refused for this).
+  if(v.record_id!==null&&!lean)return sketchRefusal({status:'invalid',reason:'sketch_existing_construction',
    message:'This job works on a saved construction; sketch its changes with edit_construction_parts mode sketch.'})
   if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {status:'invalid',issues:[{code:'request_quote',path:'request_quote'}]}
   const read=await readNewSketch(v.key)
   if('error' in read)return read.error
   const {request_quote,...input}=v
-  const save=mergeNewConstruction(read.sketch?.save??null,input)
+  const save=lean?{...mergeNewConstruction(read.sketch?.save??null,input),joint_rules:byKey(read.sketch?.save?.joint_rules,input.joint_rules,'id')}
+   :mergeNewConstruction(read.sketch?.save??null,input)
   const ready=await prepareSave({...save,request_quote},true)
-  if('error' in ready)return sketchRefusal(ready.error)
+  if('error' in ready){
+   if(!lean||!keepable(ready.error))return sketchRefusal(ready.error)
+   const kept:NewConstructionSketch={version:1,kind:'new',key:v.key,save,part_count:(save.recipe?.instances??[]).length,notes:[...(read.sketch?.notes??[]),v.change_note].slice(-20)}
+   if(!await opts.hasAccess())return {status:'denied'}
+   const put=await opts.newSketches!.put(v.key,read.revision,kept as any)
+   if(put.status!=='stored')return sketchRefusal(ready.error)
+   return {...ready.error,saved:false,sketched:true,new_key:v.key,sketch:{status:'kept_with_issues',new_key:v.key,part_count:kept.part_count},
+    message:[typeof ready.error.message==='string'?ready.error.message:null,KEPT_NEW].filter(Boolean).join(' ')}
+  }
   const check=await sketchCheck({projectId:opts.projectId,artifact_id:null,revision:0,current_revision:0,source_state:'current',archived:false,
    recipe:ready.recipe,parameters:ready.parameters,materials:save.materials,joints:joints(save.joints),instance_policy:save.instance_policy??null,
    design_intent:ready.readiness.design_intent??null,form_refinement:save.form_refinement??null})
@@ -639,11 +806,19 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   if(v.action==='rebase')return {status:'invalid',saved:false,sketch:kept,message:'A new construction has no saved revision to move onto; commit or discard it.'}
   if(v.key===null||v.change_note===null)return {status:'invalid',saved:false,sketch:kept,
    validation:{code:'commit_fields_required',fields:['key','change_note'].filter(f=>v[f]===null)},message:'commit needs a key and a change_note.'}
+  // Lean writing: the sketch may hold a refused text; it is checked again here.
+  const existing=lean&&typeof sketch.save.record_id==='string'?sketch.save.record_id:null
+  if(lean){
+   if(existing&&v.record_id!==null&&v.record_id!==existing)return {status:'invalid',saved:false,sketch:kept,message:'This sketch revises another construction than the one named.'}
+   const prose=humanTextRejection(proseFields(sketch.save,CONSTRUCTION_PROSE.save_construction_draft.filter(p=>p!=='change_note')))
+   if(prose)return {status:'invalid',saved:false,sketch:kept,validation:{code:'human_text',fields:prose.fields},message:'Not saved. '+prose.message+' Correct it with mode sketch and the same key; your sketch is kept.'}
+  }
   // The server binds the target current at the commit, as for a direct save.
   const target=opts.serverTarget&&opts.readCurrentTarget?await opts.readCurrentTarget(sketch.save.area_id??null):sketch.save.target_revision
   if(target===null)return {status:'needs_data',reason:'design_target_required',saved:false,sketch:kept,
    message:'No construction saved. This project or area has no selected solution to build from yet; the solution is selected first.'}
-  const result=await saveDraft({...sketch.save,target_revision:target,key:v.key,change_note:v.change_note,request_quote:v.request_quote,record_id:null,expected_revision:0})
+  const result=await saveDraft({...sketch.save,target_revision:target,key:v.key,change_note:v.change_note,request_quote:v.request_quote,
+   record_id:existing,expected_revision:existing?sketch.save.expected_revision:0})
   if(result.status!=='saved')return {...result,saved:false,sketch:kept,message:[typeof result.message==='string'?result.message:null,'Your sketch is kept.'].filter(Boolean).join(' ')}
   const dropped=await opts.newSketches!.drop(sketch.key)
   const receipt=result.receipt,sub=sketch.save.sub_build_id
@@ -734,7 +909,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   const issues=schemaIssues(spec.function.parameters,raw)
   if(issues.length)return {status:'invalid',issues}
   const prose=humanTextRejection(proseFields(raw,CONSTRUCTION_PROSE[name]??[]))
-  if(prose)return {status:'invalid',validation:{code:'human_text',fields:prose.fields},message:'No change made. '+prose.message}
+  const textRefusal=prose?{status:'invalid',validation:{code:'human_text',fields:prose.fields},message:'No change made. '+prose.message}:null
+  // Lean writing: a construction with a text to correct is kept in the sketch.
+  const keepText=!!textRefusal&&lean&&!!opts.writer&&(name===CONSTRUCTION_SAVE_TOOL.function.name||name===CONSTRUCTION_EDIT_TOOL.function.name&&!!opts.prepareEdit)
+  if(textRefusal&&!keepText)return textRefusal
   const v=raw as any
   if(!await opts.hasAccess())return {status:'denied'}
   try{
@@ -745,6 +923,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(target===null)return {status:'needs_data',reason:'design_target_required',
      message:'No construction saved. This project or area has no selected solution to build from yet; the solution is selected first.'}
     v.target_revision=target
+   }
+   if(keepText){
+    const {mode:_mode,...input}=v
+    return await keptAfter(textRefusal!,()=>name===CONSTRUCTION_SAVE_TOOL.function.name?sketchNew(input):sketchParts(input),name===CONSTRUCTION_SAVE_TOOL.function.name?KEPT_NEW:KEPT_EDIT)
    }
    if(name===CONSTRUCTION_DELIVERY_TOOL.function.name){
     const result=await opts.readDelivery!(v.artifact_id,v.revision,v.resource,v.after)
@@ -808,7 +990,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(opts.sketches){
      const {mode,...input}=v
      if(mode==='sketch')return await sketchParts(input)
-     return await editParts(input)
+     const result=await editParts(input)
+     return lean&&keepable(result)?await keptAfter(result,()=>sketchParts(input),KEPT_EDIT):result
     }
     return await editParts(v)
    }
@@ -1013,7 +1196,11 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(opts.newSketches){
     const {mode,...input}=v
     if(mode==='sketch')return await sketchNew(input)
-    return await saveDraft(input)
+    const result=await saveDraft(input)
+    if(lean&&keepable(result))return await keptAfter(result,()=>sketchNew(input),KEPT_NEW)
+    // A sketch kept under this key by an earlier refusal is done now.
+    if(lean&&result.status==='saved')await opts.newSketches.drop(input.key).catch(()=>undefined)
+    return result
    }
    return await saveDraft(v)
   }catch(error){

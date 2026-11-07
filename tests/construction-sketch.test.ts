@@ -11,6 +11,7 @@ import {createProjectWriter} from '../supabase/functions/_shared/project-write.t
 import {createAiCatalogSession} from '../supabase/functions/_shared/ai-catalog.ts'
 import {CONSTRUCTION_SKETCH_COMMIT_TOOL_V2,CONSTRUCTION_NEW_SKETCH_NOTE,CONSTRUCTION_SKETCH_NOTE,baseKeysOf,composeSketchChanges,createConstructionSketchStore,parseSketch,sketchChangeCount,sketchSummary,
  type BaseKeys,type SketchChanges} from '../supabase/functions/_shared/construction-sketch.ts'
+import {LEAN_EDIT_NOTE,LEAN_SAVE_NOTE} from '../supabase/functions/_shared/construction-lean.ts'
 
 // Owner decision 2026-11-07 (sketchbook, design B; "Ja kör på rek!"): Konrad
 // builds a construction in a private job sketch, checked whole, and saves it
@@ -280,15 +281,16 @@ test('sketch, check and commit once against the database: one revision, one rece
   assert.deepEqual(published.parameters,CONSTRUCTION_SKETCH_COMMIT_TOOL_V2.function.parameters)
   assert.equal(published.description,CONSTRUCTION_SKETCH_COMMIT_TOOL_V2.function.description)
   const editTool=fixture.definition('tools.edit_construction_parts','tool_contract').definition as any
-  assert(editTool.description.endsWith(CONSTRUCTION_SKETCH_NOTE));assert.deepEqual(editTool.parameters.properties.mode,{type:'string',enum:['sketch','save']})
+  // bob-lean-construction-v1 (later the same day) appends its note after the sketch note.
+  assert(editTool.description.endsWith(CONSTRUCTION_SKETCH_NOTE+LEAN_EDIT_NOTE));assert.deepEqual(editTool.parameters.properties.mode,{type:'string',enum:['sketch','save']})
   // The production pins together: code validates exactly the published edit, save and commit schemas.
   const production=createConstructionTools({projectId:project,message,writer:writer(),hasAccess:async()=>true,read:(_id,revision)=>read(revision),readSources:async()=>({project:new Map(),physical:new Map()}),
    constructionViews:true,coherentWork:true,constructionText:true,constructionNotes:true,chosenJointFasteners:true,defaultZero:true,constructionRepeats:true,repeatStart:true,formRefinement:true,
-   placeIn:async()=>({status:'saved'}),serverTarget:true,sketches:store(),newSketches:store()})
+   placeIn:async()=>({status:'saved'}),serverTarget:true,sketches:store(),newSketches:store(),leanConstruction:true})
   for(const name of ['edit_construction_parts','save_construction_draft','commit_construction_sketch'])
    assert.deepEqual(production.tools.find(s=>s.function.name===name)!.function.parameters,(fixture.definition('tools.'+name,'tool_contract').definition as any).parameters,name)
   const save=fixture.definition('tools.save_construction_draft','tool_contract').definition as any
-  assert(save.description.endsWith(CONSTRUCTION_NEW_SKETCH_NOTE));assert.equal(save.parameters.properties.target_revision,undefined)
+  assert(save.description.endsWith(CONSTRUCTION_NEW_SKETCH_NOTE+LEAN_SAVE_NOTE));assert.equal(save.parameters.properties.target_revision,undefined)
   assert.equal(editTool.parameters.properties.target_revision,undefined)
   const box=fixture.definition('bob.tools','tool_contract').definition as any
   assert(box.build_workers.structure.focus.core.includes('commit_construction_sketch'));assert(box.shelves[5].tools.includes('commit_construction_sketch'))
