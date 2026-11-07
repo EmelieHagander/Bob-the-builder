@@ -2701,3 +2701,62 @@ save, how many calls are refused (and for which reason), whether the guard's
 `repeated` note appears, cache reads per Konrad call, and cost per role.
 Aborted Claude calls are recorded without a price, so the recorded total is a
 lower bound.
+
+<a id="owner-runs-after-498-2026-11-07"></a>
+### First owner turns after #498 — 2026-11-07, 13:39–14:00 UTC
+
+The owner ran Våningssäng 2 (job `4c819180`, 13:39–13:43, delivery
+`partial`, 4 records saved by Bob) and Entrén (job `f3a93a7a`, 13:40–14:00,
+delivery `saved`; Konrad created `Väggstomme – inbyggd entré` rev 1 and
+edited it to rev 2).
+
+| Role | Calls | Recorded USD | Input read from cache |
+|---|---:|---:|---:|
+| Konrad (structure-worker) | 45 (+7 refused before billing) | 4.42 | 87 % |
+| Bob (ask-bob) | 22 | 1.29 | 83 % |
+| tool-picker, completion-gate, material-finder | 12 | 0.15 | — |
+
+Recorded total USD 5.86; three Konrad calls cut by the 120 s window carry no
+price (their input was 92–99 % cached), so this is a lower bound. Before
+#498 the bed turn read 45 % from cache. A Konrad job now starts with 27,883
+tokens read from cache (core tools and system shared across jobs).
+
+- **Defect in #498: five cache points.** Seven Konrad calls were refused by
+  Claude before billing: `400 A maximum of 4 blocks with cache_control may be
+  provided. Found 5.` A compacted job marks system, core tool, job start,
+  settled compaction and the automatic tail; the tests covered the core-tool
+  point only without the message points. Bob saw `ask_structure_worker
+  unavailable` three times in the bed turn and four times in the entry turn.
+  Fixed in #500 (published below).
+- **Gap: a part added by an edit cannot be mapped to the concept.** Twice
+  (13:48, 13:59) a Konrad edit and a sketch commit were refused by the
+  database with `form_instance_unmapped` (recorded as `unspecified`; Konrad
+  received the writer's FORM message). The construction has an explicit FORM
+  mapping, `edit_construction_parts` has no field for it, and a sketch of an
+  existing construction is refused in `save_construction_draft`
+  (`sketch_existing_construction`), so only a complete save can map a new
+  part. Not fixed.
+- Other refusals: `human_text` (description), `parameter_unused_node`,
+  `edit_path_unsupported` (Bob); each once. No refusal repeated, so the
+  guard's `repeated` note did not appear. Konrad sketched once
+  (`edit_construction_parts`), wrote three answers above 10,000 output tokens
+  and was cut three times by the window.
+
+<a id="publication-500-2026-11-07"></a>
+#### Hosted publication of #500 (four cache points) — 2026-11-07, 14:01 UTC
+
+Owner: "Ja, publicera #500". #500 is merged at
+`6e4d632f7036fdf9c0b4100ead3c9eacbdc5e22d`; its tree
+`4bc3687ddb4165151817965fc1105cd73baf1661` equals the tested branch tree.
+Safety branch `save/bob-before-cache-cap-2026-11-07` retains
+`951c434d329736ac9e7ef573975296fd8c8cf23b`. Zero active jobs before and
+after. No migration.
+
+| Consumer | Version | Files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 216 | 152 | Existing private job capability, JWT false | `332ab34acc0b430ee6c00f696ecc53abeea602d6091e26ce9388884fa46e33b3` |
+| ask-bob | 248 | 154 | JWT true | `5d014ed87f0821c85c0619cb795a63176a0d57b3be0f326cbb5f5701883d000b` |
+
+Returned sources match the merged checkout byte for byte except the known
+type-only `cad-intake.ts` erasure; both bundles contain `capCachePoints`.
+Remaining: a new owner turn shows no `cache_control` refusal.
