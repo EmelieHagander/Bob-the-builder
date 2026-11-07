@@ -2968,3 +2968,45 @@ an edit names nodes, not the formulas that made them. Instance roles
 (`instance_policy`, 1,447 characters for the wall) are still written per part.
 Live measurement of write size, refusals and cost is the next owner turn.
 The five catalog-parity tests red on `main` are a separate repair.
+
+<a id="publication-502-2026-11-07"></a>
+#### Hosted publication of #502 (lean construction writing) — 2026-11-07, 19:12–19:14 UTC
+
+Owner: "Applicera tack". #502 is merged at
+`0518da400d9ec2da425b0122babb264beaa78a8b`; its tree
+`75bce2afacd42ce851700c94e78a11640ec42899` equals the tested branch tree
+(`0bd2806`). Safety branch `save/bob-before-lean-construction-2026-11-07`
+retains the previous published source `ad3bc4934bd057d93b52ea1425b33d8b08fbf1b8`.
+Zero active jobs before and after; last job completed 14:00.
+
+Order: the database seam first (backward compatible: the edit mapping is
+optional and `cost_basis` nullable), then the runtimes, then the catalog that
+switches the pin on.
+
+1. `20261107150000_construction_edit_form_mapping.sql` as ledger
+   `20261107191243`. Read back: `bob.prepare_construction_edit` and
+   `bob_private.bob_project_write_v16` carry `form_refinement`, both SECURITY
+   DEFINER with an empty `search_path`; EXECUTE for `authenticated` and
+   `postgres` only; `shared.ai_usage_events.cost_basis` exists (text, nullable).
+2. Functions from the merged checkout (Supabase CLI, `--use-api`, worker first):
+
+| Consumer | Version | Files compared | JWT policy | ezbr SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 217 | 155 | Existing private job capability, JWT false | `52faa582ff234c66dff1c91c9f447755e3f7f09357c004d73ab35056717e9093` |
+| ask-bob | 249 | 157 | JWT true | `e594fa84f7dc83ae6bc18a7e36015e899ac65589545fa468cc63d0fbf84a1ce5` |
+
+   Returned sources match the merged checkout byte for byte except the known
+   type-only `cad-intake.ts` erasure; both bundles contain the formula
+   compiler, joint rules, mapping extension, sketch fence, rule notes, the
+   cut-answer estimate and the `leanConstruction` pin.
+3. `20261107150100_bob_lean_construction_catalog.sql` as ledger
+   `20261107191355`. Active catalog (publication `bob-lean-construction-v1`,
+   `lean_construction_version` 1): `tools.save_construction_draft` v17 with
+   `joint_rules`; `tools.edit_construction_parts` v12 with `joint_rules` and
+   `form_assign`; `tools.commit_construction_sketch` v3. Each active definition
+   equals the migration's JSON.
+
+Remaining: the owner's Entrén and Våningssäng 2 turns, read back for
+characters and tokens per Konrad write, answer time against the 120 s window,
+refusals by reason (and whether kept), joints written by rules, mapping
+completions, and cost per role including `streamed_output_estimate` rows.
