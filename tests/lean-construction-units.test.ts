@@ -135,3 +135,17 @@ test('the FORM mapping follows the parts: a new part goes to the component holdi
  // assign overrides the envelope.
  assert.deepEqual(extendFormMapping(intent,drawer,refinement,new Set(),[{instance_id:'knob',component_id:'frame'}]).refinement.mappings.map(m=>m.component_id),['frame'])
 })
+
+test('the model sees no revision in a joint rule; the server fills it, as for joints (server_revisions_version 1)',async()=>{
+ const {createConstructionTools}=await import('../supabase/functions/_shared/construction-draft.ts')
+ const {withoutServerRevisions}=await import('../supabase/functions/_shared/server-revisions.ts')
+ const store={read:async()=>({status:'unavailable' as const}),put:async()=>({status:'unavailable' as const}),drop:async()=>({status:'unavailable' as const}),list:async()=>({status:'unavailable' as const})}
+ const tools=createConstructionTools({projectId:'p',message:'m',hasAccess:async()=>true,read:async()=>null,readSources:async()=>({project:new Map(),physical:new Map()}),
+  writer:{} as any,defaultZero:true,chosenJointFasteners:true,formRefinement:true,serverTarget:true,sketches:store,newSketches:store,leanConstruction:true})
+ for(const [name,rules] of [['save_construction_draft',(p:any)=>p.properties.joint_rules],['edit_construction_parts',(p:any)=>p.properties.joint_rules]] as const){
+  const spec=tools.tools.find(t=>t.function.name===name)!
+  assert.ok(rules(spec.function.parameters).items.properties.fasteners.items.properties.material_revision,'code validates the filled value')
+  const shown=withoutServerRevisions(spec)
+  assert.equal(rules(shown.function.parameters).items.properties.fasteners.items.properties.material_revision,undefined,name)
+ }
+})
