@@ -89,7 +89,8 @@ test('the plan gate refuses a construction write until a plan note is saved in t
     () => reply('w1', [call('a', 'read_construction_draft'), call('b', 'check_construction_draft'), call('c', 'edit_construction_parts', { changes: [] })]),
     () => reply('w2', [call('d', 'update_workpad', { expected_revision: 0, note: { ...working, status: 'done' } }), call('e', 'edit_construction_parts', { changes: [] })]),
     () => reply('w3', [call('f', 'update_workpad', { expected_revision: 1, note: { ...working, steps: [] } }), call('g', 'edit_construction_parts', { changes: [] })]),
-    () => reply('w4', [call('h', 'update_workpad', { expected_revision: 2, note: working }), call('i', 'edit_construction_parts', { changes: [] })]),
+    // Sent as JSON text, as Konrad did in the bed on 2026-11-07: the same plan.
+    () => reply('w4', [call('h', 'update_workpad', { expected_revision: 2, note: JSON.stringify(working) }), call('i', 'edit_construction_parts', { changes: [] })]),
     () => done('w5'),
   ])
   const result = await h.run()

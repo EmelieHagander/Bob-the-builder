@@ -66,11 +66,14 @@ export function catalogWorkers(catalog: AiCatalogSession): Record<string, Worker
   return structuredClone(workers)
 }
 
+// A plan sent as JSON text is the same plan (bed, 2026-11-07); the workpad
+// tool reads it the same way before saving it.
+const notePlan = (note: unknown): unknown => { if (typeof note !== 'string') return note; try { return JSON.parse(note) } catch { return null } }
 /** A plan: a working or waiting note with a goal and at least one step. */
-const plannedNote = (note: unknown): boolean => !!note && typeof note === 'object'
+const plannedNote = (raw: unknown): boolean => { const note = notePlan(raw); return !!note && typeof note === 'object'
   && ['working', 'waiting'].includes(String((note as { status?: unknown }).status))
   && typeof (note as { goal?: unknown }).goal === 'string' && (note as { goal: string }).goal.trim().length > 0
-  && Array.isArray((note as { steps?: unknown }).steps) && (note as { steps: unknown[] }).steps.length > 0
+  && Array.isArray((note as { steps?: unknown }).steps) && (note as { steps: unknown[] }).steps.length > 0 }
 
 function validFocus(worker: WorkerDefinition): boolean {
   const focus = worker.focus
