@@ -1,4 +1,5 @@
 import {helperConversation} from './bob-helper-context.ts'
+import { withoutServerRevisions } from './server-revisions.ts'
 import type {WorkerOperations,OperationRole} from './worker-operations.ts'
 import { validConstructionRef, type ConstructionRef } from './drawing-work.ts'
 import type { PlanLinks } from './project-plan-links.ts'
@@ -356,6 +357,10 @@ export type ProjectAnswerOptions = {
    * sketches open in this turn, so Konrad's report says what is not saved. */
   /** Pinned per execution (stableToolsVersion 1): a worker's core tools first, with a cache point after them. */
   stableTools?: boolean;
+  /** Pinned per execution (serverRevisionsVersion 1): the server fills every revision; passed on to each tool session. */
+  serverRevisions?: { readers: import('./server-revisions.ts').RevisionReaders };
+  /** Pinned per execution (refusalGuardVersion 1): a refused call does not run again unchanged. */
+  refusalGuard?: boolean;
   openSketches?: () => Promise<Record<string, unknown>[] | null>;
   /** New v2 jobs: caller-authorized, code-only reads of the approved Plan and
    * exact Construction revisions, not a second planner or worker tool. */
@@ -621,6 +626,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         ...(opts.workerPlan && workerPads ? { planGate: true } : {}),
         ...(opts.openSketches && key === 'structure' ? { openSketches: opts.openSketches } : {}),
         ...(opts.stableTools ? { stableTools: true } : {}),
+        ...(opts.refusalGuard ? { refusalGuard: true } : {}),
         ...(opts.workerPieceProgress && key === 'structure' && workerPads && reportReadback && worker.knowledge
           ? { pieceProgress: { ...(opts.continuedWork?{unmappedReview:true}:{}), ...(opts.workerGates ? { gatesAsFacts: true } : {}), readSaved: async (receipt: Record<string, unknown>) => {
             const read = readbackReads([receipt])[0]
@@ -913,7 +919,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (availabilityMessage) availabilitySent = availability
     // The job's newly available tools, in detail, after everything else in this request.
     const sheetMessage = pendingSheets.length ? { role: 'user' as const, content: opts.aiCatalog.text('bob.toolbox.sheets-intro') + '\n' + JSON.stringify(pendingSheets.map(name => {
-      const spec = opts.aiCatalog.tool(name, { ...schemaParameters(), ...(toolbox.toolParameters()?.[name] ?? {}) }).function
+      const sheet = opts.aiCatalog.tool(name, { ...schemaParameters(), ...(toolbox.toolParameters()?.[name] ?? {}) })
+      // Server-owned revisions stay out of the sheet as out of the tool list.
+      const spec = (opts.serverRevisions ? withoutServerRevisions(sheet) : sheet).function
       return { name: spec.name, description: spec.description, parameters: spec.parameters }
     })) } : null
     for (const name of pendingSheets) sheetsSent.add(name)

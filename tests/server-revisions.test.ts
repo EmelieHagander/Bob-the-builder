@@ -131,3 +131,22 @@ test('a refused call does not run again unchanged; the third refusal for one rea
  assert.equal((await resumed.execute('cancel_drawing_request',{request_id:'a'})).reason,'repeated_refusal')
  const guard=createRefusalGuard();assert.equal(guard.before('x',{}),null)
 })
+
+test('the tools sent to the model are rebuilt from the catalog without the server-owned fields, through to the Claude request',async()=>{
+ // Review of #498 (2026-11-07): the model call rebuilds each tool from the
+ // catalog by name, so stripping the session's list alone did not reach the model.
+ const {applyCatalogModelOptions}=await import('../supabase/functions/_shared/ai-catalog.ts')
+ const {anthropicRequestBody}=await import('../supabase/functions/_shared/anthropic-service.ts')
+ const request=(pinned:boolean)=>applyCatalogModelOptions(fixture,{app:'bob',functionName:'ask-bob',catalogRoleKey:'role.ask-bob',messages:[],
+  tools:[spec('save_project_measurement'),spec('edit_construction_parts')],...(pinned?{catalogServerRevisions:true}:{})} as any)
+ const sent=request(true),old=request(false)
+ const measurement=(r:any)=>r.tools.find((t:any)=>t.function.name==='save_project_measurement').function.parameters
+ assert.equal(measurement(sent).properties.expected_revision,undefined);assert(!measurement(sent).required.includes('expected_revision'))
+ assert.ok(measurement(old).properties.expected_revision,'unpinned jobs keep their schema')
+ const edit=(r:any)=>JSON.stringify(r.tools.find((t:any)=>t.function.name==='edit_construction_parts').function.parameters)
+ assert.doesNotMatch(edit(sent),/"(expected_revision|material_revision|part_revision|space_revision)"/)
+ assert.match(edit(old),/"material_revision"/)
+ const body=await anthropicRequestBody({...sent,promptCachePoints:1} as any,{model:{model_name:'claude-opus-5-5',capabilities:{}},maxOutputTokens:100,systemMessage:'Bob'} as any) as any
+ const claude=JSON.stringify(body.tools)
+ assert.doesNotMatch(claude,/"expected_revision"|"material_revision"|"part_revision"/,'Claude receives no revision field')
+})

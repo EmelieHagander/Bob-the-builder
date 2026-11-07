@@ -2639,3 +2639,16 @@ drawing) needs a live turn after publication.
 tokens and no price (unknown, not zero). The turn budget counts only priced
 calls, so it undercounts aborts; no spending stop is set in the live catalog
 (`turn_usd_stop` empty, `work_allowance_version` 1).
+
+**Review of #498 (2026-11-07), two corrections.** (1) The tools sent to the
+model are rebuilt from the catalog by name just before each model call
+(`applyCatalogModelOptions`), so removing the revision fields from the
+session's list did not reach the model; they are now removed in that rebuild
+too (and in Bob's tool sheets), tested down to the Claude request body for
+`save_project_measurement` and `edit_construction_parts`. (2) Konrad's plan
+gate refuses inside the work loop, outside the session's refusal guard; it
+now counts its own refusals and the third asks for a plan in the exact note
+shape, tested through the real work loop. Remaining before merge: a live
+Våningssäng 2 turn to measure what Bob saves, how many calls are refused and
+what the turn costs; aborted Claude calls make the recorded total a lower
+bound.

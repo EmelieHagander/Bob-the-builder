@@ -303,6 +303,8 @@ export async function runWorker(opts: {
   /** Pinned per job (stable_tools_version 1): core tools first, with a fixed
    * cache point after them. */
   stableTools?: boolean
+  /** Pinned per job (refusal_guard_version 1): the third plan refusal asks for another approach. */
+  refusalGuard?: boolean
   /** Owner decision 2026-11-07 (sketchbook B): sketches still open when the job
    * ends are reported as not saved; null when they could not be read. */
   openSketches?: () => Promise<Record<string, unknown>[] | null>
@@ -319,6 +321,7 @@ export async function runWorker(opts: {
   // The plan gate: construction writes wait for a plan note saved in this job.
   const writes = new Set(opts.worker.tools.filter(name => name !== 'check_construction_draft'))
   let planned = restored?.planned === true
+  let planRefusals = 0
   // The worker's session also offers tools that wait for a prerequisite (saving a
   // reviewed drawing), so the list is the same in every step and the prompt start
   // stays cached; calling one too early answers "not available yet". Prepared each
@@ -459,7 +462,11 @@ export async function runWorker(opts: {
       else if (!allowed.has(name)) result = { status: 'not_offered' }
       else if (opts.planGate && !planned && writes.has(name)) result = { status: 'invalid', reason: 'plan_required',
         validation: { code: 'plan_required', fields: [] },
-        message: 'Write your plan with update_workpad first: the goal, the steps in order and the next step. Then make the change.' }
+        message: 'Write your plan with update_workpad first: the goal, the steps in order and the next step. Then make the change.',
+        // Owner review 2026-11-07: the plan gate answers here, not through the
+        // tool session, so it counts its own refusals for the refusal guard.
+        ...(opts.refusalGuard && ++planRefusals >= 3 ? { repeated: { count: planRefusals, reason: 'plan_required',
+          note: 'Refused ' + planRefusals + ' times without a saved plan. Do not try the change again yet: call update_workpad with note as an object whose status is working, with a goal, next_step and at least one step, and empty blockers and references when there are none; then make the change.' } } : {}) }
       else {
         try { result = await opts.session.execute(name, args) }
         catch (error) { rethrowContinuation(error); throw error }

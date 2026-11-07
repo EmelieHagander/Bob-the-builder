@@ -227,7 +227,7 @@ export async function answerWithOpenAi(opts: {
   // Construction reads in the model step being executed (page budget share).
   let constructionReadsInStep = 1
   const dispatchModel = async (requested: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>, imageInputs?:BobImageInputCounts) => {
-   const options = { ...applyCatalogModelOptions(aiCatalog, requested), ...(execution.toolSchemaDedupVersion === 1 ? { toolSchemaDedup: 1 as const } : {}),
+   const options = { ...applyCatalogModelOptions(aiCatalog, execution.serverRevisionsVersion === 1 ? { ...requested, catalogServerRevisions: true } : requested), ...(execution.toolSchemaDedupVersion === 1 ? { toolSchemaDedup: 1 as const } : {}),
      ...(execution.promptCachePointsVersion === 1 ? { promptCachePoints: 1 as const } : {}) }
    const drawingAuthority:DrawingBudgetAuthority|undefined=drawingRequestId&&drawingBudget
     ?{requestId:drawingRequestId,options}:undefined
