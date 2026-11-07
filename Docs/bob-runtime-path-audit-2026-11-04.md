@@ -2592,3 +2592,50 @@ names its bounds; project-edits now expects the `mode` field that
 **Not covered yet.** Material, part and fastener revisions and measurement
 source revisions are still typed by Konrad, and about 30 of Bob's tools still
 take `expected_revision`; these are the second step of proposal 1.
+
+<a id="server-revisions-2026-11-07"></a>
+### Built: no revision typed by a model, stepwise sketches, refusal guard — 2026-11-07
+
+Owner, 2026-11-07: "fixar dom sista findingsen där också, Konrad och bob med
+versionsnummer", then an external review of #498 (priorities: stepwise
+construction, stop refusal loops, server-owned versions, correct tool
+contracts, stable cache, cost measurement, end-to-end scenarios). Built and
+tested locally in #498; not deployed or applied.
+
+- **Server revisions (`server_revisions_version 1`).** A code map
+  (`server-revisions.ts`) names each revision field of 31 write tools and the
+  record it belongs to. The model never sees the field; a value it sends is
+  dropped; the server fills it: catalog items, measurements, space
+  measurements and constructions from their current revision, the plan and
+  the selected target from their readers, other records from the newest
+  revision the model read in the request (kept with a paused job; an unread
+  record is refused with "read first"). A worker job's identity fields
+  (`derive_cad_material_requirement` data pins, `expected_revision`) are
+  dropped before its binding checks the call instead of refused (18 refusals
+  since 2026-10-25). Left as model input: reads that choose a historical
+  revision, `continue_construction_change.output_revision`,
+  `edit_project_room_layout.source_revisions` (no ids beside them) and tools
+  whose identities the worker binding already owns.
+- **Stepwise sketches.** While a new construction is sketched, a concept
+  component not built yet (`concept_part_missing`) or filled only partly
+  (`form_envelope_incomplete`, parts inside its envelope) is returned as
+  `pending`; geometry outside the concept is still refused; the save applies
+  the full rule.
+- **Refusal guard (`refusal_guard_version 1`).** An `invalid` call refused
+  earlier in the request does not run again unchanged (`repeated_refusal`);
+  the third refusal for one reason carries a note to change approach.
+  Refusals that depend on project state (read first, a changed source, a
+  missing plan) still run again.
+
+**Scenarios (owner review, before merge).** *Entrén* (stepwise from a
+multi-component concept): PGlite, a frame sketched rail by rail is pending,
+an outside rail and an early save are refused, the finished frame saves once
+on the current target. *Fellopp*: a repeated refused call is not run, the
+third refusal carries the note, state-dependent refusals still run, a paused
+job keeps both memories. *Våningssäng 2* (change a detail, save, updated
+drawing) needs a live turn after publication.
+
+**Cost measurement.** Aborted calls are in the ledger with their input
+tokens and no price (unknown, not zero). The turn budget counts only priced
+calls, so it undercounts aborts; no spending stop is set in the live catalog
+(`turn_usd_stop` empty, `work_allowance_version` 1).
