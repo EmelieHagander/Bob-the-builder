@@ -179,3 +179,57 @@ test('Konrad receives native Claude tool results after the shared stateless cont
   assert.deepEqual(assistant?.content.map(b => b.type), ['thinking', 'tool_use'])
   assert.deepEqual(transcript.at(-1)?.content.map(b => b.tool_use_id), ['worker_call'])
 })
+
+// Owner decision 2026-11-06: fixed cache points. Claude keeps a read point
+// only where a request put one; with the automatic tail point alone, every
+// compaction batch and job start paid the whole input again (bed, entry).
+test('pinned executions mark the job start and the settled compaction as cache points; unpinned requests send the same bytes without them', async () => {
+  const run = async (pinned: boolean) => {
+    const requests: Record<string, unknown>[] = []
+    let step = 0
+    const create = () => createBobContextContinuation({ version: 1, aiCatalog: catalog, mainResultReferences: 1, compactionBatch: 4,
+      ...(pinned ? { promptCachePointsVersion: 1 as const } : {}),
+      callModel: async options => {
+        requests.push(await anthropicRequestBody({ ...options, ...(pinned ? { promptCachePoints: 1 as const } : {}) }, claude))
+        step++
+        return step <= 11 ? toolReply('msg_' + step, 'read_construction_draft', ['call_' + step]) : finalReply('msg_final')
+      } })
+    let continuation = create()
+    const request: OpenAIServiceOptions = { app: 'bob', module: 'global', functionName: 'ask-bob', aiFunction: 'ask-bob',
+      catalogRoleKey: 'ask-bob', coworkerId: 'bob', responseItemsMode: 'preserve',
+      messages: [{ role: 'user', content: 'Check every saved construction detail.' }], tools: [tool('read_construction_draft')] }
+    let response = await continuation.call(request)
+    for (let i = 1; i <= 11; i++) {
+      if (pinned && i === 7) { const checkpoint = structuredClone(continuation.exportState()); continuation = create(); continuation.restoreState(checkpoint) }
+      response = await continuation.call({ ...request, previousResponseId: response.responseId,
+        messages: [{ role: 'tool', tool_call_id: 'call_' + i, content: JSON.stringify({ status: 'ok', revision: i, detail: 'd'.repeat(300) }) }] })
+    }
+    assert.equal(response.data, 'Readback complete.')
+    return requests
+  }
+  const pinned = await run(true), plain = await run(false)
+  assert.equal(pinned.length, 12); assert.equal(plain.length, 12)
+  type Body = { system: unknown; cache_control: unknown; messages: Array<{ role: string; content: Array<Record<string, unknown>> }> }
+  const points = (body: Record<string, unknown>) => (body as Body).messages.flatMap((m, i) => m.content.flatMap((b, j) => b.cache_control ? [[i, j, b.type]] : []))
+  for (const body of plain) {
+    assert.equal(body.system, 'Build carefully.'); assert.deepEqual(body.cache_control, { type: 'ephemeral' }); assert.deepEqual(points(body), [])
+  }
+  for (const body of pinned) {
+    assert.deepEqual(body.system, [{ type: 'text', text: 'Build carefully.', cache_control: { type: 'ephemeral' } }], 'tools and system share one fixed point')
+    assert.deepEqual(body.cache_control, { type: 'ephemeral' }, 'the automatic tail point stays')
+  }
+  // Requests 1–6: nothing is settled yet; the job start (the one seed message) is the only fixed point.
+  for (const body of pinned.slice(0, 6)) assert.deepEqual(points(body), [[0, 0, 'text']])
+  // Requests 7–10: six to nine exchanges, four settled; the point sits on the fourth tool result and does not move between batches.
+  for (const body of pinned.slice(6, 10)) assert.deepEqual(points(body), [[0, 0, 'text'], [8, 0, 'tool_result']])
+  // Requests 11–12: ten and eleven exchanges, eight settled; the point moves one batch later.
+  for (const body of pinned.slice(10)) assert.deepEqual(points(body), [[0, 0, 'text'], [16, 0, 'tool_result']])
+  // At most three fixed points plus the automatic one (the provider allows four).
+  for (const body of pinned) assert.ok(points(body).length + 1 <= 3)
+  // Same transcript bytes with and without the pin, and across the checkpoint restore inside the pinned run.
+  const strip = (body: Record<string, unknown>) => JSON.parse(JSON.stringify(body, (key, value) => key === 'cache_control' ? undefined : value))
+  for (const [i, body] of pinned.entries()) {
+    const expected = strip(plain[i])
+    assert.deepEqual(strip({ ...body, system: 'Build carefully.' }), { ...expected, system: 'Build carefully.' }, 'request ' + (i + 1))
+  }
+})

@@ -19,14 +19,20 @@ import type {ContextSurface} from './bob-context-continuation.ts'
  * worker's project knowledge comes from these fixed reads, fresh at the start of
  * the job. Workers without knowledge (manifests before) get Bob's brief instead. */
 export interface WorkerKnowledge { label: string; tool: string; arguments: Record<string, unknown> }
-export interface WorkerDefinition { role: string; tool: string; tools: string[]; reads: string[]; max_steps: number; knowledge?: WorkerKnowledge[] }
+/** Owner decision 2026-11-06 (worker_focus_version 1): the tools a job is
+ * offered. `core` always; up to `optional_limit` of `optional` picked from
+ * Bob's request at job start; the rest of the worker's tools stay owned but
+ * are not offered. Measured: two of Konrad's 25 tools were 75 % of his calls. */
+export interface WorkerFocus { version: 1; core: string[]; optional: string[]; optional_limit: number }
+export interface WorkerDefinition { role: string; tool: string; tools: string[]; reads: string[]; max_steps: number; knowledge?: WorkerKnowledge[]; focus?: WorkerFocus }
 type Messages = NonNullable<OpenAIServiceOptions['messages']>
 type ModelCall = (options: OpenAIServiceOptions, beforeDispatch?: () => Promise<void>) => Promise<OpenAIServiceResponse<string>>
 const NAME = /^[a-z][a-z0-9_]{0,63}$/
-/** An answer cut at the output limit, or still streaming when its request
- * window closed, ran nothing. Bob and colleagues get this once per pending
- * step, so the same job continues in smaller pieces (bed, 2026-11-06). */
-export const MODEL_OUTPUT_LIMIT_NOTE = 'Your previous answer was too long to finish in one response and was discarded: none of its tool calls ran and nothing was saved. Continue the same task with a shorter answer: one change per tool call, with brief commentary.'
+/** An answer cut at the output limit, or not finished (streaming or still
+ * thinking) when its request window closed, ran nothing. Bob and colleagues
+ * get this once per pending step, so the same job continues in smaller pieces
+ * (bed and entry, 2026-11-06). */
+export const MODEL_OUTPUT_LIMIT_NOTE = 'Your previous answer did not finish within one response and was discarded: none of its tool calls ran and nothing was saved. Continue the same task in smaller steps: one change per tool call, with brief commentary.'
 const CUT_ANSWER = new Set(['model_output_limit', 'model_output_window'])
 export function withOutputLimitNote(messages: Messages, error: string | undefined): Messages | null {
   if (!CUT_ANSWER.has(error ?? '') || messages.some(m => m.role === 'user' && m.content === MODEL_OUTPUT_LIMIT_NOTE)) return null
@@ -49,7 +55,8 @@ export function catalogWorkers(catalog: AiCatalogSession): Record<string, Worker
       if (key in workers || !NAME.test(key) || !worker || typeof worker.role !== 'string' || !catalog.manifest().definitions.some(row => row.prompt_key === worker.role && row.definition_kind === 'role')
         || !known(worker.tool) || !Array.isArray(worker.tools) || !worker.tools.length || !worker.tools.every(known)
         || !Array.isArray(worker.reads) || !worker.reads.every(known) || !Number.isSafeInteger(worker.max_steps) || worker.max_steps < 1 || worker.max_steps > 40
-        || worker.knowledge !== undefined && !validKnowledge(worker))
+        || worker.knowledge !== undefined && !validKnowledge(worker)
+        || worker.focus !== undefined && !validFocus(worker))
         throw new Error('worker_catalog_invalid')
       workers[key] = worker
     }
@@ -57,6 +64,21 @@ export function catalogWorkers(catalog: AiCatalogSession): Record<string, Worker
   const owned = Object.values(workers).flatMap(worker => worker.tools)
   if (new Set(owned).size !== owned.length) throw new Error('worker_catalog_invalid')
   return structuredClone(workers)
+}
+
+/** A plan: a working or waiting note with a goal and at least one step. */
+const plannedNote = (note: unknown): boolean => !!note && typeof note === 'object'
+  && ['working', 'waiting'].includes(String((note as { status?: unknown }).status))
+  && typeof (note as { goal?: unknown }).goal === 'string' && (note as { goal: string }).goal.trim().length > 0
+  && Array.isArray((note as { steps?: unknown }).steps) && (note as { steps: unknown[] }).steps.length > 0
+
+function validFocus(worker: WorkerDefinition): boolean {
+  const focus = worker.focus
+  if (!focus || typeof focus !== 'object' || focus.version !== 1 || !Array.isArray(focus.core) || !Array.isArray(focus.optional)) return false
+  const own = new Set([...worker.tools, ...worker.reads])
+  const names = [...focus.core, ...focus.optional]
+  return focus.core.length > 0 && names.every(name => typeof name === 'string' && own.has(name)) && new Set(names).size === names.length
+    && Number.isSafeInteger(focus.optional_limit) && focus.optional_limit >= 0 && focus.optional_limit <= 8
 }
 
 function validKnowledge(worker: WorkerDefinition): boolean {
@@ -137,6 +159,8 @@ export function buildWorkerMessages(aiCatalog: AiCatalogSession, opts: {
 interface WorkerProgressBase {
   step: number; messages: Messages
   calls: { tool: string; status: string }[]; receipts: Record<string, unknown>[]; order: string[]
+  /** Plan gate: a plan note was saved in this job, so writes are open. */
+  planned?: true
 }
 type WorkerTerminal =
   | { status: 'awaiting_design_review'; receiptIndex: number }
@@ -173,6 +197,7 @@ export function validWorkerProgress(value: unknown, maxSteps: number): value is 
     && Array.isArray(v.calls) && v.calls.every(c => !!c && typeof c.tool === 'string' && typeof c.status === 'string')
     && Array.isArray(v.receipts) && v.receipts.every(r => !!r && typeof r === 'object' && !Array.isArray(r))
     && Array.isArray(v.order) && v.order.every(name => typeof name === 'string' && NAME.test(name))
+    && (v.planned === undefined || v.planned === true)
     && (v.version !== 2 || (renewal?.savedReceiptIndex === null || Number(renewal?.savedReceiptIndex) < v.receipts.length))
 }
 
@@ -231,6 +256,14 @@ export async function runWorker(opts: {
   /** Pinned only for new claimed structure jobs with durable workpads. A fresh
    * chain is allowed after a persisted note and an exact saved-record readback. */
   verifiedRenewal?: { loadWorkpad(step: number): Promise<WorkpadSnapshot> }
+  /** Pinned per job (workerFocusVersion 1) for workers with a catalog focus:
+   * picks up to the focus limit of the optional tools from Bob's request at
+   * job start. A resumed job keeps the tools it was offered. */
+  focus?: { pick(candidates: string[]): Promise<string[] | null> }
+  /** Pinned per job (workerPlanVersion 1): a construction write before a plan
+   * note in this job's workpad is refused with plan_required; reads and checks
+   * are not. The list of tools does not change, so the prompt cache holds. */
+  planGate?: boolean
   /** Pixels the worker opened go with the worker's own next call (not Bob's), and are confirmed after it. */
   images?: { validate?:()=>Promise<boolean>; carrier: () => Messages; confirmDelivery: () => void }
   /** Reads what the worker saved, by code, after the job (see readbackReads). */
@@ -251,7 +284,17 @@ export async function runWorker(opts: {
   releaseChain?: (responseId: string) => void
 }): Promise<Record<string, unknown>> {
   const roleKey = opts.worker.role.replace(/^role\./, '')
-  const allowed = new Set([...opts.worker.tools, ...opts.worker.reads, ...(opts.workpadEnabled ? ['update_workpad'] : [])])
+  const restored = opts.progress?.restored
+  const focus = opts.focus && opts.worker.focus ? opts.worker.focus : null
+  // With a focus the job is offered its core tools and the picked optional
+  // ones, fixed for the job; a resumed job reads its picks from the offered
+  // order instead of asking again.
+  const picked = !focus ? [] : restored ? restored.order.filter(name => focus.optional.includes(name))
+    : ((await opts.focus!.pick(focus.optional)) ?? []).filter(name => focus.optional.includes(name)).slice(0, focus.optional_limit)
+  const allowed = new Set([...(focus ? [...focus.core, ...picked] : [...opts.worker.tools, ...opts.worker.reads]), ...(opts.workpadEnabled ? ['update_workpad'] : [])])
+  // The plan gate: construction writes wait for a plan note saved in this job.
+  const writes = new Set(opts.worker.tools.filter(name => name !== 'check_construction_draft'))
+  let planned = restored?.planned === true
   // The worker's session also offers tools that wait for a prerequisite (saving a
   // reviewed drawing), so the list is the same in every step and the prompt start
   // stays cached; calling one too early answers "not available yet". Prepared each
@@ -262,7 +305,6 @@ export async function runWorker(opts: {
     for (const spec of offered) if (!order.includes(spec.function.name)) order.push(spec.function.name)
     return order.flatMap(name => offered.filter(spec => spec.function.name === name))
   }
-  const restored = opts.progress?.restored
   let previous: string | undefined = restored?.previous ?? undefined
   if (restored && !validWorkerProgress(restored, opts.worker.max_steps)) throw new Error('worker_checkpoint_invalid')
   if (restored && restored.version !== 3 && restored.version !== (opts.verifiedRenewal ? 2 : 1)) throw new Error('worker_checkpoint_invalid')
@@ -372,6 +414,9 @@ export async function runWorker(opts: {
       if (opts.pieceProgress && pieceWriteSeen) result = { status: 'deferred', reason: 'construction_piece_boundary',
         message: 'First read the preceding construction save and its verification. Reissue this call only if still needed.' }
       else if (!allowed.has(name)) result = { status: 'not_offered' }
+      else if (opts.planGate && !planned && writes.has(name)) result = { status: 'invalid', reason: 'plan_required',
+        validation: { code: 'plan_required', fields: [] },
+        message: 'Write your plan with update_workpad first: the goal, the steps in order and the next step. Then make the change.' }
       else {
         try { result = await opts.session.execute(name, args) }
         catch (error) { rethrowContinuation(error); throw error }
@@ -478,6 +523,7 @@ export async function runWorker(opts: {
       if (name === 'update_workpad' && status === 'noted' && result?.unchanged !== true
         && renewal.savedReceiptIndex !== null && Number.isSafeInteger(result?.revision))
         renewal.notedRevision = result.revision
+      if (name === 'update_workpad' && status === 'noted' && plannedNote((args as { note?: unknown } | null)?.note)) planned = true
       const rejection = ['invalid', 'conflict'].includes(status) ? toolRejection(result) : undefined
       try { opts.onTool?.({ name: NAME.test(name) ? name : 'invalid_name', status, ms: Date.now() - began, ...(rejection ? { rejection } : {}) }) } catch { /* diagnostics only */ }
       messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) })
@@ -497,8 +543,8 @@ export async function runWorker(opts: {
       return finish(terminalResult(terminal))
     }
     if (opts.progress) await opts.progress.save(structuredClone(opts.verifiedRenewal
-      ? { version: 2 as const, step, previous: previous ?? null, messages, calls, receipts, order, renewal }
-      : { version: 1 as const, step, previous, messages, calls, receipts, order }))
+      ? { version: 2 as const, step, previous: previous ?? null, messages, calls, receipts, order, renewal, ...(planned ? { planned } : {}) }
+      : { version: 1 as const, step, previous, messages, calls, receipts, order, ...(planned ? { planned } : {}) }))
     // A new provider conversation must never inherit orphaned tool outputs or
     // unsaved geometry. Reset only after the last protocol batch was answered,
     // a later workpad note was saved, and an exact revision was read back.

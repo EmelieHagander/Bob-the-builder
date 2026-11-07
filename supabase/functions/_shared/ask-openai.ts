@@ -226,7 +226,8 @@ export async function answerWithOpenAi(opts: {
   // Construction reads in the model step being executed (page budget share).
   let constructionReadsInStep = 1
   const dispatchModel = async (requested: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>, imageInputs?:BobImageInputCounts) => {
-   const options = { ...applyCatalogModelOptions(aiCatalog, requested), ...(execution.toolSchemaDedupVersion === 1 ? { toolSchemaDedup: 1 as const } : {}) }
+   const options = { ...applyCatalogModelOptions(aiCatalog, requested), ...(execution.toolSchemaDedupVersion === 1 ? { toolSchemaDedup: 1 as const } : {}),
+     ...(execution.promptCachePointsVersion === 1 ? { promptCachePoints: 1 as const } : {}) }
    const drawingAuthority:DrawingBudgetAuthority|undefined=drawingRequestId&&drawingBudget
     ?{requestId:drawingRequestId,options}:undefined
    const boundDrawing=isDrawingModelCall(drawingAuthority,options.aiFunction)
@@ -400,7 +401,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; toolSchemaDedupVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; toolSchemaDedupVersion?: 1; promptCachePointsVersion?: 1; workerFocusVersion?: 1; workerPlanVersion?: 1; toolPickLimit?: number; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -426,6 +427,8 @@ export async function answerWithOpenAi(opts: {
       ...(bobStageContextVersion(!!checkpoint, contract).stageContextVersion === 1 ? { imageReleaseVersion: 1 as const } : {}),
       // Tool schemas sent with shared $defs (owner decision 2026-11-06). Jobs without this pin send inline schemas.
       ...(checkpoint ? { toolSchemaDedupVersion: 1 as const } : {}),
+      // Fixed Claude cache points after the system prompt, the job start and the settled compaction (owner decision 2026-11-06). Jobs without this pin keep the automatic point only.
+      ...(checkpoint ? { promptCachePointsVersion: 1 as const } : {}),
       // Listed images get one short description (owner decision 2026-11-06). Jobs without this pin describe nothing.
       ...(checkpoint && aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.image-describer') ? { imageDescriptionVersion: 1 as const } : {}),
       // Window 2 (2026-10-29): superseded repeat reads leave first; the latest result per record stays whole.
@@ -441,6 +444,10 @@ export async function answerWithOpenAi(opts: {
       ...(checkpoint && contract.worker_checkpoint_version === 1 ? { workerCheckpointVersion: 1 as const } : {}),
       // Only new claimed turns with the published contract may read and replace private working notes.
       ...(claimedServer && contract.workpad_version === 1 ? { workpadVersion: 1 as const } : {}),
+      // Owner decision 2026-11-06 (B): a worker's focused tool list, Konrad's plan before a write, and Bob's picker up to eight. New claimed jobs only.
+      ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_focus_version === 1 ? { workerFocusVersion: 1 as const } : {}),
+      ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_plan_version === 1 ? { workerPlanVersion: 1 as const } : {}),
+      ...(checkpoint && Number.isInteger(contract.tool_pick_limit) && Number(contract.tool_pick_limit) >= 1 && Number(contract.tool_pick_limit) <= 8 ? { toolPickLimit: Number(contract.tool_pick_limit) } : {}),
       ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_checkpoint_version === 1
         && contract.worker_verified_renewal_version === 1 ? { workerVerifiedRenewalVersion: 1 as const } : {}),
       ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_checkpoint_version === 1
@@ -458,6 +465,9 @@ export async function answerWithOpenAi(opts: {
   if (execution.specialistContinuationTokens !== undefined && !(Number.isInteger(execution.specialistContinuationTokens) && execution.specialistContinuationTokens >= 1000)) throw new Error('specialist_continuation_invalid')
   if (execution.workerCheckpointVersion !== undefined && execution.workerCheckpointVersion !== 1) throw new Error('worker_checkpoint_version_invalid')
   if (execution.workpadVersion !== undefined && execution.workpadVersion !== 1) throw new Error('workpad_version_invalid')
+  if (execution.workerFocusVersion !== undefined && (execution.workerFocusVersion !== 1 || execution.workpadVersion !== 1)) throw new Error('worker_focus_version_invalid')
+  if (execution.workerPlanVersion !== undefined && (execution.workerPlanVersion !== 1 || execution.workpadVersion !== 1)) throw new Error('worker_plan_version_invalid')
+  if (execution.toolPickLimit !== undefined && !(Number.isInteger(execution.toolPickLimit) && execution.toolPickLimit >= 1 && execution.toolPickLimit <= 8)) throw new Error('tool_pick_limit_invalid')
   if (execution.workerVerifiedRenewalVersion !== undefined
     && (execution.workerVerifiedRenewalVersion !== 1 || execution.workpadVersion !== 1 || execution.workerCheckpointVersion !== 1))
     throw new Error('worker_verified_renewal_version_invalid')
@@ -484,6 +494,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.workingStateVersion !== undefined && execution.workingStateVersion !== 1) throw new Error('working_state_version_invalid')
   if (execution.constructionPageVersion !== undefined && execution.constructionPageVersion !== 1) throw new Error('construction_page_version_invalid')
   if (execution.corePreloadVersion !== undefined && execution.corePreloadVersion !== 1) throw new Error('core_preload_version_invalid')
+  if (execution.promptCachePointsVersion !== undefined && execution.promptCachePointsVersion !== 1) throw new Error('prompt_cache_points_version_invalid')
   if (execution.memoryStairVersion !== undefined && (execution.memoryStairVersion !== 1 || execution.promptTiersVersion !== 1 || execution.contextStrategyVersion !== 1)) throw new Error('memory_stair_version_invalid')
   if (execution.buildingLinkVersion !== undefined && execution.buildingLinkVersion !== 1) throw new Error('building_link_version_invalid')
   if (execution.roomDimensionsVersion !== undefined && execution.roomDimensionsVersion !== 1) throw new Error('room_dimensions_version_invalid')
@@ -512,6 +523,7 @@ export async function answerWithOpenAi(opts: {
     ...(execution.workerStageContextVersion === 1 ? { workerStageContextVersion: 1 as const } : {}),
     ...(execution.stageContextVersion === 1 ? { stageContextVersion: 1 as const, imageSource: (url: string) => imageRefs.has(url) ? stageImageRef(url) : undefined } : {}),
     ...(execution.imageReleaseVersion === 1 ? { imageReleaseVersion: 1 as const } : {}),
+    ...(execution.promptCachePointsVersion === 1 ? { promptCachePointsVersion: 1 as const } : {}),
     ...(execution.resultWindowVersion === 1 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS } : {}),
     ...(execution.resultWindowVersion === 2 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS, resultWindowVersion: 2 as const } : {}),
     ...(execution.constructionPageVersion === 1 ? { literalResultTokens: { [CONSTRUCTION_VIEW_TOOL.function.name]: BOB_CONSTRUCTION_RESULT_TOKENS } } : {}),
@@ -1275,6 +1287,9 @@ export async function answerWithOpenAi(opts: {
     ...(execution.workerCheckpointVersion === 1 ? { workerCheckpoint: true } : {}),
     ...(execution.workerVerifiedRenewalVersion === 1 ? { workerVerifiedRenewal: true } : {}),
     ...(execution.workerPieceProgressVersion !== undefined ? { workerPieceProgress: true } : {}),
+    ...(execution.workerFocusVersion === 1 ? { workerFocus: true } : {}),
+    ...(execution.workerPlanVersion === 1 ? { workerPlan: true } : {}),
+    ...(execution.toolPickLimit !== undefined ? { toolPickLimit: execution.toolPickLimit } : {}),
     ...(execution.workerPieceProgressVersion === 3 || execution.workerPieceProgressVersion === 4 ? { workerDesignReview: true } : {}),
     ...(execution.workerPieceProgressVersion === 2 || execution.workerPieceProgressVersion === 3 || execution.workerPieceProgressVersion === 4 ? { workerFormPiece: {
       readPlan: async () => {

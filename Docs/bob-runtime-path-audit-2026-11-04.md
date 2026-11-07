@@ -1821,3 +1821,239 @@ Remaining: ordinary entry and bed turns measure, against the
 start 28.2k, Konrad 57.5k, cache 65 % / 83 %), the combined effect of the
 19:47 and 21:43 publications: image release and descriptions, the cut-answer
 retry, and Konrad's start input (expected about 10k Claude tokens lower).
+
+<a id="cache-points-2026-11-06"></a>
+### Owner runs after #486 and #488: cache misses and silent aborts — 2026-11-06
+
+Two ordinary owner turns ran after the 21:43 publication (read back from
+`bob.execution_events`, `shared.ai_usage_events` and the job rows; no model
+was run for the analysis).
+
+| | Bed (`749d3bea`, job `65f2d501`) | Entry (`c4216d67`, job `4dfc4cb7`) |
+|---|---|---|
+| Wall time | 22:00:45–22:12:34 UTC, 706 s | 22:01:23–22:24:23 UTC, 1,380 s |
+| Saved | 1 record | 8 records |
+| Bob | 8 calls, start 33,023, peak 41,100, cache 71 %, USD 0.59 | 28 calls, start 34,428, peak 87,170, cache 72 %, USD 3.22 |
+| Konrad | 27 calls, start 59,485, peak 109,664, cache 77 %, USD 3.26, 2 aborted | 5 calls, start 75,842, 2 aborted, USD 0.50 |
+| Total | ≈ USD 3.84 | ≈ USD 3.76 |
+
+**What the publications fixed.** The bed edit conflict is repaired live:
+`target_revision_required` at 22:02:59, the resend saved at 22:03:17. Konrad's
+start input fell to 59,485 tokens (71–78k before the schema deduplication).
+Aborted Claude calls are now visible in the ledger (four rows, cost null).
+
+**What still failed.**
+
+1. *Silent aborts.* Konrad's last job in both runs stopped after two 120 s
+   deadlines (bed: input 85,340; entry: 94,219). The ledger says
+   `local_timeout`, not `model_output_window`: the stream had started
+   (`message_start`, usage known) but no content delta arrived in the last
+   10 s, so the adapter treated it as a lost connection and the worker resent
+   the identical request, which timed out identically. The model was thinking
+   in silence (adaptive thinking streams no deltas while it thinks). Nothing
+   from those jobs was saved; Bob's bed answer asks the owner to choose a
+   stair option a–d (recommendation a). In the entry run Bob's turn ended
+   without Konrad's part.
+2. *Full cache misses.* Calls with `cached_input_tokens` 0 at 40k+ input:
+   bed Konrad steps 6, 10, 12, 18 and every Konrad job start, Bob step 4
+   (≈ 53 % of the bed's cost); entry Bob steps 2, 6, 10, 14, 18 — every fourth
+   step, which is the compaction batch (`BOB_COMPACTION_BATCH` 4) — plus step
+   16 (tool list 19 → 21) and Konrad's job start (≈ 76 % of the entry's cost).
+   The offered tool lists at the compaction misses were identical (25 tools,
+   same order), so the tool list is not the cause there. The cause is how
+   Claude caches: it keeps a read point only where an earlier request wrote
+   one, and Bob's request wrote only the automatic point at its end. When a
+   compaction batch rewrites older results, the new request's prefix matches
+   no earlier end point, so tools (Konrad ≈ 43k tokens of definitions after
+   the deduplication), system prompt and job start are paid at full price
+   again; a new Konrad job's different start has the same effect. OpenAI
+   matched these prefixes by itself, which is why the design never needed
+   fixed points before.
+3. *Unexplained.* Entry Bob steps 22 and 26 read 72,273 cached tokens (the
+   step-18 end point) although their input was 79–82k: the transcript
+   between steps 18 and 21 had changed after a three-minute idle gap. Bob
+   stands still for two to three minutes about six times per run, roughly
+   half the wall time, and did so on earlier days too (gaps over 100 s per
+   hour since 2026-11-04: 5, 4, 2, 6, 3, 4, 2, 2, 2, 6). Function logs are
+   not readable through the management API in this session, so the cause is
+   open and needs its own investigation.
+4. *Image descriptions.* None were written: Bob never listed the project's
+   images in either run, so the describer had nothing to do. Not a defect;
+   the live path is still unverified.
+
+**Owner direction (2026-11-06).** The whole fix: A to reach the footing GPT
+had (fixed cache points, and the note retry after a silent abort), then B to
+improve beyond it (Konrad plans first in his workpad, about eight tools
+instead of 25, Bob's tool list fixed from step 1). Measured tool use since
+2026-11-02 supports B: Konrad's 25 offered tools serve 9,617 calls, of which
+two tools (`read_construction_draft` 386, `edit_construction_parts` 57) are
+75 % and thirteen tools are used seven times or fewer; Bob saw 52 distinct
+tools, about 30 of them fewer than ten times, and called `describe_tool` 97
+times. B is a proposal for owner review before it is built.
+
+**Correction A (source; not yet deployed).**
+
+- *Fixed cache points*, pinned `promptCachePointsVersion: 1` for new
+  executions on checkpointed jobs. The Claude request puts an explicit point
+  on the system prompt's last block (tools render before the system prompt,
+  so tools and system become one read point), on the last message of the job
+  start (seed, stage handoff, historical images) and on the last settled
+  history message (the compaction boundary, byte-stable between batches),
+  beside the automatic point at the end: at most four, the provider's limit.
+  Points are wire form only; nothing is stored in a chain or checkpoint.
+  Tests prove that unpinned executions send identical bytes, that the points
+  sit where stated through eleven exchanges and a checkpoint restore, and
+  that the settled point moves one batch at a time. Expected effect: a
+  compaction miss costs the transcript after the settled boundary instead of
+  everything, and a Konrad job start costs its seed instead of tools, system
+  and seed; roughly one dollar per run of the two above. To be measured.
+- *Silent aborts*: a local deadline after Claude's first stream event is
+  reported as `model_output_window` whether text was still streaming or the
+  model was thinking in silence (ledger `model_output_window` /
+  `model_output_window_silent`); a deadline before the first event keeps
+  `local_timeout` and the identical retry. Bob and the workers then continue
+  with the note, reworded to cover both: "Your previous answer did not finish
+  within one response and was discarded … Continue the same task in smaller
+  steps".
+- Not changed: Bob's tool list still grows within a turn (step B).
+
+Remaining: publish A, run the same two turns, read back cache share and cost
+per role against this table; then the B proposal.
+
+<a id="publication-491-2026-11-06"></a>
+#### Hosted publication of #491 — 2026-11-06, 23:43 UTC
+
+The owner authorized the whole fix ("Applicera alla", 2026-11-06): A now, B
+after it is built.
+
+- #491 is merged at `086915d036592fea6c5030df23516f91a7358223`; its tree
+  `b403ac8c57595e9ac864b75c0ff1c25a1f3aaf5c` equals the tested branch tree.
+  Safety branch `save/bob-before-cache-points-2026-11-06` retains the previous
+  published source `0fba851737b41af4eb64ff952c7df856f6b2012a`.
+- Preflight: zero active Bob jobs; the running bundles were the 21:43 ones
+  (bob-worker v210, ask-bob v242).
+- Published from the merged checkout (Supabase CLI 2.117.0, `--use-api`,
+  worker first):
+
+| Consumer | Version | Files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 211 | 150 | Existing private job capability, JWT false | `59b8fa317c4070a246654162bea414bebd868f9640349553a43d12086f7782a2` |
+| ask-bob | 243 | 152 | JWT true | `5b61fecce41985fe10b91fa434ab2eb06933b955cc4250aaf04dd65cea394d7b` |
+
+  Returned sources match the merged checkout byte for byte except the known
+  type-only `cad-intake.ts` erasure; both bundles contain the cache-point pin,
+  the `cacheBoundary` marking and the silent-window code. Zero active jobs
+  after publication. No migration, catalog change or frontend publication.
+
+Remaining: B (Konrad's plan gate, core and picked tools, Bob's picker up to
+eight), then the owner's own project turns read back against the
+[table above](#cache-points-2026-11-06).
+
+<a id="tool-focus-2026-11-06"></a>
+### B: Konrad plans first, a focused tool list, Bob's picker up to eight — 2026-11-06
+
+Owner decision 2026-11-06 ("Applicera alla"): B1 as a server rule with the
+same tool list, B2 as listed, B3 with the picker widened and loading kept as
+the reserve.
+
+**Measured basis (28 Bob turns with Konrad since 2026-11-02).** Konrad was
+offered 25 tools on every call. `read_construction_draft` (386 calls, every
+turn) and `edit_construction_parts` (57, 64 % of turns) were 75 % of his
+calls; `find_catalog_materials` 57 % of turns, `search_project_data` 32 %,
+`add_catalog_fastener` 29 %, `update_workpad` 25 %, `read_build_tree` 21 %,
+`read_solution_context` 18 %, four tools at 14 %, four at 4–11 %, and
+`create_sub_build`, `place_build`, `derive_construction_lists`,
+`transition_legacy_drawing` never. His persona asks for the next step in the
+workpad, but no job wrote a plan before its first write. Bob saw 52 distinct
+tools, about 30 fewer than ten times, and loaded tools through
+`describe_tool` 97 times; each load changed his tool list within the turn,
+which under Claude invalidates the whole cache (entry: 17 → 19 → 21 tools).
+
+**Correction (source; the catalog migration is applied at publication).**
+
+- *Catalog* (`20261107000000_bob_tool_focus_catalog.sql`, publication
+  `bob-tool-focus-v1`): `bob.tools` gets `worker_focus_version: 1` and
+  `build_workers.structure.focus` — core `read_construction_draft`,
+  `edit_construction_parts`, `save_construction_draft`,
+  `check_construction_draft`, `find_catalog_materials`,
+  `add_catalog_fastener`, `search_project_data`; optional
+  `change_construction_parameters`, `continue_construction_change`,
+  `read_build_tree`, `read_solution_context`, `read_construction_changes`,
+  `search_building_knowledge`, `open_project_item`, `list_project_category`,
+  `calculate_project`, `change_construction_roles`,
+  `read_construction_delivery`; `optional_limit` 4. The four never-used tools
+  stay owned by Konrad (so Bob does not get them) but are not offered.
+  `agent-contract.ask-bob` gets `worker_focus_version: 1`,
+  `worker_plan_version: 1`, `tool_pick_limit: 8`. `schema.bob_tool_pick`
+  allows eight names. `tool-picker.contract` OLD "Name at most four, only from
+  candidates; name fewer when fewer are needed." → NEW "Name at most eight,
+  only from candidates; name fewer when fewer are needed."
+  `structure-worker.persona` gains the paragraph: "Innan du ändrar något
+  skriver du din plan i anteckningsblocket: målet, stegen i ordning och nästa
+  steg. En ändring utan plan avvisas. Planen är ditt arbetsläge, inte ett
+  sparat resultat; uppdatera nästa steg efter varje sparad del."
+- *Runtime.* `catalogWorkers` validates a focus (known, owned, disjoint
+  names; limit 0–8). A pinned job (`workerFocusVersion: 1`) is offered its
+  core tools, the workpad and up to the limit of optional tools that the
+  tool-picker role names from Bob's request at job start (`pickWorkerTools`:
+  the same role and schema as Bob's picker, candidates only the optional
+  tools with their cards); the list is fixed for the job, and a resumed job
+  reads its picks from the offered order instead of asking again. A pinned
+  job (`workerPlanVersion: 1`) refuses a construction write (the worker's
+  tools except `check_construction_draft`) with `plan_required` until an
+  `update_workpad` note with status working or waiting, a goal and at least
+  one step is saved in this job; reads and checks pass; `planned` is saved in
+  the worker's progress. Bob's picker names up to the pinned `tool_pick_limit`
+  (eight) instead of four; loading through `describe_tool` stays as the
+  reserve and is measured. Pins: both worker pins need a checkpointed,
+  claimed job with `workpad_version 1`; older jobs and manifests change
+  nothing.
+- *Tests* (`tests/bob-worker-focus.test.ts`): the offered list is core plus
+  the first valid picks, fixed across steps and across a resume without a
+  second pick; unlisted and unpicked tools answer `not_offered`; the gate
+  refuses writes until a real plan (a done note or a note without steps does
+  not count), lets reads and checks through, persists `planned`, and is
+  absent without the pin; the fixture catalog carries the focus, the pins,
+  the eight and the persona paragraph; a bad focus is refused; the picker
+  limit and the worker pick's inputs.
+
+Expected: Konrad's tool definitions fall from about 43k to about 30k Claude
+tokens per call (to be measured), one `update_workpad` call more per job,
+and fewer tool-list changes in Bob's turns. Publication order: both runtimes
+first (older code ignores the new flags), then the migration.
+
+<a id="publication-492-2026-11-06"></a>
+#### Hosted publication of #492 (B) — 2026-11-06, 23:55 UTC
+
+- #492 is merged at `46152aa6a61530bd420b1dccba17d387f6671aec`; its tree
+  `8f65ca86334c97e1614aca8796ed3afc77d73221` equals the tested branch tree.
+  Safety branch `save/bob-before-tool-focus-2026-11-06` retains the previous
+  published source `086915d036592fea6c5030df23516f91a7358223` (A).
+- Preflight: zero active Bob jobs; the running bundles were the 23:43 ones
+  (bob-worker v211, ask-bob v243).
+- Published from the merged checkout (Supabase CLI 2.117.0, `--use-api`,
+  worker first), before the catalog change:
+
+| Consumer | Version | Files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 212 | 150 | Existing private job capability, JWT false | `7ac04299a47b0e165658535bd04f98743330c3d40186d54c18ef8909c51de3ae` |
+| ask-bob | 244 | 152 | JWT true | `738d0b4b00aacb94602adf467bd61f81afa08a87c7f379bab8e30cb5dec8feda` |
+
+  Returned sources match the merged checkout byte for byte except the known
+  type-only `cad-intake.ts` erasure; both bundles contain the focus and plan
+  pins and the worker pick.
+- Catalog: `20261107000000_bob_tool_focus_catalog.sql` applied through the
+  management API as ledger version `20261106235617` (`bob_tool_focus_catalog`).
+  Active afterwards: `bob.tools` v51 (focus present, `worker_focus_version`
+  1), `agent-contract.ask-bob` v27 (`worker_focus_version` 1,
+  `worker_plan_version` 1, `tool_pick_limit` 8), `schema.bob_tool_pick` v3,
+  `tool-picker.contract` v2, `structure-worker.persona` v5 (plan paragraph
+  read back), all `bob-tool-focus-v1`. Zero active jobs after. No frontend
+  publication.
+
+Remaining: the owner's own project turns. Read back per role: Konrad's
+offered tool count (expect 11–12 plus the two continuation tools instead
+of 25), start input, `plan_required` rejections and the `update_workpad`
+note before his first write, cache share and cost against the
+[table above](#cache-points-2026-11-06); Bob's picked count and
+`describe_tool` loads per turn.

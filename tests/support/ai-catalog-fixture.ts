@@ -706,6 +706,32 @@ for(const migration of migrations){
   seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-image-describer-v1'}})
   versions.set(addition.key,1)
  }
+ // Owner decision 2026-11-06 (B): Konrad's focus and plan gate, Bob's picker up to eight.
+ const toolFocus=source.match(/\$tool_focus_definition\$([\s\S]+?)\$tool_focus_definition\$/)
+ if(toolFocus){
+  const publication='bob-tool-focus-v1'
+  const read=(tag:string)=>source.match(new RegExp('\\$'+tag+'\\$([\\s\\S]+?)\\$'+tag+'\\$'))![1]
+  const focus=JSON.parse(toolFocus[1]),flags=JSON.parse(read('tool_focus_contract')),persona=read('tool_focus_persona')
+  const pickerOld=read('tool_focus_picker_old'),pickerNew=read('tool_focus_picker_new')
+  const box=seed.find(row=>row.key==='bob.tools')
+  if(box.definition.build_workers_version!==1||box.definition.worker_focus_version!==undefined||!box.definition.build_workers?.structure||box.definition.build_workers.structure.focus)throw new Error('tool_focus_toolbox_unexpected')
+  box.definition={...box.definition,worker_focus_version:1,build_workers:{...box.definition.build_workers,structure:{...box.definition.build_workers.structure,focus}}}
+  publishAs(box,publication);box.metadata.worker_focus_version=1;versions.set(box.key,versions.get(box.key)!+1)
+  const contract=seed.find(row=>row.key==='agent-contract.ask-bob')
+  if(contract.metadata.worker_focus_version!==undefined||contract.metadata.worker_plan_version!==undefined||contract.metadata.tool_pick_limit!==undefined)throw new Error('tool_focus_contract_unexpected')
+  publishAs(contract,publication);contract.metadata={...contract.metadata,...flags};versions.set(contract.key,versions.get(contract.key)!+1)
+  const schema=seed.find(row=>row.key==='schema.bob_tool_pick')
+  if(schema.definition.properties.tools.maxItems!==4)throw new Error('tool_focus_pick_schema_unexpected')
+  schema.definition=structuredClone(schema.definition);schema.definition.properties.tools.maxItems=8
+  publishAs(schema,publication);versions.set(schema.key,versions.get(schema.key)!+1)
+  const picker=seed.find(row=>row.key==='tool-picker.contract')
+  if(picker.content.split(pickerOld).length!==2)throw new Error('tool_focus_picker_contract_unexpected')
+  picker.content=picker.content.replace(pickerOld,()=>pickerNew);publishAs(picker,publication);versions.set(picker.key,versions.get(picker.key)!+1)
+  const personaRow=seed.find(row=>row.key==='structure-worker.persona')
+  // The fixture does not mirror the piece-progress persona paragraph; the live guard does.
+  if(personaRow.content.includes('Innan du ändrar något'))throw new Error('tool_focus_persona_unexpected')
+  personaRow.content=personaRow.content+'\n\n'+persona;publishAs(personaRow,publication);versions.set(personaRow.key,versions.get(personaRow.key)!+1)
+ }
  const completionGate=source.match(/\$completion_gate_additions\$([\s\S]+?)\$completion_gate_additions\$/)
  if(completionGate)for(const addition of JSON.parse(completionGate[1])){
   seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-completion-gate-v1'}})

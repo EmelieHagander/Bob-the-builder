@@ -169,6 +169,11 @@ export interface OpenAIServiceOptions {
   /** Pinned per execution (tool_schema_dedup_version 1): repeated sub-schemas are
    * sent once as $defs. Validators keep the inline schema. */
   toolSchemaDedup?: 1;
+  /** Pinned per execution (prompt_cache_points_version 1): the Claude request
+   * marks fixed cache points after the system prompt and on the messages the
+   * caller flags with `cacheBoundary`, beside the automatic one at the end.
+   * OpenAI matches prefixes itself and ignores both. */
+  promptCachePoints?: 1;
   catalogToolParameters?: Record<string, Record<string, unknown>>;
   maxOutputTokens?: number;
   /** Explicit per-call ceiling for bounded internal routing. Does not alter app settings. */
@@ -216,6 +221,10 @@ export interface OpenAIServiceOptions {
     nativeOutput?: OpenAIResponseItem[];
     /** Counting metadata only; never sent as provider input. */
     nativeReasoningTokens?: number;
+    /** The prefix up to and including this message stays stable between
+     * requests (job start, settled compaction). Set per request by the
+     * continuation; never stored in a chain or checkpoint. */
+    cacheBoundary?: 1;
   }>;
   tools?: Array<{
     type: 'function';
