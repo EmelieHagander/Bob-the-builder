@@ -149,3 +149,31 @@ test('the model sees no revision in a joint rule; the server fills it, as for jo
   assert.equal(rules(shown.function.parameters).items.properties.fasteners.items.properties.material_revision,undefined,name)
  }
 })
+
+test('old and new format are the same model: identical geometry, and identical geometry after a measure changes',async()=>{
+ const {compileConstructionParameterChange}=await import('../supabase/functions/_shared/construction-parameters.ts')
+ // Old format: Konrad wrote every derived node and binding by hand.
+ const at=(x:number|string,y:number|string,z:number|string)=>({x,y,z,rx:0,ry:0,rz:0})
+ const d=(id:string,operation:string,operands:[string,string])=>({id,role:'derived',operation,operands,rounding:operation==='add_v1'||operation==='subtract_v1'?'exact':'half_away_6'})
+ const oldRecipe={contract_version:1,units:'mm',assembly_id:'wall',views:['front','top'],
+  definitions:[{id:'plate',primitive:'box',material_ref:null,x_mm:95,y_mm:2555,z_mm:45},{id:'stud',primitive:'box',material_ref:null,x_mm:95,y_mm:45,z_mm:2310}],
+  instances:[{id:'sill',definition_id:'plate',placement:at(0,0,0)},{id:'s1',definition_id:'stud',placement:at(0,0,45)},
+   {id:'s2',definition_id:'stud',placement:at(0,2510,45)},{id:'top',definition_id:'plate',placement:at(0,0,2355)}]}
+ const oldPlan={version:1,frames:[],nodes:[...nodes,d('len','subtract_v1',['D','st']),d('double','multiply_v1',['two','lum']),d('stud_h','subtract_v1',['h','double']),
+  d('top_z','subtract_v1',['h','lum']),d('s2_y','subtract_v1',['len','lum'])],
+  bindings:[['definitions/plate/x_mm','st'],['definitions/plate/y_mm','len'],['definitions/plate/z_mm','lum'],['definitions/stud/x_mm','st'],['definitions/stud/y_mm','lum'],
+   ['definitions/stud/z_mm','stud_h'],['instances/s1/placement/z','lum'],['instances/s2/placement/y','s2_y'],['instances/s2/placement/z','lum'],['instances/top/placement/z','top_z']].map(([path,node])=>({path,node}))}
+ const old=(()=>{const r=parseCadAssemblyRequest(structuredClone(oldRecipe))!,p=withZeroDefaults(r,parseParameterPlan(oldPlan));return {recipe:r,parameters:compileCadParameters('p',r,p,new Map(),new Map())}})()
+ const lean=compile(wall(),{version:1,frames:[],nodes,bindings:[]})
+ assert.deepEqual(lean.recipe,old.recipe,'identical geometry')
+ // Every field is bound in both; the bindings name different nodes with the same values.
+ assert.deepEqual(lean.parameters.bindings.map(b=>b.path).sort(),old.parameters.bindings.map(b=>b.path).sort())
+ const value=(p:typeof old.parameters,path:string)=>p.nodes.find(n=>n.id===p.bindings.find(b=>b.path===path)!.node)!.normalized
+ for(const b of old.parameters.bindings)assert.deepEqual(value(lean.parameters,b.path),value(old.parameters,b.path),b.path)
+ // The same measure change, through the compiler change_construction_parameters uses.
+ const change=async(saved:typeof old)=>(await compileConstructionParameterChange('p',{projectId:'p',status:'ok',recipe:saved.recipe,parameters:saved.parameters},
+  [decision('D',2700),decision('h',2500)],async()=>({project:new Map(),physical:new Map()}))) as {recipe:any}
+ const [a,b]=[await change(old),await change(lean)]
+ assert.deepEqual(b.recipe,a.recipe,'identical geometry after the change')
+ assert.deepEqual(b.recipe.definitions.map((x:any)=>x.y_mm),[2605,45]);assert.equal(b.recipe.instances.find((i:any)=>i.id==='top').placement.z,2455)
+})

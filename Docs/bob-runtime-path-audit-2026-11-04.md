@@ -2812,6 +2812,17 @@ validates exactly the published schemas with the production pins.
 `anthropic-service` 11/11 (cut answers priced). Five suites fail identically on
 `main`.
 
+**Owner review the same day (external review relayed by the owner), applied.**
+(1) Joints are not only geometry: a rule is Konrad's decision per definition
+pair, `except` leaves touching pairs unjoined, and the answer lists every joint
+code wrote (`rule_joints`). (2) Formulas must not change the model: a test
+compiles the same wall in the old hand-written format and with formulas and
+asserts identical geometry, bindings and values, and identical geometry after
+the same measure change through the `change_construction_parameters` compiler.
+(3) The size and time gain is a hypothesis until measured. (4) Code maps a part
+to a concept component only when exactly one holds it. (5) Only writing errors
+(text, formula, joint rule) are kept in the sketch, never construction errors.
+
 **Open.** Reads still show the stored graph (nodes and bindings), not formulas;
 an edit names nodes, not the formulas that made them. Instance roles
 (`instance_policy`, 1,447 characters for the wall) are still written per part.

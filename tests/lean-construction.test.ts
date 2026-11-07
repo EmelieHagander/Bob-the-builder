@@ -48,7 +48,7 @@ async function setup(message:string){
 }
 const decision=(id:string,value:number,reason:string)=>({id,role:'decision',value,unit:'mm',reason})
 const at=(x:unknown,y:unknown=0)=>({x,y,z:0,rx:0,ry:0,rz:0})
-const rule={id:'horn',between:['rail','cross'],reason:'Tvärslån limmas och skruvas mot sidoslån.',fasteners:[]}
+const rule={id:'horn',between:['rail','cross'],reason:'Tvärslån limmas och skruvas mot sidoslån.',fasteners:[],except:[]}
 const role=(id:string)=>({instance_id:id,role:'build_part',quantity_policy:'manufacture',reason:'Syntetisk del'})
 function frameSave(message:string,material:string){
  return {key:'ram',record_id:null,expected_revision:0,title:'Ram',description:'Syntetisk ram',area_id:null,change_note:'Ramen',open_questions:[],request_quote:message,mode:'save',
@@ -88,29 +88,42 @@ test('a part edit adds a part by formula: its joints come from the rule and the 
  assert.deepEqual(draft.form_refinement.mappings[0].instance_ids,['left','right','front','back'])
 })
 
-test('a refused part edit stays in the sketch: send only the correction, then commit; refused text is checked again at commit',async()=>{
+test('a part edit refused for its text stays in the sketch and is checked again at commit; a construction error is not kept',async()=>{
  const message='Lägg till en slå utanför och rätta den.',{tools,material,read}=await setup(message)
  const id=(await tools.execute('save_construction_draft',{...frameSave(message,material),request_quote:message})).receipt.recordId
- // Outside every concept component: refused, and kept.
+ // Outside every concept component is a construction error: refused, nothing kept (owner review 2026-11-07).
  const outside=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:1,key:'ute',change_note:'Extra slå',request_quote:message,mode:'save',
   changes:{instances:{upsert:[{id:'extra',definition_id:'cross',placement:at('span')}],remove:[]},roles:{upsert:[role('extra')],remove:[]}},joint_rules:[],form_assign:[]})
- assert.equal(outside.status,'needs_data',JSON.stringify(outside))
- assert.equal(outside.sketch?.status,'kept_with_issues',JSON.stringify(outside))
+ assert.equal(outside.status,'needs_data',JSON.stringify(outside));assert.equal(outside.sketch,undefined,'a construction error is not kept')
+ assert.deepEqual(outside.issues.map((i:any)=>i.code),['form_instance_outside'])
+ // A text that is not plain prose is a writing error: refused and kept.
+ const back={instances:{upsert:[{id:'extra',definition_id:'cross',placement:at('w','depth - w')}],remove:[]},roles:{upsert:[role('extra')],remove:[]}}
+ const text=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:1,key:'in',change_note:'Bakre slå',request_quote:message,mode:'save',
+  changes:back,joint_rules:[{...rule,reason:'Se save_construction_draft'}],form_assign:[]})
+ assert.equal(text.status,'invalid',JSON.stringify(text));assert.equal(text.validation?.code,'human_text')
+ assert.equal(text.sketch?.status,'kept',JSON.stringify(text))
  assert.equal((await read(id)).revision,1,'nothing saved')
- // Only the correction: move it inside.
- const moved=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:1,key:'ute2',change_note:'Flytta in',request_quote:message,mode:'sketch',
-  changes:{instances:{upsert:[{id:'extra',definition_id:'cross',placement:at('w','depth - w')}],remove:[]}},joint_rules:[{...rule,reason:'Se save_construction_draft'}],form_assign:[]})
- assert.equal(moved.status,'invalid',JSON.stringify(moved));assert.equal(moved.validation?.code,'human_text')
- assert.equal(moved.sketch?.status,'kept',JSON.stringify(moved))
  const early=await tools.execute('commit_construction_sketch',{record_id:id,new_key:null,action:'commit',key:'c1',change_note:'Spara',request_quote:message})
  assert.equal(early.status,'invalid');assert.equal(early.validation?.code,'human_text','the kept text is checked at commit')
- const text=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:1,key:'ute3',change_note:'Rätt text',request_quote:message,mode:'sketch',
+ // Only the correction.
+ const fixed=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:1,key:'in2',change_note:'Rätt text',request_quote:message,mode:'sketch',
   changes:{},joint_rules:[rule],form_assign:[]})
- assert.equal(text.status,'sketched',JSON.stringify(text))
+ assert.equal(fixed.status,'sketched',JSON.stringify(fixed))
+ assert.deepEqual(fixed.rule_joints.map((j:any)=>j.rule),['horn','horn'],'the answer lists the joints code wrote')
  const saved=await tools.execute('commit_construction_sketch',{record_id:id,new_key:null,action:'commit',key:'c2',change_note:'Spara',request_quote:message})
  assert.equal(saved.status,'saved',JSON.stringify(saved))
  const draft=await read(id)
  assert.equal(draft.revision,2);assert.equal(draft.joints.length,4)
+})
+
+test('a rule leaves a touching pair named in except unjoined; the check still names that contact',async()=>{
+ const message='Ramen där högra sidan ska kunna lyftas av.',{tools,material,read}=await setup(message)
+ const saved=await tools.execute('save_construction_draft',{...frameSave(message,material),joint_rules:[{...rule,except:[['right','front']]}]})
+ assert.equal(saved.status,'saved',JSON.stringify(saved))
+ assert.deepEqual(saved.rule_joints,[{id:ruleJointId('front','left'),parts:['left','front'],rule:'horn'}])
+ assert.deepEqual((await read(saved.receipt.recordId)).joints.map((j:any)=>j.id),[ruleJointId('front','left')])
+ const check=await tools.execute('check_construction_draft',{artifact_id:saved.receipt.recordId,revision:1})
+ assert.ok(check.issues.some((i:any)=>i.code==='contact_without_joint'&&i.ids.includes('right')),'unjoined contact stays visible: '+JSON.stringify(check.issues))
 })
 
 test('a refused new save is kept under its key, and a saved construction can be revised whole in a keyed sketch',async()=>{

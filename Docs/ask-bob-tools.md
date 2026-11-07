@@ -305,23 +305,29 @@ Entry turn 2026-11-07: an 11-part wall was 26,590 characters Konrad typed in
   decision or measurement with its reason. A repeat's `spacing_mm` takes a
   formula. Formula nodes nothing uses any more are removed by code; a declared
   node nothing uses is still refused. Source: `cad-formulas.ts`.
-- **Joint rules.** `joint_rules` names how parts of two definitions are joined
-  (fasteners and reason); code writes one joint, id `jr.<a>.<b>`, for every
-  pair of such parts touching face to face that has no joint, with the faces in
-  local coordinates. A touching pair without a rule or a joint stays
-  `contact_without_joint`; two existing parts and reference geometry are never
+- **Joint rules.** `joint_rules` is Konrad's joining decision for two
+  definitions (fasteners and reason); code writes one joint, id `jr.<a>.<b>`,
+  for every pair of such parts touching face to face that has no joint, with the
+  faces in local coordinates, and the answer lists each joint it wrote and its
+  rule (`rule_joints`). Touching parts that must not be joined that way (resting,
+  sliding, removable) go in the rule's `except`; they stay
+  `contact_without_joint` until they get their own joint, as does any touching
+  pair without a rule. Two existing parts and reference geometry are never
   joined. Rules last for the save or edit (and the sketch) they come with.
   Source: `construction-joint-rules.ts`.
-- **FORM mapping kept by code.** A part no mapping names goes to the one active
-  concept component whose envelope holds it; a removed part leaves its mapping;
+- **FORM mapping kept by code.** A part no mapping names goes to the active
+  concept component whose envelope holds it, only when exactly one does; a
+  removed part leaves its mapping;
   `form_assign` (part edits) moves a part on purpose. A part outside every
   component, or inside several, is named, not guessed. A part edit now carries
   the mapping to the database (`20261107150000_construction_edit_form_mapping.sql`),
   whose readiness seam validates and stores it for the new revision.
-- **A refused write stays in the sketch.** A part edit or save refused for what
-  was written (`invalid`, `needs_data`, including a text that is not plain
-  prose) is kept in the sketch with its issues, so the next call sends only the
-  correction; commit checks the kept text again. A saved construction can be
+- **A write refused for how it was written stays in the sketch.** Only a text
+  that is not plain prose, a formula or a joint rule (owner review 2026-11-07):
+  the rest is kept in the sketch with the issue, so the next call sends only the
+  correction, and commit checks everything again. A construction error
+  (geometry, concept, readiness, collisions) is refused as before and nothing
+  is kept; a kept sketch is never a saved construction. A saved construction can be
   revised whole in a keyed sketch (`save_construction_draft` with its
   `record_id`, mode sketch), committed with its `new_key`.
 

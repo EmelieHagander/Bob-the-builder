@@ -113,8 +113,8 @@ export function extendFormMapping(intent: DesignIntent, recipe: CadAssemblyReque
     const lo = [p.x, p.y, p.z], hi = [p.x + d.x_mm, p.y + d.y_mm, p.z + d.z_mm]
     const solid = !referenceIds.has(i.id)
     const holding = boxes.filter(b => (b.kind === 'solid') === solid && lo.every((v, k) => v >= b.min[k] - 1e-7) && hi.every((v, k) => v <= b.min[k] + b.size_mm[k] + 1e-7))
-    const preferred = holding.length > 1 ? holding.filter(b => mappedComponents.has(b.id)) : holding
-    if (preferred.length === 1) mapping.set(i.id, preferred[0].id)
+    // Only an unambiguous match is mapped by code (owner review 2026-11-07).
+    if (holding.length === 1) mapping.set(i.id, holding[0].id)
     else issues.push(holding.length
       ? { code: 'form_instance_ambiguous', ids: [i.id, ...holding.map(b => b.id)], message: 'Several concept components hold this part; assign it to one.' }
       : { code: 'form_instance_outside', ids: [i.id], message: 'No concept component holds this part; move it inside one, assign it, or revise the Solution concept.' })
