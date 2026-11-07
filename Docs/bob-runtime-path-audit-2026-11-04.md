@@ -2202,3 +2202,43 @@ notices) with Edge changes in `ask-openai.ts`, `delivery-language.ts`,
 `20261106233000_bob_failure_notice_marker.sql`. Publishing the runtimes from
 `main` publishes those changes too; the owner decides whether #490's
 migration is applied in the same publication.
+
+<a id="publication-494-2026-11-07"></a>
+#### Hosted publication of #494 (with #490) — 2026-11-07, 06:08 UTC
+
+The owner authorized publication after the entry turn ("Ja, publicera när
+entrén är klar"); the entry turn ended 05:56 (28 min, 12 saved records).
+
+- #494 is merged at `edbf3e1f904dda6179124882fdd27b8d4e68d502`; its tree
+  `c64f3326d015daf0be85ade463ebeb316d0e35bb` equals the tested branch tree,
+  which includes #490 (another session's chat-notice change, merged by the
+  owner 05:30 UTC). Its focused tests pass except
+  `bob-write-runtime` #13, which fails identically before #490. Safety
+  branch `save/bob-before-worker-gates-2026-11-07` retains the previous
+  published source `46152aa6a61530bd420b1dccba17d387f6671aec`.
+- Preflight: zero active Bob jobs; running bundles bob-worker v212, ask-bob
+  v244.
+- Published from the merged checkout (Supabase CLI 2.117.0, `--use-api`,
+  worker first):
+
+| Consumer | Version | Files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 213 | 150 | Existing private job capability, JWT false | `c7ccc1e4ed3b82ef116f2974785004ecc366e4e790b6ac7ea01ceaf674c0c936` |
+| ask-bob | 245 | 152 | JWT true | `cbaa997cc74242a4ea6ed4aefb95534472ebc72335ab153092f8e5d676e0b019` |
+
+  Returned sources match the merged checkout byte for byte except the known
+  type-only `cad-intake.ts` erasure; both bundles contain the worker-gates
+  pin, `piece_open`, the request fingerprint and #490's notice marker.
+- Migrations, applied through the management API after the runtimes, in
+  order: `20261106233000_bob_failure_notice_marker.sql` (#490; its preflight
+  hash matched) as ledger `20261107060758`;
+  `20261107070000_retire_lada_facade_piece_policy.sql` as `20261107060759`
+  (piece policies, scopes and attempts now 0);
+  `20261107070100_bob_worker_gates_catalog.sql` as `20261107060801`
+  (`agent-contract.ask-bob` v28, `worker_gates_version` 1,
+  `bob-worker-gates-v1`). Zero active jobs after. The frontend part of #490
+  reaches users on the owner's next site publication.
+
+Remaining: ordinary bed and entry turns read back Konrad's hand-over
+outcomes (`ok` share, logged stop reasons, `piece_open` facts) against the
+[locked-paths data](#locked-paths-2026-11-07).
