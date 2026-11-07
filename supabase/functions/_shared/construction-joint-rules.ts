@@ -24,7 +24,7 @@ export const JOINT_RULES_SCHEMA = {
     between: { type: 'array', minItems: 2, maxItems: 2, items: { type: 'string', pattern: ID } },
     reason: { type: 'string', minLength: 1, maxLength: 500 },
     fasteners: JOINT_CHOSEN_FASTENERS_SCHEMA,
-    except: { type: 'array', maxItems: 64, description: 'Part id pairs this rule does not join, e.g. a part that rests, slides or is removable.',
+    except: { type: 'array', maxItems: 64, description: 'Part id pairs this rule does not join, e.g. a part that rests, slides or is removable. Send them again whenever the rule is sent.',
       items: { type: 'array', minItems: 2, maxItems: 2, items: { type: 'string', pattern: ID } } },
   } },
 }

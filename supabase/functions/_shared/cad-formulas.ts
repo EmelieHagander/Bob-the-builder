@@ -132,7 +132,8 @@ export function formulaCompiler(known:ParameterInput[],valueOf:(id:string)=>numb
   const id=formulaNodeId(OPERATION[op],a,b,rounding)
   if(!nodes.has(id)&&!generated.has(id)){
    // The plan holds at most 1024 nodes; stop before building more (audit round 3).
-   if(nodes.size+generated.size>=1024)throw new FormulaParseError('formula_too_large')
+   // Old formula nodes code prunes afterwards do not count (round 4).
+   if(generated.size>=1024)throw new FormulaParseError('formula_too_large')
    generated.set(id,{id,role:'derived',operation:OPERATION[op],operands:[a,b],rounding})
   }
   return id

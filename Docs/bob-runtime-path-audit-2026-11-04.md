@@ -2905,7 +2905,7 @@ security, the owner's Audit 2), fixed the same day.**
 | | A kept rule-only change was dropped by any saved edit | Dropped only when the saved change also carries its rules, assignments and text |
 | | A save refused for its text was merged into open sketch work under its key | Kept only when no sketch work is open under the key |
 | | Two refused tries were merged, so a part dropped in the second still reached the commit | The second try replaces the first |
-| Keep rules | A construction error behind a rule or formula-number refusal was kept | Those refusals come only after the construction checks pass |
+| Keep rules | A construction error behind a joint-rule refusal, or behind a number written where a node computes the field, was kept | Those refusals come only after the construction checks pass; an unreadable formula hides the geometry, so it is still kept and the commit checks everything |
 | Joints | A part made reference geometry kept code's joints | They go |
 | | A rule restated with a pair in `except` kept code's joint for that pair | It goes |
 | | A rule in a node-only edit wrote nothing; upserting a definition lost earlier excepts; new fasteners did not reach code's joints of edited parts | A rule applies to parts the edit adds, names or moves (computed place or size changed), and their code joints take it; rules that write nothing say so |
@@ -2933,6 +2933,23 @@ rules); an item revised before the commit commits its older revision. (3) A
 `form_assign` naming a part the construction lacks is ignored, not refused.
 (4) Publication order: migration `20261107150000` before the functions, or
 estimated ledger rows fail to insert.
+
+**Audit round 4 (one reviewer, a convergence check of round 3), fixed the
+same day.** Round 3's rows hold. Found: the construction fence skipped jobs
+bound to no construction (`record_id` null), so a new-wall job using the same
+key could continue and commit another construction's sketch (medium,
+confirmed); now any call or commit not naming the sketch's construction is
+refused. Low: a second refused try that could not be kept left the first one
+open (now discarded, `earlier_try`); a rule-only edit that wrote nothing got an
+unexplained database refusal (now `rules_wrote_nothing`), and code joints a
+restated `except` removed were not reported (now `code_joints_removed`); model
+texts did not say `except` is sent again with its rule (now in the schema);
+the formula cap counted old nodes about to be pruned (now only new ones). Not
+changed: a role or parameter change through its own tool leaves code joints
+until the next part edit (documented; the check names faces that no longer
+meet). Tests: `lean-construction` 13/13; 57 focused files 433/438, the same
+five catalog-parity failures as on `main`, with identical differences. Deno
+check passes.
 
 **Audit 4, local, on the real wall (no model call).** The saved entry wall
 (`tests/fixtures/entrance-wall-construction.json`) goes through the same tools

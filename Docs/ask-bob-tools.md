@@ -322,12 +322,16 @@ Entry turn 2026-11-07: an 11-part wall was 26,590 characters Konrad typed in
   the parts the edit adds, names or moves (computed place or size changed), so
   an earlier `except` holds for the rest; a save or an edit with only rules
   applies to every touching pair. Where a rule applies, code's joints take its
-  fasteners and reason, and code's joint of a pair it names in `except` goes.
-  A joint code wrote follows its parts: written again when they moved,
-  removed when they are gone, when one becomes reference geometry, or when
-  both are still boxes that no longer touch. Rules that write nothing say so
-  (`rule_note`). Rules last for the save or edit (and the sketch) they come
-  with.
+  fasteners and reason, and code's joint of a pair it names in `except` goes;
+  `except` is sent again whenever the rule is. In saves and part edits a joint
+  code wrote follows its parts: written again when they moved, removed when
+  they are gone, when one becomes reference geometry, or when both are still
+  boxes that no longer touch (`code_joints_removed`). A role or parameter
+  change through its own tool leaves them until the next part edit; the check
+  names a joint whose faces no longer meet. Rules that write nothing say so
+  (`rule_note`; an edit with only such rules is refused as
+  `rules_wrote_nothing`). Rules last for the save or edit (and the sketch)
+  they come with.
   Source: `construction-joint-rules.ts`.
 - **FORM mapping kept by code.** A part no mapping names goes to the active
   concept component whose envelope holds it, only when exactly one does; a
@@ -341,9 +345,10 @@ Entry turn 2026-11-07: an 11-part wall was 26,590 characters Konrad typed in
   the rest is kept in the sketch with the issue, so the next call sends only the
   correction, and commit checks everything again. A construction error
   (geometry, concept, readiness, collisions) is refused as before and nothing
-  is kept: a rule or formula-number refusal is returned only once the
-  construction passes its checks (a formula that cannot be read hides the
-  geometry; the commit checks everything again). A kept sketch is never a
+  is kept: a joint-rule refusal, or a number written where a node computes
+  the field, is returned only once the construction passes its checks. A
+  formula that cannot be read hides the geometry, so it is kept and the
+  commit checks everything again. A kept sketch is never a
   saved construction. A saved construction can be
   revised whole in a keyed sketch (`save_construction_draft` with its
   `record_id`, mode sketch), committed with its `new_key`; the sketch keeps the
@@ -351,7 +356,9 @@ Entry turn 2026-11-07: an 11-part wall was 26,590 characters Konrad typed in
   newer revision, and it cannot continue or be committed as another
   construction (`operation_scope_changed`). A refused direct write is kept
   only when no sketch work is open (for a save, under its key); a second
-  refused try replaces the first. The sketch of a refused part edit is dropped
+  refused try replaces the first, and discards it when it cannot be kept
+  itself. A keyed sketch of a saved construction is fenced to it whether or
+  not the job is bound to one. The sketch of a refused part edit is dropped
   when a saved change covers it (its ids, rules, assignments and text), and
   named as open otherwise.
 - **What follows from a part removal.** Removing a part removes its role, its

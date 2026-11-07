@@ -351,3 +351,36 @@ test('audit round 3, keyed sketches: a repeat role reaches the sketch check; a r
  assert.equal(commit.reason,'operation_scope_changed',JSON.stringify(commit))
  assert.equal((await read(a)).revision,1);assert.equal((await read(b)).revision,1)
 })
+
+test('audit round 4: the fence holds for unbound jobs; superseded tries go; removed code joints and empty rules are named; a save keeps no construction error behind a rule error',async()=>{
+ const message='Runda fyra.',{tools:t,material,read}=await setup(message)
+ const base=frameSave(message,material) as any
+ const id=(await t.execute('save_construction_draft',base)).receipt.recordId
+ const edit=(over:Record<string,unknown>)=>t.execute('edit_construction_parts',{record_id:id,expected_revision:1,request_quote:message,mode:'save',changes:{},joint_rules:[],form_assign:[],...over})
+ // A rule restated with a pair in except: code's joint goes, and the answer names it.
+ const unjoin=await edit({key:'u1',change_note:'Lös höger',joint_rules:[{...rule,except:[['front','right']]}]})
+ assert.equal(unjoin.status,'saved',JSON.stringify(unjoin));assert.deepEqual(unjoin.code_joints_removed,[ruleJointId('front','right')])
+ // The same rules again write nothing: refused with a reason, not an unexplained database refusal.
+ const nothing=await edit({key:'u2',expected_revision:2,change_note:'Igen',joint_rules:[{...rule,except:[['front','right']]}]})
+ assert.equal(nothing.reason,'rules_wrote_nothing',JSON.stringify(nothing))
+ // A second refused try that cannot be kept discards the first.
+ const add=(part:string,y:number,key:string)=>edit({key,expected_revision:2,change_note:'Se save_construction_draft',
+  changes:{nodes:{upsert:[decision('py',y,'Läge.')],remove:[]},instances:{upsert:[{id:part,definition_id:'cross',placement:at('w','py')}],remove:[]},roles:{upsert:[bare(part)],remove:[]}}})
+ assert.equal((await add('a1',300,'t1')).sketch?.status,'kept')
+ const second=await edit({key:'t2',expected_revision:2,change_note:'Se save_construction_draft',
+  changes:{nodes:{upsert:[decision('fx_far',5000,'Långt bort.')],remove:[]},instances:{upsert:[{id:'a2',definition_id:'cross',placement:at('fx_far')}],remove:[]},roles:{upsert:[bare('a2')],remove:[]}}})
+ assert.equal(second.sketch,undefined,JSON.stringify(second));assert.equal(second.earlier_try?.status,'discarded',JSON.stringify(second))
+ assert.equal((await t.execute('commit_construction_sketch',{record_id:id,new_key:null,action:'read',key:null,change_note:null,request_quote:message})).status,'not_found')
+ // A whole revision sketched under a key: a job bound to no construction cannot continue or commit it.
+ const revise=(record:string|null)=>t.execute('save_construction_draft',{...base,key:'wall',record_id:record,expected_revision:record?2:0,mode:'sketch',title:'Ram A'})
+ assert.equal((await revise(id)).status,'sketched')
+ assert.equal((await revise(null)).reason,'operation_scope_changed')
+ const commit=await t.execute('commit_construction_sketch',{record_id:null,new_key:'wall',action:'commit',key:'wall_c',change_note:'Ram',request_quote:message})
+ assert.equal(commit.reason,'operation_scope_changed',JSON.stringify(commit));assert.equal((await read(id)).revision,2)
+ // A new save with a rule naming a missing definition and a part outside the concept: the construction error is the answer, nothing kept.
+ const far={...base,key:'far',recipe:{...base.recipe,instances:[...base.recipe.instances,{id:'far',definition_id:'cross',placement:at('farx')}]},
+  parameter_plan:{...base.parameter_plan,nodes:[...base.parameter_plan.nodes,decision('farx',5000,'Långt bort.')]},
+  instance_policy:{version:1,instances:[...base.instance_policy.instances,bare('far')]},joint_rules:[rule,{...rule,id:'ghost',between:['rail','ghost']}]}
+ const refused=await t.execute('save_construction_draft',far)
+ assert.equal(refused.status,'needs_data',JSON.stringify(refused));assert.equal(refused.sketch,undefined)
+})
