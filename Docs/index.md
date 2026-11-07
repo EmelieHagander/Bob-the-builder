@@ -217,7 +217,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 ## Quality / runtime
 
-- [Sketchbook design, 2026-11-07](bob-sketchbook-design-2026-11-07.md) — **proposed, not built**: read once, work on a job-scoped copy, check, save changed fields once (A: `mode: "check"` on write tools; B: construction sketches committed once); maps what is already half implemented.
+- [Sketchbook design, 2026-11-07](bob-sketchbook-design-2026-11-07.md) — **approved and built, not yet published**: read once, work on a job-scoped copy, check, save changed fields once (A: `mode: "check"` on write tools; B: construction sketches committed once); maps what is already half implemented.
 - [Runtime path audit, 2026-11-04](bob-runtime-path-audit-2026-11-04.md) — five handoff/schema/recovery findings with implemented corrections and focused verification, including the #458 multi-piece routing regression; [correction and rollout evidence](bob-runtime-path-audit-2026-11-04.md#corrections) separates installation from paid/owner acceptance.
 
 - `.claude/skills/verify/SKILL.md` — current browser-verification procedure and known interaction gotchas.

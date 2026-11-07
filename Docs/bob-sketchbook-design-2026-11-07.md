@@ -1,6 +1,9 @@
 # Sketchbook: read once, work on a copy, check, save once — design 2026-11-07
 
-> **Status:** proposed design for owner decision; nothing built.
+> **Status:** owner-approved 2026-11-07 ("Ja kör på rek!": A first, then B for
+> constructions; private job table; one commit per assignment, milestones
+> allowed). **Built, not published**: see [§6 Built](#6-built-2026-11-07). Not
+> live until deploy and the catalog publication; then needs owner runs.
 > **Owns:** the target write cycle for Bob and the build team (A: check
 > before saving; B: a job-scoped working copy committed once).
 > **Does not own:** the domain contracts it reuses — constructions
@@ -161,3 +164,65 @@ follow separately.
 4. Supersede for constructions the 2026-11-03 "save each piece before the
    next" direction, and record that the 2026-10-26 FORM decision (sketches as
    saved Solution revisions) stays for solutions until their own sketch step.
+
+Owner, 2026-11-07: "Ja kör på rek!" — all four as recommended.
+
+## 6. Built 2026-11-07
+
+Built and tested locally; **not deployed, not published, not owner-run.**
+Both behind pins new claimed jobs adopt from the catalog; pinned manifests
+keep their behaviour.
+
+**A — `write_check_version 1`.** `edit_project_record` takes `mode: "check" |
+"save"`. A check calls `bob.bob_project_write_check`, which runs the same
+caller-authorized write function in a subtransaction, fires the deferred
+constraint triggers (`SET CONSTRAINTS ALL IMMEDIATE`) and rolls back on
+purpose: every rule answers, including the 30,000-byte solution readback
+behind `compact_design_intent_required`; nothing is saved, no receipt, no
+write budget. The refusal now names the 30,000-byte limit. Constructions are
+checked through B instead (a check would send a large construction twice).
+Migrations `20261107080000_bob_project_write_check.sql`,
+`20261107080100_bob_write_check_catalog.sql`.
+
+**B — `construction_sketch_version 1`.**
+
+- `edit_construction_parts` takes `mode: "sketch" | "save"`. A sketched change
+  is composed with the open sketch (one entry per id, the latest wins; removing
+  an id the sketch added drops it), prepared on the sketch's base revision by
+  the same server merge, compiled, and checked whole in code
+  (`checkConstruction` / the evidence check on the merged draft). It is stored
+  only when it passes the same refusals a save would; nothing is saved.
+- `commit_construction_sketch {record_id, action: commit | read | discard |
+  rebase, key, change_note}` saves the sketch as **one** revision through the
+  ordinary edit path (one receipt, one change set, the whole-model check of
+  that revision), reads it, drops it, or moves it onto a revision saved after
+  it began (removals already done there are dropped; a sketch that does not
+  apply yet is kept there, unchecked, to be corrected).
+- Store: `bob_private.construction_sketches` (thread + turn + construction),
+  reached only through `bob.construction_sketch` by the claimed caller of the
+  current turn; an earlier turn's sketch is deleted on the next call, and a
+  finished job deletes its sketches (trigger on `bob_jobs`). Never read by
+  drawings, materials, plans or the UI.
+- Konrad: the commit tool is in his core focus. A sketched change, a read, a
+  rebase or a discard is not a piece write, so several may follow in one
+  batch; a commit is a save like any other piece write. Sketches still open
+  when he stops reach Bob as `open_sketches: not_saved`.
+- Migrations `20261107090000_construction_sketches.sql`,
+  `20261107090100_bob_construction_sketch_catalog.sql` (after A's).
+
+**Supersedes for constructions** the 2026-11-03 direction that Konrad saves
+each piece before the next ([piece progress](ask-bob-tools.md)): with the
+sketch pin he builds in the sketch and saves once per assignment or at a step
+the owner should see. The 2026-10-26 FORM decision (sketches as saved
+Solution revisions) stays for solutions until their own sketch step.
+
+**Verification (local, focused).** PGlite: three sketched changes leave
+revision 1, no receipt; one commit gives revision 2 and one receipt; a direct
+save during a sketch makes the commit a conflict, rebase then commit gives
+one revision with both; the stranger, anon and service role cannot reach a
+sketch; a completed job leaves none; the database catalog equals the test
+fixture and code validates the published schemas. A write check saves no
+artifact, revision, receipt or change set. Worker loop: sketch calls are not
+deferred, a commit defers what follows it, open sketches are reported. Deno
+type check of ask-bob and bob-worker passes.
+
