@@ -198,8 +198,10 @@ test('joints code wrote follow their parts: faces rewritten after a move, gone w
  const both=existing.joints.find(j=>j.id===ruleJointId('s1','sill'))!
  assert.deepEqual(both.fasteners,fasteners);assert.equal(existing.joints.length,4)
  const check=checkConstruction({artifact_id:'a',revision:1,current_revision:1,source_state:'current',archived:false,recipe,materials:[],open_questions:[],
-  instance_policy:{version:1,instances:recipe.instances.map(i=>({instance_id:i.id,role:['sill','s1'].includes(i.id)?'existing_part':'build_part',quantity_policy:['sill','s1'].includes(i.id)?'reuse':'manufacture',reason:'x'}))},
+  instance_policy:{version:1,instances:recipe.instances.map(i=>({instance_id:i.id,role:['sill','s1'].includes(i.id)?'existing_part':'build_part',quantity_policy:['sill','s1'].includes(i.id)?'retain':'manufacture',reason:'x'}))},
   joints:existing.joints.map(j=>({...j,method:'butt'}))},new Map(),'2026-11-07')
+ // The check runs (a policy it cannot read once made this pass by returning early, audit round 3).
+ assert.ok(!check.issues.some((i:any)=>i.code==='invalid_instance_policy'),JSON.stringify(check.issues))
  assert.deepEqual(check.issues.filter((i:any)=>['contact_without_joint','joint_faces_do_not_meet'].includes(i.code)&&i.ids.includes('s1')&&i.ids.includes('sill')),[])
  // (a, b.c) and (a.b, c) once met as jr.a.b.c.
  assert.notEqual(ruleJointId('a','b.c'),ruleJointId('a.b','c'))
@@ -236,4 +238,32 @@ test('audit round 1, formulas: real values before checks, copied code nodes, una
   instances:{upsert:[{id:'s3',definition_id:'stud',placement:{x:0,y:'D - st',z:0,rx:0,ry:0,rz:0}}],remove:[]}},plan.nodes) as any
  assert.deepEqual(edit.nodes.remove,[]);assert.ok(edit.nodes.upsert.some((x:any)=>x.id===id))
  assert.deepEqual(edit.bindings.remove,[])
+})
+
+test('audit round 3: a part made reference geometry loses code joints; a restated except removes one; a rule restated in a part edit reaches only the parts it touches',()=>{
+ const {recipe}=compile(wall(),{version:1,frames:[],nodes,bindings:[]})
+ const fasteners=[{material_id:'00000000-0000-4000-8000-000000000001',material_revision:1,count:2,spacing_mm:null}]
+ const rule=(f:unknown[],except:[string,string][]=[])=>[{id:'plate_stud',between:['plate','stud'] as [string,string],reason:'Spikas.',fasteners:f as any,except}]
+ const first=ruleJoints(recipe,[],rule(fasteners),new Map())
+ const s1sill=ruleJointId('s1','sill')
+ // A part that became reference geometry: its code joints go.
+ assert.ok(ruleJoints(recipe,first.joints,[],new Map([['s1','reference']])).stale.includes(s1sill))
+ // A rule restated with the pair in except: code's joint for that pair goes, others stay.
+ const except=ruleJoints(recipe,first.joints,rule(fasteners,[['sill','s1']]),new Map(),{rewrite:true})
+ assert.deepEqual(except.stale,[s1sill]);assert.ok(!except.joints.some(j=>j.id===s1sill))
+ // The same rule in a part edit touching only s1's neighbour leaves s1's joint alone.
+ const others=recipe.instances.map(i=>i.id).filter(id=>id!=='s1'&&id!=='sill')
+ assert.deepEqual(ruleJoints(recipe,first.joints,rule(fasteners,[['sill','s1']]),new Map(),{touched:new Set([others[0]])}).stale,[])
+ // New fasteners in a part edit: the joints of touched parts take them, the rest keep theirs.
+ const more=[{...fasteners[0],count:4}]
+ const edit=ruleJoints(recipe,first.joints,rule(more),new Map(),{touched:new Set(['s1'])})
+ assert.ok(edit.joints.length>0&&edit.joints.every(j=>[j.first.instance_id,j.second.instance_id].includes('s1')&&(j.fasteners as any)[0].count===4),JSON.stringify(edit.joints))
+})
+
+test('audit round 3: formulas stop at the plan limit',()=>{
+ // Each part's chain is new from its first sum, so 24 parts need about 1,200 nodes.
+ const chain=(n:number)=>[...Array(n).fill('lum'),...Array(50).fill('st')].join(' + ')
+ const many={...wall(),instances:Array.from({length:24},(_,n)=>({id:'p'+n,definition_id:'plate',placement:{x:chain(n+1),y:0,z:0,rx:0,ry:0,rz:0}}))}
+ assert.throws(()=>compileSaveFormulas(many,{version:1,frames:[],nodes,bindings:[]}),
+  (e:any)=>e instanceof CadFormulaError&&e.issues.some((i:any)=>i.code==='formula_too_large'))
 })

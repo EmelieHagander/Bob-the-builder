@@ -2895,6 +2895,45 @@ older publications they assert as the latest. This PR adds no difference to
 them; `konrad-lean-catalog` now also reads the lean pin. Deno check of
 `bob-worker` and `ask-bob` passes.
 
+**Audit round 3 (two reviewers: the round-2 fixes, and correctness and
+security, the owner's Audit 2), fixed the same day.**
+
+| Area | Found | Now |
+|---|---|---|
+| Sketch scope (security) | A keyed sketch of construction A could continue, or be committed, from a job bound to B, and overwrote A | Refused as `operation_scope_changed` |
+| Sketches | The sketch check read a repeat's role unexpanded and stopped at `invalid_instance_policy`, hiding collisions and FORM | It checks the roles the commit saves |
+| | A kept rule-only change was dropped by any saved edit | Dropped only when the saved change also carries its rules, assignments and text |
+| | A save refused for its text was merged into open sketch work under its key | Kept only when no sketch work is open under the key |
+| | Two refused tries were merged, so a part dropped in the second still reached the commit | The second try replaces the first |
+| Keep rules | A construction error behind a rule or formula-number refusal was kept | Those refusals come only after the construction checks pass |
+| Joints | A part made reference geometry kept code's joints | They go |
+| | A rule restated with a pair in `except` kept code's joint for that pair | It goes |
+| | A rule in a node-only edit wrote nothing; upserting a definition lost earlier excepts; new fasteners did not reach code's joints of edited parts | A rule applies to parts the edit adds, names or moves (computed place or size changed), and their code joints take it; rules that write nothing say so |
+| Formulas | The saved number sent again was recomputed without a word | Listed in the answer (`recomputed`) |
+| Limits (security) | Formulas could build tens of thousands of nodes before the plan limit; repeated role rows multiplied | Compilation stops at 1,024 nodes; rows naming an id twice are not expanded |
+| Cost | Execution events showed a cut answer as free | They carry its estimated tokens, cost and `cost_basis` |
+| Tests | One check passed without checking (an invalid `quantity_policy` stopped it early) | It runs, and asserts it ran |
+
+Checked clean: both patched database functions stay SECURITY DEFINER with an
+empty `search_path`, each patch anchor must match once, no grant changes, no
+injection path; edit sketches commit through the database's revision check;
+sketch stores are scoped per thread and turn; formula parsing is linear and
+bounded; server revisions in joint rules come from the catalog.
+
+Tests: `lean-construction-units` 12/12, `lean-construction` 12/12,
+`lean-entrance-wall` 1/1; 57 focused files 432/437, the five failures the same
+catalog-parity tests as on `main`, with identical differences. Deno check
+passes.
+
+Open, low: (1) a cut answer's estimate is not added to the turn budget when the
+step yields at the segment wall; the ledger row is written, and new pinned Bob
+turns have no spending stop. A fix needs the estimate journaled. (2) Sketches
+keep catalog revisions filled at the sketch call (joints, materials, now joint
+rules); an item revised before the commit commits its older revision. (3) A
+`form_assign` naming a part the construction lacks is ignored, not refused.
+(4) Publication order: migration `20261107150000` before the functions, or
+estimated ledger rows fail to insert.
+
 **Audit 4, local, on the real wall (no model call).** The saved entry wall
 (`tests/fixtures/entrance-wall-construction.json`) goes through the same tools
 and database twice: as saved live (old format, 15,463 characters) and in the

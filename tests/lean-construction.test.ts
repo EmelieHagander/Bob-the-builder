@@ -230,6 +230,7 @@ test('audit round 2, edits: unknown paths named; hand bindings and saved values 
  const moved=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:3,key:'flytt',change_note:'Flytta mittslån',request_quote:message,mode:'save',
   changes:{nodes:{upsert:[decision('mid',200,'Flyttad.')],remove:[]},instances:{upsert:[{id:'mid',definition_id:'cross',placement:at(18,191)}],remove:[]}},joint_rules:[],form_assign:[]})
  assert.equal(moved.status,'saved',JSON.stringify(moved));assert.equal((await read(id)).recipe.instances.find((i:any)=>i.id==='mid').placement.y,200)
+ assert.deepEqual(moved.recomputed,[{path:'instances/mid/placement/y',written:191,computed:200}],'the answer names the recomputed field')
  // Removing the part leaves its own decision node: refused, since a decided value is not dropped unseen.
  const orphan=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:4,key:'bort0',change_note:'Ta bort',request_quote:message,mode:'save',
   changes:{instances:{upsert:[],remove:['mid']}},joint_rules:[],form_assign:[]})
@@ -291,4 +292,62 @@ test('audit round 2, saves: an unknown binding path is named; a repeat takes one
  const draft=await read(saved.receipt.recordId)
  assert.deepEqual(draft.instance_policy.instances.map((r:any)=>[r.instance_id,r.quantity_policy]),[['left','manufacture'],['right','manufacture'],['slat.1','manufacture'],['slat.2','manufacture'],['slat.3','manufacture']])
  assert.equal(draft.joints.length,6)
+})
+
+test('audit round 3, edits: a kept rule-only change survives an unrelated save; a second refused try replaces the first; a construction error is not kept behind a rule error; rules reach parts a node moves',async()=>{
+ const message='Ram, regler och flyttade delar.',{tools:t,material}=await setup(message)
+ const id=(await t.execute('save_construction_draft',frameSave(message,material))).receipt.recordId
+ const edit=(over:Record<string,unknown>)=>t.execute('edit_construction_parts',{record_id:id,expected_revision:1,request_quote:message,mode:'save',changes:{},joint_rules:[],form_assign:[],...over})
+ const sketchRead=()=>t.execute('commit_construction_sketch',{record_id:id,new_key:null,action:'read',key:null,change_note:null,request_quote:message})
+ const discard=()=>t.execute('commit_construction_sketch',{record_id:id,new_key:null,action:'discard',key:null,change_note:null,request_quote:message})
+ // A rule-only change refused for its text is kept; an unrelated saved edit leaves it open.
+ const ruleOnly=await edit({key:'r1',change_note:'Se save_construction_draft',joint_rules:[{...rule,id:'horn2',reason:'Limmas.'}]})
+ assert.equal(ruleOnly.sketch?.status,'kept',JSON.stringify(ruleOnly))
+ const other=await edit({key:'r2',change_note:'Ny roll',changes:{roles:{upsert:[{instance_id:'left',role:'build_part',reason:'Sidoslå'}],remove:[]}}})
+ assert.equal(other.status,'saved',JSON.stringify(other));assert.equal(other.open_sketch?.status,'kept','the kept rules are not dropped')
+ await discard()
+ // Two refused direct tries: the second replaces the first in the kept sketch.
+ const add=(part:string,key:string)=>edit({key,expected_revision:2,change_note:'Se save_construction_draft',
+  changes:{nodes:{upsert:[decision('ay',100,'Ny spjäla.')],remove:[]},instances:{upsert:[{id:part,definition_id:'cross',placement:at('w','ay')}],remove:[]},roles:{upsert:[bare(part)],remove:[]}}})
+ {const r1=await add('a1','t1');assert.equal(r1.sketch?.status,'kept',JSON.stringify(r1))};assert.equal((await add('a2','t2')).sketch?.status,'kept')
+ const held=await sketchRead()
+ assert.deepEqual(held.changes.instances.upsert.map((i:any)=>i.id),['a2'],JSON.stringify(held))
+ await discard()
+ // A part outside every concept component with a rule naming a missing definition: the construction error is the answer, and nothing is kept.
+ const outside=await edit({key:'o1',expected_revision:2,change_note:'Utanför',joint_rules:[{...rule,id:'ghost',between:['rail','ghost']}],
+  changes:{nodes:{upsert:[decision('farx',5000,'Långt bort.')],remove:[]},instances:{upsert:[{id:'far',definition_id:'cross',placement:at('farx')}],remove:[]},roles:{upsert:[bare('far')],remove:[]}}})
+ assert.equal(outside.reason,'form_mapping_incomplete',JSON.stringify(outside));assert.equal(outside.sketch,undefined,'not kept')
+ // A part added without a rule, then moved by its node: the rule sent with the node change joins it.
+ const pad=await edit({key:'p1',expected_revision:2,change_note:'Lös spjäla',
+  changes:{nodes:{upsert:[decision('pady',200,'Spjälans läge.')],remove:[]},instances:{upsert:[{id:'pad',definition_id:'cross',placement:at('w','pady')}],remove:[]},roles:{upsert:[bare('pad')],remove:[]}}})
+ assert.equal(pad.status,'saved',JSON.stringify(pad));assert.equal(pad.rule_joints,undefined)
+ const moved=await edit({key:'p2',expected_revision:3,change_note:'Flytta spjälan',joint_rules:[rule],changes:{nodes:{upsert:[decision('pady',300,'Spjälan flyttas.')],remove:[]}}})
+ assert.equal(moved.status,'saved',JSON.stringify(moved))
+ assert.deepEqual(moved.rule_joints.map((j:any)=>j.id).sort(),[ruleJointId('left','pad'),ruleJointId('pad','right')].sort())
+})
+
+test('audit round 3, keyed sketches: a repeat role reaches the sketch check; a refused save is not merged into open work; a sketch of one construction is not saved onto another',async()=>{
+ const message='Spjälor och nycklar.',{tools,material,read}=await setup(message,{constructionRepeats:true,repeatStart:true})
+ const plain=frameSave(message,material) as any,base={...plain,recipe:{...plain.recipe,arrays:[]}}
+ const slats={...base,key:'spj',mode:'sketch',recipe:{...base.recipe,instances:base.recipe.instances.filter((i:any)=>i.id!=='front'),
+  arrays:[{id:'slat',definition_id:'cross',axis:'y',count:3,start:{x:'w',y:0,z:0},spacing_mm:'mid'}]},
+  parameter_plan:{...base.parameter_plan,nodes:[...base.parameter_plan.nodes,decision('mid',191,'Spjälavstånd.')]},
+  instance_policy:{version:1,instances:[bare('left'),bare('right'),bare('slat')]}}
+ const sketched=await tools.execute('save_construction_draft',slats)
+ assert.equal(sketched.status,'sketched',JSON.stringify(sketched))
+ assert.ok(!JSON.stringify(sketched.check).includes('invalid_instance_policy'),JSON.stringify(sketched.check))
+ // A direct save under the same key refused for its text: refused, the sketch untouched.
+ const direct=await tools.execute('save_construction_draft',{...base,key:'spj',title:'Annan ram',description:'Se save_construction_draft'})
+ assert.equal(direct.validation?.code,'human_text',JSON.stringify(direct));assert.equal(direct.sketch,undefined)
+ const kept=await tools.execute('commit_construction_sketch',{record_id:null,new_key:'spj',action:'read',key:null,change_note:null,request_quote:message})
+ assert.equal(kept.save.title,'Ram')
+ // Two saved frames; a whole revision of A sketched under a key cannot continue or be saved as B.
+ const a=(await tools.execute('save_construction_draft',{...base,key:'a'})).receipt.recordId
+ const b=(await tools.execute('save_construction_draft',{...base,key:'b'})).receipt.recordId
+ const revise=(record:string)=>tools.execute('save_construction_draft',{...base,key:'wall',record_id:record,expected_revision:1,mode:'sketch',title:'Ram A'})
+ assert.equal((await revise(a)).status,'sketched')
+ assert.equal((await revise(b)).reason,'operation_scope_changed')
+ const commit=await tools.execute('commit_construction_sketch',{record_id:b,new_key:'wall',action:'commit',key:'wall_c',change_note:'Ram',request_quote:message})
+ assert.equal(commit.reason,'operation_scope_changed',JSON.stringify(commit))
+ assert.equal((await read(a)).revision,1);assert.equal((await read(b)).revision,1)
 })

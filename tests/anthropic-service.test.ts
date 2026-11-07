@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
 import { anthropicCostUsd, anthropicRequestBody, callAnthropicMessages, nativeItems, strictSchema, type AnthropicCallContext } from '../supabase/functions/_shared/anthropic-service.ts'
+import { createExecutionMetrics } from '../supabase/functions/_shared/execution-metrics.ts'
+import { createBobModelBudget } from '../supabase/functions/_shared/bob-model-budget.ts'
 import { createAiCatalogSession, validateAiCall, type AiCatalogDefinition, type AiCatalogManifest, type AiCatalogModel } from '../supabase/functions/_shared/ai-catalog.ts'
 
 const claude = { model_name: 'claude-opus-5-5', input_cost_per_1m_tokens: 4, output_cost_per_1m_tokens: 20, cached_input_cost_per_1m_tokens: 0.2, supports_images: true, capabilities: {} }
@@ -141,7 +143,16 @@ test('an answer still streaming when our deadline closes is reported as too long
     assert.equal(costUsd, anthropicCostUsd(ctx({}).model, { input_tokens: 10, cache_read_input_tokens: 900, cache_creation_input_tokens: 90, output_tokens: outputTokens }))
     // The turn budget counts the estimate; it is not a provider receipt, so a
     // drawing reservation stays pending rather than storing a reusable failure.
-    assert.deepEqual((result as any).costEstimate, { usd: costUsd, basis: 'streamed_output_estimate' })
+    assert.deepEqual((result as any).costEstimate, { usd: costUsd, basis: 'streamed_output_estimate', input_tokens: 1000, cached_input_tokens: 900, output_tokens: outputTokens })
+    // Execution events see the estimate too (audit round 3: they showed it as free).
+    const events: any[] = []
+    const metrics = createExecutionMetrics({ runId: 'r', turnId: 't', startedAt: 0, write: async (e: any) => { events.push(e) } })
+    await metrics.model({ aiFunction: 'structure-worker' } as any, result as any, 10)
+    assert.deepEqual([events[0].input_tokens, events[0].output_tokens, events[0].cost_usd, events[0].counts.cost_basis], [1000, outputTokens, costUsd, 'streamed_output_estimate'])
+    // The turn budget counts it.
+    const budget = createBobModelBudget(1)
+    await budget.run(async () => result as any)
+    assert.equal(budget.usage.spent, costUsd)
     assert.equal((result as any).estimatedCostUsd, undefined)
     assert.deepEqual((result as any).failure, { code: 'model_output_window' })
   } finally { console.error = originalError }

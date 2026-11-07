@@ -65,9 +65,11 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
     observe(value:TurnObservation){turn=structuredClone(value)},
     /** step is the journal key (model:<function>:<position>); attempt>0 marks a re-sent call. */
     async model(options:OpenAIServiceOptions,result:OpenAIServiceResponse<unknown>,elapsed:number,call:{step:string|null;attempt:number;usageEventId?:string|null}={step:null,attempt:0}){
+      // A cut Claude answer carries no usage, only code's estimate (audit round 3).
+      const est=typeof result.estimatedCostUsd!=='number'&&result.costEstimate?result.costEstimate:null
       await write({...base(),event_key:'model:'+crypto.randomUUID(),kind:'model',role:roles.has(options.aiFunction)?options.aiFunction:'other',status:result.success?'ok':'failed',
-        duration_ms:Math.round(number(elapsed)),input_tokens:number(result.usage?.input_tokens),output_tokens:number(result.usage?.output_tokens),
-        cost_usd:typeof result.estimatedCostUsd==='number'?number(result.estimatedCostUsd):null,
+        duration_ms:Math.round(number(elapsed)),input_tokens:number((est??result.usage)?.input_tokens),output_tokens:number((est??result.usage)?.output_tokens),
+        cost_usd:typeof result.estimatedCostUsd==='number'?number(result.estimatedCostUsd):est?number(est.usd):null,
         counts:{...phaseCounts(result.outputPhase),function_name:label(options.aiFunction),usage_event_id:call.usageEventId??null,
           schema_issue_paths:result.failure?.schemaPaths?.filter(p=>typeof p==='string'&&p.length<=120).slice(0,8)??[],offered_tool_count:options.tools?.length??0,offered_tools:toolNames(options.tools),
           returned_tool_count:result.toolCalls?.length??0,returned_tools:(result.toolCalls??[]).slice(0,32).map(t=>code(t.function?.name,'invalid_name')),
@@ -77,7 +79,7 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
           ai_role_version_id:label(options.aiDefinition?.roleVersionId),
           ai_profile_version_id:label(options.aiDefinition?.profileVersionId),
           ai_tier:label(options.aiDefinition?.tier),
-          cached_input_tokens:number(result.usage?.cached_input_tokens),reasoning_tokens:number(result.usage?.reasoning_tokens),
+          cached_input_tokens:number((est??result.usage)?.cached_input_tokens),cost_basis:est?est.basis:null,reasoning_tokens:number(result.usage?.reasoning_tokens),
           step:label(call.step),attempt:number(call.attempt)}})
     },
     async internalTool(input:{name:string;status:string;callId:string;role:string;ms:number}){

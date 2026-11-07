@@ -18,7 +18,7 @@ type Row = Record<string, any>
 const ID = '^[A-Za-z][A-Za-z0-9_.:-]{0,79}$'
 export const JOINT_RULES_SCHEMA = {
   type: 'array', maxItems: 32,
-  description: 'Your joining decision for two definitions, existing parts included: code writes one joint, with these fasteners and reason, for each pair of their parts that touch face to face and have no joint. In a part edit it joins the parts the edit adds or changes; an edit with only rules applies them to every touching pair and restates the joints code wrote for them. A pair of the same definition is ["stud","stud"]. Touching parts that must not be joined this way go in except and stay unjoined until they get a joint. Empty for none.',
+  description: 'Your joining decision for two definitions, existing parts included: code writes one joint, with these fasteners and reason, for each pair of their parts that touch face to face and have no joint. In a part edit it applies to the parts the edit adds, changes or moves; an edit with only rules applies them to every touching pair. Where it applies, the joints code wrote take its fasteners and reason. A pair of the same definition is ["stud","stud"]. Touching parts that must not be joined this way go in except: code writes no joint for them and removes one it wrote, and they stay unjoined until they get a joint. Empty for none.',
   items: { type: 'object', additionalProperties: false, required: ['id', 'between', 'reason', 'fasteners', 'except'], properties: {
     id: { type: 'string', pattern: ID },
     between: { type: 'array', minItems: 2, maxItems: 2, items: { type: 'string', pattern: ID } },
@@ -43,10 +43,12 @@ export function ruleJointId(a: string, b: string): string {
   return id.length <= 80 ? id : 'jr.' + fnv(`${x}|${y}`)
 }
 export const RULE_JOINT_PREFIX = 'jr.'
-/** touched: in a part edit, only pairs with a part the edit adds or changes get
- * a new joint, so an except from an earlier save still holds for the others.
- * rewrite: an edit sending only rules restates the decision, so code's joints
- * of covered pairs take the rule's fasteners and reason. */
+/** touched: in a part edit, only pairs with a part the edit adds or changes
+ * (or whose computed place or size changed) get a new joint, so an except from
+ * an earlier save still holds for the others. rewrite: an edit sending only
+ * rules restates the decision for every pair. Where a rule is restated, code's
+ * joints of the pairs it covers take its fasteners and reason, and a code
+ * joint of a pair it now names in except goes. */
 export type RuleScope = { touched?: Set<string>; rewrite?: boolean }
 
 /** Joints for the touching pairs the rules cover. recipe holds computed
@@ -83,7 +85,10 @@ export function ruleJoints(recipe: CadAssemblyRequest, joints: Row[], rules: Joi
     return !!a && !!b && !!fa && !!fb && a.id !== b.id && fa.axis === fb.axis && fa.sign === -fb.sign && Math.abs(fa.plane - fb.plane) <= tolerance
       && [0, 1, 2].every(k => k === fa.axis || Math.min(a.max[k], b.max[k]) - Math.max(a.min[k], b.min[k]) > tolerance)
   }
-  const touching = new Set<string>()
+  const touching = new Set<string>(), unjoined: string[] = []
+  // Whether this call restates the rules for a pair: a save and a rule-only
+  // edit restate every pair, a part edit the pairs with a part it touches.
+  const restates = (a: string, b: string) => !!scope.rewrite || !scope.touched || scope.touched.has(a) || scope.touched.has(b)
   for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
     const a = boxes[i], b = boxes[j]
     const overlap = [0, 1, 2].map(k => Math.min(a.box.max[k], b.box.max[k]) - Math.max(a.box.min[k], b.box.min[k]))
@@ -91,8 +96,11 @@ export function ruleJoints(recipe: CadAssemblyRequest, joints: Row[], rules: Joi
     const key = pair(a.box.id, b.box.id), earlier = jointOf.get(key)
     touching.add(key)
     const code = typeof earlier?.id === 'string' && earlier.id.startsWith(RULE_JOINT_PREFIX)
-    const matched = (byPair.get(pair(a.definition, b.definition)) ?? []).filter(r => !excluded.has(`${r.id}|${key}`))
-    const restated = code && scope.rewrite && matched.length === 1
+    const covering = byPair.get(pair(a.definition, b.definition)) ?? []
+    const matched = covering.filter(r => !excluded.has(`${r.id}|${key}`))
+    // A pair the restated rule now names in except is not joined by code.
+    if (code && covering.length && !matched.length && restates(a.box.id, b.box.id)) { unjoined.push(earlier!.id); continue }
+    const restated = code && restates(a.box.id, b.box.id) && matched.length === 1
       && (earlier!.reason !== matched[0].reason || JSON.stringify(earlier!.fasteners ?? []) !== JSON.stringify(matched[0].fasteners))
     if (earlier && (!code || meets(earlier)) && !restated) continue
     if (!earlier && scope.touched && !scope.touched.has(a.box.id) && !scope.touched.has(b.box.id)) continue
@@ -114,15 +122,17 @@ export function ruleJoints(recipe: CadAssemblyRequest, joints: Row[], rules: Joi
       reason: rule ? rule.reason : earlier!.reason, fasteners: structuredClone(rule ? rule.fasteners : earlier!.fasteners ?? []) })
     made.push({ id, parts: [low.id, high.id], rule: rule?.id ?? null })
   }
-  // Code's joints whose parts are gone, or both still checkable as boxes and
-  // no longer touching. A part that became a cut, turned or other shape is not
-  // checked here, so its joints stay (audit round 2).
+  // Code's joints whose parts are gone, whose part became reference geometry,
+  // or whose parts are both still checkable as boxes and no longer touch. A
+  // part that became a cut, turned or other shape is not checked here, so its
+  // joints stay (audit rounds 2 and 3).
   const present = new Set(recipe.instances.map(i => i.id))
-  const stale = joints.filter(j => {
+  const stale = [...new Set([...unjoined, ...joints.filter(j => {
     if (typeof j?.id !== 'string' || !j.id.startsWith(RULE_JOINT_PREFIX)) return false
     const a = j.first?.instance_id, b = j.second?.instance_id
     if (!present.has(a) || !present.has(b)) return true
+    if (roles.get(a) === 'reference' || roles.get(b) === 'reference') return true
     return boxOf.has(a) && boxOf.has(b) && !touching.has(pair(a, b))
-  }).map(j => j.id as string)
+  }).map(j => j.id as string)])]
   return { joints: out, made, issues, stale }
 }

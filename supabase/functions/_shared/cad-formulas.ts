@@ -77,6 +77,7 @@ export function validFormulaNode(n:unknown):boolean{
 const MESSAGES:Record<string,string>={
  formula_number:'Name each number as a parameter node with its reason (a decision or a measurement) and use that name in the formula.',
  formula_syntax:'Write a formula with node names, + - * / and parentheses; put spaces around a minus sign.',
+ formula_too_large:'The formulas need more than the 1024 parameter nodes a construction may hold; name shared sub-results as nodes.',
  formula_unknown_node:'The formula names a node that is not in parameter_plan.nodes; a name with a hyphen is one name, so write a minus sign with spaces.',
  formula_unit:'The formula gives another unit than this field takes (mm for sizes and positions, deg for rotations); a negative value needs a node in mm or deg.',
  formula_binding_conflict:'This field has both a formula and a binding; keep one.',
@@ -129,7 +130,11 @@ export function formulaCompiler(known:ParameterInput[],valueOf:(id:string)=>numb
  const derive=(op:keyof typeof OPERATION,a:string,b:string):string=>{
   const rounding=op==='+'||op==='-'?'exact':'half_away_6'
   const id=formulaNodeId(OPERATION[op],a,b,rounding)
-  if(!nodes.has(id)&&!generated.has(id))generated.set(id,{id,role:'derived',operation:OPERATION[op],operands:[a,b],rounding})
+  if(!nodes.has(id)&&!generated.has(id)){
+   // The plan holds at most 1024 nodes; stop before building more (audit round 3).
+   if(nodes.size+generated.size>=1024)throw new FormulaParseError('formula_too_large')
+   generated.set(id,{id,role:'derived',operation:OPERATION[op],operands:[a,b],rounding})
+  }
   return id
  }
  const emit=(ast:Ast):string=>{

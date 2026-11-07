@@ -470,7 +470,7 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
     // The turn budget counts the estimate. It is not a provider receipt:
     // estimatedCostUsd stays empty, so a drawing reservation stays pending
     // for reconciliation and is never stored as a finished, reusable result.
-    const spent = priced ? { costEstimate: { usd: priced.cost, basis: 'streamed_output_estimate' as const } } : {}
+    const spent = priced ? { costEstimate: { usd: priced.cost, basis: 'streamed_output_estimate' as const, input_tokens: priced.input, cached_input_tokens: priced.read, output_tokens: priced.output } } : {}
     if (cut) return { ...fail<T>(model, 'model_output_window'), ...spent, failure: { code: 'model_output_window' } }
     if (priced) return { ...fail<T>(model, `Network error: ${msg}`), ...spent }
     return fail(model, `Network error: ${msg}`)
