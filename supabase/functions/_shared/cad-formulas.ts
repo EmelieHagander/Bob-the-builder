@@ -142,7 +142,13 @@ export function formulaCompiler(known:ParameterInput[],valueOf:(id:string)=>numb
    if(u!=='mm'&&u!=='deg')throw new FormulaParseError('formula_unit',value)
    return derive('-',ZERO_NODE_IDS[u],value)
   }
-  return derive(ast.op,emit(ast.left),emit(ast.right))
+  const a=emit(ast.left),b=emit(ast.right),ua=unitOf(a),ub=unitOf(b)
+  // The evaluator's unit rules, checked here so the field is named.
+  if(ua!==null&&ub!==null){
+   const ok=ast.op==='+'||ast.op==='-'?ua===ub:ast.op==='*'?ua==='scalar'||ub==='scalar':ub==='scalar'||ua===ub
+   if(!ok)throw new FormulaParseError('formula_unit',`${ua} ${ast.op} ${ub}`)
+  }
+  return derive(ast.op,a,b)
  }
  return {
   /** The node a formula ends in (an existing node for a bare name). */
@@ -159,11 +165,14 @@ const place=(path:string,p:unknown,out:Field[])=>{
  if(!p||typeof p!=='object')return
  for(const k of ['x','y','z','rx','ry','rz'])if(k in (p as object))out.push({path:`${path}/${k}`,obj:p as Record<string,unknown>,key:k,placeholder:0})
 }
+// An outside diameter whose value is not known yet must still leave room for
+// the wall, so the recipe rules pass until code asks for the missing value.
+const placeholderOf=(k:string)=>k==='outside_diameter_mm'?100000:1
 export function definitionFields(d:Record<string,any>,out:Field[]=[]){
- for(const k of CAD_DIMENSIONS)if(k in d)out.push({path:`definitions/${d.id}/${k}`,obj:d,key:k,placeholder:1})
+ for(const k of CAD_DIMENSIONS)if(k in d)out.push({path:`definitions/${d.id}/${k}`,obj:d,key:k,placeholder:placeholderOf(k)})
  if(Array.isArray(d.cuts))d.cuts.forEach((c:any,i:number)=>{
   if(!c||typeof c!=='object')return
-  for(const k of CAD_DIMENSIONS)if(k in c)out.push({path:`definitions/${d.id}/cuts/${i}/${k}`,obj:c,key:k,placeholder:1})
+  for(const k of CAD_DIMENSIONS)if(k in c)out.push({path:`definitions/${d.id}/cuts/${i}/${k}`,obj:c,key:k,placeholder:placeholderOf(k)})
   place(`definitions/${d.id}/cuts/${i}/placement`,c.placement,out)
  })
  return out
@@ -186,13 +195,12 @@ function recipeFields(recipe:Record<string,any>):Field[]{
 /** Replace every formula in these fields by a placeholder number and return
  * the bindings and generated nodes. Code computes the real values from the
  * graph, as for any bound field. */
-function compileFields(fields:Field[],compiler:ReturnType<typeof formulaCompiler>,bound:Set<string>){
+function compileFields(fields:Field[],compiler:ReturnType<typeof formulaCompiler>){
  const bindings:{path:string;node:string}[]=[],issues:FormulaIssue[]=[]
  for(const f of fields){
   const text=f.obj[f.key]
   if(typeof text!=='string')continue
-  if(bound.has(f.path)){issues.push(issue('formula_binding_conflict',f.path));continue}
-  if(!FORMULA.test(text)){issues.push(issue(/[0-9]/.test(text)?'formula_number':'formula_syntax',f.path));continue}
+  if(!FORMULA.test(text)){issues.push(issue(/[0-9]/.test(text)&&!/[^A-Za-z0-9_.:()+*/ -]/.test(text)?'formula_number':'formula_syntax',f.path,text.slice(0,40)));continue}
   try{
    const node=compiler.compile(text),unit=compiler.unitOf(node),wants=/\/r[xyz]$/.test(f.path)?'deg':'mm'
    if(unit!==null&&unit!==wants){issues.push(issue('formula_unit',f.path,`${text} is ${unit}`));continue}
@@ -213,11 +221,14 @@ export function compileSaveFormulas(rawRecipe:unknown,rawPlan:unknown,valueOf?:(
  const declared=Array.isArray(plan.nodes)?plan.nodes:[],explicit=Array.isArray(plan.bindings)?plan.bindings:[]
  const issues=formulaNodeIssues(declared)
  const compiler=formulaCompiler(declared as ParameterInput[],valueOf)
- const out=compileFields(recipeFields(recipe),compiler,new Set(explicit.map((b:any)=>b?.path)))
+ const out=compileFields(recipeFields(recipe),compiler)
  issues.push(...out.issues)
  if(issues.length)throw new CadFormulaError(issues.slice(0,24))
+ // A formula written at the field replaces a binding for the same path, which
+ // a keyed sketch may still hold from an earlier call.
+ const formulaPaths=new Set(out.bindings.map(b=>b.path))
  if(Array.isArray(recipe.arrays))recipe.arrays=recipe.arrays.map((a:any)=>a&&typeof a==='object'?(({spacing_mm:_s,...rest})=>rest)(a):a)
- plan.nodes=[...declared,...compiler.generated()];plan.bindings=[...explicit,...out.bindings]
+ plan.nodes=[...declared,...compiler.generated()];plan.bindings=[...explicit.filter((b:any)=>!formulaPaths.has(b?.path)),...out.bindings]
  return {recipe,plan}
 }
 
@@ -225,7 +236,7 @@ export function compileSaveFormulas(rawRecipe:unknown,rawPlan:unknown,valueOf?:(
  * and binding upserts for their formulas. A formula field replaces that
  * field's saved binding; a number keeps it. savedNodes carry their computed
  * values (normalized), which give fields their real values. */
-export function compileEditFormulas(rawChanges:unknown,savedNodes:(ParameterInput&{normalized?:{value:number}})[]):unknown{
+export function compileEditFormulas(rawChanges:unknown,savedNodes:(ParameterInput&{normalized?:{value:number}})[],valueOf:(id:string)=>number|undefined=()=>undefined):unknown{
  if(!rawChanges||typeof rawChanges!=='object')return rawChanges
  const changes=structuredClone(rawChanges) as Record<string,any>
  const upserts=(name:string):any[]=>Array.isArray(changes[name]?.upsert)?changes[name].upsert:[]
@@ -233,11 +244,11 @@ export function compileEditFormulas(rawChanges:unknown,savedNodes:(ParameterInpu
  const removed=new Set<string>(Array.isArray(changes.nodes?.remove)?changes.nodes.remove:[])
  const known=[...savedNodes.filter(n=>!removed.has(n.id)&&!upserts('nodes').some((u:any)=>u?.id===n.id)),...upserts('nodes')] as ParameterInput[]
  const saved=new Map(savedNodes.map(n=>[n.id,n]))
- const compiler=formulaCompiler(known,id=>removed.has(id)?undefined:saved.get(id)?.normalized?.value)
+ const compiler=formulaCompiler(known,id=>valueOf(id)??(removed.has(id)?undefined:saved.get(id)?.normalized?.value))
  const fields:Field[]=[]
  for(const d of upserts('definitions'))if(d&&typeof d==='object')definitionFields(d,fields)
  for(const i of upserts('instances'))if(i&&typeof i==='object')instanceFields(i,fields)
- const out=compileFields(fields,compiler,new Set(upserts('bindings').map((b:any)=>b?.path)))
+ const out=compileFields(fields,compiler)
  issues.push(...out.issues)
  if(issues.length)throw new CadFormulaError(issues.slice(0,24))
  // New to this change: not in the saved plan, or removed by it and needed again.
@@ -250,7 +261,7 @@ export function compileEditFormulas(rawChanges:unknown,savedNodes:(ParameterInpu
  if(out.bindings.length){
   // A formula replaces the field's binding; removing that path as well would conflict.
   const list=changes.bindings??={upsert:[],remove:[]},paths=new Set(out.bindings.map(b=>b.path))
-  list.upsert.push(...out.bindings);list.remove=list.remove.filter((r:string)=>!paths.has(r))
+  list.upsert=[...list.upsert.filter((b:any)=>!paths.has(b?.path)),...out.bindings];list.remove=list.remove.filter((r:string)=>!paths.has(r))
  }
  return changes
 }
@@ -269,4 +280,6 @@ export function unusedFormulaNodes(nodes:ParameterInput[],bindings:{node:string}
  }
 }
 
-export const FORMULA_STRING={type:'string',pattern:FORMULA_PATTERN,maxLength:400}
+/** Any short text: a formula the compiler cannot read is named by its field
+ * and kept in the sketch, not refused as a wrong type. */
+export const FORMULA_STRING={type:'string',minLength:1,maxLength:400}

@@ -50,9 +50,9 @@ test('a formula refuses numbers, unknown names, a field also bound by hand, and 
  bad.instances[2].placement.x='st'
  assert.throws(()=>compileSaveFormulas(bad,{version:1,frames:[],nodes:[...nodes,{...decision('fx.mine',1)}],bindings:[{path:'instances/s2/placement/x',node:'st'}]}),(e:any)=>{
   assert.ok(e instanceof CadFormulaError)
+  // A formula at the field wins over a hand binding for the same path (audit round 2).
   assert.deepEqual(e.issues.map((i:any)=>[i.code,i.path]).sort(),[
-   ['formula_binding_conflict','instances/s2/placement/x'],['formula_number','definitions/plate/z_mm'],
-   ['formula_reserved_id','nodes/fx.mine'],['formula_unknown_node','instances/s1/placement/z']].sort())
+   ['formula_number','definitions/plate/z_mm'],['formula_reserved_id','nodes/fx.mine'],['formula_unknown_node','instances/s1/placement/z']].sort())
   return true
  })
  // A hyphen inside a name is part of the name; subtraction has spaces.
@@ -107,8 +107,8 @@ test('joint rules write one joint per touching pair of those definitions, with f
  // A declared joint for a pair wins; two existing parts are not joined again.
  const declared=[{id:'mine',first:{instance_id:'sill',face:'z_max'},second:{instance_id:'s1',face:'z_min'}}]
  assert.equal(ruleJoints(recipe,declared,rules,new Map()).joints.length,3)
- // Two existing parts are joined with nothing fastened (the schedule counts no hardware).
- assert.deepEqual(ruleJoints(recipe,[],rules,new Map([['sill','existing_part'],['s1','existing_part']])).joints.find(j=>j.id===ruleJointId('s1','sill'))!.fasteners,[])
+ // Existing parts are joined as the rule says (audit round 2: code does not decide they are already joined).
+ assert.deepEqual(ruleJoints(recipe,[],rules,new Map([['sill','existing_part'],['s1','existing_part']])).joints.find(j=>j.id===ruleJointId('s1','sill'))!.fasteners,fasteners)
  assert.equal(ruleJoints(recipe,[],rules,new Map([['s1','reference']])).joints.length,2)
  // Two rules for one pair, or a rule naming a missing definition, are refused.
  assert.equal(ruleJoints(recipe,[],[...rules,{...rules[0],id:'again'}],new Map()).issues[0].code,'joint_rule_ambiguous')
@@ -193,14 +193,14 @@ test('joints code wrote follow their parts: faces rewritten after a move, gone w
  const moved=structuredClone(recipe);moved.instances.find(i=>i.id==='s1')!.placement.z=500
  const later=ruleJoints(moved,[...first.joints,{id:'mine',first:{instance_id:'s1',face:'z_max'},second:{instance_id:'top',face:'z_min'}}],[],new Map())
  assert.deepEqual(later.stale.sort(),[ruleJointId('s1','sill'),ruleJointId('s1','top')].sort())
- // Two existing parts: joined, nothing fastened (the schedule counts no hardware for them).
+ // Two existing parts are joined as the rule says; except is where they are not.
  const existing=ruleJoints(recipe,[],rules,new Map([['sill','existing_part'],['s1','existing_part']]))
  const both=existing.joints.find(j=>j.id===ruleJointId('s1','sill'))!
- assert.deepEqual(both.fasteners,[]);assert.equal(existing.joints.length,4)
+ assert.deepEqual(both.fasteners,fasteners);assert.equal(existing.joints.length,4)
  const check=checkConstruction({artifact_id:'a',revision:1,current_revision:1,source_state:'current',archived:false,recipe,materials:[],open_questions:[],
   instance_policy:{version:1,instances:recipe.instances.map(i=>({instance_id:i.id,role:['sill','s1'].includes(i.id)?'existing_part':'build_part',quantity_policy:['sill','s1'].includes(i.id)?'reuse':'manufacture',reason:'x'}))},
   joints:existing.joints.map(j=>({...j,method:'butt'}))},new Map(),'2026-11-07')
- assert.deepEqual(check.issues.filter((i:any)=>['contact_without_joint','joint_faces_do_not_meet','joint_fasteners_missing'].includes(i.code)&&i.ids.includes('s1')&&i.ids.includes('sill')),[])
+ assert.deepEqual(check.issues.filter((i:any)=>['contact_without_joint','joint_faces_do_not_meet'].includes(i.code)&&i.ids.includes('s1')&&i.ids.includes('sill')),[])
  // (a, b.c) and (a.b, c) once met as jr.a.b.c.
  assert.notEqual(ruleJointId('a','b.c'),ruleJointId('a.b','c'))
  assert.match(ruleJointId('a','b.c'),/^[A-Za-z][A-Za-z0-9_.:-]{0,79}$/)

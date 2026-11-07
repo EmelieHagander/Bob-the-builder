@@ -26,7 +26,7 @@ before(async()=>{
 })
 after(()=>pg.close())
 
-async function setup(message:string){
+async function setup(message:string,extra:Record<string,unknown>={}){
  const project=(await call(owner,'bob.create_project',[{name:'Lean'}])).id,solution=randomUUID(),turn=randomUUID()
  const {intent}=constructionFormFixture()
  await call(owner,'bob.solution_command',[project,'create',solution,0,{title:'Ram',description:'Syntetisk',assumptions:'Ej mätt',tradeoffs:'Ej godkänd',measurements:[],design_intent:intent}])
@@ -43,13 +43,15 @@ async function setup(message:string){
   readCurrentTarget:async area=>(await call(owner,'bob.read_design_readiness',[project,area,null,'construction'])).target_revision??null,
   readConstructionReadiness:(t,area,r)=>call(owner,'bob.read_construction_readiness',[project,area,t,r]),
   readCatalog:(id,revision)=>call(owner,'bob.catalog_read',[project,{action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}]),
-  prepareEdit:async p=>{try{return await call(owner,'bob.prepare_construction_edit',[...binding,JSON.stringify(p)])}catch(e:any){return {status:e.code==='PT409'?'conflict':e.code==='42501'?'denied':'invalid',reason:e.message}}}})
+  prepareEdit:async p=>{try{return await call(owner,'bob.prepare_construction_edit',[...binding,JSON.stringify(p)])}catch(e:any){return {status:e.code==='PT409'?'conflict':e.code==='42501'?'denied':'invalid',reason:e.message}}},...extra})
  return {project,tools,material:material.recordId as string,read:(id:string,revision:number|null=null)=>call(owner,'bob.read_construction_draft',[project,id,revision,null])}
 }
 const decision=(id:string,value:number,reason:string)=>({id,role:'decision',value,unit:'mm',reason})
 const at=(x:unknown,y:unknown=0)=>({x,y,z:0,rx:0,ry:0,rz:0})
 const rule={id:'horn',between:['rail','cross'],reason:'Tvärslån limmas och skruvas mot sidoslån.',fasteners:[],except:[]}
 const role=(id:string)=>({instance_id:id,role:'build_part',quantity_policy:'manufacture',reason:'Syntetisk del'})
+// quantity_policy follows from the role; lean writing may leave it out.
+const bare=(id:string)=>({instance_id:id,role:'build_part',reason:'Syntetisk del'})
 function frameSave(message:string,material:string){
  return {key:'ram',record_id:null,expected_revision:0,title:'Ram',description:'Syntetisk ram',area_id:null,change_note:'Ramen',open_questions:[],request_quote:message,mode:'save',
   recipe:{contract_version:1,units:'mm',assembly_id:'frame',views:['front','top'],
@@ -205,4 +207,88 @@ test('audit round 1, keyed sketches keep their construction and base; a refused 
   changes:mid,joint_rules:[rule],form_assign:[]})
  assert.equal(fixed.status,'saved',JSON.stringify(fixed))
  if(fixed.status==='saved')assert.equal(await sketches(),0,'the shadow of the refused try is gone')
+})
+
+test('audit round 2, edits: unknown paths named; hand bindings and saved values accepted; removed parts take their roles and joints; rules join only touched parts',async()=>{
+ const message='Mittslå, flytta den och ta bort den.',{tools,material,read}=await setup(message)
+ const id=(await tools.execute('save_construction_draft',{...frameSave(message,material),joint_rules:[{...rule,except:[['right','front']]}]})).receipt.recordId
+ const mid=(y:unknown)=>({nodes:{upsert:[decision('mid',191,'Mitt i ramen.')],remove:[]},instances:{upsert:[{id:'mid',definition_id:'cross',placement:at('w',y)}],remove:[]},roles:{upsert:[bare('mid')],remove:[]}})
+ // A mistyped hand binding is named, not dropped.
+ const typo=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:1,key:'typo',change_note:'Mittslå',request_quote:message,mode:'save',
+  changes:{...mid('mid'),bindings:{upsert:[{path:'instances/front/placement/Y',node:'mid'}],remove:[]}},joint_rules:[rule],form_assign:[]})
+ assert.equal(typo.reason,'binding_path_unknown',JSON.stringify(typo))
+ // The rule joins the part this edit adds, not the pair left out with except earlier; quantity_policy may be left out.
+ const added=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:1,key:'mid',change_note:'Mittslå',request_quote:message,mode:'save',changes:mid('mid'),joint_rules:[rule],form_assign:[]})
+ assert.equal(added.status,'saved',JSON.stringify(added))
+ assert.deepEqual(added.rule_joints.map((j:any)=>j.id).sort(),[ruleJointId('left','mid'),ruleJointId('mid','right')].sort())
+ assert.ok(!(await read(id)).joints.some((j:any)=>j.id===ruleJointId('front','right')),'except from the save still holds')
+ // A hand binding with a placeholder number is the old style and is accepted.
+ const hand=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:2,key:'hand',change_note:'Bind för hand',request_quote:message,mode:'save',
+  changes:{instances:{upsert:[{id:'mid',definition_id:'cross',placement:at(18,0.5)}],remove:[]},bindings:{upsert:[{path:'instances/mid/placement/y',node:'mid'}],remove:[]}},joint_rules:[],form_assign:[]})
+ assert.equal(hand.status,'saved',JSON.stringify(hand))
+ // A node changes and the part is sent again with its saved number: kept as it is, computed anew.
+ const moved=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:3,key:'flytt',change_note:'Flytta mittslån',request_quote:message,mode:'save',
+  changes:{nodes:{upsert:[decision('mid',200,'Flyttad.')],remove:[]},instances:{upsert:[{id:'mid',definition_id:'cross',placement:at(18,191)}],remove:[]}},joint_rules:[],form_assign:[]})
+ assert.equal(moved.status,'saved',JSON.stringify(moved));assert.equal((await read(id)).recipe.instances.find((i:any)=>i.id==='mid').placement.y,200)
+ // Removing the part leaves its own decision node: refused, since a decided value is not dropped unseen.
+ const orphan=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:4,key:'bort0',change_note:'Ta bort',request_quote:message,mode:'save',
+  changes:{instances:{upsert:[],remove:['mid']}},joint_rules:[],form_assign:[]})
+ assert.equal(orphan.status,'invalid',JSON.stringify(orphan));assert.match(JSON.stringify(orphan),/parameter_unused_node/)
+ // With the node removed too: its role and joints go with the part, and the answer says so.
+ const gone=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:4,key:'bort',change_note:'Ta bort',request_quote:message,mode:'save',
+  changes:{nodes:{upsert:[],remove:['mid']},instances:{upsert:[],remove:['mid']}},joint_rules:[],form_assign:[]})
+ assert.equal(gone.status,'saved',JSON.stringify(gone))
+ assert.deepEqual(gone.removed_with_parts.roles,['mid'])
+ const draft=await read(id);assert.equal(draft.joints.length,1);assert.ok(!draft.instance_policy.instances.some((r:any)=>r.instance_id==='mid'))
+ // A rule-only edit joins the pair left out before and says which joint it wrote.
+ const join=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:5,key:'foga',change_note:'Foga',request_quote:message,mode:'save',changes:{},joint_rules:[rule],form_assign:[]})
+ assert.equal(join.status,'saved',JSON.stringify(join));assert.deepEqual(join.rule_joints.map((j:any)=>j.id),[ruleJointId('front','right')])
+})
+
+test('audit round 2, sketches: a refused edit is not merged into open work; a shadow survives unrelated saves; a removed definition takes its rule along',async()=>{
+ const message='Skisser utan förlorat arbete.',{tools,material,read}=await setup(message)
+ const id=(await tools.execute('save_construction_draft',frameSave(message,material))).receipt.recordId
+ const sketched=async()=>(await pg.query('select count(*) n from bob_private.construction_sketches where artifact_id=$1',[id])).rows[0].n
+ const mid=(note:string)=>({record_id:id,expected_revision:1,change_note:note,request_quote:message,joint_rules:[rule],form_assign:[],
+  changes:{nodes:{upsert:[decision('mid',191,'Mitt i ramen.')],remove:[]},instances:{upsert:[{id:'mid',definition_id:'cross',placement:at('w','mid')}],remove:[]},roles:{upsert:[bare('mid')],remove:[]}}})
+ // Refused for its text with no sketch open: kept as a shadow. An unrelated saved edit leaves it, and says so.
+ const refused=await tools.execute('edit_construction_parts',{...mid('Se save_construction_draft'),key:'s1',mode:'save'})
+ assert.equal(refused.sketch?.status,'kept',JSON.stringify(refused))
+ const other=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:1,key:'roll',change_note:'Ny roll',request_quote:message,mode:'save',
+  changes:{roles:{upsert:[{instance_id:'left',role:'build_part',reason:'Sidoslå'}],remove:[]}},joint_rules:[],form_assign:[]})
+ assert.equal(other.status,'saved',JSON.stringify(other));assert.equal(other.open_sketch?.status,'kept',JSON.stringify(other));assert.equal(Number(await sketched()),1)
+ await tools.execute('commit_construction_sketch',{record_id:id,new_key:null,action:'discard',key:null,change_note:null,request_quote:message})
+ // With ordinary sketch work open, a refused direct edit is not merged into it.
+ const work=await tools.execute('edit_construction_parts',{...mid('Mittslå'),expected_revision:2,key:'w1',mode:'sketch'})
+ assert.equal(work.status,'sketched',JSON.stringify(work))
+ const direct=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:2,key:'d1',change_note:'Se save_construction_draft',request_quote:message,mode:'save',
+  changes:{roles:{upsert:[{instance_id:'left',role:'build_part',reason:'Igen'}],remove:[]}},joint_rules:[],form_assign:[]})
+ assert.equal(direct.validation?.code,'human_text');assert.equal(direct.sketch,undefined,'not merged into open work')
+ // A sketch call adding a definition with a rule, then one removing it: the rule goes too, the commit saves.
+ const pin={definitions:{upsert:[{id:'pin',primitive:'box',material_ref:null,x_mm:'w',y_mm:'w',z_mm:'w'}],remove:[]},materials:{upsert:[{definition_id:'pin',material_id:material,material_revision:1,part_id:null,part_revision:null}],remove:[]}}
+ const withPin=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:2,key:'w2',change_note:'Tapp',request_quote:message,mode:'sketch',changes:pin,joint_rules:[{...rule,id:'tapp',between:['rail','pin']}],form_assign:[]})
+ assert.equal(withPin.status,'sketched',JSON.stringify(withPin))
+ const noPin=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:2,key:'w3',change_note:'Ingen tapp',request_quote:message,mode:'sketch',
+  changes:{definitions:{upsert:[],remove:['pin']},materials:{upsert:[],remove:['pin']}},joint_rules:[],form_assign:[]})
+ assert.equal(noPin.status,'sketched',JSON.stringify(noPin))
+ const saved=await tools.execute('commit_construction_sketch',{record_id:id,new_key:null,action:'commit',key:'w_c',change_note:'Mittslå',request_quote:message})
+ assert.equal(saved.status,'saved',JSON.stringify(saved));assert.equal((await read(id)).recipe.instances.length,4)
+})
+
+test('audit round 2, saves: an unknown binding path is named; a repeat takes one role by its id',async()=>{
+ const message='Ram med spjälor.',{tools,material,read}=await setup(message,{constructionRepeats:true,repeatStart:true})
+ const base=frameSave(message,material) as any
+ const typo={...base,recipe:{...base.recipe,arrays:[]},parameter_plan:{...base.parameter_plan,bindings:[{path:'instances/front/placment/z',node:'w'}]}}
+ const refused=await tools.execute('save_construction_draft',typo)
+ assert.equal(refused.reason,'binding_path_unknown',JSON.stringify(refused))
+ // Rails, and three slats as one repeat with one role entry.
+ const slats={...base,recipe:{...base.recipe,instances:base.recipe.instances.filter((i:any)=>i.id!=='front'),
+  arrays:[{id:'slat',definition_id:'cross',axis:'y',count:3,start:{x:'w',y:0,z:0},spacing_mm:'mid'}]},
+  parameter_plan:{...base.parameter_plan,nodes:[...base.parameter_plan.nodes,decision('mid',191,'Spjälavstånd.')]},
+  instance_policy:{version:1,instances:[bare('left'),bare('right'),bare('slat')]}}
+ const saved=await tools.execute('save_construction_draft',slats)
+ assert.equal(saved.status,'saved',JSON.stringify(saved))
+ const draft=await read(saved.receipt.recordId)
+ assert.deepEqual(draft.instance_policy.instances.map((r:any)=>[r.instance_id,r.quantity_policy]),[['left','manufacture'],['right','manufacture'],['slat.1','manufacture'],['slat.2','manufacture'],['slat.3','manufacture']])
+ assert.equal(draft.joints.length,6)
 })

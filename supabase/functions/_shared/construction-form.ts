@@ -99,7 +99,8 @@ export function extendFormMapping(intent: DesignIntent, recipe: CadAssemblyReque
   const mapping = new Map<string, string>()
   for (const m of before.mappings) for (const id of m.instance_ids) if (present.has(id)) mapping.set(id, m.component_id)
   for (const a of assign) {
-    if (!present.has(a.instance_id) || !active.has(a.component_id)) { issues.push({ code: 'form_assignment_invalid', ids: [a.instance_id, a.component_id], message: 'Assign an existing part to an active concept component.' }); continue }
+    if (!present.has(a.instance_id)) continue // a part removed since it was assigned
+    if (!active.has(a.component_id)) { issues.push({ code: 'form_assignment_invalid', ids: [a.instance_id, a.component_id], message: 'Assign a part to an active concept component.' }); continue }
     mapping.set(a.instance_id, a.component_id)
   }
   const mappedComponents = new Set(before.mappings.map(m => m.component_id))

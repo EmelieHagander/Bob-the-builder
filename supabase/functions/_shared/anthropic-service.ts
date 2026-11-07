@@ -449,7 +449,7 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
     // A request our own deadline cut was billed for what the provider did.
     // Its input is known from the start of the stream and its output is
     // estimated from what streamed (owner decision 2026-11-07: three cut
-    // Konrad answers had no price); a later count from the provider wins.
+    // Konrad answers had no price), or the provider's partial count if larger.
     // Thinking streams as a summary, so the estimate is a lower bound. A
     // network or provider error keeps an unknown cost, and so does a stream
     // that never reported its input.
@@ -467,9 +467,10 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
         errorCode: cut ? active ? 'model_output_window' : 'model_output_window_silent' : controller.signal.aborted ? 'local_timeout' : 'network_or_stream' }) }
       catch { /* the ledger never decides the call outcome */ }
     }
-    // The turn budget and execution events see the same estimate as the ledger.
-    const spent = priced ? { usage: { input_tokens: priced.input, output_tokens: priced.output, total_tokens: priced.input + priced.output, cached_input_tokens: priced.read, reasoning_tokens: 0 },
-      estimatedCostUsd: priced.cost } : {}
+    // The turn budget counts the estimate. It is not a provider receipt:
+    // estimatedCostUsd stays empty, so a drawing reservation stays pending
+    // for reconciliation and is never stored as a finished, reusable result.
+    const spent = priced ? { costEstimate: { usd: priced.cost, basis: 'streamed_output_estimate' as const } } : {}
     if (cut) return { ...fail<T>(model, 'model_output_window'), ...spent, failure: { code: 'model_output_window' } }
     if (priced) return { ...fail<T>(model, `Network error: ${msg}`), ...spent }
     return fail(model, `Network error: ${msg}`)

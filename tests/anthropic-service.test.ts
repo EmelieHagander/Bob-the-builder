@@ -139,9 +139,10 @@ test('an answer still streaming when our deadline closes is reported as too long
     assert.ok(outputTokens > 0, 'the streamed text counts as output')
     assert.equal(totalTokens, 1000 + outputTokens)
     assert.equal(costUsd, anthropicCostUsd(ctx({}).model, { input_tokens: 10, cache_read_input_tokens: 900, cache_creation_input_tokens: 90, output_tokens: outputTokens }))
-    // The turn budget and execution events see the same estimate as the ledger.
-    assert.equal((result as any).estimatedCostUsd, costUsd)
-    assert.deepEqual([result.usage.input_tokens, result.usage.output_tokens], [1000, outputTokens])
+    // The turn budget counts the estimate; it is not a provider receipt, so a
+    // drawing reservation stays pending rather than storing a reusable failure.
+    assert.deepEqual((result as any).costEstimate, { usd: costUsd, basis: 'streamed_output_estimate' })
+    assert.equal((result as any).estimatedCostUsd, undefined)
     assert.deepEqual((result as any).failure, { code: 'model_output_window' })
   } finally { console.error = originalError }
 })

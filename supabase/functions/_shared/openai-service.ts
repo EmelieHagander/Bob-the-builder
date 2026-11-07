@@ -276,6 +276,9 @@ export interface OpenAIServiceResponse<T = unknown> {
     };
   }>;
   estimatedCostUsd?: number | null;
+  /** A cut Claude answer's estimated cost (ledger cost_basis
+   * streamed_output_estimate); spending, not a provider receipt. */
+  costEstimate?: { usd: number; basis: 'streamed_output_estimate' };
 }
 
 function sanitizeJsonSchema(schema: Record<string, unknown>, strict: boolean = false): Record<string, unknown> {

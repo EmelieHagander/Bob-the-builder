@@ -80,7 +80,8 @@ export function createBobModelBudget(limitUsd = 1, maxCalls = 24, reserve: { usd
    if(!policy.unlimitedWork&&reasons.length)return budgetFailure<T>({scope:'turn',reasons,calls,call_limit:callLimit,spent_usd:spent,usd_limit:usdLimit,unpriced})
    const result = await work()
    calls++
-   const cost = result.estimatedCostUsd
+   // A cut answer's estimate is spending too (a lower bound).
+   const cost = result.estimatedCostUsd ?? result.costEstimate?.usd
    if (typeof cost === 'number' && Number.isFinite(cost) && cost >= 0) spent += cost
    else if (result.usage.total_tokens > 0) unpriced = true
    return result

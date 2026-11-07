@@ -18,7 +18,7 @@ type Row = Record<string, any>
 const ID = '^[A-Za-z][A-Za-z0-9_.:-]{0,79}$'
 export const JOINT_RULES_SCHEMA = {
   type: 'array', maxItems: 32,
-  description: 'Your joining decision for two definitions: code writes one joint, with these fasteners and reason, for every pair of their parts that touch face to face and have no joint in joints. A pair of the same definition is ["stud","stud"]. Touching parts that must not be joined this way go in except; they stay unjoined until you give them a joint. Empty for none.',
+  description: 'Your joining decision for two definitions, existing parts included: code writes one joint, with these fasteners and reason, for each pair of their parts that touch face to face and have no joint. In a part edit it joins the parts the edit adds or changes; an edit with only rules applies them to every touching pair and restates the joints code wrote for them. A pair of the same definition is ["stud","stud"]. Touching parts that must not be joined this way go in except and stay unjoined until they get a joint. Empty for none.',
   items: { type: 'object', additionalProperties: false, required: ['id', 'between', 'reason', 'fasteners', 'except'], properties: {
     id: { type: 'string', pattern: ID },
     between: { type: 'array', minItems: 2, maxItems: 2, items: { type: 'string', pattern: ID } },
@@ -43,15 +43,18 @@ export function ruleJointId(a: string, b: string): string {
   return id.length <= 80 ? id : 'jr.' + fnv(`${x}|${y}`)
 }
 export const RULE_JOINT_PREFIX = 'jr.'
-/** Two existing parts are already joined; the rule records that, nothing is fastened. */
-export const EXISTING_JOINT_REASON = 'Existing parts, already joined; nothing new is fastened.'
+/** touched: in a part edit, only pairs with a part the edit adds or changes get
+ * a new joint, so an except from an earlier save still holds for the others.
+ * rewrite: an edit sending only rules restates the decision, so code's joints
+ * of covered pairs take the rule's fasteners and reason. */
+export type RuleScope = { touched?: Set<string>; rewrite?: boolean }
 
 /** Joints for the touching pairs the rules cover. recipe holds computed
  * numbers; joints are the joints already declared or saved. A joint code wrote
  * earlier (id jr.) is code's to keep in step: written again when its parts
  * moved and its faces no longer meet, and named in stale when its parts no
  * longer touch or are gone. */
-export function ruleJoints(recipe: CadAssemblyRequest, joints: Row[], rules: JointRule[], roles: Map<string, string>): { joints: Row[]; made: RuleJoint[]; issues: RuleIssue[]; stale: string[] } {
+export function ruleJoints(recipe: CadAssemblyRequest, joints: Row[], rules: JointRule[], roles: Map<string, string>, scope: RuleScope = {}): { joints: Row[]; made: RuleJoint[]; issues: RuleIssue[]; stale: string[] } {
   const issues: RuleIssue[] = [], out: Row[] = [], made: RuleJoint[] = []
   const definitions = new Map(recipe.definitions.map(d => [d.id, d as Row]))
   const seen = new Set<string>()
@@ -70,7 +73,7 @@ export function ruleJoints(recipe: CadAssemblyRequest, joints: Row[], rules: Joi
   const boxes = recipe.instances.flatMap(i => {
     if (roles.get(i.id) === 'reference') return []
     const box = constructionBox(i as Row, definitions.get(i.definition_id)!)
-    return box ? [{ box, definition: i.definition_id, existing: roles.get(i.id) === 'existing_part' }] : []
+    return box ? [{ box, definition: i.definition_id }] : []
   })
   const boxOf = new Map(boxes.map(b => [b.box.id, b.box]))
   // The checker's test: local faces opposed on one plane with positive contact area.
@@ -88,8 +91,11 @@ export function ruleJoints(recipe: CadAssemblyRequest, joints: Row[], rules: Joi
     const key = pair(a.box.id, b.box.id), earlier = jointOf.get(key)
     touching.add(key)
     const code = typeof earlier?.id === 'string' && earlier.id.startsWith(RULE_JOINT_PREFIX)
-    if (earlier && (!code || meets(earlier))) continue
     const matched = (byPair.get(pair(a.definition, b.definition)) ?? []).filter(r => !excluded.has(`${r.id}|${key}`))
+    const restated = code && scope.rewrite && matched.length === 1
+      && (earlier!.reason !== matched[0].reason || JSON.stringify(earlier!.fasteners ?? []) !== JSON.stringify(matched[0].fasteners))
+    if (earlier && (!code || meets(earlier)) && !restated) continue
+    if (!earlier && scope.touched && !scope.touched.has(a.box.id) && !scope.touched.has(b.box.id)) continue
     // A code joint whose parts moved keeps its fasteners and reason unless a rule is sent again.
     if (!matched.length && !earlier) continue
     if (matched.length > 1) { issues.push({ code: 'joint_rule_ambiguous', path: `joint_rules/${matched.map(r => r.id).join(',')}`, message: `Several rules join ${a.definition} and ${b.definition}; keep one.` }); continue }
@@ -102,14 +108,21 @@ export function ruleJoints(recipe: CadAssemblyRequest, joints: Row[], rules: Joi
     const id = earlier ? earlier.id as string : ruleJointId(low.id, high.id)
     if (!earlier && taken.has(id)) { issues.push({ code: 'joint_rule_id_taken', path: `joints/${id}`, message: 'A declared joint already uses the id code gives this pair.' }); continue }
     taken.add(id)
-    const existing = a.existing && b.existing, rule = matched[0] ?? null
+    // Existing parts are joined as the rule says; except is where they are not.
+    const rule = matched[0] ?? null
     out.push({ id, first: { instance_id: low.id, face: first }, second: { instance_id: high.id, face: second },
-      reason: existing ? EXISTING_JOINT_REASON : rule ? rule.reason : earlier!.reason,
-      fasteners: existing ? [] : structuredClone(rule ? rule.fasteners : earlier!.fasteners ?? []) })
+      reason: rule ? rule.reason : earlier!.reason, fasteners: structuredClone(rule ? rule.fasteners : earlier!.fasteners ?? []) })
     made.push({ id, parts: [low.id, high.id], rule: rule?.id ?? null })
   }
-  // Code's joints whose parts no longer touch, or are gone or became reference geometry.
-  const stale = joints.filter(j => typeof j?.id === 'string' && j.id.startsWith(RULE_JOINT_PREFIX)
-    && !touching.has(pair(j.first?.instance_id, j.second?.instance_id))).map(j => j.id as string)
+  // Code's joints whose parts are gone, or both still checkable as boxes and
+  // no longer touching. A part that became a cut, turned or other shape is not
+  // checked here, so its joints stay (audit round 2).
+  const present = new Set(recipe.instances.map(i => i.id))
+  const stale = joints.filter(j => {
+    if (typeof j?.id !== 'string' || !j.id.startsWith(RULE_JOINT_PREFIX)) return false
+    const a = j.first?.instance_id, b = j.second?.instance_id
+    if (!present.has(a) || !present.has(b)) return true
+    return boxOf.has(a) && boxOf.has(b) && !touching.has(pair(a, b))
+  }).map(j => j.id as string)
   return { joints: out, made, issues, stale }
 }

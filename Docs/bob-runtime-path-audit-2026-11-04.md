@@ -2866,7 +2866,37 @@ Not changed: `form_assign` only with a part change (the database refuses an
 edit with no change). Tests: `lean-construction-units` 10/10,
 `lean-construction` 7/7.
 
+**Audit round 2 (two reviewers: the round-1 fixes, and a fresh read of the
+whole diff), fixed the same day.** Round 1's fixes held; these were new or
+not yet whole.
+
+| Area | Found | Now |
+|---|---|---|
+| Formulas | A binding to a mistyped path was dropped without a word | Refused as `binding_path_unknown`, naming each path (save and edit) |
+| | A part sent again with its saved number after its node changed was refused | The saved number is accepted and computed anew; only a new number where code computes the field is refused, and hand bindings are not checked as formulas |
+| | `w * w` passed until the evaluator; a formula and a binding for one path conflicted | Unit rules are checked at compile and named by field; a formula replaces a binding for its path |
+| | A strict schema pattern refused a mistyped formula as a wrong type, so it was never kept | Any short text is accepted by the schema; the compiler names it and the sketch keeps it |
+| Sketches | A refused edit's shadow sketch was dropped by any saved edit | Dropped only when a saved change covers it; otherwise the answer names it as open |
+| | A refused direct edit was merged into ordinary open sketch work | Kept only when no sketch is open |
+| | Rules and assignments piled up across sketch calls, also for removed definitions and parts | Filtered when their definitions or parts go |
+| Joints | An `except` from the save was forgotten by the next part edit | A part edit joins only parts it adds or changes |
+| | Existing pairs got a joint with nothing fastened | The rule applies as declared; `except` is where it does not |
+| | A part turned into a cut or other shape lost its code joints | A code joint goes only when its parts are gone, or both are still boxes and no longer touch |
+| | A rule-only edit did not say what it wrote | It lists `rule_joints` |
+| Removal | Removing a part left its role and joints, so the edit was refused | Its role, joints, bindings, formula nodes and a removed definition's material go with it, and the answer lists them; a node Konrad wrote stays until he removes it, since a decided value is not dropped unseen |
+| Roles | Every role needed `quantity_policy`; a repeat needed one entry per copy | `quantity_policy` follows from the role; a repeat's copies take the role given for its id |
+| Cost | The cut-answer estimate was read as a drawing's reserved cost, so drawing reservations settled early | The failure carries `costEstimate`; reservations stay pending until a real price is known |
+
+Tests: `lean-construction-units` 10/10, `lean-construction` 10/10; 55
+focused files 415/420. The five failures are catalog-parity tests that fail
+identically on `main` (`ai-catalog-fixture-replay`, `construction-fastener-tools`,
+`construction-parameter-catalog`, `konrad-lean-catalog`, `tool-catalog-parity`):
+older publications they assert as the latest. This PR adds no difference to
+them; `konrad-lean-catalog` now also reads the lean pin. Deno check of
+`bob-worker` and `ask-bob` passes.
+
 **Open.** Reads still show the stored graph (nodes and bindings), not formulas;
 an edit names nodes, not the formulas that made them. Instance roles
 (`instance_policy`, 1,447 characters for the wall) are still written per part.
 Live measurement of write size, refusals and cost is the next owner turn.
+The five catalog-parity tests red on `main` are a separate repair.
