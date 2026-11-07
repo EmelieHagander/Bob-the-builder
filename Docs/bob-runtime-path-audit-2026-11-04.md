@@ -2458,3 +2458,93 @@ Remaining: ordinary owner turns read back whether Konrad sketches and commits
 once per assignment (revisions and change sets per assignment, `sketched` vs
 `saved` calls, `open_sketches` at hand-over) and whether Bob uses
 `mode: check` before a large solution save.
+
+<a id="versions-and-cost-2026-11-07"></a>
+## Versions and cost of the bed and entry turns — 2026-11-07
+
+Owner, 2026-11-07, after the first turns with the sketchbook: "Konrad får inte
+bestämma vilken version … det ska lösas via versionshanteringen i databasen.
+Dom ska alltid få senaste versionen" and "Det här är väldigt dyrt … hur gör vi
+det 1. bättre och 2. billigare." Investigation only; nothing built here.
+
+**The two turns (08:59–09:31 UTC).** Bed: 9 min, USD 4.83, nothing saved.
+Entry: 30 min, USD 4.65 recorded, one solution saved (after three
+`mode: check` refusals for the 30 kB readback and one passing check: design A
+worked), no construction saved. Konrad did not use the sketch in either turn.
+
+### Versions typed by models
+
+- **Inventory (published schemas).** About 60 tools take a version from the
+  model: `expected_revision` (about 30, the optimistic-concurrency guard),
+  source pins (`target_revision`, `material_revision`, `part_revision`,
+  measurement `source.revision`, `plan_revision`, `construction_revision`,
+  `child_revision`, …) and read/check `revision`. Server-issued handles already
+  exist and work: the Solution `edit_ref`, `next_ref`, and for Konrad the
+  worker-operation refs (`source_ref: op_…`), which hide `record_id` and
+  `expected_revision` on his construction writes.
+- **The gap that stopped the bed.** `target_revision` is still typed by
+  Konrad. He sent the construction's revision (20) where the selected target's
+  revision (15) belongs, four times across two hand-overs; the refusal said
+  "The selected target changed. Read the current Project/Area target", which
+  was not true and did not name 15. Since 2026-11-02 about one refusal in five
+  concerns a version (`construction_source_refresh_blocked` 7,
+  `construction_edit_preparation_failed` 5, `target_revision_required` 1,
+  `parameter_source_changed` 1, plus unlabelled conflicts).
+- **Best practice.** Optimistic concurrency stays, but the version travels
+  with a server-issued handle from the read the change is based on, never as
+  a number the model copies. Source pins default to the current revision,
+  bound by the server at save; a pin the owner chose to hold is a stored
+  decision, not a model input. Deltas by stable id (the construction edit) can
+  be applied to the current head when the touched ids did not change since the
+  read, and are refused by id when they did.
+
+### Where the money went (recorded USD 9.48)
+
+| Bucket | USD | Share |
+|---|---:|---:|
+| Input not read from cache | 5.17 | 55 % |
+| — of which calls with no cache at all (job starts and two full misses) | 2.40 | |
+| — of which partial misses of 30k+ tokens mid-job | 0.80 | |
+| Input read from cache (10 % price) | 2.05 | 22 % |
+| Output | 2.21 | 23 % |
+
+Konrad is 69 % (USD 6.53), Bob 30 %; the picker, gate, memory and finder
+roles together USD 0.15. Both main roles run on the standard tier
+(`claude-opus-5-5`, USD 4 / 20 per million input / output). Eight entry calls
+that hit the 120 s output window are recorded without a price; their real
+cost is unknown and not included.
+
+**Causes found.**
+
+1. *The tool list changes inside a job.* The worker-operation refs are an
+   `enum` inside the tool schemas; every read that lists another construction
+   or revision adds a ref, which changes the tools block, the first thing Claude
+   caches, so the next call is paid in full (bed steps 14 and 22: 95k and 77k
+   tokens, no cache, USD 0.68). The same per-job enum keeps each new Konrad
+   job from reading the tools and system prompt cached by the previous job
+   (each Konrad job start paid 46–60k tokens uncached, USD 0.19–0.32).
+2. *Calls that produce nothing.* Bed: 6 refused plan notes (JSON text, fixed
+   in #498), 4 version refusals, 3 human-text refusals, 13 construction reads,
+   two hand-overs. Entry: 8 output-window aborts (a new wall is one call too
+   large for 120 s; the sketch covers only existing constructions), 2
+   concept refusals.
+3. *Context per call.* Konrad sends 48–117k tokens per call; each step adds
+   5–15k new tokens (read results), paid uncached once and cached afterwards.
+
+### Proposals (owner decision)
+
+1. **Server-bound versions** (better and cheaper): no revision numbers in
+   Konrad's tools. The server edits the current head and binds the current
+   selected target at save after the readiness check; a refusal names what is
+   not ready. Then the same for Bob's `expected_revision` tools, through the
+   existing handle pattern.
+2. **Stable tool schemas** (cheaper): validate operation refs on the server
+   and list the current refs in the tool result, not as an `enum` in the
+   schema; tools and system prompt then stay cached through a job and from one
+   Konrad job to the next.
+3. **New constructions in small steps** (better and cheaper): a sketch can
+   start a new construction; Konrad adds parts in small calls and saves once,
+   so no single answer has to fit 120 s.
+4. **Cheaper model for Konrad, tested** (cheaper, quality risk):
+   `claude-sonnet-5-5` is half the price per token; one bed and one entry turn
+   would show whether his geometry holds.
