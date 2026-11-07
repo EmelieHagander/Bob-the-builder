@@ -2412,3 +2412,49 @@ tool is loaded. Ranked gaps behind repeated refusals:
 - B3 Each write tool's schema and description are generated from the same
   parser that validates it (lengths, enums, patterns, counts, couplings), so
   a rule cannot exist only after the call; a test compares them.
+
+<a id="publication-496-2026-11-07"></a>
+#### Hosted publication of #496 (sketchbook A and B) — 2026-11-07, 08:55 UTC
+
+The owner approved the design ("Ja kör på rek!") and then publication
+("Applicera allt tack"). Design and build:
+[sketchbook](bob-sketchbook-design-2026-11-07.md#6-built-2026-11-07).
+
+- #496 is merged at `2fa3cd30348a21868a8b41a8094cb8a666b1e859`; its tree
+  `ee17431cc3afcf73c38227c54f774a87da65de0a` equals the tested branch tree.
+  Safety branch `save/bob-before-sketchbook-2026-11-07` retains the previous
+  published source `edbf3e1f904dda6179124882fdd27b8d4e68d502`.
+- Preflight: zero active Bob jobs, no delivery since 06:10; running bundles
+  bob-worker v213, ask-bob v245.
+- Published from the merged checkout (Supabase CLI 2.117.0, `--use-api`,
+  worker first):
+
+| Consumer | Version | Files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 214 | 150 | Existing private job capability, JWT false | `8a0e75ae3aead88fa0a521825d2878307e1ee29c89107379c0e5dc0197ffa823` |
+| ask-bob | 246 | 152 | JWT true | `73e66ded656f6ca9afed9fd90b1adced03711243b166277d21caa7aaebff47e3` |
+
+  Returned sources match the merged checkout byte for byte except the known
+  type-only `cad-intake.ts` erasure; both bundles contain the sketch pin, the
+  commit tool, the write-check call and the open-sketch report.
+- Migrations, applied through the management API after the runtimes, in
+  order: `20261107080000_bob_project_write_check.sql` as ledger
+  `20261107085546`; `20261107080100_bob_write_check_catalog.sql` as
+  `20261107085547`; `20261107090000_construction_sketches.sql` as
+  `20261107085549`; `20261107090100_bob_construction_sketch_catalog.sql` as
+  `20261107085551`.
+- Read back: `bob.bob_project_write_check` and `bob.construction_sketch`
+  executable by `authenticated` only (not anon, not service role); the sketch
+  table has RLS on and 0 rows; the finished-job trigger exists. Active
+  catalog: `agent-contract.ask-bob` v30 with `write_check_version` 1 and
+  `construction_sketch_version` 1; `bob.tools` v52 with the commit tool in
+  Konrad's core focus; `tools.edit_construction_parts` v10,
+  `tools.commit_construction_sketch` v1, `tools.edit_project_record` v11;
+  policy row `commit_construction_sketch` schema 1, active. The three live
+  tool definitions equal the tested catalog fixture (definition and
+  metadata). Zero active jobs after.
+
+Remaining: ordinary owner turns read back whether Konrad sketches and commits
+once per assignment (revisions and change sets per assignment, `sketched` vs
+`saved` calls, `open_sketches` at hand-over) and whether Bob uses
+`mode: check` before a large solution save.
