@@ -2895,6 +2895,18 @@ older publications they assert as the latest. This PR adds no difference to
 them; `konrad-lean-catalog` now also reads the lean pin. Deno check of
 `bob-worker` and `ask-bob` passes.
 
+**Audit 4, local, on the real wall (no model call).** The saved entry wall
+(`tests/fixtures/entrance-wall-construction.json`) goes through the same tools
+and database twice: as saved live (old format, 15,463 characters) and in the
+lean format (8,155: formulas, seven rules, one mapped part). Project
+measurements are decisions with the same values; fasteners are left out
+(`tests/lean-entrance-wall.test.ts`). Result: the same geometry, the same 21
+joints on the same faces, the same roles and the same completed mapping; after
+the window width changes, both computed walls are still identical. The part
+edit refused twice live (`form_instance_unmapped`) saves: code maps the new
+stud to the wall and the stud–plate rule writes its two joints. Live
+measurement (Entrén, Våningssäng 2) needs publication.
+
 **Open.** Reads still show the stored graph (nodes and bindings), not formulas;
 an edit names nodes, not the formulas that made them. Instance roles
 (`instance_policy`, 1,447 characters for the wall) are still written per part.
