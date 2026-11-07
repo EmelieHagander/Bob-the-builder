@@ -2242,3 +2242,51 @@ entrén är klar"); the entry turn ended 05:56 (28 min, 12 saved records).
 Remaining: ordinary bed and entry turns read back Konrad's hand-over
 outcomes (`ok` share, logged stop reasons, `piece_open` facts) against the
 [locked-paths data](#locked-paths-2026-11-07).
+
+<a id="why-bob-stops-2026-11-07"></a>
+## Why Bob stands still — 2026-11-07
+
+Owner question 2026-11-07: "Varför stoppas bob?" Read from the unified
+Edge log table (`logs`, management API `analytics/endpoints/logs`; the old
+`logs.all` endpoint and the `function_logs` source no longer exist), the
+execution events and the usage ledger. Nothing was changed.
+
+**Entry turn 05:28–05:56 UTC (28 min, 12 saved records).** About half of
+the wall time was spent waiting, for two reasons:
+
+| Cause | When | Lost |
+|---|---|---|
+| Edge "CPU Time exceeded": the segment's isolate is killed mid-work; the job stays `running` until the lease runs out and the one-minute cron (`bob-background-turns`) re-dispatches it | 05:29:05 → 05:31:20, 05:43:32 → 05:46:02, 05:46:41 → 05:48:48 | ≈ 7 min |
+| Claude window: Konrad, at 90–98k input tokens, still writing (1,837 and 1,970 stream events) when our 120 s deadline closed | 05:33:20–05:35:20, 05:49:37–05:51:37, 05:51:59–05:53:59, 05:54:03–05:56:03 | ≈ 8 min |
+
+The first window cut was repaired by the note (the next step succeeded and
+read the cut call's cache); the last three came in a row, and after the
+third the hand-over ended `unavailable`. CPU kills over the last days:
+9 on 2026-11-05, 13 on 2026-11-06, 3 this morning — older than this week's
+changes.
+
+**What costs CPU in a segment** (local benchmarks on this machine; the Edge
+isolate is slower, and its CPU budget per request is small):
+
+- every step commits the whole turn checkpoint: today 460–800 kB of state
+  (`components.contextContinuation` alone 235–451 kB), logged up to five
+  times within two seconds; one commit (stable key sort, two to three full
+  serialisations, size breakdown, two clones) took 5.5 ms for 460 kB here;
+- token counting of the native context: about 20 ms per 290 kB;
+- the tool-schema deduplication published on 2026-11-06: about 27 ms for
+  Konrad's 24 tools on every call, recomputed each time although the
+  schemas do not change within a job.
+
+**Proposals (owner decision, nothing built).**
+1. Compute each tool's deduplicated schema once per bound schema (memo by
+   identity); expected saving about 27 ms per Konrad call.
+2. Checkpoint less work per step: skip the size breakdown unless the size
+   crosses the limit, serialise once and reuse the text, and keep chains
+   out of the state where the provider-neutral archive already holds them.
+3. Recover a killed segment at once: a shorter lease with a heartbeat, so a
+   killed job is re-dispatched by the next cron tick instead of after the
+   whole lease.
+4. Konrad's large writes: the plan gate now makes him plan; the next step
+   is to let his plan's steps bound each write (one opening or one wall per
+   call), so a single answer fits the window — or, if the project's plan
+   allows a longer wall clock, raise the Claude window.
