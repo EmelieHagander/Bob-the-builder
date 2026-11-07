@@ -89,7 +89,8 @@ test('the plan gate refuses a construction write until a plan note is saved in t
     () => reply('w1', [call('a', 'read_construction_draft'), call('b', 'check_construction_draft'), call('c', 'edit_construction_parts', { changes: [] })]),
     () => reply('w2', [call('d', 'update_workpad', { expected_revision: 0, note: { ...working, status: 'done' } }), call('e', 'edit_construction_parts', { changes: [] })]),
     () => reply('w3', [call('f', 'update_workpad', { expected_revision: 1, note: { ...working, steps: [] } }), call('g', 'edit_construction_parts', { changes: [] })]),
-    () => reply('w4', [call('h', 'update_workpad', { expected_revision: 2, note: working }), call('i', 'edit_construction_parts', { changes: [] })]),
+    // Sent as JSON text, as Konrad did in the bed on 2026-11-07: the same plan.
+    () => reply('w4', [call('h', 'update_workpad', { expected_revision: 2, note: JSON.stringify(working) }), call('i', 'edit_construction_parts', { changes: [] })]),
     () => done('w5'),
   ])
   const result = await h.run()
@@ -170,4 +171,24 @@ test('the worker gates pin is published for new jobs and the request fingerprint
   assert.equal(requestFingerprint({ job: 'Gör lådan 500 mm bred.', findings: null }), a)
   assert.notEqual(requestFingerprint({ job: 'Gör lådan 500 mm bred, en del i taget.', findings: null }), a)
   assert.notEqual(requestFingerprint({ job: 'Gör lådan 500 mm bred.', findings: 'ny' }), a)
+})
+
+test('three plan refusals in Konrad\'s real work loop: the third asks for another approach, and a plan then opens the write', async () => {
+  // Review of #498 (2026-11-07): the plan gate answers inside the work loop,
+  // so its refusals never reached the session's refusal guard.
+  const plan = { status: 'working', goal: 'Dörr i väggen', next_step: 'Byt panel', steps: ['Byt panel'], blockers: [], references: [] }
+  const edit = (id: string) => call(id, 'edit_construction_parts', { changes: [] })
+  const h = harness([() => reply('w1', [edit('a')]), () => reply('w2', [edit('b')]), () => reply('w3', [edit('c')]),
+    () => reply('w4', [call('d', 'update_workpad', { expected_revision: 0, note: plan }), edit('e')]), () => done('w5')], { refusalGuard: true })
+  assert.equal((await h.run()).status, 'ok')
+  const result = (step: number) => toolResults(h.requests[step])
+  assert.equal(result(1)[0].reason, 'plan_required'); assert.equal(result(1)[0].repeated, undefined)
+  assert.equal(result(2)[0].repeated, undefined)
+  assert.equal(result(3)[0].repeated.count, 3); assert.match(result(3)[0].repeated.note, /call update_workpad with note as an object/)
+  assert.deepEqual(result(4).map(r => r.status), ['noted', 'saved'], 'the plan opens the write')
+  assert.equal(h.executed.filter(e => e.name === 'edit_construction_parts').length, 1, 'refused writes never ran')
+  // Without the pin the refusals stay as they were.
+  const old = harness([() => reply('w1', [edit('a')]), () => reply('w2', [edit('b')]), () => reply('w3', [edit('c')]), () => done('w4')])
+  await old.run()
+  assert.equal(toolResults(old.requests[3])[0].repeated, undefined)
 })

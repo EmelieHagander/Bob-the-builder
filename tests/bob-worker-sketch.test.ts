@@ -9,7 +9,7 @@ import type { OpenAIServiceOptions, OpenAIServiceResponse } from '../supabase/fu
 // piece write; sketches still open when Konrad stops are reported as not saved.
 const catalog = { text: (key: string) => key } as AiCatalogSession
 const worker: WorkerDefinition = { role: 'role.structure-worker', tool: 'ask_structure_worker',
-  tools: ['edit_construction_parts', 'commit_construction_sketch'], reads: ['read_construction_draft'], max_steps: 8 }
+  tools: ['edit_construction_parts', 'save_construction_draft', 'commit_construction_sketch'], reads: ['read_construction_draft'], max_steps: 8 }
 const tool = (name: string) => ({ type: 'function' as const, function: { name, description: name, parameters: { type: 'object' } } })
 const call = (id: string, name: string, args: unknown = {}) => ({ id, type: 'function' as const, function: { name, arguments: JSON.stringify(args) } })
 const model = (id: string, calls: ReturnType<typeof call>[] = []): OpenAIServiceResponse<string> => ({ success: true,
@@ -24,10 +24,10 @@ function harness(steps: ReturnType<typeof model>[], open: () => Promise<{ artifa
     userId: 'member', job: { job: 'Bygg ramen med lådor.', findings: null }, history: [],
     readKnowledge: async () => ({ current: true }), readCurrent: async () => null,
     session: {
-      prepare: async () => [tool('read_construction_draft'), tool('edit_construction_parts'), tool('commit_construction_sketch'), tool('update_workpad')],
+      prepare: async () => [tool('read_construction_draft'), tool('edit_construction_parts'), tool('save_construction_draft'), tool('commit_construction_sketch'), tool('update_workpad')],
       execute: async (name: string, args: any) => {
         executed.push(name + (args?.mode ? ':' + args.mode : args?.action ? ':' + args.action : ''))
-        if (name === 'edit_construction_parts' && args?.mode === 'sketch') return { status: 'sketched', saved: false, change_count: 2 }
+        if ((name === 'edit_construction_parts' || name === 'save_construction_draft') && args?.mode === 'sketch') return { status: 'sketched', saved: false, change_count: 2 }
         if (name === 'commit_construction_sketch' && args?.action === 'commit')
           return { status: 'saved', receipt: { dataset: 'artifacts', recordId: 'c1', revision: ++saved, operation: 'updated' }, check: { status: 'checked', concept_ready: true } }
         if (name === 'commit_construction_sketch') return { status: 'ok', saved: false }
@@ -45,14 +45,14 @@ function harness(steps: ReturnType<typeof model>[], open: () => Promise<{ artifa
 
 test('sketched changes and sketch reads run together in one batch; a commit is one save and defers what follows it', async () => {
   const steps = [
-    model('one', [call('a', 'edit_construction_parts', { mode: 'sketch' }), call('b', 'edit_construction_parts', { mode: 'sketch' }),
+    model('one', [call('a', 'edit_construction_parts', { mode: 'sketch' }), call('b', 'save_construction_draft', { mode: 'sketch' }),
       call('c', 'commit_construction_sketch', { action: 'read' })]),
     model('two', [call('d', 'commit_construction_sketch', { action: 'commit' }), call('e', 'edit_construction_parts', { mode: 'sketch' })]),
     model('done')]
   const { result, executed, observed } = harness(steps, async () => [])
   const report = await result
   assert.equal(report.status, 'ok')
-  assert.deepEqual(executed, ['edit_construction_parts:sketch', 'edit_construction_parts:sketch', 'commit_construction_sketch:read', 'commit_construction_sketch:commit'])
+  assert.deepEqual(executed, ['edit_construction_parts:sketch', 'save_construction_draft:sketch', 'commit_construction_sketch:read', 'commit_construction_sketch:commit'])
   const second = observed[2].messages!.map(m => JSON.parse(String(m.content)))
   assert.equal(second[0].status, 'saved'); assert.equal(second[0].piece_readback.status, 'verified')
   assert.equal(second[1].status, 'deferred', 'nothing runs after a save in the same batch')

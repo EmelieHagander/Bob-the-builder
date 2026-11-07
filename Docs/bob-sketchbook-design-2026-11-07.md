@@ -229,3 +229,7 @@ artifact, revision, receipt or change set. Worker loop: sketch calls are not
 deferred, a commit defers what follows it, open sketches are reported. Deno
 type check of ask-bob and bob-worker passes.
 
+**Version 2 (built 2026-11-07, not published).** A new construction can be
+sketched too, in parts under one key, and saved once; the sketch commit is
+bound to the job's construction. See the
+[runtime audit](bob-runtime-path-audit-2026-11-04.md#lean-writes-2026-11-07).

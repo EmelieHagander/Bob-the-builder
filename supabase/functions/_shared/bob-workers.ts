@@ -66,11 +66,14 @@ export function catalogWorkers(catalog: AiCatalogSession): Record<string, Worker
   return structuredClone(workers)
 }
 
+// A plan sent as JSON text is the same plan (bed, 2026-11-07); the workpad
+// tool reads it the same way before saving it.
+const notePlan = (note: unknown): unknown => { if (typeof note !== 'string') return note; try { return JSON.parse(note) } catch { return null } }
 /** A plan: a working or waiting note with a goal and at least one step. */
-const plannedNote = (note: unknown): boolean => !!note && typeof note === 'object'
+const plannedNote = (raw: unknown): boolean => { const note = notePlan(raw); return !!note && typeof note === 'object'
   && ['working', 'waiting'].includes(String((note as { status?: unknown }).status))
   && typeof (note as { goal?: unknown }).goal === 'string' && (note as { goal: string }).goal.trim().length > 0
-  && Array.isArray((note as { steps?: unknown }).steps) && (note as { steps: unknown[] }).steps.length > 0
+  && Array.isArray((note as { steps?: unknown }).steps) && (note as { steps: unknown[] }).steps.length > 0 }
 
 function validFocus(worker: WorkerDefinition): boolean {
   const focus = worker.focus
@@ -238,7 +241,7 @@ const CONSTRUCTION_PIECE_WRITES = new Set([
 const pieceWrite = (name: string, args: unknown) => {
   if (!CONSTRUCTION_PIECE_WRITES.has(name)) return false
   const a = args && typeof args === 'object' ? args as Record<string, unknown> : {}
-  if (name === 'edit_construction_parts') return a.mode !== 'sketch'
+  if (name === 'edit_construction_parts' || name === 'save_construction_draft') return a.mode !== 'sketch'
   if (name === 'commit_construction_sketch') return a.action === 'commit'
   return true
 }
@@ -297,9 +300,14 @@ export async function runWorker(opts: {
   progress?: { restored?: WorkerProgress; save(progress: WorkerProgress): Promise<void>; afterStep?(): void }
   /** Drops the worker's model chain once it has returned; it is never continued. */
   releaseChain?: (responseId: string) => void
+  /** Pinned per job (stable_tools_version 1): core tools first, with a fixed
+   * cache point after them. */
+  stableTools?: boolean
+  /** Pinned per job (refusal_guard_version 1): the third plan refusal asks for another approach. */
+  refusalGuard?: boolean
   /** Owner decision 2026-11-07 (sketchbook B): sketches still open when the job
    * ends are reported as not saved; null when they could not be read. */
-  openSketches?: () => Promise<{ artifact_id: string; base_revision: number; change_count: number }[] | null>
+  openSketches?: () => Promise<Record<string, unknown>[] | null>
 }): Promise<Record<string, unknown>> {
   const roleKey = opts.worker.role.replace(/^role\./, '')
   const restored = opts.progress?.restored
@@ -313,15 +321,27 @@ export async function runWorker(opts: {
   // The plan gate: construction writes wait for a plan note saved in this job.
   const writes = new Set(opts.worker.tools.filter(name => name !== 'check_construction_draft'))
   let planned = restored?.planned === true
+  let planRefusals = 0
   // The worker's session also offers tools that wait for a prerequisite (saving a
   // reviewed drawing), so the list is the same in every step and the prompt start
   // stays cached; calling one too early answers "not available yet". Prepared each
   // step so a disabled tool still disappears; the order never changes.
   const order: string[] = []
+  // Stable tools (owner decision 2026-11-07): the core tools and the workpad
+  // go first, in the catalog's focus order, so every job of this worker starts
+  // with the same tool definitions and reads them from cache.
+  const stablePrefix = opts.stableTools && focus ? [...focus.core, ...(opts.workpadEnabled ? ['update_workpad'] : [])] : []
   const offer = async () => {
     const offered = (await opts.session.prepare()).filter(spec => allowed.has(spec.function.name))
+    if (!order.length) for (const name of stablePrefix) if (offered.some(spec => spec.function.name === name)) order.push(name)
     for (const spec of offered) if (!order.includes(spec.function.name)) order.push(spec.function.name)
     return order.flatMap(name => offered.filter(spec => spec.function.name === name))
+  }
+  // The last offered tool of the stable prefix, when the prefix leads the list.
+  const cacheAfterTool = (offered: { function: { name: string } }[]) => {
+    let last: string | undefined
+    for (const spec of offered) { if (!stablePrefix.includes(spec.function.name)) break; last = spec.function.name }
+    return last
   }
   let previous: string | undefined = restored?.previous ?? undefined
   if (restored && !validWorkerProgress(restored, opts.worker.max_steps)) throw new Error('worker_checkpoint_invalid')
@@ -411,6 +431,7 @@ export async function runWorker(opts: {
       ...(opts.stageContext ? { responseItemsMode: 'preserve' as const } : {}),
       catalogRoleKey: roleKey, ...(opts.runtimeSurface?{catalogRuntimeSurface:opts.runtimeSurface()}:{}), ...(opts.boundDrawingWork?{catalogDrawingWork:true}:{}), ...(opts.variables ? { catalogVariables: opts.variables } : {}), messages: [...messages, ...images], tools: specs, catalogSchemaParameters: params, catalogToolParameters: toolParams(),
       ...(previous ? { previousResponseId: previous } : {}), maxOutputTokens: 8000,
+      ...(cacheAfterTool(specs) ? { cacheAfterTool: cacheAfterTool(specs) } : {}),
       timeoutMs: Math.max(1000, Math.min(opts.modelTimeoutMs ?? 45_000, opts.deadline - Date.now())) }, opts.stageContext ? validateStage : undefined)
     if (!response.success) {
       if (response.error === 'turn_budget_exhausted' && opts.stopAsResult) return finish({ status: 'paused_at_limit', worker: roleKey, calls })
@@ -441,7 +462,11 @@ export async function runWorker(opts: {
       else if (!allowed.has(name)) result = { status: 'not_offered' }
       else if (opts.planGate && !planned && writes.has(name)) result = { status: 'invalid', reason: 'plan_required',
         validation: { code: 'plan_required', fields: [] },
-        message: 'Write your plan with update_workpad first: the goal, the steps in order and the next step. Then make the change.' }
+        message: 'Write your plan with update_workpad first: the goal, the steps in order and the next step. Then make the change.',
+        // Owner review 2026-11-07: the plan gate answers here, not through the
+        // tool session, so it counts its own refusals for the refusal guard.
+        ...(opts.refusalGuard && ++planRefusals >= 3 ? { repeated: { count: planRefusals, reason: 'plan_required',
+          note: 'Refused ' + planRefusals + ' times without a saved plan. Do not try the change again yet: call update_workpad with note as an object whose status is working, with a goal, next_step and at least one step, and empty blockers and references when there are none; then make the change.' } } : {}) }
       else {
         try { result = await opts.session.execute(name, args) }
         catch (error) { rethrowContinuation(error); throw error }

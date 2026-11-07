@@ -750,6 +750,37 @@ for(const migration of migrations){
   if(contract.metadata.write_check_version!==1||contract.metadata.construction_sketch_version!==undefined)throw new Error('construction_sketch_contract_unexpected')
   publishAs(contract,publication);contract.metadata={...contract.metadata,...flags};versions.set(contract.key,versions.get(contract.key)!+1)
  }
+ // Owner decision 2026-11-07 (after the bed and entry turns): server-bound target, stable schemas, new-construction sketches.
+ const leanWrites=source.match(/\$lean_writes_contract\$([\s\S]+?)\$lean_writes_contract\$/)
+ if(leanWrites){
+  const publication='bob-lean-writes-v1',flags=JSON.parse(leanWrites[1]),text=(tag:string)=>source.match(new RegExp('\\$'+tag+'\\$([\\s\\S]+?)\\$'+tag+'\\$'))![1]
+  const [editOld,editNew,paramOld,paramNew,saveNote]=['edit_old','edit_new','param_old','param_new','save_note'].map(t=>text('lean_writes_'+t))
+  for(const key of ['tools.edit_construction_parts','tools.change_construction_parameters','tools.save_construction_draft']){
+   const row=seed.find(r=>r.key===key)
+   if(!row||!row.definition.parameters?.properties?.target_revision||row.metadata.server_target_version!==undefined)throw new Error('lean_writes_tool_unexpected: '+key)
+   const d=structuredClone(row.definition)
+   delete d.parameters.properties.target_revision
+   d.parameters.required=d.parameters.required.filter((k:string)=>k!=='target_revision');d.required_parameters=d.required_parameters.filter((k:string)=>k!=='target_revision')
+   const swap=(old:string,next:string)=>{if(d.description.split(old).length!==2)throw new Error('lean_writes_text_unexpected: '+key);d.description=d.description.replace(old,()=>next)}
+   if(key!=='tools.save_construction_draft')swap(editOld,editNew)
+   if(key==='tools.change_construction_parameters')swap(paramOld,paramNew)
+   if(key==='tools.save_construction_draft'){
+    if(d.parameters.properties.mode)throw new Error('lean_writes_save_mode_unexpected')
+    d.parameters.properties.mode={type:'string',enum:['sketch','save']};d.parameters.required=[...d.parameters.required,'mode'];d.required_parameters=[...d.required_parameters,'mode'];d.description+=saveNote
+   }
+   row.definition=d;publishAs(row,publication);row.metadata={...row.metadata,server_target_version:1,...(key==='tools.save_construction_draft'?{construction_sketch_version:2}:{})};versions.set(key,versions.get(key)!+1)
+  }
+  const commit=seed.find(r=>r.key==='tools.commit_construction_sketch')
+  if(!commit||commit.definition.parameters.properties.new_key)throw new Error('lean_writes_commit_unexpected')
+  commit.definition={...commit.definition,...JSON.parse(text('lean_writes_commit'))};publishAs(commit,publication);commit.metadata={...commit.metadata,construction_sketch_version:2};versions.set(commit.key,versions.get(commit.key)!+1)
+  const box=seed.find(r=>r.key==='bob.tools'),d=structuredClone(box.definition)
+  if(d.construction_sketch_version!==1||!d.worker_operation_bindings||d.worker_operation_bindings.commit_construction_sketch)throw new Error('lean_writes_toolbox_unexpected')
+  d.worker_operation_bindings.commit_construction_sketch=JSON.parse(text('lean_writes_binding'))
+  box.definition={...d,...flags};publishAs(box,publication);box.metadata={...box.metadata,...flags};versions.set(box.key,versions.get(box.key)!+1)
+  const contract=seed.find(r=>r.key==='agent-contract.ask-bob')
+  if(contract.metadata.construction_sketch_version!==1||contract.metadata.stable_tools_version!==undefined||contract.metadata.server_target_version!==undefined||contract.metadata.server_revisions_version!==undefined||contract.metadata.refusal_guard_version!==undefined)throw new Error('lean_writes_contract_unexpected')
+  publishAs(contract,publication);contract.metadata={...contract.metadata,...flags};versions.set(contract.key,versions.get(contract.key)!+1)
+ }
  // Owner decision 2026-11-07: worker gates (chat answer is the review, gate facts in-job, identical-request refusal).
  const workerGates=source.match(/\$worker_gates_contract\$([\s\S]+?)\$worker_gates_contract\$/)
  if(workerGates){

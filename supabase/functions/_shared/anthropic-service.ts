@@ -251,7 +251,8 @@ export async function anthropicRequestBody(options: OpenAIServiceOptions, ctx: A
       // Each tool keeps its full schema, and Bob's validators check every call.
       // Owner decision 2026-11-06: repeated sub-schemas go once as $defs (measured
       // 44,096 -> 34,561 tokens for Bob's five write tools, lossless).
-      input_schema: options.toolSchemaDedup === 1 ? dedupSchema(tool.function.parameters) as Json : tool.function.parameters }))
+      input_schema: options.toolSchemaDedup === 1 ? dedupSchema(tool.function.parameters) as Json : tool.function.parameters,
+      ...(options.promptCachePoints === 1 && options.cacheAfterTool === tool.function.name ? { cache_control: cachePoint() } : {}) }))
     const parallel = (options.aiDefinition?.providerParameters as Json | undefined)?.parallel_tool_calls
     const choice = options.tool_choice
     // Forced tool choice is rejected by current Claude models unless the

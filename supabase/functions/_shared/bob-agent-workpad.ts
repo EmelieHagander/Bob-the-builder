@@ -44,6 +44,26 @@ function validNote(raw: unknown): raw is WorkpadNote {
     Array.isArray(note[key]) && note[key].length <= count && note[key].every((s: unknown) => typeof s === 'string' && s.length <= 180))
 }
 
+/** The note as an object. Claude may send the nested note as JSON text; the
+ * same object in text form is read as the object (bed, 2026-11-07: Konrad's
+ * plan was refused four times in a row for this alone, so he could not write). */
+function noteValue(raw: unknown): unknown {
+  if (typeof raw !== 'string') return raw
+  try { const parsed = JSON.parse(raw); return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : raw } catch { return raw }
+}
+/** Which bounds a refused note broke, so the next note can be fixed. */
+function noteIssues(raw: unknown): string[] {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return ['note must be an object']
+  const note = raw as Record<string, unknown>, issues: string[] = []
+  if (Object.keys(note).sort().join(',') !== 'blockers,goal,next_step,references,status,steps') issues.push('note has exactly status, goal, next_step, steps, blockers, references')
+  if (!['working', 'waiting', 'done'].includes(String(note.status))) issues.push('status is working, waiting or done')
+  if (typeof note.goal !== 'string' || note.goal.length > 500) issues.push('goal: text, at most 500 characters')
+  if (typeof note.next_step !== 'string' || note.next_step.length > 250) issues.push('next_step: text, at most 250 characters')
+  for (const [key, count] of [['steps', 6], ['blockers', 6], ['references', 12]] as const)
+    if (!Array.isArray(note[key]) || note[key].length > count || !note[key].every((s: unknown) => typeof s === 'string' && s.length <= 180))
+      issues.push(`${key}: at most ${count} items of at most 180 characters`)
+  return issues
+}
 /** Agent identity is server-bound to a tool session, never supplied by a model.
  * Revision zero means this agent has no note yet. An equal replay is idempotent. */
 export function workpadTool(workpads: AgentWorkpads, agent: WorkpadAgent): ToolDefinition {
@@ -52,9 +72,12 @@ export function workpadTool(workpads: AgentWorkpads, agent: WorkpadAgent): ToolD
       const value = raw as { expected_revision?: unknown; note?: unknown } | null
       if (!value || typeof value !== 'object' || Array.isArray(value)
         || Object.keys(value).sort().join(',') !== 'expected_revision,note'
-        || !Number.isSafeInteger(value.expected_revision) || Number(value.expected_revision) < 0 || Number(value.expected_revision) > 2147483645
-        || !validNote(value.note)) return { status: 'invalid', message: 'Replace the bounded note with the revision you were shown.' }
-      return workpads.update(agent, Number(value.expected_revision), value.note)
+        || !Number.isSafeInteger(value.expected_revision) || Number(value.expected_revision) < 0 || Number(value.expected_revision) > 2147483645)
+        return { status: 'invalid', message: 'Replace the bounded note with the revision you were shown.' }
+      const note = noteValue(value.note)
+      if (!validNote(note)) return { status: 'invalid', validation: { code: 'workpad_note_bounds', fields: noteIssues(note) },
+        message: 'Note not saved. Fix: ' + noteIssues(note).join('; ') + '.' }
+      return workpads.update(agent, Number(value.expected_revision), note)
     } }
 }
 

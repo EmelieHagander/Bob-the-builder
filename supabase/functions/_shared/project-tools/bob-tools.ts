@@ -1,4 +1,5 @@
 import {runtimeToolSpec,type RuntimeToolSurface} from '../runtime-tool-surface.ts'
+import { SERVER_REVISIONS, createRefusalGuard, createRevisionMemory, fillServerRevisions, stripServerRevisions, withoutServerRevisions, type RevisionReaders } from '../server-revisions.ts'
 import type {WorkerOperations,OperationRole} from '../worker-operations.ts'
 import { drawingWorkerSpec } from '../drawing-work.ts'
 import { SUPERSEDED_PLAN_LINK_TOOLS, type PlanLinks } from '../project-plan-links.ts'
@@ -91,6 +92,11 @@ export const DRAWING_CONTINUATION_PRELOAD = ['read_construction_draft', 'check_c
   'edit_construction_parts', 'save_cad_design']
 
 export function createBobToolSession(opts: { continuedWork?:boolean;
+  /** Owner decision 2026-11-07 (server_revisions_version 1): no model types a
+   * revision; the server fills each one (see server-revisions.ts). */
+  serverRevisions?: { readers: RevisionReaders };
+  /** Owner feedback 2026-11-07 (refusal_guard_version 1): a refused call does not run again unchanged. */
+  refusalGuard?: boolean;
   drawingWorker?:boolean;
   workerOperation?:{role:OperationRole;operations:WorkerOperations};
   runtimeSurface?:()=>RuntimeToolSurface;
@@ -246,14 +252,35 @@ export function createBobToolSession(opts: { continuedWork?:boolean;
     }] : []),
     ...(opts.extraTools ?? []),
   ]
-  return createToolSession({ definitions: registered.filter(def=>!!opts.workerOperation||!opts.drawingWorker||!['plan_cad_pieces','compose_cad_shell','link_cad_shell_steps','link_project_drawing','link_drawing_gap','ensure_drawing_gap_task'].includes(def.spec.function.name)).map(def=>{
+  // Owner decision 2026-11-07: the server fills every revision; the model's
+  // values are dropped, what it reads is remembered for records without a reader.
+  const revisionMemory=opts.serverRevisions?createRevisionMemory():undefined
+  const refusalGuard=opts.refusalGuard?createRefusalGuard():undefined
+  const revised=(def:ToolDefinition):ToolDefinition=>{
+    if(!revisionMemory&&!refusalGuard)return def
+    const name=def.spec.function.name,own=!!revisionMemory&&!!SERVER_REVISIONS[name]
+    return {...def,execute:async(raw:unknown)=>{
+      const repeated=refusalGuard?.before(name,raw)
+      if(repeated)return repeated
+      let args=raw
+      if(own){
+        const filled=await fillServerRevisions(name,stripServerRevisions(name,raw,SERVER_REVISIONS,{}),revisionMemory!,opts.serverRevisions!.readers)
+        if('error' in filled)return refusalGuard?refusalGuard.after(name,raw,filled.error):filled.error
+        args=filled.args
+      }
+      const result=await def.execute(args)
+      revisionMemory?.observe(name,result)
+      return refusalGuard?refusalGuard.after(name,raw,result):result
+    }}
+  }
+  const session=createToolSession({ definitions: registered.map(revised).filter(def=>!!opts.workerOperation||!opts.drawingWorker||!['plan_cad_pieces','compose_cad_shell','link_cad_shell_steps','link_project_drawing','link_drawing_gap','ensure_drawing_gap_task'].includes(def.spec.function.name)).map(def=>{
     // A bound drawing operation cannot escape into another CAD/destination or
     // work-link writer. Those operations need their own code-owned bindings.
     if(opts.workerOperation){
       const {role,operations}=opts.workerOperation,name=def.spec.function.name
       return shelved({...def,execute:async(raw:unknown)=>{
-        const prepared=await operations.before(role,name,raw)
-        if(prepared.status!=='ready'||!prepared.args)return prepared.result??{status:prepared.status,reason:prepared.reason,saved:false}
+        const prepared=await operations.before(role,name,revisionMemory?stripServerRevisions(name,raw):raw)
+        if(prepared.status!=='ready'||!prepared.args)return prepared.result??{status:prepared.status,reason:prepared.reason,saved:false,...(prepared.available_refs?{available_refs:prepared.available_refs}:{})}
         return operations.observe(role,name,prepared.args,await def.execute(prepared.args))
       }})
     }
@@ -275,7 +302,8 @@ export function createBobToolSession(opts: { continuedWork?:boolean;
     ...(opts.aiCatalog ? { catalogTool: (name, parameters) => {
         const definition = opts.aiCatalog!.tool(name, parameters)
         const visible=name === 'design_project_cad' && !opts.buildGuideTools ? withoutAssemblyOrder(definition) : definition
-        return opts.runtimeSurface?runtimeToolSpec(definition,opts.runtimeSurface()):opts.drawingWorker?drawingWorkerSpec(visible):visible
+        const shown=opts.runtimeSurface?runtimeToolSpec(definition,opts.runtimeSurface()):opts.drawingWorker?drawingWorkerSpec(visible):visible
+        return revisionMemory?withoutServerRevisions(shown):shown
       },
       ...(opts.toolInstructions === 'lazy' ? { catalogColleagues: (name: string) => bobColleagues(opts.aiCatalog!, [name]),
         catalogWorkflows: () => bobWorkflows(opts.aiCatalog!) } : {}),
@@ -285,6 +313,14 @@ export function createBobToolSession(opts: { continuedWork?:boolean;
         if (!Number.isSafeInteger(version) || Number(version) < 1) throw new Error('tool_catalog_unavailable')
         return Number(version)
       } } : {}) })
+  if(!revisionMemory&&!refusalGuard)return session
+  // What the model read and what was refused survive a paused job with the rest of the session.
+  const exportState=session.exportState.bind(session),restoreState=session.restoreState.bind(session)
+  return Object.assign(session,{
+    exportState:()=>({...exportState(),...(revisionMemory?{revision_memory:revisionMemory.exportState()}:{}),...(refusalGuard?{refusal_memory:refusalGuard.exportState()}:{})}) as ReturnType<typeof exportState>,
+    restoreState:(state:Parameters<typeof restoreState>[0])=>{restoreState(state)
+      revisionMemory?.restoreState((state as {revision_memory?:unknown}).revision_memory);refusalGuard?.restoreState((state as {refusal_memory?:unknown}).refusal_memory)},
+  })
 }
 
 /** Present shelves in their fixed order, and tools in shelf order. */

@@ -2458,3 +2458,197 @@ Remaining: ordinary owner turns read back whether Konrad sketches and commits
 once per assignment (revisions and change sets per assignment, `sketched` vs
 `saved` calls, `open_sketches` at hand-over) and whether Bob uses
 `mode: check` before a large solution save.
+
+<a id="versions-and-cost-2026-11-07"></a>
+## Versions and cost of the bed and entry turns — 2026-11-07
+
+Owner, 2026-11-07, after the first turns with the sketchbook: "Konrad får inte
+bestämma vilken version … det ska lösas via versionshanteringen i databasen.
+Dom ska alltid få senaste versionen" and "Det här är väldigt dyrt … hur gör vi
+det 1. bättre och 2. billigare." Investigation only; nothing built here.
+
+**The two turns (08:59–09:31 UTC).** Bed: 9 min, USD 4.83, nothing saved.
+Entry: 30 min, USD 4.65 recorded, one solution saved (after three
+`mode: check` refusals for the 30 kB readback and one passing check: design A
+worked), no construction saved. Konrad did not use the sketch in either turn.
+
+### Versions typed by models
+
+- **Inventory (published schemas).** About 60 tools take a version from the
+  model: `expected_revision` (about 30, the optimistic-concurrency guard),
+  source pins (`target_revision`, `material_revision`, `part_revision`,
+  measurement `source.revision`, `plan_revision`, `construction_revision`,
+  `child_revision`, …) and read/check `revision`. Server-issued handles already
+  exist and work: the Solution `edit_ref`, `next_ref`, and for Konrad the
+  worker-operation refs (`source_ref: op_…`), which hide `record_id` and
+  `expected_revision` on his construction writes.
+- **The gap that stopped the bed.** `target_revision` is still typed by
+  Konrad. He sent the construction's revision (20) where the selected target's
+  revision (15) belongs, four times across two hand-overs; the refusal said
+  "The selected target changed. Read the current Project/Area target", which
+  was not true and did not name 15. Since 2026-11-02 about one refusal in five
+  concerns a version (`construction_source_refresh_blocked` 7,
+  `construction_edit_preparation_failed` 5, `target_revision_required` 1,
+  `parameter_source_changed` 1, plus unlabelled conflicts).
+- **Best practice.** Optimistic concurrency stays, but the version travels
+  with a server-issued handle from the read the change is based on, never as
+  a number the model copies. Source pins default to the current revision,
+  bound by the server at save; a pin the owner chose to hold is a stored
+  decision, not a model input. Deltas by stable id (the construction edit) can
+  be applied to the current head when the touched ids did not change since the
+  read, and are refused by id when they did.
+
+### Where the money went (recorded USD 9.48)
+
+| Bucket | USD | Share |
+|---|---:|---:|
+| Input not read from cache | 5.17 | 55 % |
+| — of which calls with no cache at all (job starts and two full misses) | 2.40 | |
+| — of which partial misses of 30k+ tokens mid-job | 0.80 | |
+| Input read from cache (10 % price) | 2.05 | 22 % |
+| Output | 2.21 | 23 % |
+
+Konrad is 69 % (USD 6.53), Bob 30 %; the picker, gate, memory and finder
+roles together USD 0.15. Both main roles run on the standard tier
+(`claude-opus-5-5`, USD 4 / 20 per million input / output). Seven entry calls
+that hit the 120 s output window are recorded without a price; their real
+cost is unknown and not included.
+
+**Causes found.**
+
+1. *The tool list changes inside a job.* The worker-operation refs are an
+   `enum` inside the tool schemas; every read that lists another construction
+   or revision adds a ref, which changes the tools block, the first thing Claude
+   caches, so the next call is paid in full (bed steps 14 and 22: 95k and 77k
+   tokens, no cache, USD 0.68). The same per-job enum keeps each new Konrad
+   job from reading the tools and system prompt cached by the previous job
+   (each Konrad job start paid 46–60k tokens uncached, USD 0.19–0.32).
+2. *Calls that produce nothing.* Bed: 6 refused plan notes (JSON text, fixed
+   in #498), 4 version refusals, 3 human-text refusals, 13 construction reads,
+   two hand-overs. Entry: 7 output-window aborts (a new wall is one call too
+   large for 120 s; the sketch covers only existing constructions), 2
+   concept refusals.
+3. *Context per call.* Konrad sends 48–117k tokens per call; each step adds
+   5–15k new tokens (read results), paid uncached once and cached afterwards.
+
+### Proposals (owner decision)
+
+1. **Server-bound versions** (better and cheaper): no revision numbers in
+   Konrad's tools. The server edits the current head and binds the current
+   selected target at save after the readiness check; a refusal names what is
+   not ready. Then the same for Bob's `expected_revision` tools, through the
+   existing handle pattern.
+2. **Stable tool schemas** (cheaper): validate operation refs on the server
+   and list the current refs in the tool result, not as an `enum` in the
+   schema; tools and system prompt then stay cached through a job and from one
+   Konrad job to the next.
+3. **New constructions in small steps** (better and cheaper): a sketch can
+   start a new construction; Konrad adds parts in small calls and saves once,
+   so no single answer has to fit 120 s.
+4. **Cheaper model for Konrad, tested** (cheaper, quality risk):
+   `claude-sonnet-5-5` is half the price per token; one bed and one entry turn
+   would show whether his geometry holds.
+
+<a id="lean-writes-2026-11-07"></a>
+### Built: proposals 1–3 — 2026-11-07
+
+Owner, 2026-11-07: "1. Ja 2. ja 3. Ja 4. Nej, kör opus för for now." Built and
+tested locally in #498; **not deployed, not applied, not owner-run.** New
+claimed jobs adopt the pins from publication `bob-lean-writes-v1`
+(`20261107100100_bob_lean_writes_catalog.sql`, after
+`20261107100000_construction_new_sketches.sql`); pinned manifests keep their
+behaviour. Konrad and Bob stay on `claude-opus-5-5`.
+
+1. **Server-bound target (`server_target_version 1`).** `save_construction_draft`,
+   `edit_construction_parts` and `change_construction_parameters` no longer
+   take `target_revision`, for Konrad or Bob. A save uses the current selected
+   target of its area. An edit whose construction is behind the current
+   target is bound to it on the server and retried once; the readiness check
+   still applies and its issues are returned. A changed measurement is named
+   as such instead of as a changed target. A sent `target_revision` is refused
+   as an unknown field. `commit_construction_sketch` is bound to the job's
+   construction like the part edits (`record_id` hidden, `source_ref`).
+2. **Stable tool schemas (`stable_tools_version 1`).** Operation reference
+   fields are a fixed pattern checked by the server, present whether or not
+   the job is bound; a refused reference returns the current ones. Konrad's
+   core tools and workpad come first in catalog focus order, with a Claude
+   cache point after them (three of four points: core tools, system, tail),
+   so a new Konrad job reads them from cache.
+3. **New constructions in parts (`construction_sketch_version 2`).**
+   `save_construction_draft` takes `mode: sketch | save`. Sketch calls under one
+   key are merged by id (definitions, parts, nodes, bindings, materials,
+   joints, roles; header fields and question lists from the latest call),
+   checked whole through the same save preparation, and stored in
+   `bob_private.construction_new_sketches` (same claim and cleanup rules as
+   the existing-construction sketches). `commit_construction_sketch` with
+   `new_key` saves it once as revision 1, with the target current at the
+   commit, and places it in its sub-build. A part cannot be removed from a new
+   sketch; discard and sketch again.
+
+Also in #498: a plan note sent as JSON text is accepted, and a refused note
+names its bounds; project-edits now expects the `mode` field that
+`bob-write-check-v1` added (missed when design A was built).
+
+**Not covered yet.** Material, part and fastener revisions and measurement
+source revisions are still typed by Konrad, and about 30 of Bob's tools still
+take `expected_revision`; these are the second step of proposal 1.
+
+<a id="server-revisions-2026-11-07"></a>
+### Built: no revision typed by a model, stepwise sketches, refusal guard — 2026-11-07
+
+Owner, 2026-11-07: "fixar dom sista findingsen där också, Konrad och bob med
+versionsnummer", then an external review of #498 (priorities: stepwise
+construction, stop refusal loops, server-owned versions, correct tool
+contracts, stable cache, cost measurement, end-to-end scenarios). Built and
+tested locally in #498; not deployed or applied.
+
+- **Server revisions (`server_revisions_version 1`).** A code map
+  (`server-revisions.ts`) names each revision field of 31 write tools and the
+  record it belongs to. The model never sees the field; a value it sends is
+  dropped; the server fills it: catalog items, measurements, space
+  measurements and constructions from their current revision, the plan and
+  the selected target from their readers, other records from the newest
+  revision the model read in the request (kept with a paused job; an unread
+  record is refused with "read first"). A worker job's identity fields
+  (`derive_cad_material_requirement` data pins, `expected_revision`) are
+  dropped before its binding checks the call instead of refused (18 refusals
+  since 2026-10-25). Left as model input: reads that choose a historical
+  revision, `continue_construction_change.output_revision`,
+  `edit_project_room_layout.source_revisions` (no ids beside them) and tools
+  whose identities the worker binding already owns.
+- **Stepwise sketches.** While a new construction is sketched, a concept
+  component not built yet (`concept_part_missing`) or filled only partly
+  (`form_envelope_incomplete`, parts inside its envelope) is returned as
+  `pending`; geometry outside the concept is still refused; the save applies
+  the full rule.
+- **Refusal guard (`refusal_guard_version 1`).** An `invalid` call refused
+  earlier in the request does not run again unchanged (`repeated_refusal`);
+  the third refusal for one reason carries a note to change approach.
+  Refusals that depend on project state (read first, a changed source, a
+  missing plan) still run again.
+
+**Scenarios (owner review, before merge).** *Entrén* (stepwise from a
+multi-component concept): PGlite, a frame sketched rail by rail is pending,
+an outside rail and an early save are refused, the finished frame saves once
+on the current target. *Fellopp*: a repeated refused call is not run, the
+third refusal carries the note, state-dependent refusals still run, a paused
+job keeps both memories. *Våningssäng 2* (change a detail, save, updated
+drawing) needs a live turn after publication.
+
+**Cost measurement.** Aborted calls are in the ledger with their input
+tokens and no price (unknown, not zero). The turn budget counts only priced
+calls, so it undercounts aborts; no spending stop is set in the live catalog
+(`turn_usd_stop` empty, `work_allowance_version` 1).
+
+**Review of #498 (2026-11-07), two corrections.** (1) The tools sent to the
+model are rebuilt from the catalog by name just before each model call
+(`applyCatalogModelOptions`), so removing the revision fields from the
+session's list did not reach the model; they are now removed in that rebuild
+too (and in Bob's tool sheets), tested down to the Claude request body for
+`save_project_measurement` and `edit_construction_parts`. (2) Konrad's plan
+gate refuses inside the work loop, outside the session's refusal guard; it
+now counts its own refusals and the third asks for a plan in the exact note
+shape, tested through the real work loop. Remaining before merge: a live
+Våningssäng 2 turn to measure what Bob saves, how many calls are refused and
+what the turn costs; aborted Claude calls make the recorded total a lower
+bound.
