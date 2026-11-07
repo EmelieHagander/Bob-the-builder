@@ -87,6 +87,15 @@ try {
           storeCompletedTurn(body, response)
           return respond({ json: response })
         }
+        if (body.message === 'Dropped hammer fixture') {
+          // A recovered turn: the whole answer is a server notice, marked for the chat.
+          const notice='Det normala svaret kunde inte slutföras. Kvittona återställdes utan att ändringarna gjordes om.\n\nVerifierade sparade ändringar\n• Mockup v5'
+          const response=success(body.projectId,notice)
+          response.evidence={...response.evidence,sources:[],writes:[{projectId:body.projectId,dataset:'tasks',recordId:'10000000-0000-4000-8000-000000000002',label:'Measure the window',operation:'created',savedAt:'2026-11-06T22:00:00Z'}],
+            notices:[{kind:'failed',code:'recovered',text:notice}]}
+          storeCompletedTurn(body,response)
+          return respond({json:response})
+        }
         if (body.message === 'Inspect project photo') {
           const response=success(body.projectId,'Project photo inspected.')
           response.evidence.sources=[{projectId:body.projectId,dataset:'image_pixels',recordId:'10000000-0000-4000-8000-000000000001',label:'Bild öppnad: Fönsteranslutning',retrievedAt:'2026-09-20T12:00:00Z',updatedAt:'2026-09-20T11:00:00Z',truth:'unknown'}]
@@ -305,12 +314,11 @@ try {
     await send('Which boards?')
     await drawer.getByText('Answer for Porch A', { exact: true }).waitFor()
     assert.equal(requests.at(-1).projectId, 'A')
-    await drawer.locator('.bob-message summary').click()
-    await drawer.getByText('Bob’s assessment', { exact: true }).waitFor()
-    await drawer.getByText('Stored project information; measurements and specifications are not verified.', { exact: true }).waitFor()
-    await drawer.getByText('Some results were limited or unavailable.', { exact: true }).waitFor()
-    await drawer.getByText('Boards for Porch A', { exact: true }).waitFor()
-    assert(await drawer.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Drawer must not overflow horizontally with long source ids')
+    // Sources stay in the stored answer for debugging; the chat shows the reply only.
+    for (const text of ['Bob’s assessment', 'Boards for Porch A', 'Some results were limited or unavailable.'])
+      assert.equal(await drawer.getByText(text, { exact: true }).count(), 0, `${text} stays out of chat`)
+    assert.equal(await drawer.locator('.bob-message summary').count(), 0, 'No source details under the answer')
+    assert(await drawer.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Drawer must not overflow horizontally')
     for (const name of ['Close Ask bob', 'Send']) {
       const box = await drawer.getByRole('button', { name, exact: true }).boundingBox()
       assert(box && box.width >= 44 && box.height >= 44 && box.x >= 0 && box.x + box.width <= viewport.width && box.y >= 0 && box.y + box.height <= viewport.height, `${name} must be reachable with a 44px target`)
@@ -341,7 +349,7 @@ try {
         assert.equal(requests.length, beforeDismiss, 'Dismissing a local retry must not call the backend')
       }
       assert.equal(await drawer.getByText('WRONG PROJECT ANSWER', { exact: true }).count(), 0)
-      assert.equal(await drawer.locator('.bob-message summary').count(), 1, 'Failure must not introduce source evidence')
+      assert.equal(await drawer.locator('.bob-message summary').count(), 0, 'Failure must not introduce source details')
     }
     responseMode = 'success'
     await send('Slow question')
@@ -359,7 +367,7 @@ try {
     drawer = await switchProject('A')
     await drawer.getByText('Answer for Porch A', { exact: true }).waitFor()
     assert.equal(await drawer.getByRole('textbox', { name: 'Question for bob' }).inputValue(), '')
-    assert.equal(await drawer.locator('.bob-message summary').count(), 1, 'Project A restores its own server-synchronised source disclosure')
+    assert.equal(await drawer.locator('.bob-message summary').count(), 0, 'Restored answers carry no source details in chat')
     assert.equal(await drawer.getByText('Answer for Porch B', { exact: true }).count(), 0, 'Project B history must not leak into project A')
     const lateResponse = page.waitForResponse(response => response.url() === `${api}/functions/v1/ask-bob` && response.request().postDataJSON().message === 'Slow question')
     slow.resolve()
@@ -371,7 +379,7 @@ try {
     drawer = await openBob('A')
     await drawer.getByText('Answer for Porch A', { exact: true }).waitFor()
     await drawer.getByText('OLD DELAYED ANSWER', { exact: true }).waitFor()
-    assert.equal(await drawer.locator('.bob-message summary').count(), 2, 'Reload restores the completed server transcript with evidence')
+    assert.equal(await drawer.locator('.bob-message summary').count(), 0, 'Reload restores the transcript without source details')
     assert.equal(await drawer.getByText('Answer for Porch B', { exact: true }).count(), 0, 'Reload keeps project histories isolated')
 
     await send('Wrong receipt')
@@ -422,18 +430,24 @@ try {
     await drawer.getByText('Saved chosen plan once.', { exact: true }).waitFor()
 
     // Production source disclosure and persistence; HTTP fixture, not vision proof.
+    await send('Dropped hammer fixture')
+    await drawer.getByText('Bob dropped the hammer. Only this was saved: Measure the window.',{exact:true}).waitFor()
+    assert.equal(await drawer.getByText(/Kvittona återställdes/).count(),0,'The stored notice text stays out of chat')
+    await page.reload();drawer=await openBob('A')
+    await drawer.getByText('Bob dropped the hammer. Only this was saved: Measure the window.',{exact:true}).waitFor()
+    await settleVisual(page)
+    await page.screenshot({path:`test-results/ask-bob-dropped-hammer-${viewport.width}.png`,fullPage:true})
     await send('Inspect project photo')
     await drawer.getByText('Project photo inspected.',{exact:true}).waitFor()
-    await drawer.locator('details > summary').last().click()
-    await drawer.getByText('Bild öppnad: Fönsteranslutning',{exact:true}).waitFor()
-    await drawer.getByText('Bild öppnad: Fönsteranslutning',{exact:true}).scrollIntoViewIfNeeded()
-    assert(await drawer.evaluate(node=>node.scrollWidth<=node.clientWidth+1),'Image evidence must fit the phone drawer')
+    // The photo the answer is about is shown; its source record stays in stored evidence.
+    await drawer.getByRole('button',{name:'Open image bob looked at 1'}).waitFor()
+    assert.equal(await drawer.getByText('Bild öppnad: Fönsteranslutning',{exact:true}).count(),0,'Source labels stay out of chat')
+    assert(await drawer.evaluate(node=>node.scrollWidth<=node.clientWidth+1),'Image answer must fit the phone drawer')
     await settleVisual(page)
     await page.screenshot({path:`test-results/ask-bob-images-${viewport.width}.png`,fullPage:true})
     await page.reload();drawer=await openBob('A')
     await drawer.getByText('Project photo inspected.',{exact:true}).waitFor()
-    await drawer.locator('details > summary').last().click()
-    await drawer.getByText('Bild öppnad: Fönsteranslutning',{exact:true}).waitFor()
+    await drawer.getByRole('button',{name:'Open image bob looked at 1'}).waitFor()
     drawer=await switchProject('B')
     assert.equal(await drawer.getByText('Project photo inspected.',{exact:true}).count(),0)
     drawer=await switchProject('A')

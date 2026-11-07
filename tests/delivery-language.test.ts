@@ -36,6 +36,8 @@ test('a failed transcript commit keeps Bob\'s reply and adds a notice localised 
    return response('La tâche est enregistrée.')
   },fail:async()=>{},commit:async()=>{throw new Error('transport')}})
  assert(result.ok);assert.match(result.answer,/^La tâche est enregistrée\.\n\n/);assert.match(result.answer,/conversation n’a pas été synchronisée/);assert.equal(languageCalls,1);assert.equal(receipts.length,1);assert(result.evidence.partial)
+ // The sync note is marked so the chat hides it; Bob's own reply stays visible.
+ assert.deepEqual(result.evidence.notices?.map(n=>[n.kind,n.code]),[['info','chat_unsynced']]);assert(result.answer.endsWith('\n\n'+result.evidence.notices![0].text))
 })
 test('recovery formats unversioned Tasks without misleading vnull labels', async () => {
  const format=createDeliveryLanguage({userId:'u',message:'Fortsätt.',hasAccess:async()=>true,

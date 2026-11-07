@@ -74,4 +74,7 @@ export function isBobAnswerEvidence(value: unknown, projectId: string): value is
     && (evidence.references === undefined || (Array.isArray(evidence.references) && evidence.references.length<=32
       && evidence.references.every(r=>r&&typeof r.id==='string'&&typeof r.title==='string'&&typeof r.version==='string'
         &&typeof r.reviewedAt==='string'&&Number.isFinite(Date.parse(r.reviewedAt))&&typeof r.url==='string'&&/^https:\/\//.test(r.url))))
+    && (evidence.notices === undefined || (Array.isArray(evidence.notices) && evidence.notices.length <= 8
+      && evidence.notices.every(n => n && ['failed', 'uncertain', 'info'].includes(n.kind) && typeof n.code === 'string' && typeof n.text === 'string'
+        && (n.missing === undefined || (Array.isArray(n.missing) && n.missing.every(m => typeof m === 'string'))))))
 }

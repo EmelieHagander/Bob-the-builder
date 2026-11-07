@@ -6,7 +6,7 @@ import {createCadAssistant as cad} from '../../supabase/functions/_shared/cad-as
 import {createPlanAssistant as plan} from '../../supabase/functions/_shared/plan-assistant.ts'
 import {prepareWorkingContext as context} from '../../supabase/functions/_shared/bob-working-context.ts'
 import {createDeliveryLanguage as language} from '../../supabase/functions/_shared/delivery-language.ts'
-import {drawingResumeReply as resume} from '../../supabase/functions/_shared/drawing-resume-reply.ts'
+import {drawingResumeReply as resume,drawingResumeDelivery as delivery} from '../../supabase/functions/_shared/drawing-resume-reply.ts'
 import {createProjectContext as images} from '../../supabase/functions/_shared/project-context/dispatcher.ts'
 import type {DesignReadiness} from '../../supabase/functions/_shared/project-design-intent.ts'
 export * from '../../supabase/functions/_shared/plan-assistant.ts'
@@ -45,4 +45,5 @@ export function createPlanAssistant(opts:Omit<Parameters<typeof plan>[0],'aiCata
 export function prepareWorkingContext(opts:Parameters<typeof context>[0]){return context({...opts,get deadline(){return opts.deadline},callModel:catalogCall(opts.callModel)})}
 export function createDeliveryLanguage(opts:Parameters<typeof language>[0]&{aiCatalog?:AiCatalogSession}){return language({...opts,callModel:catalogCall(opts.callModel,opts.aiCatalog??catalogFixture())})}
 export function drawingResumeReply(opts:Parameters<typeof resume>[0]){return resume({...opts,callModel:catalogCall(opts.callModel)})}
+export function drawingResumeDelivery(opts:Parameters<typeof delivery>[0]){return delivery({...opts,callModel:catalogCall(opts.callModel)})}
 export function createProjectContext(opts:Parameters<typeof images>[0]){return images({...opts,reviewInstruction:opts.reviewInstruction??DRAWING_REVIEW_INSTRUCTION,imageEvidenceInstruction:opts.imageEvidenceInstruction??catalogFixture().text('images.evidence-intro'),reviewLabel:opts.reviewLabel??catalogFixture().text('images.review-label')})}

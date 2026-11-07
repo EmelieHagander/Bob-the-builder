@@ -266,6 +266,22 @@ export async function getBobInbox(projectId: string): Promise<BobInbox | null> {
     return data && typeof data.threadId === 'string' && Number.isSafeInteger(data.latestSeq) && typeof data.unread === 'boolean' ? data : null
   })
 }
+/** Home lists every project, not only the active one: which have an unread Bob
+ * reply for this member. The RPC checks access per project; a failed check shows
+ * no mark rather than blocking the project list. */
+export async function getBobUnreadProjects(projectIds: string[]): Promise<Set<string>> {
+  const unread = new Set<string>()
+  if (!bobDb || !projectIds.length) return unread
+  const epoch = historyEpoch
+  const { data: auth } = await bobDb.auth.getSession()
+  const user = auth.session?.user
+  if (!user || user.email?.toLowerCase() === GUEST_EMAIL) return unread
+  await Promise.allSettled(projectIds.map(async projectId => {
+    const { data, error } = await bobDb!.rpc('bob_chat_inbox', { p_project: projectId }).abortSignal(AbortSignal.timeout(12000))
+    if (!error && data && data.unread === true) unread.add(projectId)
+  }))
+  return epoch === historyEpoch ? unread : new Set()
+}
 export async function markBobChatRead(projectId: string, threadId: string, seq: number): Promise<void> {
   if (!bobDb) return
   const { error } = await bobDb.rpc('bob_mark_chat_read', { p_project: projectId, p_thread: threadId, p_seq: seq })
