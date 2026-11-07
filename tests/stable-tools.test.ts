@@ -79,6 +79,20 @@ test('a focused job lists its core tools and workpad first, whatever the catalog
  assert.deepEqual(body.tools.map((t:any)=>!!t.cache_control),[false,false,false,true,false])
  const unpinned=await anthropicRequestBody({app:'bob',functionName:'structure-worker',messages:[{role:'user',content:'Bygg'}],tools:one.tools,cacheAfterTool:'update_workpad'} as any,ctx) as any
  assert(unpinned.tools.every((t:any)=>!t.cache_control),'only with the cache-point pin')
+ // Live 400, 2026-11-07 13:41: a compacted job also marks its job start and its
+ // settled compaction. Claude takes at most four points; the system point goes.
+ const compacted=await anthropicRequestBody({app:'bob',functionName:'structure-worker',tools:one.tools,promptCachePoints:1,cacheAfterTool:'update_workpad',messages:[
+  {role:'user',content:'Bygg',cacheBoundary:1},{role:'assistant',content:'Läser.'},{role:'user',content:'Sammanfattning',cacheBoundary:1},{role:'assistant',content:'Fortsätter.'},{role:'user',content:'Nästa'}]} as any,ctx) as any
+ const points=(compacted.cache_control?1:0)+compacted.system.filter((b:any)=>b.cache_control).length+compacted.tools.filter((t:any)=>t.cache_control).length
+  +compacted.messages.flatMap((m:any)=>m.content).filter((b:any)=>b.cache_control).length
+ assert.equal(points,4,'never more than four cache points')
+ assert.deepEqual(compacted.tools.map((t:any)=>!!t.cache_control),[false,false,false,true,false],'the core-tool point stays')
+ assert.deepEqual(compacted.messages.map((m:any)=>m.content.map((b:any)=>b.cache_control?1:0)),[[1],[0],[1],[0],[0]],'job start and compaction stay')
+ assert.equal(compacted.system[0].cache_control,undefined,'the system point is the one dropped')
+ // Without the tool point the four fit, and nothing is dropped.
+ const bob=await anthropicRequestBody({app:'bob',functionName:'ask-bob',tools:one.tools,promptCachePoints:1,messages:[
+  {role:'user',content:'Bygg',cacheBoundary:1},{role:'assistant',content:'Läser.'},{role:'user',content:'Sammanfattning',cacheBoundary:1}]} as any,ctx) as any
+ assert.deepEqual(bob.system[0].cache_control,{type:'ephemeral'})
 })
 
 test('saving a sketch names its construction by the job, never by a typed id; with no construction yet it is a new one',async()=>{
