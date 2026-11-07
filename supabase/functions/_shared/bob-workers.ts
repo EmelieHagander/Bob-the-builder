@@ -252,6 +252,11 @@ export async function runWorker(opts: {
     readBoundedReview?(receipt: Record<string, unknown>): Promise<Record<string, unknown>>
     /** v3: a checked piece ends this hand-over for natural visual review. */
     pauseForDesignReview?: boolean
+    /** Owner decision 2026-11-07 (workerGatesVersion 1): an incomplete piece
+     * readback, check or form scope, and a rejected piece write, are facts in
+     * the tool result that Konrad acts on in the same job, not the end of it.
+     * Since piece progress v2–v4 went live, 1 of 33 hand-overs ended ok. */
+    gatesAsFacts?: boolean
   }
   /** Pinned only for new claimed structure jobs with durable workpads. A fresh
    * chain is allowed after a persisted note and an exact saved-record readback. */
@@ -350,7 +355,7 @@ export async function runWorker(opts: {
     if (!await opts.hasAccess()) throw new Error('project_denied')
     return finish(terminalResult(restored.terminal))
   }
-  if (restored && opts.pieceProgress?.readBoundedReview) {
+  if (restored && opts.pieceProgress?.readBoundedReview && !opts.pieceProgress.gatesAsFacts) {
     const rejected = calls.findLast(c => CONSTRUCTION_PIECE_WRITES.has(c.tool) && c.status === 'conflict')
     if (rejected) {
       if (!await opts.hasAccess()) throw new Error('project_denied')
@@ -428,7 +433,7 @@ export async function runWorker(opts: {
       // be repaired by changing unrelated parts or reading forever in this
       // worker chain. Return to Bob so the current Plan/source is reconciled.
       // Older worker contracts without a bounded review stay unchanged.
-      if (opts.pieceProgress?.readBoundedReview && CONSTRUCTION_PIECE_WRITES.has(name) && status === 'conflict')
+      if (opts.pieceProgress?.readBoundedReview && !opts.pieceProgress.gatesAsFacts && CONSTRUCTION_PIECE_WRITES.has(name) && status === 'conflict')
         rejectedBoundedPiece = name
       calls.push({ tool: NAME.test(name) ? name : 'invalid_name', status })
       // A check stores its result too, so it is reported (and read back) like a save.
@@ -519,6 +524,13 @@ export async function runWorker(opts: {
           incompletePiece = { receipt, reason: pieceEvidence?.status === 'form_scoped'
             ? 'saved_form_scope_unbounded' : 'saved_form_evidence_unavailable' }
         else if (localCheck && localCheck.status !== 'checked') incompletePiece = { receipt, reason: 'saved_local_check_incomplete' }
+        // The same finding goes to Konrad as a fact; he decides whether to
+        // correct, re-read or report back. The receipt still reaches Bob.
+        if (incompletePiece && opts.pieceProgress.gatesAsFacts) {
+          result = { ...result, piece_open: { reason: incompletePiece.reason, saved: true, approval_not_implied: true,
+            note: 'The piece is saved, but this verification is open. Correct it, re-read it, or report it to Bob; do not repeat the same change.' } }
+          incompletePiece = null
+        }
       }
       if (name === 'update_workpad' && status === 'noted' && result?.unchanged !== true
         && renewal.savedReceiptIndex !== null && Number.isSafeInteger(result?.revision))

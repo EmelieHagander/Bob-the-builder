@@ -706,6 +706,13 @@ for(const migration of migrations){
   seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-image-describer-v1'}})
   versions.set(addition.key,1)
  }
+ // Owner decision 2026-11-07: worker gates (chat answer is the review, gate facts in-job, identical-request refusal).
+ const workerGates=source.match(/\$worker_gates_contract\$([\s\S]+?)\$worker_gates_contract\$/)
+ if(workerGates){
+  const contract=seed.find(row=>row.key==='agent-contract.ask-bob')
+  if(contract.metadata.worker_focus_version!==1||contract.metadata.worker_gates_version!==undefined)throw new Error('worker_gates_contract_unexpected')
+  publishAs(contract,'bob-worker-gates-v1');contract.metadata={...contract.metadata,...JSON.parse(workerGates[1])};versions.set(contract.key,versions.get(contract.key)!+1)
+ }
  // Owner decision 2026-11-06 (B): Konrad's focus and plan gate, Bob's picker up to eight.
  const toolFocus=source.match(/\$tool_focus_definition\$([\s\S]+?)\$tool_focus_definition\$/)
  if(toolFocus){

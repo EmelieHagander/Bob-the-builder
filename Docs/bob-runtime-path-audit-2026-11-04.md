@@ -2132,3 +2132,73 @@ job ends and Bob tries the same wall again. That is what the owner saw.
    metric and a sunset; a new steering rule is published only with a
    measurement (CLAUDE.md: inspect tools, context, execution and results
    before adding behavioural rules).
+
+<a id="worker-gates-2026-11-07"></a>
+### Decisions 1–3 built: the chat answer is the review, gate facts in the job, identical-request refusal — 2026-11-07
+
+Owner decision 2026-11-07 ("Ja bygg 1-3"), from the
+[locked-paths inventory](#locked-paths-2026-11-07).
+
+**Owner turns the same morning (published A and B, before 1–3).** Bed
+05:27–05:31 UTC (run `c85ddb10`, USD 1.46, 4 saved): Konrad got 14 tools
+instead of 25, wrote his plan first, and the cache held across compaction
+(Konrad cache 80 %, Bob 89 %); his part edit was refused with
+`construction_source_refresh_blocked`, the job ended `needs_verification`,
+and Bob's two further hand-overs were refused at once
+(`construction_piece_blocked_earlier_this_turn`). Bed again 05:47–05:50 (run
+`5294d293`, USD 1.27): the same refusal and the same lock; Bob told the
+owner "Sedan spärrade systemet alla ändringar av konstruktionen resten av
+omgången". The bed solution reads `ready` at target 17 when read as the
+owner afterwards, so the refusal concerned the revision or form scope Konrad
+sent; its issues are not logged. Entry 05:28– (run `68e22a5e`, still running
+at 05:51): Konrad's step 5 was cut at 120 s as `model_output_window`, the
+next step with the note succeeded and read 90,896 cached tokens; compaction
+steps read the fixed points (62,526 and 82,833 instead of 0); Bob then had
+five `compact_design_intent_required` and two `edit_path_unsupported`
+refusals on `edit_project_record`.
+
+**Correction (source; not yet published).**
+
+- *Pin.* `agent-contract.ask-bob` gets `worker_gates_version: 1`
+  (`20261107070100_bob_worker_gates_catalog.sql`, publication
+  `bob-worker-gates-v1`); new checkpointed, claimed jobs with `workpad_version`
+  1 pin `workerGatesVersion: 1`. Older jobs and manifests change nothing.
+- *1, the chat answer is the review.* Under the pin Konrad is not stopped
+  after every saved piece (`pauseForDesignReview` is not passed); Bob shows
+  the saved result and the owner answers in chat, as decided 2026-10-27. The
+  database facade hold existed only for "Bygga liten lada";
+  `20261107070000_retire_lada_facade_piece_policy.sql` removes that
+  project's piece policy, its four facade envelopes and its one open attempt
+  (revision 5, front, `awaiting_review` since 2026-11-04), with exact-state
+  guards and the removed values recorded in the file. The existing trigger
+  then returns early and the progress read answers `not_configured`, as for
+  every other project. No construction, solution, plan, task or feedback row
+  changes.
+- *2, gate findings are facts.* Under the pin an open piece verification
+  (readback, check, form scope or evidence, local check) is added to the
+  tool result as `piece_open {reason, saved: true, approval_not_implied:
+  true, note}` and Konrad continues; a rejected piece write is returned to
+  him as its normal `conflict` result instead of ending the job, also after a
+  resume. Every receipt still reaches Bob. A stopped hand-over
+  (`needs_verification`, `awaiting_design_review`, `unavailable`,
+  `not_started`) now logs its reason as the rejection code in
+  `bob.execution_events` (telemetry only, always on).
+- *3, identical request only.* Under the pin the per-turn latches
+  (`failed_earlier_this_turn`, `construction_piece_blocked_earlier_this_turn`)
+  are keyed by the worker and an FNV-1a fingerprint of Bob's request
+  (`structure_r_<16 hex>`), so Bob may start a new job after changing the
+  source or the request; the identical request is still refused without a
+  model call.
+- *Tests.* `bob-worker-piece-progress`: an open form scope is a fact and
+  Konrad continues with both receipts; a rejected v4 write is returned to
+  him, also on resume. `bob-worker-checkpoint`: the identical failed request
+  is refused, a changed one dispatches a second Konrad job, the latch is the
+  fingerprinted key. `bob-worker-focus`: the pin is published; the
+  fingerprint is stable and differs for changed text or findings.
+
+**Publication note.** `main` also carries #490 (another session; chat
+notices) with Edge changes in `ask-openai.ts`, `delivery-language.ts`,
+`drawing-resume-reply.ts`, `project-turn.ts` and an unapplied migration
+`20261106233000_bob_failure_notice_marker.sql`. Publishing the runtimes from
+`main` publishes those changes too; the owner decides whether #490's
+migration is applied in the same publication.

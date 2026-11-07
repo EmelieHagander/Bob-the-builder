@@ -180,6 +180,18 @@ export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], 
     pending_drawing_requests: Array.isArray(drawingRequests) ? drawingRequests.length : 0, always_loaded: core }, candidates, deadline, limit)
 }
 
+const WORKER_STOPS = new Set(['needs_verification', 'awaiting_design_review', 'unavailable', 'not_started'])
+
+/** A short, stable fingerprint of one hand-over (FNV-1a, 64 bit), so a failed
+ * or blocked request is refused again only when Bob repeats it unchanged. */
+export function requestFingerprint(job: { job: string; findings: string | null }): string {
+  let hash = 0xcbf29ce484222325n
+  for (const byte of new TextEncoder().encode(JSON.stringify([job.job, job.findings]))) {
+    hash ^= BigInt(byte); hash = (hash * 0x100000001b3n) & 0xffffffffffffffffn
+  }
+  return hash.toString(16).padStart(16, '0')
+}
+
 /** Owner decision 2026-11-06 (worker focus): the same picker names, from Bob's
  * request to a worker, which of the worker's optional tools the job needs,
  * beside its core tools. The worker then keeps that list for the whole job. */
@@ -335,6 +347,11 @@ export type ProjectAnswerOptions = {
   workerPieceProgress?: boolean;
   /** v3: finish a checked piece at the owner-visible review boundary. */
   workerDesignReview?: boolean;
+  /** Owner decision 2026-11-07 (workerGatesVersion 1): the owner's chat answer is
+   * the review, so no stop after every piece; open piece verifications reach
+   * Konrad as facts in the same job; a failed or blocked hand-over refuses only
+   * the identical request this turn. */
+  workerGates?: boolean;
   /** New v2 jobs: caller-authorized, code-only reads of the approved Plan and
    * exact Construction revisions, not a second planner or worker tool. */
   workerFormPiece?: {
@@ -545,11 +562,14 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       // A provider failure already exhausted the journal's bounded replay.
       // Bob may report the failure, but not start an equally costly fresh chain
       // for the same specialist until the owner's next message starts a new turn.
-      if (opts.workerFormPiece && key === 'structure' && failedWorkers.has('structure_piece'))
+      // With worker gates (owner decision 2026-11-07) only the identical request
+      // is refused: after Bob changed the source or the request, a new job may start.
+      const failedKey = (base: string) => opts.workerGates ? base + '_r_' + requestFingerprint(job) : base
+      if (opts.workerFormPiece && key === 'structure' && failedWorkers.has(failedKey('structure_piece')))
         return { status: 'needs_verification', worker: worker.role.replace(/^role\./, ''),
           reason: 'construction_piece_blocked_earlier_this_turn',
           note: 'A canonical bounded-construction write was already rejected in this turn. Do not spend another specialist chain on the same blocked geometry. Keep the saved revision unchanged; report the blocker and allow a new owner turn after the source or implementation is corrected.', calls: [] }
-      if (failedWorkers.has(key)) return { status: 'unavailable', worker: worker.role.replace(/^role\./, ''), reason: 'failed_earlier_this_turn', calls: [] }
+      if (failedWorkers.has(failedKey(key))) return { status: 'unavailable', worker: worker.role.replace(/^role\./, ''), reason: 'failed_earlier_this_turn', calls: [] }
       if(opts.workerOperations&&!resume&&workpadAgent){
         const drawing=opts.currentView?.status==='ok'?opts.currentView.focus.drawing:undefined
         const prepared=await opts.workerOperations.prepare(workpadAgent,drawingSources,drawing?{artifact_id:drawing.id,revision:drawing.revision}:undefined)
@@ -595,11 +615,11 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         ...(opts.workerFocus && worker.focus && workerPads ? { focus: { pick: (candidates: string[]) => pickWorkerTools(opts, job.job, worker.focus!.core, candidates, deadline, worker.focus!.optional_limit) } } : {}),
         ...(opts.workerPlan && workerPads ? { planGate: true } : {}),
         ...(opts.workerPieceProgress && key === 'structure' && workerPads && reportReadback && worker.knowledge
-          ? { pieceProgress: { ...(opts.continuedWork?{unmappedReview:true}:{}), readSaved: async (receipt: Record<string, unknown>) => {
+          ? { pieceProgress: { ...(opts.continuedWork?{unmappedReview:true}:{}), ...(opts.workerGates ? { gatesAsFacts: true } : {}), readSaved: async (receipt: Record<string, unknown>) => {
             const read = readbackReads([receipt])[0]
             if (!read || !('tool' in read) || read.label !== 'construction') return { status: 'unavailable' }
             return readSavedRecord(read)
-          }, ...(opts.workerDesignReview ? { pauseForDesignReview: true } : {}), ...(opts.workerFormPiece ? { inspectSaved: async (receipt: Record<string, unknown>, toolArgs: unknown) => {
+          }, ...(opts.workerDesignReview && !opts.workerGates ? { pauseForDesignReview: true } : {}), ...(opts.workerFormPiece ? { inspectSaved: async (receipt: Record<string, unknown>, toolArgs: unknown) => {
             const id = typeof receipt.artifact_id === 'string' ? receipt.artifact_id : receipt.record_id
             const revision = receipt.revision
             if (typeof id !== 'string' || !Number.isSafeInteger(revision) || Number(revision) < 1)
@@ -683,9 +703,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       // canonical geometry conflict, but Bob handed the same blocked work back
       // twice more in one turn (three paid chains, no new revision). Use the
       // existing persisted per-turn failed-worker marker for this v4 boundary.
-      if (report.status === 'unavailable') failedWorkers.add(key)
+      if (report.status === 'unavailable') failedWorkers.add(failedKey(key))
       if (opts.workerFormPiece && key === 'structure' && report.status === 'needs_verification'
-        && report.reason === 'construction_piece_write_conflict') failedWorkers.add('structure_piece')
+        && report.reason === 'construction_piece_write_conflict') failedWorkers.add(failedKey('structure_piece'))
       return report
     } }))
   const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: turnPreload,
@@ -1025,7 +1045,11 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           : completionAware && typeof result?.validation?.code === 'string' ? result.validation.code : undefined
         try { opts.onTool?.({ name: toolName, status: String(result?.status ?? 'returned'), step: step + 1, index, ms: Date.now() - began,
           ...(result?.diagnostics?{diagnostics:result.diagnostics}:{}),
-          ...(validationCode !== undefined ? { validation_code: validationCode } : {}), ...(rejection ? { rejection } : {}) }) } catch { /* diagnostics only */ }
+          ...(validationCode !== undefined ? { validation_code: validationCode } : {}), ...(rejection ? { rejection } : {}),
+          // A worker hand-over that stopped says why in the telemetry too (owner decision 2026-11-07):
+          // 11 needs_verification since 2026-11-02 could not be told apart afterwards.
+          ...(!rejection && WORKER_STOPS.has(String(result?.status)) && typeof result?.reason === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(result.reason)
+            ? { rejection: { code: result.reason, fields: [] } } : {}) }) } catch { /* diagnostics only */ }
         // Cache hits are worker-local telemetry. Their loss on resume must not
         // change model/journal bytes for the same exact source result.
         if (['work_read','work_change','work_check'].includes(result?.diagnostics?.operation)) {
