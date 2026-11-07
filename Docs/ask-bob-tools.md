@@ -288,8 +288,8 @@ tokens, and every box construction was glue only or screws only by chance.
 Pinned manifests keep the former schemas, rule fastener and lookups.
 
 <a id="konrad-lean-writing"></a>
-**Konrad writes the construction, code writes what follows — built 2026-11-07,
-not yet published** (`tools.save_construction_draft`
+**Konrad writes the construction, code writes what follows — published
+2026-11-07 ([#502](bob-runtime-path-audit-2026-11-04.md#publication-502-2026-11-07))** (`tools.save_construction_draft`
 `lean_construction_version` 1, owner: "Kör B"; needs `default_zero_version` 1,
 `joint_fastener_version` 2, the FORM refinement and both sketch stores).
 Entry turn 2026-11-07: an 11-part wall was 26,590 characters Konrad typed in
