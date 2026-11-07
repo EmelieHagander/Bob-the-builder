@@ -253,7 +253,7 @@ export function createBobToolSession(opts: { continuedWork?:boolean;
       const {role,operations}=opts.workerOperation,name=def.spec.function.name
       return shelved({...def,execute:async(raw:unknown)=>{
         const prepared=await operations.before(role,name,raw)
-        if(prepared.status!=='ready'||!prepared.args)return prepared.result??{status:prepared.status,reason:prepared.reason,saved:false}
+        if(prepared.status!=='ready'||!prepared.args)return prepared.result??{status:prepared.status,reason:prepared.reason,saved:false,...(prepared.available_refs?{available_refs:prepared.available_refs}:{})}
         return operations.observe(role,name,prepared.args,await def.execute(prepared.args))
       }})
     }

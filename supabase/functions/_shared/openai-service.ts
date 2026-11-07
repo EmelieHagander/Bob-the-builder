@@ -174,6 +174,10 @@ export interface OpenAIServiceOptions {
    * caller flags with `cacheBoundary`, beside the automatic one at the end.
    * OpenAI matches prefixes itself and ignores both. */
   promptCachePoints?: 1;
+  /** Claude only, with promptCachePoints: a fixed cache point on this tool's
+   * definition. A worker's core tools come first and are the same in every
+   * job, so the next job reads them from cache (stable_tools_version 1). */
+  cacheAfterTool?: string;
   catalogToolParameters?: Record<string, Record<string, unknown>>;
   maxOutputTokens?: number;
   /** Explicit per-call ceiling for bounded internal routing. Does not alter app settings. */
