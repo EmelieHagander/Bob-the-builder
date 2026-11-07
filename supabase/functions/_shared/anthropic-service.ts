@@ -269,7 +269,27 @@ export async function anthropicRequestBody(options: OpenAIServiceOptions, ctx: A
     outputConfig.format = { type: 'json_schema', schema: strictSchema(options.schema, true) }
   }
   if (Object.keys(outputConfig).length) body.output_config = outputConfig
+  capCachePoints(body)
   return body
+}
+
+const MAX_CACHE_POINTS = 4
+
+// Claude refuses a request with more than four cache points (live 400,
+// 2026-11-07 13:41: a compacted Konrad job sent system, core tool, job start,
+// settled compaction and the automatic tail). Tools and system stay the same
+// within a job, so the job-start point already covers the system prompt: drop
+// that one first, then the earliest message points.
+function capCachePoints(body: Json): void {
+  const marked = (blocks: unknown) => Array.isArray(blocks) ? (blocks as Block[]).filter(b => b.cache_control) : []
+  const messages = (body.messages as Array<{ content: Block[] }>).flatMap(m => marked(m.content))
+  const system = marked(body.system)
+  let excess = (body.cache_control ? 1 : 0) + system.length + marked(body.tools).length + messages.length - MAX_CACHE_POINTS
+  for (const block of [...(messages.length ? system : []), ...messages]) {
+    if (excess <= 0) break
+    delete block.cache_control
+    excess--
+  }
 }
 
 /** Collect one streamed Messages response into the final message object. */
