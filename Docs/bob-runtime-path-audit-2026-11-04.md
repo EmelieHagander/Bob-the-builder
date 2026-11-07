@@ -3010,3 +3010,27 @@ Remaining: the owner's Entrén and Våningssäng 2 turns, read back for
 characters and tokens per Konrad write, answer time against the 120 s window,
 refusals by reason (and whether kept), joints written by rules, mapping
 completions, and cost per role including `streamed_output_estimate` rows.
+
+<a id="entry-after-502-2026-11-07"></a>
+#### First owner turn after #502: Entrén stopped — 2026-11-07, 19:46–20:00 UTC
+
+Job `016d8a42` failed after 31 claims with `continuation_changed` at
+`workpad:load:5` (log 20:00:06). Konrad had worked normally until then: edits,
+sketches and a committed sketch saved; three edits refused as `invalid`.
+
+Cause (not in #502's code): the verified context renewal of Konrad's chain
+(`bob-workers.ts`) ran after the step was saved. At 19:59:42 its conditions held
+(input 110,269 tokens, a saved revision, a later workpad note), so it loaded the
+workpad (journal `workpad:load:5`, location `renewal:<step>`), did not renew,
+and the job yielded. The next claim resumed from the save made before that load,
+ran the next step and tried again: `workpad:load:5` with the next step's
+location met the recorded entry, and the journal stopped the turn. The attempt
+also depended on the clock (`Date.now() + 30 s < deadline`), so a replay could
+take another path. Any attempt that did not renew stopped the turn at the next
+eligible step.
+
+Fix: the attempt runs before the step's single save, so the save covers its
+journaled reads, and its condition no longer reads the clock (the journal yields
+when the segment runs short). `tests/bob-worker-renewal.test.ts` reproduces the
+stop on the published code and passes with the fix; a renewing attempt is saved
+with the fresh messages, no chain and one reset.

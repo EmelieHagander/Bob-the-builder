@@ -599,16 +599,21 @@ export async function runWorker(opts: {
       previous = undefined
       return finish(terminalResult(terminal))
     }
-    if (opts.progress) await opts.progress.save(structuredClone(opts.verifiedRenewal
-      ? { version: 2 as const, step, previous: previous ?? null, messages, calls, receipts, order, renewal, ...(planned ? { planned } : {}) }
-      : { version: 1 as const, step, previous, messages, calls, receipts, order, ...(planned ? { planned } : {}) }))
     // A new provider conversation must never inherit orphaned tool outputs or
     // unsaved geometry. Reset only after the last protocol batch was answered,
     // a later workpad note was saved, and an exact revision was read back.
+    // The attempt runs before this step is saved, so the saved place covers its
+    // journaled reads: a resumed job replays them, and a later step never meets
+    // an earlier attempt's reads at the same journal position. Its condition
+    // depends on nothing but the step, so a replay makes the same attempt; the
+    // journal itself yields when the segment runs short. (Entrén, 2026-11-07:
+    // an attempt after the save that did not renew was skipped on resume, and
+    // the next step's attempt stopped the turn with continuation_changed at
+    // workpad:load.)
     if (opts.verifiedRenewal && opts.progress && opts.releaseChain && opts.readback && opts.readKnowledge
       && opts.worker.role === 'role.structure-worker' && response.usage.input_tokens >= 105_000
       && renewal.resets < 2 && renewal.savedReceiptIndex !== null && renewal.notedRevision !== null
-      && step + 1 < opts.worker.max_steps && Date.now() + 30_000 < opts.deadline) {
+      && step + 1 < opts.worker.max_steps) {
       let replacement: Messages | null = null
       try {
         const note = await opts.verifiedRenewal.loadWorkpad(step)
@@ -645,13 +650,15 @@ export async function runWorker(opts: {
         const old = previous!
         previous = undefined; messages = replacement
         renewal.resets++; renewal.savedReceiptIndex = null; renewal.notedRevision = null
-        // The old step is checkpointed. Releasing its chain before saving the
-        // new position keeps checkpoints small; a failed save restores the
-        // previous persisted state and is not swallowed by the optional guard.
+        // Releasing the old chain before saving keeps the checkpoint small; a
+        // resume before the save replays this step and releases it again.
         opts.releaseChain(old)
-        await opts.progress.save(structuredClone({ version: 2 as const, step, previous: null, messages, calls, receipts, order, renewal }))
       }
     }
+    if (opts.progress) await opts.progress.save(structuredClone(opts.verifiedRenewal
+      ? { version: 2 as const, step, previous: previous ?? null, messages, calls, receipts, order, renewal, ...(planned ? { planned } : {}) }
+      // Without renewal the chain is never reset here, so previous is this step's response.
+      : { version: 1 as const, step, previous: previous as string, messages, calls, receipts, order, ...(planned ? { planned } : {}) }))
     // Only continuing work yields. Review holds, conflicts and final reports
     // above must reach Bob before any later specialist step can be scheduled.
     if (step + 1 < opts.worker.max_steps) opts.progress?.afterStep?.()
