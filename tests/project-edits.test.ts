@@ -192,7 +192,8 @@ test('published model contract has no database IDs, concurrency fields or quote;
   }
   const catalog=catalogFixture()
   const schema=catalog.tool('edit_project_record',{server_quote:true}).function.parameters
-  assert.deepEqual(Object.keys(schema.properties).sort(),['changes','edit_ref','reason'])
+  // bob-write-check-v1 (2026-11-07) added mode check|save; still no database ids or concurrency fields.
+  assert.deepEqual(Object.keys(schema.properties).sort(),['changes','edit_ref','mode','reason'])
   for(const name of ['record_id','area_id','expected_revision','expected_updated_at','request_quote'])assert.ok(!JSON.stringify(schema).includes('"'+name+'"'))
   const writer=createProjectWriter('A','Add panel',rpc,async()=>({data:[],error:null}),async()=>({data:{generation:2,receipts:[]},error:null}))
   const edits=createProjectEdits({projectId:'A',writer,hasAccess:async()=>true,read})

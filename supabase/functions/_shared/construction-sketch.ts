@@ -149,3 +149,56 @@ export function withConstructionSketch<T extends { type: 'function'; function: {
   return { ...spec, function: { ...spec.function, description: spec.function.description + CONSTRUCTION_SKETCH_NOTE,
     parameters: { ...p, required: [...p.required, 'mode'], properties: { ...p.properties, mode: { type: 'string', enum: ['sketch', 'save'] } } } } }
 }
+
+// Owner decision 2026-11-07 (construction_sketch_version 2): a new
+// construction can be built in a sketch too. Entry, 09:18-09:30: one new wall
+// was too large for Konrad to write within the 120 s answer window, seven
+// times. Each sketch call carries the next parts under the same key.
+export type NewConstructionSketch = { version: 1; kind: 'new'; key: string; save: Record<string, any>; part_count: number; notes: string[] }
+const byId = (prior: unknown, next: unknown, key: string): Record<string, any>[] => {
+  const out = Array.isArray(prior) ? structuredClone(prior) as Record<string, any>[] : []
+  for (const item of Array.isArray(next) ? next as Record<string, any>[] : []) {
+    const at = out.findIndex(x => x?.[key] === item?.[key])
+    if (at >= 0) out[at] = structuredClone(item); else out.push(structuredClone(item))
+  }
+  return out
+}
+/** The sketched save after one more call: header fields and lists of
+ * questions are the latest; parts, nodes, bindings, materials, joints and
+ * roles are merged by their ids, a later one replacing an earlier one. */
+export function mergeNewConstruction(prior: Record<string, any> | null, next: Record<string, any>): Record<string, any> {
+  if (!prior) return structuredClone(next)
+  const r0 = prior.recipe ?? {}, r1 = next.recipe ?? {}, p0 = prior.parameter_plan ?? {}, p1 = next.parameter_plan ?? {}
+  const recipe: Record<string, any> = { ...r0, ...r1, definitions: byId(r0.definitions, r1.definitions, 'id'), instances: byId(r0.instances, r1.instances, 'id') }
+  if (Array.isArray(r0.arrays) || Array.isArray(r1.arrays)) recipe.arrays = byId(r0.arrays, r1.arrays, 'id')
+  const policy = next.instance_policy ?? prior.instance_policy ?? null
+  return { ...prior, ...next, recipe,
+    parameter_plan: { ...p0, ...p1, frames: byId(p0.frames, p1.frames, 'id'), nodes: byId(p0.nodes, p1.nodes, 'id'), bindings: byId(p0.bindings, p1.bindings, 'path') },
+    materials: byId(prior.materials, next.materials, 'definition_id'), joints: byId(prior.joints, next.joints, 'id'),
+    instance_policy: policy && { ...policy, instances: byId(prior.instance_policy?.instances, next.instance_policy?.instances, 'instance_id') } }
+}
+export function parseNewSketch(value: unknown): NewConstructionSketch | null {
+  const s = value as NewConstructionSketch
+  if (!s || typeof s !== 'object' || s.version !== 1 || s.kind !== 'new' || typeof s.key !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(s.key)) return null
+  if (!s.save || typeof s.save !== 'object' || Array.isArray(s.save) || !Number.isSafeInteger(s.part_count) || !Array.isArray(s.notes) || s.notes.some(n => typeof n !== 'string')) return null
+  return s
+}
+export const CONSTRUCTION_NEW_SKETCH_NOTE = ' mode sketch builds a new construction in your sketch instead of saving it: send it in parts, every call with the same key, the current title, description, area and refinement, and the next parts; a definition, part, node, binding, material, joint or role with the same id replaces the earlier one. Each call is checked as a whole like a save and saves nothing. Save it once with commit_construction_sketch, new_key being that key. mode save saves at once.'
+/** save_construction_draft with mode sketch|save. */
+export function withNewConstructionSketch<T extends { type: 'function'; function: { name: string; description: string; parameters: any } }>(spec: T): T {
+  const p = spec.function.parameters
+  return { ...spec, function: { ...spec.function, description: spec.function.description + CONSTRUCTION_NEW_SKETCH_NOTE,
+    parameters: { ...p, required: [...p.required, 'mode'], properties: { ...p.properties, mode: { type: 'string', enum: ['sketch', 'save'] } } } } }
+}
+export const CONSTRUCTION_SKETCH_COMMIT_TOOL_V2 = { type: 'function' as const, function: {
+  name: 'commit_construction_sketch',
+  description: 'Save, read or discard your sketch of one construction. For a new construction new_key is the key its save_construction_draft sketch used; otherwise new_key is null. commit saves all sketched changes as one revision, a new construction as revision 1, through the same checks as a direct save, with the whole-model check of that revision. read shows what the sketch holds. discard drops it without saving. rebase moves a sketch of an existing construction onto its current saved revision when the construction changed after the sketch began, and checks it there. A sketch lasts for this request only.',
+  parameters: { type: 'object', additionalProperties: false, required: ['record_id', 'new_key', 'action', 'key', 'change_note', 'request_quote'], properties: {
+    record_id: { anyOf: [{ type: 'string', format: 'uuid' }, { type: 'null' }], description: 'The construction the sketch belongs to; null for a new construction.' },
+    new_key: { anyOf: [{ type: 'string', pattern: '^[A-Za-z0-9_-]{1,80}$' }, { type: 'null' }], description: 'For a new construction, the key of its sketch; otherwise null.' },
+    action: { type: 'string', enum: ['commit', 'read', 'discard', 'rebase'] },
+    key: CONSTRUCTION_SKETCH_COMMIT_TOOL.function.parameters.properties.key,
+    change_note: CONSTRUCTION_SKETCH_COMMIT_TOOL.function.parameters.properties.change_note,
+    request_quote: { type: 'string', minLength: 1, maxLength: 500 },
+  } },
+} }

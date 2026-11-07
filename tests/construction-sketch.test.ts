@@ -9,7 +9,7 @@ import {compileCadParameters} from '../supabase/functions/_shared/cad-parameters
 import {createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
 import {createProjectWriter} from '../supabase/functions/_shared/project-write.ts'
 import {createAiCatalogSession} from '../supabase/functions/_shared/ai-catalog.ts'
-import {CONSTRUCTION_SKETCH_COMMIT_TOOL,CONSTRUCTION_SKETCH_NOTE,baseKeysOf,composeSketchChanges,createConstructionSketchStore,parseSketch,sketchChangeCount,sketchSummary,
+import {CONSTRUCTION_SKETCH_COMMIT_TOOL_V2,CONSTRUCTION_NEW_SKETCH_NOTE,CONSTRUCTION_SKETCH_NOTE,baseKeysOf,composeSketchChanges,createConstructionSketchStore,parseSketch,sketchChangeCount,sketchSummary,
  type BaseKeys,type SketchChanges} from '../supabase/functions/_shared/construction-sketch.ts'
 
 // Owner decision 2026-11-07 (sketchbook, design B; "Ja kör på rek!"): Konrad
@@ -188,6 +188,63 @@ test('sketch, check and commit once against the database: one revision, one rece
   assert.equal((await plain.execute('commit_construction_sketch',commit('read'))).status,'invalid')
  })
 
+ // bob-lean-writes-v1: the server binds the current target; new constructions are sketched in parts.
+ const newStore=()=>createConstructionSketchStore(async(action,key,expected,sketch)=>{
+  try{return {data:await rpc(owner,'bob.construction_new_sketch',[...binding,action,key,expected,sketch===null?null:JSON.stringify(sketch)]),error:null}}
+  catch(e:any){return {data:null,error:{code:e.code}}}})
+ const lean=()=>createConstructionTools({projectId:project,message,writer:writer(),hasAccess:async()=>true,read:(_id,revision)=>read(revision),
+  readSources:async()=>({project:new Map(),physical:new Map()}),sketches:store(),newSketches:newStore(),serverTarget:true,constructionViews:true,coherentWork:true,
+  readCurrentTarget:async(area)=>(await rpc(owner,'bob.read_design_readiness',[project,area,null,'construction'])).target_revision??null,
+  readDesignReadiness:(target:number,purpose:any,area:string|null=null)=>rpc(owner,'bob.read_design_readiness',[project,area,target,purpose]),
+  readCatalog:(cid:string,revision:number)=>rpc(owner,'bob.catalog_read',[project,JSON.stringify({action:'read',id:cid,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}})]),
+  prepareEdit:async p=>{try{return await rpc(owner,'bob.prepare_construction_edit',[...binding,JSON.stringify(p)])}catch(e:any){return {status:e.code==='PT409'?'conflict':e.code==='42501'?'denied':'invalid',reason:e.message}}}})
+
+ await t.test('the server keeps a construction on the current selected target; no target revision is sent or accepted',async()=>{
+  const before=await read(),k=lean()
+  assert.equal(k.tools.find(s=>s.function.name==='edit_construction_parts')!.function.parameters.properties.target_revision,undefined)
+  // The owner reaffirms the selection: a newer target, and this construction is behind it.
+  const target=await rpc(owner,'bob.solution_command',[project,'select',solution,before.target_revision,JSON.stringify({solution_revision:1,reason:'Reaffirm the frame'})])
+  assert.equal((await read()).source_state,'changed')
+  const typed=await k.execute('edit_construction_parts',{...edit(drawer(9),{expected_revision:before.revision,mode:'save'}),target_revision:before.target_revision})
+  assert.equal(typed.status,'invalid','a model-supplied target is not a field')
+  const saved=await k.execute('edit_construction_parts',edit(drawer(9),{expected_revision:before.revision,mode:'save'}))
+  assert.equal(saved.status,'saved',JSON.stringify(saved)+JSON.stringify(await read()).slice(0,300))
+  const after=await read()
+  assert.equal(after.revision,before.revision+1);assert.equal(after.target_revision,target.revision);assert.equal(after.source_state,'current')
+ })
+
+ await t.test('a new construction is sketched in parts under one key, checked whole, and saved once as revision 1',async()=>{
+  const k=lean(),artifacts=async()=>Number((await pg.query('select count(*) n from bob.artifacts where project_id=$1',[project])).rows[0].n)
+  const before=await artifacts()
+  const part=(defs:any[],instances:any[],joints:any[]=[])=>{const r:any={contract_version:1,units:'mm',assembly_id:'shelf',definitions:defs,instances,views:['front']}
+   return {recipe:r,parameter_plan:parameterPlan(r),materials:defs.map((d:any)=>pin(d.id)),joints,
+    instance_policy:{version:1,instances:instances.map((i:any)=>({instance_id:i.id,role:'build_part',quantity_policy:'manufacture',reason:'Synthetic shelf part'}))}}}
+  const side={id:'side',primitive:'box',material_ref:null,x_mm:18,y_mm:80,z_mm:200},board={id:'board',primitive:'box',material_ref:null,x_mm:564,y_mm:80,z_mm:18}
+  const call=(p:any,extra:Record<string,unknown>={})=>({key:'shelf',title:'Shelf',description:'Synthetic shelf; no fabrication approval',area_id:null,change_note:'Next parts',
+   open_questions:['Hardware unchecked'],request_quote:message,mode:'sketch',...p,...extra})
+  const first=await k.execute('save_construction_draft',{...call(part([side],[{id:'left',definition_id:'side',placement:at(0)},{id:'right',definition_id:'side',placement:at(582)}])),record_id:null,expected_revision:0})
+  assert.equal(first.status,'sketched',JSON.stringify(first));assert.equal(first.part_count,2);assert.equal(first.check.status,'checked')
+  const second=await k.execute('save_construction_draft',{...call(part([board],[{id:'bottom',definition_id:'board',placement:at(18)}],
+   [{id:'leftJoint',method:'screwed_butt',first:{instance_id:'left',face:'x_max'},second:{instance_id:'bottom',face:'x_min'},reason:'Synthetic concept'}])),record_id:null,expected_revision:0})
+  assert.equal(second.status,'sketched',JSON.stringify(second));assert.equal(second.part_count,3)
+  assert.deepEqual(second.sketch.instances,['left','right','bottom'])
+  assert.equal(await artifacts(),before,'nothing saved while sketching')
+  const shown=await k.execute('commit_construction_sketch',{record_id:null,new_key:'shelf',action:'read',key:null,change_note:null,request_quote:message})
+  assert.equal(shown.status,'ok');assert.equal(shown.part_count,3);assert.equal(shown.notes.length,2)
+  const both=await k.execute('commit_construction_sketch',{record_id:id,new_key:'shelf',action:'commit',key:'c_both',change_note:'x',request_quote:message})
+  assert.equal(both.status,'invalid','either a construction or a new key')
+  const saved=await k.execute('commit_construction_sketch',{record_id:null,new_key:'shelf',action:'commit',key:'shelf_c',change_note:'A shelf in three parts',request_quote:message})
+  assert.equal(saved.status,'saved',JSON.stringify(saved));assert.equal(saved.receipt.revision,1);assert.equal(saved.sketch.status,'committed')
+  assert.equal(await artifacts(),before+1)
+  const made=await rpc(owner,'bob.read_construction_draft',[project,saved.receipt.recordId,null,null])
+  assert.deepEqual(made.recipe.instances.map((i:any)=>i.id),['left','right','bottom'])
+  assert.equal(made.target_revision,(await rpc(owner,'bob.read_design_readiness',[project,null,null,'construction'])).target_revision,'bound to the current target')
+  assert.equal(Number((await pg.query('select count(*) n from bob_private.construction_new_sketches where turn_id=$1',[turn])).rows[0].n),0)
+  // A sketch of an existing construction cannot start this way.
+  const existing=await k.execute('save_construction_draft',{...call(part([side],[{id:'x',definition_id:'side',placement:at(0)}])),record_id:id,expected_revision:(await read()).revision})
+  assert.equal(existing.reason,'sketch_existing_construction')
+ })
+
  await t.test('the database catalog and the fixture agree, and the published schemas are the ones code validates',async()=>{
   const manifest=await rpc(null,'shared.resolve_ai_catalog',['bob'],'service_role')
   const live=createAiCatalogSession({rpc:async()=>{throw new Error('Pinned')}},{app:'bob',manifest}),fixture=catalogFixture()
@@ -199,16 +256,22 @@ test('sketch, check and commit once against the database: one revision, one rece
   const added=(d:any)=>({entry:d.catalog.find((c:any)=>c.name==='commit_construction_sketch'),key:d.contract_keys.includes('tools.commit_construction_sketch'),
    shelf:d.shelves[5].tools.at(-1),tools:d.build_workers.structure.tools.at(-1),core:d.build_workers.structure.focus.core,flag:d.construction_sketch_version})
   assert.deepEqual(added(live.definition('bob.tools').definition),added(fixture.definition('bob.tools').definition))
-  assert.equal(live.definition('agent-contract.ask-bob').metadata.construction_sketch_version,1)
+  // bob-lean-writes-v1 (later the same day) moved the pins to version 2 and added server_target / stable_tools.
+  assert.deepEqual(['construction_sketch_version','server_target_version','stable_tools_version'].map(k=>live.definition('agent-contract.ask-bob').metadata[k]),[2,1,1])
   const published=fixture.definition('tools.commit_construction_sketch','tool_contract').definition as any
-  assert.deepEqual(published.parameters,CONSTRUCTION_SKETCH_COMMIT_TOOL.function.parameters)
-  assert.equal(published.description,CONSTRUCTION_SKETCH_COMMIT_TOOL.function.description)
+  assert.deepEqual(published.parameters,CONSTRUCTION_SKETCH_COMMIT_TOOL_V2.function.parameters)
+  assert.equal(published.description,CONSTRUCTION_SKETCH_COMMIT_TOOL_V2.function.description)
   const editTool=fixture.definition('tools.edit_construction_parts','tool_contract').definition as any
   assert(editTool.description.endsWith(CONSTRUCTION_SKETCH_NOTE));assert.deepEqual(editTool.parameters.properties.mode,{type:'string',enum:['sketch','save']})
-  // The production pins together: code validates exactly the published edit schema.
+  // The production pins together: code validates exactly the published edit, save and commit schemas.
   const production=createConstructionTools({projectId:project,message,writer:writer(),hasAccess:async()=>true,read:(_id,revision)=>read(revision),readSources:async()=>({project:new Map(),physical:new Map()}),
-   constructionViews:true,coherentWork:true,constructionText:true,constructionNotes:true,chosenJointFasteners:true,defaultZero:true,sketches:store()})
-  assert.deepEqual(production.tools.find(s=>s.function.name==='edit_construction_parts')!.function.parameters,editTool.parameters)
+   constructionViews:true,coherentWork:true,constructionText:true,constructionNotes:true,chosenJointFasteners:true,defaultZero:true,constructionRepeats:true,repeatStart:true,formRefinement:true,
+   placeIn:async()=>({status:'saved'}),serverTarget:true,sketches:store(),newSketches:store()})
+  for(const name of ['edit_construction_parts','save_construction_draft','commit_construction_sketch'])
+   assert.deepEqual(production.tools.find(s=>s.function.name===name)!.function.parameters,(fixture.definition('tools.'+name,'tool_contract').definition as any).parameters,name)
+  const save=fixture.definition('tools.save_construction_draft','tool_contract').definition as any
+  assert(save.description.endsWith(CONSTRUCTION_NEW_SKETCH_NOTE));assert.equal(save.parameters.properties.target_revision,undefined)
+  assert.equal(editTool.parameters.properties.target_revision,undefined)
   const box=fixture.definition('bob.tools','tool_contract').definition as any
   assert(box.build_workers.structure.focus.core.includes('commit_construction_sketch'));assert(box.shelves[5].tools.includes('commit_construction_sketch'))
   const policy=(await pg.query<any>(`select schema_version,active from bob.tool_catalog where name='commit_construction_sketch'`)).rows
