@@ -3034,3 +3034,21 @@ journaled reads, and its condition no longer reads the clock (the journal yields
 when the segment runs short). `tests/bob-worker-renewal.test.ts` reproduces the
 stop on the published code and passes with the fix; a renewing attempt is saved
 with the fresh messages, no chain and one reset.
+
+<a id="publication-503-2026-11-07"></a>
+#### Hosted publication of #503 (renewal fix) — 2026-11-07, 23:47 UTC
+
+Owner: "Publicera". #503 is merged at
+`ac6a0e46223f828a2fe4ed7419390b19deb065d7`; its tree
+`144c00971b22449de9cae40e6af1ed3817aa573d` equals the tested branch tree.
+Safety branch `save/bob-before-renewal-fix-2026-11-07` retains the previous
+published source `0518da400d9ec2da425b0122babb264beaa78a8b`. Zero active jobs
+before and after. No migration.
+
+| Consumer | Version | Files compared | JWT policy | ezbr SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 218 | 155 | Existing private job capability, JWT false | `859797e549f676bfa8c9b56f8e9f99ffb0ea8449bbf65e8b68e277215969a1f8` |
+| ask-bob | 250 | 157 | JWT true | `4caea91196081b05ba38a159d02f2244c06f724a7aade5dc8b989eae942c652d` |
+
+Returned sources match the merged checkout byte for byte except the known
+type-only `cad-intake.ts` erasure; both bundles contain the reordered renewal.
