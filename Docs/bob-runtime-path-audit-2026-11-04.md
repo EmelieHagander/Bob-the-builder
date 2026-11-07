@@ -2510,7 +2510,7 @@ worked), no construction saved. Konrad did not use the sketch in either turn.
 
 Konrad is 69 % (USD 6.53), Bob 30 %; the picker, gate, memory and finder
 roles together USD 0.15. Both main roles run on the standard tier
-(`claude-opus-5-5`, USD 4 / 20 per million input / output). Eight entry calls
+(`claude-opus-5-5`, USD 4 / 20 per million input / output). Seven entry calls
 that hit the 120 s output window are recorded without a price; their real
 cost is unknown and not included.
 
@@ -2525,7 +2525,7 @@ cost is unknown and not included.
    (each Konrad job start paid 46–60k tokens uncached, USD 0.19–0.32).
 2. *Calls that produce nothing.* Bed: 6 refused plan notes (JSON text, fixed
    in #498), 4 version refusals, 3 human-text refusals, 13 construction reads,
-   two hand-overs. Entry: 8 output-window aborts (a new wall is one call too
+   two hand-overs. Entry: 7 output-window aborts (a new wall is one call too
    large for 120 s; the sketch covers only existing constructions), 2
    concept refusals.
 3. *Context per call.* Konrad sends 48–117k tokens per call; each step adds
