@@ -220,7 +220,11 @@ load from his first step and are never picker candidates; box run 13 cost USD 0.
 ([record](foundation-verification.md#build-team-cost-2026-10-31)).
 
 **Konrad works in saved pieces — installed 2026-11-03; live-model acceptance pending**
-([deployment record](konrad-piece-progress-release-2026-11-03.md)). New claimed turns pinned
+([deployment record](konrad-piece-progress-release-2026-11-03.md)).
+*For constructions, superseded 2026-11-07 for jobs pinned to
+`construction_sketch_version` 1: Konrad builds in a private sketch and saves
+once per assignment ([sketchbook, §6](bob-sketchbook-design-2026-11-07.md#6-built-2026-11-07)).
+The one-save-per-batch and readback rules below still apply to that commit.* New claimed turns pinned
 to `worker_piece_progress_version` 1 keep Konrad's existing construction tools,
 save ledger, code check and workpad. His role now chooses one natural affected
 wall/opening or comparable workpiece at a time on the same existing Construction;

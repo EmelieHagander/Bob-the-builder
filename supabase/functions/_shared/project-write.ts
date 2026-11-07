@@ -118,7 +118,7 @@ const BUILDING_SCOPE_REASONS: Record<string, string> = {
 }
 const BUILDING_SCOPE_REFUSAL = /\b(?:building_denied|site_denied|building_not_linked|space_not_in_building|element_not_in_building|building_site_covered|building_household_follow)\b/
 export interface WriteResult {
-  status: 'saved' | 'invalid' | 'conflict' | 'denied' | 'unknown' | 'budget_exhausted'
+  status: 'saved' | 'invalid' | 'conflict' | 'denied' | 'unknown' | 'budget_exhausted' | 'checked' | 'unavailable'
   /** access: the database refused this record for this caller; the turn re-checks project access. */
   reason?: 'access' | string
   receipt?: WriteReadback
@@ -288,8 +288,11 @@ export function databaseRejectionReason(error: { code?: string | null; message?:
   if (named) return named
   return typeof error.code === 'string' && /^[0-9A-Z]{5}$/.test(error.code) ? 'db_' + error.code.toLowerCase() : undefined
 }
-export function createProjectWriter(projectId: string, userMessage: string, transport: WriteTransport, read: ReceiptTransport, settle: ReceiptTransport, options: { taskWorkDiagnostics?: boolean; unlimitedWork?: boolean; rejectionReasons?: boolean } = {}) {
-  let used = 0, invalidAttempts = 0
+export function createProjectWriter(projectId: string, userMessage: string, transport: WriteTransport, read: ReceiptTransport, settle: ReceiptTransport, options: { taskWorkDiagnostics?: boolean; unlimitedWork?: boolean; rejectionReasons?: boolean;
+  /** Owner decision 2026-11-07 (write_check_version 1): the same write run by the
+   * database in a rolled-back subtransaction; every check and trigger, nothing saved. */
+  checkTransport?: WriteTransport } = {}) {
+  let used = 0, invalidAttempts = 0, checks = 0
   let uncertain = false
   let settled = false
   const receipts: WriteReadback[] = []
@@ -309,6 +312,84 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
   }
   const remember = (r: WriteReadback) => rememberIn(receipts, seenReceipts, r)
   const rememberExecuted = (r: WriteReadback) => rememberIn(executedReceipts, seenExecutedReceipts, r)
+  /** One mapping from a database refusal to what the model is told, shared by
+   * a real write and its rolled-back check. Null: not a known refusal. */
+  const rejection = (payload: WritePayload, error: { code?: string; message?: string }): WriteResult | null => {
+    if (error.message?.includes('turn_not_claimed')) return { status: 'denied' }
+    if (payload.kind === 'form_feedback' && ['40001', '40P01', 'PT409'].includes(error.code ?? '')) return { status: 'conflict', message: 'The shown version, its sources or mandate changed. The old reply cannot accept the new model. Read model feedback and reconcile the version within the user response.' }
+    if (payload.kind === 'form_feedback' && error.code === '22023') return { status: 'invalid', message: 'Feedback needs the model actually shown in this turn and a consistent scoped interpretation of the whole response. A correction or uncertainty is not acceptance.' }
+    if (payload.kind === 'bound_solution' && ['40001','PT409'].includes(error.code ?? '')) return { status: 'conflict', message: 'No change made. The solution or selected direction changed after this read. Read the edit context again and reconsider the change; never create a replacement alternative.' }
+    if (payload.kind === 'bound_plan_link' && ['40001','40P01','PT409','23505'].includes(error.code ?? '')) return { status: 'conflict', message: 'No plan links changed. The plan, focus, Task or its links changed. Read plan link context again and apply only the intended change.' }
+    if (payload.kind === 'bound_work' && ['40001','40P01','PT409','23505'].includes(error.code ?? '')) return { status: 'conflict', message: 'No change made. The work record, scope or its relationships changed. Read work context again and apply only the intended delta; never create a replacement.' }
+    if (payload.kind === 'bound_building_scope') {
+      if (['40001','40P01','PT409','23505'].includes(error.code ?? '')) return { status: 'conflict', message: 'No building scope changed. The building, its rooms, Areas or links changed. Read building scope again and apply only the intended change.' }
+      // A refused building link is an answerable outcome, not a lost project.
+      const reason = BUILDING_SCOPE_REFUSAL.exec(error.message ?? '')?.[0]
+      if (reason) return { status: 'invalid', message: 'No building scope changed. ' + BUILDING_SCOPE_REASONS[reason] }
+    }
+    if (error.code === '42501') return { status: 'denied', reason: 'access' }
+    if (/\bform_refinement_unverified\b/.test(error.message ?? '')) return { status: 'invalid', message: 'No delivery or quantity saved. This construction is an unverified FORM checkpoint; keep its pending components and requirements visible.' }
+    if (['construction','construction_edit','construction_parameters','construction_roles'].includes(payload.kind) && /\b(invalid_form_refinement|form_instance_unmapped|form_instance_missing)\b/.test(error.message ?? '')) return { status: 'invalid', message: 'No construction changed. Read the saved FORM mapping and preserve all mapped instances. A complete save can explicitly replace the mapping; every instance must belong to one active selected concept component.' }
+    if (['construction','construction_roles','construction_consequence','operational','cut_plan'].includes(payload.kind) && /construction_instance_roles_required/.test(error.message ?? '')) return { status: 'invalid', message: 'No quantity or cut was saved. Read the exact construction and explicitly classify its saved instance IDs with change_construction_roles; historical roles remain unknown until recorded.' }
+    if (payload.kind === 'construction_roles' && /invalid_(?:instance_policy|construction_role)/.test(error.message ?? '')) return { status: 'invalid', message: 'No role change saved. Use distinct existing instance IDs and the matching role/quantity policy with an honest reason. Read the current construction before retrying.' }
+    if (payload.kind === 'construction_consequence' && error.code === 'PT409') return { status: 'conflict', message: 'Construction, affected output or commitments changed. Reopen read_construction_changes and the same output identity; preserve purchases, reservations and performed work. Reuse the original key only for an exact retry.' }
+    if ((payload.kind === 'solution' || payload.kind === 'target' || payload.kind.startsWith('bound_solution')) && error.message?.includes('compact_design_intent_required')) return { status: 'invalid', reason: 'compact_design_intent_required',
+      validation: { code: 'domain_fields', fields: ['/description', '/assumptions', '/tradeoffs', '/design_intent'] },
+      message: 'No change made. Keep shared design advice compact enough to read: the saved solution, read back whole (title, description, assumptions, tradeoffs and the full design intent with its concept model and linked measurements), must stay under 30,000 bytes; shorten explanations while preserving actual choices, references and required features, then retry.' }
+    if (['construction','construction_edit','construction_parameters','legacy_construction'].includes(payload.kind) && /design_readiness_required/.test(error.message ?? '')) return { status: 'invalid', message: 'No construction saved. Read the selected solution and its design_intent. Investigate unresolved choices, explain alternatives and recommend a supported direction; reuse prior decisions or decide within the existing mandate. Save and select the exact solution revision for purpose=construction before retrying.' }
+    if (payload.kind === 'solution' && /(?:invalid_design_(?:intent|choice|feature|reference)|design_(?:choice|feature|reference)_[a-z_]+)/.test(error.message ?? '')) return { status: 'invalid', message: 'No solution saved. Read the current solution and this tool schema. Preserve significant features, original references and prior choices; each resolved choice needs a selected direction and a supported decision basis. Open choices retain advice and consequences. A deferral names only this illustration or concept purpose.' }
+    if (payload.kind === 'operational' && error.message?.includes('construction_requirement_exists')) return { status: 'conflict', message: 'A current blank requirement already exists for this construction definition and quantity mode. Read requirements and revise that same identity; do not create a duplicate.' }
+    if (payload.kind === 'operational' && error.message?.includes('construction_derive_required')) return { status: 'invalid', message: 'Recalculate this existing construction requirement (blank, fastener or glue) with derive_cad_material_requirement and the same record_id/current revision. Manual revision cannot replace its deterministic source proof.' }
+    if (payload.kind === 'operational') {
+      const fastener = /\b(fastener_group_not_in_schedule|fastener_requirement_exists|fastener_construction_required|fastener_quantity_exact)\b/.exec(error.message ?? '')?.[1]
+      if (fastener) return { status: fastener === 'fastener_requirement_exists' ? 'conflict' : 'invalid', message: {
+        fastener_group_not_in_schedule: 'No requirement saved. Use a kind, diameter and length exactly as a totals row of derive_construction_lists for this construction revision; glue needs at least one glued joint.',
+        fastener_requirement_exists: 'No requirement saved. This construction already has a need for that fastener size or glue; revise that existing requirement instead.',
+        fastener_construction_required: 'No requirement saved. Fastener and glue needs come from an exact current saved construction revision; read it again and use its ID and revision.',
+        fastener_quantity_exact: 'No requirement saved. Fastener and glue needs are exact counts from the schedule; leave waste_percent out. If a spare is sensible, recommend it in your reply instead, separate from the need.',
+      }[fastener] }
+    }
+    if (payload.kind === 'operational' && error.message?.includes('construction_cut_fit_required')) return { status: 'invalid', message: 'Construction blank quantities are saved concept needs. Reserve only an exact saved cut_plan through manage_project_material(resource=cut_plan), with its current plan/reservation revisions and real bound stock. Do not allocate raw sheets to individual blank needs or send these blanks to Shopping. Keep that gap explicit.' }
+    if (payload.kind === 'supplier_article' && error.code === 'PT409') return { status: 'conflict', message: 'Supplier article changed or is withdrawn. Read resource=product again and revise the exact current revision; do not create a duplicate article.' }
+    if (payload.kind === 'supplier_article' && ['22023','22P02','23514','22008','22007'].includes(error.code ?? '')) return { status: 'invalid', message: 'No supplier article saved. Bind one readable catalog item revision, give supplier or manufacturer, article number and a source URL or document, and list only fields the source states. A known pack size must be in supported_fields with purchase_unit; otherwise use null. Count content must be whole pieces.' }
+    if (payload.kind === 'pack_purchase' && error.code === 'PT409') return { status: 'conflict', message: 'Article, needs or Shopping changed. Read the same product, pack_purchase, requirements and Shopping. Needs held by another purchase or ordinary Shopping stay there; edited, missing or ordered rows are preserved for review. Do not create a replacement purchase.' }
+    if (payload.kind === 'pack_purchase' && ['22023','22P02','23514'].includes(error.code ?? '')) return { status: 'invalid', message: 'No pack purchase changed. Use exact current requirement revisions in the article content unit, a current article with a source-stated pack size, and a nonzero net need. Construction blank needs cannot publish here. Unknown pack size stays unresolved.' }
+    if (payload.kind === 'cut_plan_shopping' && error.code === 'PT409') return { status: 'conflict', message: 'Plan, sources or Shopping changed. Reopen the same cut_plan and Shopping. Preserve edited, missing or committed purchase rows; do not create a replacement or silently remove a contribution.' }
+    if (payload.kind === 'cut_plan_shopping' && ['22023','22P02','23514'].includes(error.code ?? '')) return { status: 'invalid', message: 'No Shopping contribution changed. Publish requires at least one used catalog sheet, all used sheets bound to current stock or catalog panels, and exact plan/shopping revisions. Only catalog sheets are published; stock sheets require separate reserve. Used hypothetical sheets cannot publish. Product and pack verification remains separate.' }
+    if (payload.kind === 'cut_plan_stock' && error.code === 'PT409') return { status: 'conflict', message: 'Plan/reservation or bound source/capacity changed. Read this same cut_plan and stock before changing its shared reservation. A stale reservation keeps capacity until explicit release; do not duplicate it.' }
+    if (payload.kind === 'cut_plan_stock' && ['22023','22P02','23514'].includes(error.code ?? '')) return { status: 'invalid', message: 'No reservation changed. Reserve requires at least one used stock sheet, all used sheets bound to current stock or catalog panels, and exact plan/reservation revisions. Only stock sheets are reserved; catalog sheets require separate publish. Used hypothetical sheets cannot reserve. Quantities come only from the saved layout. Reopen supply after either operation and retry only the missing commitment.' }
+    if (payload.kind === 'cut_plan' && error.code === 'PT409') return { status: 'conflict', message: 'Cut plan, construction, saved piece needs, material/format revision or remaining whole-sheet capacity changed. Read current cut_plan, requirements and sources; preserve existing identities and update the same plan.' }
+    if (payload.kind === 'cut_plan' && ['22023','22P02','23514'].includes(error.code ?? '')) return { status: 'invalid', message: 'No cut plan saved. Use the exact current piece needs, explicit valid sheet inputs, and matching versioned stock/catalog format. Unknown inputs or an unexecutable layout cannot be saved. Stock reservation and Shopping remain separate.' }
+    if (payload.kind === 'cad_shell_steps' && ['40001', 'PT409'].includes(error.code ?? '')) return { status: 'conflict', message: 'The shell drawing changed since you read it. Read it with read_cad_shell and link against its current revision.' }
+    if (payload.kind === 'cad_shell_steps' && error.code === '22023') return { status: 'invalid', message: 'No plan links changed. ' + (/cad_shell_step_unavailable/.test(error.message ?? '') ? 'Use exact Step ids from the current plan; add a missing Step with edit_project_plan first.' : /cad_shell_unknown_component/.test(error.message ?? '') ? 'Use component keys exactly as read_cad_shell returns them.' : /cad_shell_piece_archived/.test(error.message ?? '') ? 'An archived piece cannot be linked; restore it first.' : /cad_shell_archived/.test(error.message ?? '') ? 'The shell is archived; restore it first.' : 'Give 1-64 distinct links, each a component_key from the shell, a Step id and link or unlink.') }
+    if (payload.kind === 'cad_shell' && ['40001', 'PT409'].includes(error.code ?? '')) return { status: 'conflict', message: 'The shell drawing changed since you read it. Read it with read_cad_shell and apply the change to its current revision.' }
+    if (payload.kind === 'cad_shell' && error.code === '22023') return { status: 'invalid', message: 'No shell change made. ' + (/cad_shell_[a-z_]+|use_cad_shell_command/.exec(error.message ?? '')?.[0] === 'cad_shell_piece_archived' ? 'An archived piece cannot be placed; restore it first.' : /cad_shell_(unknown_component|duplicate_key)/.test(error.message ?? '') ? 'Use component keys exactly as read_cad_shell returns them; a new piece needs a new key.' : 'Pieces must be saved CAD drawings in this project (read_drawing_requests lists them), 1-64 per shell, placed in whole mm with rz 0, 90, 180 or 270.') }
+    if(payload.kind==='construction_edit'&&error.code==='22023'){
+      const reasons:Record<string,string>={invalid_joint:'A joint must connect two different saved instances. Correct that joint; preserve unrelated joints.',
+        joint_endpoint_missing_or_unsupported:'A joint endpoint must name an existing supported box face. Update dependent joints when removing parts.',
+        construction_identity_reused:'An existing identity cannot change meaning. Preserve existing part identities; a joint with different endpoints needs a new ID.',
+        invalid_instance_policy:'Provide one explicit role for each instance, retaining existing classifications. Unknown evidence stays unknown.',
+        construction_edit_compilation_mismatch:'The compiled result did not match the requested change. No revision was saved.'}
+      if(error.message&&Object.hasOwn(reasons,error.message))return {status:'invalid',message:'No construction changed. '+reasons[error.message]}
+    }
+    if (/^concept_(reconciliation_required|part_missing|mapping_unsupported|geometry_changed|identity_required)$/.test(error.message ?? '')) return { status: 'invalid', message: 'No change saved. Read the selected concept and preserve its component identities, dimensions, views and constraints. Missing or unsupported geometry must be reconciled explicitly before construction.', validation: { code: 'field_value', fields: ['design_intent.model'] } }
+    if (error.code === '40001' || error.code === 'PT409' || (payload.kind === 'catalog' && error.code === '23505') || error.message?.includes('Record changed')) return { status: 'conflict', message: 'Record changed or an equivalent catalog definition exists. Read the current record and do not overwrite unrelated changes.' }
+    if (['22023', '22P02', '22007', '22008', '23502', '23503', '23514', 'P0001'].includes(error.code ?? '')) {
+      const taskIssue = options.taskWorkDiagnostics ? taskWorkRejection(payload, error) : null
+      if (taskIssue) return { status: 'invalid', message: taskIssue.message, validation: { code: taskIssue.code, fields: taskIssue.fields } }
+      if (payload.kind === 'catalog' && /\bcatalog_source_quote_required\b/.test(error.message ?? '')) return { status: 'invalid', message: 'No change made: source_quote must be an exact, unmodified substring of its source message, including punctuation. Use source_seq=null for this current owner message; an older source_seq must identify the exact message you quoted. Do not paraphrase, add a final period, or change source_kind to bypass the quote check. Correct the quote and retry.' }
+      if (payload.kind === 'catalog') {
+        const issue = catalogRejection(error.message)
+        if (issue) return { status: 'invalid', message: issue.message, validation: { code: 'domain_fields', fields: issue.fields } }
+      }
+      if (payload.kind === 'catalog') return { status: 'invalid', message: 'The catalog rejected this definition. No change made. Read the exact part/material profile and pinned material revision. Put required part dimensions in properties using the profile field keys; compatible material properties are inherited server-side, and notes are not dimension fields. If the current definition already matches, reuse it instead of revising metadata.' }
+      if (payload.kind === 'lifecycle' || payload.kind === 'bound_work' && (payload.data.domain as WritePayload)?.kind === 'lifecycle') return { status: 'invalid', message: 'No change made. ' + (LIFECYCLE_REASON.exec(error.message ?? '')?.[0] ?? 'The project rejected this change; read the current record and check its state.') }
+      if (payload.kind.startsWith('plan_')) return { status: 'invalid', message: 'The living plan rejected this command. No canonical plan was silently changed. Read the current plan, reuse only exact Step/Requirement IDs from it, keep completed history, and use current project evidence IDs/revisions.' }
+      const reason = options.rejectionReasons ? databaseRejectionReason(error) : undefined
+      return { status: 'invalid', message: 'The database rejected this command. No change made; check fields, source, current revision and record state.', ...(reason ? { reason } : {}) }
+    }
+    return null
+  }
   return {
     receipts,
     exportState(): ProjectWriterState {
@@ -402,6 +483,28 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       else if (result.status === 'saved') { corrections.delete(key); corrections.delete(JSON.stringify([name, 'unbound'])) }
       return result
     },
+    /** Owner decision 2026-11-07: the same payload run by the database and rolled
+     * back. Nothing is saved, no write budget is used, no uncertainty arises. */
+    async check(payload: WritePayload | null): Promise<WriteResult> {
+      if (settled) return { status: 'denied' }
+      if (uncertain) return { status: 'unknown', message: 'A prior write has an uncertain outcome. Stop; do not retry or claim it failed.' }
+      if (!options.checkTransport) return { status: 'unavailable' }
+      if (!options.unlimitedWork && checks >= 24 || checks >= 64) return { status: 'budget_exhausted' }
+      if (!payload || !payload.request_quote || !userMessage.includes(payload.request_quote)) return { status: 'invalid', message: 'Nothing checked: the call does not match the tool schema.' }
+      checks++
+      try {
+        const { data, error } = await options.checkTransport(payload)
+        if (error) return rejection(payload, error) ?? { status: 'unavailable' }
+        const d = data as { status?: unknown; code?: unknown; message?: unknown } | null
+        if (d?.status === 'checked') return { status: 'checked', message: 'Checked by the database: this exact change would save. Nothing was saved.' }
+        if (d?.status === 'refused') {
+          const refusal = { code: typeof d.code === 'string' ? d.code : undefined, message: typeof d.message === 'string' ? d.message : undefined }
+          const reason = databaseRejectionReason(refusal)
+          return rejection(payload, refusal) ?? { status: 'invalid', message: 'The database would reject this command. Nothing was saved.', ...(reason ? { reason } : {}) }
+        }
+        return { status: 'unavailable' }
+      } catch (error) { rethrowContinuation(error); return { status: 'unavailable' } }
+    },
     async commit(payload: WritePayload | null): Promise<WriteResult> {
       if (settled) return { status: 'denied' }
       if (uncertain) return { status: 'unknown', message: 'A prior write has an uncertain outcome. Stop; do not retry or claim it failed.' }
@@ -411,77 +514,8 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
         const { data, error } = await transport(payload)
         if (error) {
           invalidAttempts++
-          if (error.message?.includes('turn_not_claimed')) return { status: 'denied' }
-          if (payload.kind === 'form_feedback' && ['40001', '40P01', 'PT409'].includes(error.code ?? '')) return { status: 'conflict', message: 'The shown version, its sources or mandate changed. The old reply cannot accept the new model. Read model feedback and reconcile the version within the user response.' }
-          if (payload.kind === 'form_feedback' && error.code === '22023') return { status: 'invalid', message: 'Feedback needs the model actually shown in this turn and a consistent scoped interpretation of the whole response. A correction or uncertainty is not acceptance.' }
-          if (payload.kind === 'bound_solution' && ['40001','PT409'].includes(error.code ?? '')) return { status: 'conflict', message: 'No change made. The solution or selected direction changed after this read. Read the edit context again and reconsider the change; never create a replacement alternative.' }
-          if (payload.kind === 'bound_plan_link' && ['40001','40P01','PT409','23505'].includes(error.code ?? '')) return { status: 'conflict', message: 'No plan links changed. The plan, focus, Task or its links changed. Read plan link context again and apply only the intended change.' }
-          if (payload.kind === 'bound_work' && ['40001','40P01','PT409','23505'].includes(error.code ?? '')) return { status: 'conflict', message: 'No change made. The work record, scope or its relationships changed. Read work context again and apply only the intended delta; never create a replacement.' }
-          if (payload.kind === 'bound_building_scope') {
-            if (['40001','40P01','PT409','23505'].includes(error.code ?? '')) return { status: 'conflict', message: 'No building scope changed. The building, its rooms, Areas or links changed. Read building scope again and apply only the intended change.' }
-            // A refused building link is an answerable outcome, not a lost project.
-            const reason = BUILDING_SCOPE_REFUSAL.exec(error.message ?? '')?.[0]
-            if (reason) return { status: 'invalid', message: 'No building scope changed. ' + BUILDING_SCOPE_REASONS[reason] }
-          }
-          if (error.code === '42501') return { status: 'denied', reason: 'access' }
-          if (/\bform_refinement_unverified\b/.test(error.message ?? '')) return { status: 'invalid', message: 'No delivery or quantity saved. This construction is an unverified FORM checkpoint; keep its pending components and requirements visible.' }
-          if (['construction','construction_edit','construction_parameters','construction_roles'].includes(payload.kind) && /\b(invalid_form_refinement|form_instance_unmapped|form_instance_missing)\b/.test(error.message ?? '')) return { status: 'invalid', message: 'No construction changed. Read the saved FORM mapping and preserve all mapped instances. A complete save can explicitly replace the mapping; every instance must belong to one active selected concept component.' }
-          if (['construction','construction_roles','construction_consequence','operational','cut_plan'].includes(payload.kind) && /construction_instance_roles_required/.test(error.message ?? '')) return { status: 'invalid', message: 'No quantity or cut was saved. Read the exact construction and explicitly classify its saved instance IDs with change_construction_roles; historical roles remain unknown until recorded.' }
-          if (payload.kind === 'construction_roles' && /invalid_(?:instance_policy|construction_role)/.test(error.message ?? '')) return { status: 'invalid', message: 'No role change saved. Use distinct existing instance IDs and the matching role/quantity policy with an honest reason. Read the current construction before retrying.' }
-          if (payload.kind === 'construction_consequence' && error.code === 'PT409') return { status: 'conflict', message: 'Construction, affected output or commitments changed. Reopen read_construction_changes and the same output identity; preserve purchases, reservations and performed work. Reuse the original key only for an exact retry.' }
-          if ((payload.kind === 'solution' || payload.kind === 'target') && error.message?.includes('compact_design_intent_required')) return { status: 'invalid', message: 'No change made. Keep shared design advice compact enough to read; shorten explanations while preserving actual choices, references and required features, then retry.' }
-          if (['construction','construction_edit','construction_parameters','legacy_construction'].includes(payload.kind) && /design_readiness_required/.test(error.message ?? '')) return { status: 'invalid', message: 'No construction saved. Read the selected solution and its design_intent. Investigate unresolved choices, explain alternatives and recommend a supported direction; reuse prior decisions or decide within the existing mandate. Save and select the exact solution revision for purpose=construction before retrying.' }
-          if (payload.kind === 'solution' && /(?:invalid_design_(?:intent|choice|feature|reference)|design_(?:choice|feature|reference)_[a-z_]+)/.test(error.message ?? '')) return { status: 'invalid', message: 'No solution saved. Read the current solution and this tool schema. Preserve significant features, original references and prior choices; each resolved choice needs a selected direction and a supported decision basis. Open choices retain advice and consequences. A deferral names only this illustration or concept purpose.' }
-          if (payload.kind === 'operational' && error.message?.includes('construction_requirement_exists')) return { status: 'conflict', message: 'A current blank requirement already exists for this construction definition and quantity mode. Read requirements and revise that same identity; do not create a duplicate.' }
-          if (payload.kind === 'operational' && error.message?.includes('construction_derive_required')) return { status: 'invalid', message: 'Recalculate this existing construction requirement (blank, fastener or glue) with derive_cad_material_requirement and the same record_id/current revision. Manual revision cannot replace its deterministic source proof.' }
-          if (payload.kind === 'operational') {
-            const fastener = /\b(fastener_group_not_in_schedule|fastener_requirement_exists|fastener_construction_required|fastener_quantity_exact)\b/.exec(error.message ?? '')?.[1]
-            if (fastener) return { status: fastener === 'fastener_requirement_exists' ? 'conflict' : 'invalid', message: {
-              fastener_group_not_in_schedule: 'No requirement saved. Use a kind, diameter and length exactly as a totals row of derive_construction_lists for this construction revision; glue needs at least one glued joint.',
-              fastener_requirement_exists: 'No requirement saved. This construction already has a need for that fastener size or glue; revise that existing requirement instead.',
-              fastener_construction_required: 'No requirement saved. Fastener and glue needs come from an exact current saved construction revision; read it again and use its ID and revision.',
-              fastener_quantity_exact: 'No requirement saved. Fastener and glue needs are exact counts from the schedule; leave waste_percent out. If a spare is sensible, recommend it in your reply instead, separate from the need.',
-            }[fastener] }
-          }
-          if (payload.kind === 'operational' && error.message?.includes('construction_cut_fit_required')) return { status: 'invalid', message: 'Construction blank quantities are saved concept needs. Reserve only an exact saved cut_plan through manage_project_material(resource=cut_plan), with its current plan/reservation revisions and real bound stock. Do not allocate raw sheets to individual blank needs or send these blanks to Shopping. Keep that gap explicit.' }
-          if (payload.kind === 'supplier_article' && error.code === 'PT409') return { status: 'conflict', message: 'Supplier article changed or is withdrawn. Read resource=product again and revise the exact current revision; do not create a duplicate article.' }
-          if (payload.kind === 'supplier_article' && ['22023','22P02','23514','22008','22007'].includes(error.code ?? '')) return { status: 'invalid', message: 'No supplier article saved. Bind one readable catalog item revision, give supplier or manufacturer, article number and a source URL or document, and list only fields the source states. A known pack size must be in supported_fields with purchase_unit; otherwise use null. Count content must be whole pieces.' }
-          if (payload.kind === 'pack_purchase' && error.code === 'PT409') return { status: 'conflict', message: 'Article, needs or Shopping changed. Read the same product, pack_purchase, requirements and Shopping. Needs held by another purchase or ordinary Shopping stay there; edited, missing or ordered rows are preserved for review. Do not create a replacement purchase.' }
-          if (payload.kind === 'pack_purchase' && ['22023','22P02','23514'].includes(error.code ?? '')) return { status: 'invalid', message: 'No pack purchase changed. Use exact current requirement revisions in the article content unit, a current article with a source-stated pack size, and a nonzero net need. Construction blank needs cannot publish here. Unknown pack size stays unresolved.' }
-          if (payload.kind === 'cut_plan_shopping' && error.code === 'PT409') return { status: 'conflict', message: 'Plan, sources or Shopping changed. Reopen the same cut_plan and Shopping. Preserve edited, missing or committed purchase rows; do not create a replacement or silently remove a contribution.' }
-          if (payload.kind === 'cut_plan_shopping' && ['22023','22P02','23514'].includes(error.code ?? '')) return { status: 'invalid', message: 'No Shopping contribution changed. Publish requires at least one used catalog sheet, all used sheets bound to current stock or catalog panels, and exact plan/shopping revisions. Only catalog sheets are published; stock sheets require separate reserve. Used hypothetical sheets cannot publish. Product and pack verification remains separate.' }
-          if (payload.kind === 'cut_plan_stock' && error.code === 'PT409') return { status: 'conflict', message: 'Plan/reservation or bound source/capacity changed. Read this same cut_plan and stock before changing its shared reservation. A stale reservation keeps capacity until explicit release; do not duplicate it.' }
-          if (payload.kind === 'cut_plan_stock' && ['22023','22P02','23514'].includes(error.code ?? '')) return { status: 'invalid', message: 'No reservation changed. Reserve requires at least one used stock sheet, all used sheets bound to current stock or catalog panels, and exact plan/reservation revisions. Only stock sheets are reserved; catalog sheets require separate publish. Used hypothetical sheets cannot reserve. Quantities come only from the saved layout. Reopen supply after either operation and retry only the missing commitment.' }
-          if (payload.kind === 'cut_plan' && error.code === 'PT409') return { status: 'conflict', message: 'Cut plan, construction, saved piece needs, material/format revision or remaining whole-sheet capacity changed. Read current cut_plan, requirements and sources; preserve existing identities and update the same plan.' }
-          if (payload.kind === 'cut_plan' && ['22023','22P02','23514'].includes(error.code ?? '')) return { status: 'invalid', message: 'No cut plan saved. Use the exact current piece needs, explicit valid sheet inputs, and matching versioned stock/catalog format. Unknown inputs or an unexecutable layout cannot be saved. Stock reservation and Shopping remain separate.' }
-          if (payload.kind === 'cad_shell_steps' && ['40001', 'PT409'].includes(error.code ?? '')) return { status: 'conflict', message: 'The shell drawing changed since you read it. Read it with read_cad_shell and link against its current revision.' }
-          if (payload.kind === 'cad_shell_steps' && error.code === '22023') return { status: 'invalid', message: 'No plan links changed. ' + (/cad_shell_step_unavailable/.test(error.message ?? '') ? 'Use exact Step ids from the current plan; add a missing Step with edit_project_plan first.' : /cad_shell_unknown_component/.test(error.message ?? '') ? 'Use component keys exactly as read_cad_shell returns them.' : /cad_shell_piece_archived/.test(error.message ?? '') ? 'An archived piece cannot be linked; restore it first.' : /cad_shell_archived/.test(error.message ?? '') ? 'The shell is archived; restore it first.' : 'Give 1-64 distinct links, each a component_key from the shell, a Step id and link or unlink.') }
-          if (payload.kind === 'cad_shell' && ['40001', 'PT409'].includes(error.code ?? '')) return { status: 'conflict', message: 'The shell drawing changed since you read it. Read it with read_cad_shell and apply the change to its current revision.' }
-          if (payload.kind === 'cad_shell' && error.code === '22023') return { status: 'invalid', message: 'No shell change made. ' + (/cad_shell_[a-z_]+|use_cad_shell_command/.exec(error.message ?? '')?.[0] === 'cad_shell_piece_archived' ? 'An archived piece cannot be placed; restore it first.' : /cad_shell_(unknown_component|duplicate_key)/.test(error.message ?? '') ? 'Use component keys exactly as read_cad_shell returns them; a new piece needs a new key.' : 'Pieces must be saved CAD drawings in this project (read_drawing_requests lists them), 1-64 per shell, placed in whole mm with rz 0, 90, 180 or 270.') }
-          if(payload.kind==='construction_edit'&&error.code==='22023'){
-            const reasons:Record<string,string>={invalid_joint:'A joint must connect two different saved instances. Correct that joint; preserve unrelated joints.',
-              joint_endpoint_missing_or_unsupported:'A joint endpoint must name an existing supported box face. Update dependent joints when removing parts.',
-              construction_identity_reused:'An existing identity cannot change meaning. Preserve existing part identities; a joint with different endpoints needs a new ID.',
-              invalid_instance_policy:'Provide one explicit role for each instance, retaining existing classifications. Unknown evidence stays unknown.',
-              construction_edit_compilation_mismatch:'The compiled result did not match the requested change. No revision was saved.'}
-            if(error.message&&Object.hasOwn(reasons,error.message))return {status:'invalid',message:'No construction changed. '+reasons[error.message]}
-          }
-          if (/^concept_(reconciliation_required|part_missing|mapping_unsupported|geometry_changed|identity_required)$/.test(error.message ?? '')) return { status: 'invalid', message: 'No change saved. Read the selected concept and preserve its component identities, dimensions, views and constraints. Missing or unsupported geometry must be reconciled explicitly before construction.', validation: { code: 'field_value', fields: ['design_intent.model'] } }
-          if (error.code === '40001' || error.code === 'PT409' || (payload.kind === 'catalog' && error.code === '23505') || error.message?.includes('Record changed')) return { status: 'conflict', message: 'Record changed or an equivalent catalog definition exists. Read the current record and do not overwrite unrelated changes.' }
-          if (['22023', '22P02', '22007', '22008', '23502', '23503', '23514', 'P0001'].includes(error.code ?? '')) {
-            const taskIssue = options.taskWorkDiagnostics ? taskWorkRejection(payload, error) : null
-            if (taskIssue) return { status: 'invalid', message: taskIssue.message, validation: { code: taskIssue.code, fields: taskIssue.fields } }
-            if (payload.kind === 'catalog' && /\bcatalog_source_quote_required\b/.test(error.message ?? '')) return { status: 'invalid', message: 'No change made: source_quote must be an exact, unmodified substring of its source message, including punctuation. Use source_seq=null for this current owner message; an older source_seq must identify the exact message you quoted. Do not paraphrase, add a final period, or change source_kind to bypass the quote check. Correct the quote and retry.' }
-            if (payload.kind === 'catalog') {
-              const issue = catalogRejection(error.message)
-              if (issue) return { status: 'invalid', message: issue.message, validation: { code: 'domain_fields', fields: issue.fields } }
-            }
-            if (payload.kind === 'catalog') return { status: 'invalid', message: 'The catalog rejected this definition. No change made. Read the exact part/material profile and pinned material revision. Put required part dimensions in properties using the profile field keys; compatible material properties are inherited server-side, and notes are not dimension fields. If the current definition already matches, reuse it instead of revising metadata.' }
-            if (payload.kind === 'lifecycle' || payload.kind === 'bound_work' && (payload.data.domain as WritePayload)?.kind === 'lifecycle') return { status: 'invalid', message: 'No change made. ' + (LIFECYCLE_REASON.exec(error.message ?? '')?.[0] ?? 'The project rejected this change; read the current record and check its state.') }
-            if (payload.kind.startsWith('plan_')) return { status: 'invalid', message: 'The living plan rejected this command. No canonical plan was silently changed. Read the current plan, reuse only exact Step/Requirement IDs from it, keep completed history, and use current project evidence IDs/revisions.' }
-            const reason = options.rejectionReasons ? databaseRejectionReason(error) : undefined
-            return { status: 'invalid', message: 'The database rejected this command. No change made; check fields, source, current revision and record state.', ...(reason ? { reason } : {}) }
-          }
+          const refused = rejection(payload, error)
+          if (refused) return refused
           throw new Error('Unknown write result')
         }
         const receipt = checkedReceipt(data, projectId)

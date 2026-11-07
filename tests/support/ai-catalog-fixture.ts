@@ -706,6 +706,50 @@ for(const migration of migrations){
   seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-image-describer-v1'}})
   versions.set(addition.key,1)
  }
+ // Owner decision 2026-11-07 (sketchbook A): edit_project_record takes mode check|save.
+ const writeCheck=source.match(/\$write_check_note\$([\s\S]+?)\$write_check_note\$/)
+ if(writeCheck){
+  const publication='bob-write-check-v1',row=seed.find(r=>r.key==='tools.edit_project_record')
+  if(!row||row.definition.parameters?.properties?.mode)throw new Error('write_check_tool_unexpected')
+  row.definition=structuredClone(row.definition)
+  row.definition.parameters.properties.mode={type:'string',enum:['check','save']}
+  row.definition.parameters.required=[...row.definition.parameters.required,'mode']
+  if(Array.isArray(row.definition.required_parameters))row.definition.required_parameters=[...row.definition.required_parameters,'mode']
+  row.definition.description+=writeCheck[1]
+  publishAs(row,publication);versions.set(row.key,versions.get(row.key)!+1)
+  const contract=seed.find(r=>r.key==='agent-contract.ask-bob')
+  if(contract.metadata.worker_gates_version!==1||contract.metadata.write_check_version!==undefined)throw new Error('write_check_contract_unexpected')
+  publishAs(contract,publication);contract.metadata={...contract.metadata,...JSON.parse(source.match(/\$write_check_contract\$([\s\S]+?)\$write_check_contract\$/)![1])};versions.set(contract.key,versions.get(contract.key)!+1)
+ }
+ // Owner decision 2026-11-07 (sketchbook B): construction sketches committed once.
+ const sketchNote=source.match(/\$construction_sketch_note\$([\s\S]+?)\$construction_sketch_note\$/)
+ if(sketchNote){
+  const publication='bob-construction-sketch-v1',flags=JSON.parse(source.match(/\$construction_sketch_contract\$([\s\S]+?)\$construction_sketch_contract\$/)![1])
+  const edit=seed.find(r=>r.key==='tools.edit_construction_parts')
+  if(!edit||edit.definition.parameters?.properties?.mode)throw new Error('construction_sketch_edit_tool_unexpected')
+  edit.definition=structuredClone(edit.definition)
+  edit.definition.parameters.properties.mode={type:'string',enum:['sketch','save']}
+  edit.definition.parameters.required=[...edit.definition.parameters.required,'mode']
+  edit.definition.required_parameters=[...edit.definition.required_parameters,'mode']
+  edit.definition.description+=sketchNote[1]
+  publishAs(edit,publication);edit.metadata={...edit.metadata,construction_sketch_version:1};versions.set(edit.key,versions.get(edit.key)!+1)
+  if(seed.some(r=>r.key==='tools.commit_construction_sketch'))throw new Error('construction_sketch_tool_already_published')
+  seed.push({key:'tools.commit_construction_sketch',kind:'tool_contract',content:'',variables:[],
+   definition:JSON.parse(source.match(/\$construction_sketch_tool\$([\s\S]+?)\$construction_sketch_tool\$/)![1]),
+   metadata:{server_fields:['request_quote'],publication,construction_sketch_version:1}})
+  versions.set('tools.commit_construction_sketch',1)
+  const entry=JSON.parse(source.match(/\$construction_sketch_entry\$([\s\S]+?)\$construction_sketch_entry\$/)![1])
+  const box=seed.find(r=>r.key==='bob.tools'),d=structuredClone(box.definition)
+  if(d.worker_focus_version!==1||'construction_sketch_version' in d||d.catalog.some((c:any)=>c.name===entry.name)||!d.contract_keys.includes('tools.edit_construction_parts')
+   ||!d.shelves[5].tools.includes('edit_construction_parts')||!d.build_workers.structure.tools.includes('edit_construction_parts')
+   ||!d.build_workers.structure.focus.core.includes('edit_construction_parts'))throw new Error('construction_sketch_toolbox_unexpected')
+  d.catalog.push(entry);d.contract_keys.push('tools.commit_construction_sketch');d.shelves[5].tools.push(entry.name)
+  d.build_workers.structure.tools.push(entry.name);d.build_workers.structure.focus.core.push(entry.name)
+  box.definition={...d,...flags};publishAs(box,publication);box.metadata={...box.metadata,...flags};versions.set(box.key,versions.get(box.key)!+1)
+  const contract=seed.find(r=>r.key==='agent-contract.ask-bob')
+  if(contract.metadata.write_check_version!==1||contract.metadata.construction_sketch_version!==undefined)throw new Error('construction_sketch_contract_unexpected')
+  publishAs(contract,publication);contract.metadata={...contract.metadata,...flags};versions.set(contract.key,versions.get(contract.key)!+1)
+ }
  // Owner decision 2026-11-07: worker gates (chat answer is the review, gate facts in-job, identical-request refusal).
  const workerGates=source.match(/\$worker_gates_contract\$([\s\S]+?)\$worker_gates_contract\$/)
  if(workerGates){

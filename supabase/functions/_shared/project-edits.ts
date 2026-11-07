@@ -87,6 +87,18 @@ PROJECT_EDIT_TOOLS[1].function.description += CONCEPT_EDIT_GUIDE + WRITE_STATE_E
 
 export const EDIT_SECTIONS = ['description','assumptions','tradeoffs','summary','features','choices','alignment','references','measurements','model.nodes','model.components','model.views','model.constraints','model.frame','model.unsupported','model.source_bindings','complete'] as const
 export const COHERENT_EDIT_TOOLS = structuredClone(PROJECT_EDIT_TOOLS)
+/** Owner decision 2026-11-07 (write_check_version 1): the edit tool takes
+ * mode check|save. A check runs the same write in the database and rolls it
+ * back, so every rule, including the 30,000-byte readback, answers before a save. */
+export const WRITE_CHECK_NOTE = ' mode check runs this exact change through every save rule, including the 30,000-byte readback of the whole solution, and saves nothing; mode save keeps it. Check a large or uncertain change first.'
+export function withWriteCheck<T extends typeof PROJECT_EDIT_TOOLS>(tools: T): T {
+  const copy = structuredClone(tools)
+  const edit = copy.find(t => t.function.name === 'edit_project_record')!.function as { description: string; parameters: { properties: Record<string, unknown>; required: string[] } }
+  edit.description += WRITE_CHECK_NOTE
+  edit.parameters.properties.mode = { type: 'string', enum: ['check', 'save'] }
+  edit.parameters.required = [...edit.parameters.required, 'mode']
+  return copy
+}
 const coherentRead = COHERENT_EDIT_TOOLS[0].function
 coherentRead.description = 'Read a compact editable overview with an exact edit_ref. For a section, use resource=section, query=the returned section name, and next_ref=edit_ref initially, then the returned next_ref. Every page stays bound to that original revision. Complete is available explicitly. Re-read after conflicts.'
 ;(coherentRead.parameters.properties.resource as any).enum.push('section')
@@ -315,7 +327,10 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
   writer?: ProjectWriter; hasAccess: () => Promise<boolean>; sources?: ProjectSource[]; unlimitedWork?: boolean;
   /** Pinned per manifest (write_state_version 1): a saved selected solution
    * returns its fresh edit entry and, for purpose=construction, its readiness. */
-  writeState?: { readiness?: (targetRevision: number, areaId: string | null) => Promise<DesignReadiness> } }) {
+  writeState?: { readiness?: (targetRevision: number, areaId: string | null) => Promise<DesignReadiness> };
+  /** Pinned per execution (write_check_version 1): edit_project_record takes
+   * mode check|save; a check runs the same write in the database and rolls it back. */
+  writeCheck?: boolean }) {
   const sectionPages = new Map<string,{edit_ref:string;section:string;offset:number}>()
   const contexts = new Map<string, EditSnapshot>()
   const pages = new Map<string, { resource: Resource; query: string | null; after: string }>()
@@ -366,7 +381,7 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
     } catch (error) { rethrowContinuation(error); return unavailable() }
   }
   return {
-    tools: opts.coherent ? COHERENT_EDIT_TOOLS : PROJECT_EDIT_TOOLS,
+    tools: opts.writeCheck ? withWriteCheck(opts.coherent ? COHERENT_EDIT_TOOLS : PROJECT_EDIT_TOOLS) : opts.coherent ? COHERENT_EDIT_TOOLS : PROJECT_EDIT_TOOLS,
     /** Prepare exactly the ordinary content delta without writing. The caller
      * may compose it with a Construction change in one database transaction. */
     prepare:async(value:unknown)=>await opts.hasAccess()?prepare(value):{status:'denied' as const},
@@ -439,6 +454,20 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
         } catch (error) { rethrowContinuation(error); return unavailable() }
       }
       if (name !== 'edit_project_record' || !opts.writer) return { status: 'denied' }
+      // Owner decision 2026-11-07: check first. The same prepared write runs in the
+      // database and is rolled back; the edit_ref stays valid for the real save.
+      let mode: 'check' | 'save' = 'save'
+      if (opts.writeCheck && value && typeof value === 'object' && !Array.isArray(value) && 'mode' in value) {
+        const { mode: requested, ...rest } = value as Record<string, unknown>
+        if (requested !== 'check' && requested !== 'save') return fail('mode is check or save.')
+        mode = requested; value = rest
+      }
+      if (mode === 'check') {
+        const prepared = await prepare(value)
+        if (prepared.status !== 'ready') return prepared
+        const checked = await opts.writer.check(prepared.payload)
+        return checked.status === 'checked' ? { status: 'checked', saved: false, message: 'This exact change would save; nothing was saved. Send the same change with mode save to keep it.' } : checked
+      }
       const v = value as Record<string, any>
       const snapshot = v && typeof v.edit_ref === 'string' ? contexts.get(v.edit_ref) : undefined
       const key = snapshot ? snapshot.resource + ':' + snapshot.key : 'unbound'

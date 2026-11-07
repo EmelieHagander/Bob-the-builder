@@ -20,6 +20,7 @@ import { parameterSourcePins } from './cad-parameters.ts'
 import { bobCompleteRequestVersions, type BobImageInputCounts } from './bob-complete-request.ts'
 import { bobStageContextVersion, stageImageRef } from './bob-stage-context.ts'
 import { createConstructionTools, checkedConstructionForDrawing, constructionCurrentReader, constructionChangeReaders, constructionPreparationFailure } from './construction-draft.ts'
+import { createConstructionSketchStore } from './construction-sketch.ts'
 import {parseDesignReadiness,type DesignPurpose,type DesignReadiness} from './project-design-intent.ts'
 import { readBudgetStop } from './bob-budget-stop.ts'
 import {drawingResumeReply,drawingResumeDelivery,confirmedDrawingReceipt} from './drawing-resume-reply.ts'
@@ -401,7 +402,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; toolSchemaDedupVersion?: 1; promptCachePointsVersion?: 1; workerFocusVersion?: 1; workerPlanVersion?: 1; workerGatesVersion?: 1; toolPickLimit?: number; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; toolSchemaDedupVersion?: 1; promptCachePointsVersion?: 1; workerFocusVersion?: 1; workerPlanVersion?: 1; workerGatesVersion?: 1; writeCheckVersion?: 1; constructionSketchVersion?: 1; toolPickLimit?: number; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -449,6 +450,9 @@ export async function answerWithOpenAi(opts: {
       ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_plan_version === 1 ? { workerPlanVersion: 1 as const } : {}),
       // Owner decision 2026-11-07: the chat answer is the review, open piece checks are facts for Konrad, and only an identical failed request is refused again. New claimed jobs only.
       ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_gates_version === 1 ? { workerGatesVersion: 1 as const } : {}),
+      // Owner decision 2026-11-07 (sketchbook): writes can be checked by the database first, and Konrad's part edits collect in a sketch committed once. New claimed jobs only.
+      ...(checkpoint && claimedServer && contract.write_check_version === 1 ? { writeCheckVersion: 1 as const } : {}),
+      ...(checkpoint && claimedServer && contract.write_check_version === 1 && contract.construction_sketch_version === 1 ? { constructionSketchVersion: 1 as const } : {}),
       ...(checkpoint && Number.isInteger(contract.tool_pick_limit) && Number(contract.tool_pick_limit) >= 1 && Number(contract.tool_pick_limit) <= 8 ? { toolPickLimit: Number(contract.tool_pick_limit) } : {}),
       ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_checkpoint_version === 1
         && contract.worker_verified_renewal_version === 1 ? { workerVerifiedRenewalVersion: 1 as const } : {}),
@@ -470,6 +474,8 @@ export async function answerWithOpenAi(opts: {
   if (execution.workerFocusVersion !== undefined && (execution.workerFocusVersion !== 1 || execution.workpadVersion !== 1)) throw new Error('worker_focus_version_invalid')
   if (execution.workerPlanVersion !== undefined && (execution.workerPlanVersion !== 1 || execution.workpadVersion !== 1)) throw new Error('worker_plan_version_invalid')
   if (execution.workerGatesVersion !== undefined && (execution.workerGatesVersion !== 1 || execution.workpadVersion !== 1)) throw new Error('worker_gates_version_invalid')
+  if (execution.writeCheckVersion !== undefined && execution.writeCheckVersion !== 1) throw new Error('write_check_version_invalid')
+  if (execution.constructionSketchVersion !== undefined && (execution.constructionSketchVersion !== 1 || execution.writeCheckVersion !== 1)) throw new Error('construction_sketch_version_invalid')
   if (execution.toolPickLimit !== undefined && !(Number.isInteger(execution.toolPickLimit) && execution.toolPickLimit >= 1 && execution.toolPickLimit <= 8)) throw new Error('tool_pick_limit_invalid')
   if (execution.workerVerifiedRenewalVersion !== undefined
     && (execution.workerVerifiedRenewalVersion !== 1 || execution.workpadVersion !== 1 || execution.workerCheckpointVersion !== 1))
@@ -620,13 +626,19 @@ export async function answerWithOpenAi(opts: {
     }
   }
   // Route new bound actions separately; pinned older journals retain their RPC names.
+  const writeFunction = (kind: string) => kind === 'construction_work' ? 'commit_construction_work' : kind === 'form_feedback' ? 'record_model_feedback' : kind === 'bound_building_scope' ? 'bob_project_write_v21' : kind === 'bound_plan_link' ? 'bob_project_write_v20' : kind === 'bound_work' ? 'bob_project_write_v19' : ['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'].includes(kind) ? 'bob_project_write_v18' : ['bound_project', 'bound_solution'].includes(kind) ? 'bob_project_write_v17' : 'bob_project_write_v16'
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => writeRpc(payload.kind === 'construction_work' ? 'commit_construction_work' : payload.kind === 'form_feedback' ? 'record_model_feedback' : payload.kind === 'bound_building_scope' ? 'bob_project_write_v21' : payload.kind === 'bound_plan_link' ? 'bob_project_write_v20' : payload.kind === 'bound_work' ? 'bob_project_write_v19' : ['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'].includes(payload.kind) ? 'bob_project_write_v18' : ['bound_project', 'bound_solution'].includes(payload.kind) ? 'bob_project_write_v17' : 'bob_project_write_v16', { ...binding, p_payload: payload }),
+    payload => writeRpc(writeFunction(payload.kind), { ...binding, p_payload: payload }),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
     { unlimitedWork, taskWorkDiagnostics: [1, 2, 3].includes(contract.work_completion_version as number),
       // Catalog switch (2026-11-01): the database's coded reason on the catch-all rejection.
-      ...(aiCatalog.definition('bob.tools', 'tool_contract').definition.rejection_reason_version === 1 ? { rejectionReasons: true } : {}) },
+      ...(aiCatalog.definition('bob.tools', 'tool_contract').definition.rejection_reason_version === 1 ? { rejectionReasons: true } : {}),
+      // Owner decision 2026-11-07: a write checked by the database and rolled back (feedback has no check path).
+      ...(execution.writeCheckVersion === 1 ? { checkTransport: (payload: import('./project-write.ts').WritePayload) => payload.kind === 'form_feedback'
+        ? Promise.resolve({ data: { status: 'refused', code: '22023', message: 'write_check_unsupported' }, error: null })
+        : memo('rpc:check', { kind: payload.kind, payload }, async () => { const { data, error } = await client.rpc('bob_project_write_check', { p_function: writeFunction(payload.kind), ...binding, p_payload: payload })
+          .abortSignal(AbortSignal.timeout(26000)); return { data: data as unknown, error: error ? { code: error.code, message: error.message } : null } }) } : {}) },
   ) : undefined
   const planLinks = createPlanLinks({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
     read: input => rpc('read_bob_plan_link_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
@@ -658,6 +670,7 @@ export async function answerWithOpenAi(opts: {
   })
   const projectEdits = createProjectEdits({ coherent:execution.solutionWorkVersion===1,unlimitedWork, projectId: opts.projectId, writer, hasAccess, sources: lookup.sources,
     ...(writeState ? { writeState: { readiness: constructionReadinessReader } } : {}),
+    ...(execution.writeCheckVersion === 1 ? { writeCheck: true } : {}),
     read: input => rpc('read_bob_edit_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
     readSelected: areaId => rpc('read_bob_selected_edit_context', { p_project: opts.projectId, p_area: areaId }, AbortSignal.timeout(12000)),
   })
@@ -722,6 +735,10 @@ export async function answerWithOpenAi(opts: {
     if(!result||result.project_id!==opts.projectId||result.area_id!==areaId)throw new Error('design_readiness_unavailable')
     return result
   }
+  // Owner decision 2026-11-07 (sketchbook B): the job's private construction
+  // sketches, through the claimed caller of this turn; never project truth.
+  const constructionSketches = execution.constructionSketchVersion === 1 ? createConstructionSketchStore(async (action, artifact, expected, sketch) =>
+    await rpc('construction_sketch', { ...binding, p_action: action, p_artifact: artifact, p_expected_revision: expected, p_sketch: sketch }, AbortSignal.timeout(12000)) as { data: any; error: { code?: string } | null }) : undefined
   const constructionOptions = {unlimitedWork,projectId:opts.projectId,message:opts.message,writer,hasAccess,
     ...(execution.workingStateVersion === 1 ? { fastPageFit: true, readSummary: async (id:string,revision:number) => {
       const {data,error}=await readRpc('read_construction_summary',{p_project:opts.projectId,p_artifact:id,p_revision:revision})
@@ -819,6 +836,7 @@ export async function answerWithOpenAi(opts: {
     ...(aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.build_place_version===1)?{
       placeIn:(id:string,subBuild:string)=>buildTree.execute('place_build',{build_id:id,sub_build_id:subBuild,room_id:null})}:{}),
     observationTime:(input:unknown)=>memo('construction:observation',input,async()=>new Date().toISOString()),
+    ...(constructionSketches?{sketches:constructionSketches}:{}),
     prepareEdit:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_edit',{...binding,p_payload:payload},AbortSignal.timeout(12000))
       if(error)return constructionPreparationFailure(error,'construction_edit_preparation_failed')
@@ -1293,6 +1311,7 @@ export async function answerWithOpenAi(opts: {
     ...(execution.workerFocusVersion === 1 ? { workerFocus: true } : {}),
     ...(execution.workerPlanVersion === 1 ? { workerPlan: true } : {}),
     ...(execution.workerGatesVersion === 1 ? { workerGates: true } : {}),
+    ...(constructionSketches ? { openSketches: async () => { const listed = await constructionSketches.list(); return listed.status === 'ok' ? listed.sketches : null } } : {}),
     ...(execution.toolPickLimit !== undefined ? { toolPickLimit: execution.toolPickLimit } : {}),
     ...(execution.workerPieceProgressVersion === 3 || execution.workerPieceProgressVersion === 4 ? { workerDesignReview: true } : {}),
     ...(execution.workerPieceProgressVersion === 2 || execution.workerPieceProgressVersion === 3 || execution.workerPieceProgressVersion === 4 ? { workerFormPiece: {
