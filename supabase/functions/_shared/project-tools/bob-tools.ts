@@ -1,5 +1,5 @@
 import {runtimeToolSpec,type RuntimeToolSurface} from '../runtime-tool-surface.ts'
-import { SERVER_REVISIONS, createRevisionMemory, fillServerRevisions, stripServerRevisions, withoutServerRevisions, type RevisionReaders } from '../server-revisions.ts'
+import { SERVER_REVISIONS, createRefusalGuard, createRevisionMemory, fillServerRevisions, stripServerRevisions, withoutServerRevisions, type RevisionReaders } from '../server-revisions.ts'
 import type {WorkerOperations,OperationRole} from '../worker-operations.ts'
 import { drawingWorkerSpec } from '../drawing-work.ts'
 import { SUPERSEDED_PLAN_LINK_TOOLS, type PlanLinks } from '../project-plan-links.ts'
@@ -95,6 +95,8 @@ export function createBobToolSession(opts: { continuedWork?:boolean;
   /** Owner decision 2026-11-07 (server_revisions_version 1): no model types a
    * revision; the server fills each one (see server-revisions.ts). */
   serverRevisions?: { readers: RevisionReaders };
+  /** Owner feedback 2026-11-07 (refusal_guard_version 1): a refused call does not run again unchanged. */
+  refusalGuard?: boolean;
   drawingWorker?:boolean;
   workerOperation?:{role:OperationRole;operations:WorkerOperations};
   runtimeSurface?:()=>RuntimeToolSurface;
@@ -253,19 +255,22 @@ export function createBobToolSession(opts: { continuedWork?:boolean;
   // Owner decision 2026-11-07: the server fills every revision; the model's
   // values are dropped, what it reads is remembered for records without a reader.
   const revisionMemory=opts.serverRevisions?createRevisionMemory():undefined
+  const refusalGuard=opts.refusalGuard?createRefusalGuard():undefined
   const revised=(def:ToolDefinition):ToolDefinition=>{
-    if(!revisionMemory)return def
-    const name=def.spec.function.name,own=!!SERVER_REVISIONS[name]
+    if(!revisionMemory&&!refusalGuard)return def
+    const name=def.spec.function.name,own=!!revisionMemory&&!!SERVER_REVISIONS[name]
     return {...def,execute:async(raw:unknown)=>{
+      const repeated=refusalGuard?.before(name,raw)
+      if(repeated)return repeated
       let args=raw
       if(own){
-        const filled=await fillServerRevisions(name,stripServerRevisions(name,raw,SERVER_REVISIONS,{}),revisionMemory,opts.serverRevisions!.readers)
-        if('error' in filled)return filled.error
+        const filled=await fillServerRevisions(name,stripServerRevisions(name,raw,SERVER_REVISIONS,{}),revisionMemory!,opts.serverRevisions!.readers)
+        if('error' in filled)return refusalGuard?refusalGuard.after(name,raw,filled.error):filled.error
         args=filled.args
       }
       const result=await def.execute(args)
-      revisionMemory.observe(name,result)
-      return result
+      revisionMemory?.observe(name,result)
+      return refusalGuard?refusalGuard.after(name,raw,result):result
     }}
   }
   const session=createToolSession({ definitions: registered.map(revised).filter(def=>!!opts.workerOperation||!opts.drawingWorker||!['plan_cad_pieces','compose_cad_shell','link_cad_shell_steps','link_project_drawing','link_drawing_gap','ensure_drawing_gap_task'].includes(def.spec.function.name)).map(def=>{
@@ -308,12 +313,13 @@ export function createBobToolSession(opts: { continuedWork?:boolean;
         if (!Number.isSafeInteger(version) || Number(version) < 1) throw new Error('tool_catalog_unavailable')
         return Number(version)
       } } : {}) })
-  if(!revisionMemory)return session
-  // What the model read survives a paused job with the rest of the session.
+  if(!revisionMemory&&!refusalGuard)return session
+  // What the model read and what was refused survive a paused job with the rest of the session.
   const exportState=session.exportState.bind(session),restoreState=session.restoreState.bind(session)
   return Object.assign(session,{
-    exportState:()=>({...exportState(),revision_memory:revisionMemory.exportState()}) as ReturnType<typeof exportState>,
-    restoreState:(state:Parameters<typeof restoreState>[0])=>{restoreState(state);revisionMemory.restoreState((state as {revision_memory?:unknown}).revision_memory)},
+    exportState:()=>({...exportState(),...(revisionMemory?{revision_memory:revisionMemory.exportState()}:{}),...(refusalGuard?{refusal_memory:refusalGuard.exportState()}:{})}) as ReturnType<typeof exportState>,
+    restoreState:(state:Parameters<typeof restoreState>[0])=>{restoreState(state)
+      revisionMemory?.restoreState((state as {revision_memory?:unknown}).revision_memory);refusalGuard?.restoreState((state as {refusal_memory?:unknown}).refusal_memory)},
   })
 }
 

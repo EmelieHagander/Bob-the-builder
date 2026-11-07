@@ -340,8 +340,12 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  }
  // A construction save, prepared and checked without saving: the same path
  // serves a save, a sketched new construction and its commit.
- const prepareSave=async(v:Record<string,any>):Promise<{error:Record<string,any>}|{commit:WritePayload;recipe:Record<string,any>;parameters:unknown;readiness:DesignReadiness}>=>{
+ // sketching: an unfinished construction may still miss concept components or
+ // fill a component only partly; those come back as pending, not as refusals.
+ const PENDING_CONCEPT=new Set(['concept_part_missing','form_envelope_incomplete'])
+ const prepareSave=async(v:Record<string,any>,sketching=false):Promise<{error:Record<string,any>}|{commit:WritePayload;recipe:Record<string,any>;parameters:unknown;readiness:DesignReadiness;pending:Record<string,any>[]}>=>{
   if(!opts.message.includes(v.request_quote)||!v.request_quote.trim()||(v.record_id===null?v.expected_revision!==0:v.expected_revision<1))return {error:{status:'invalid',message:'Use the current request and exact expected revision.'}}
+  const pending:Record<string,any>[]=[]
   if(v.form_refinement?!opts.readConstructionReadiness:!opts.readDesignReadiness)return {error:{status:'unavailable',message:'Could not read the selected solution and expert advice. Recover that read before fixing construction geometry.'}}
   const read=v.form_refinement
    ? (await opts.readConstructionReadiness!(v.target_revision,v.area_id,v.form_refinement) as Record<string,unknown>|null)?.design_readiness
@@ -374,12 +378,14 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   if(readiness.design_intent?.model){
    const policy=constructionInstancePolicy(recipe,v.instance_policy)
    const references=new Set(policy.instances.filter(i=>i.role==='reference').map(i=>i.instance_id))
-   const issues=v.form_refinement?constructionFormIssues(readiness.design_intent,recipe,references,v.form_refinement,true):conceptConstructionIssues(readiness.design_intent,recipe,references)
+   const found=v.form_refinement?constructionFormIssues(readiness.design_intent,recipe,references,v.form_refinement,true,sketching):conceptConstructionIssues(readiness.design_intent,recipe,references)
+   const issues=sketching?found.filter(i=>!PENDING_CONCEPT.has(i.code)):found
+   pending.push(...(sketching?found.filter(i=>PENDING_CONCEPT.has(i.code)):[]))
    if(issues.length)return {error:{status:'needs_data',issues,message:'No construction saved. Preserve the selected concept component identities, dimensions and relations, or explicitly revise that Solution before handoff.'}}
   }
   if(!await opts.hasAccess())return {error:{status:'denied'}}
   const {record_id,expected_revision,request_quote,parameter_plan:_plan,sub_build_id:_subBuild,...data}=v
-  return {commit:{kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,joints:joints(data.joints),recipe,parameters}} as WritePayload,recipe,parameters,readiness}
+  return {commit:{kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,joints:joints(data.joints),recipe,parameters}} as WritePayload,recipe,parameters,readiness,pending}
  }
  const saveDraft=async(v:Record<string,any>):Promise<Record<string,any>>=>{
   const ready=await prepareSave(v)
@@ -602,7 +608,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   if('error' in read)return read.error
   const {request_quote,...input}=v
   const save=mergeNewConstruction(read.sketch?.save??null,input)
-  const ready=await prepareSave({...save,request_quote})
+  const ready=await prepareSave({...save,request_quote},true)
   if('error' in ready)return sketchRefusal(ready.error)
   const check=await sketchCheck({projectId:opts.projectId,artifact_id:null,revision:0,current_revision:0,source_state:'current',archived:false,
    recipe:ready.recipe,parameters:ready.parameters,materials:save.materials,joints:joints(save.joints),instance_policy:save.instance_policy??null,
@@ -612,7 +618,9 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   const put=await opts.newSketches!.put(v.key,read.revision,sketch as any)
   if(put.status!=='stored')return {status:put.status,saved:false,message:'The sketch was not stored; read it with commit_construction_sketch action read before continuing.'}
   return {status:'sketched',saved:false,new_key:v.key,part_count:sketch.part_count,sketch:newSummary(save),check,
-   message:'Kept in your sketch and checked as a whole; nothing is saved yet. Send the next parts with the same key, then save it with commit_construction_sketch and this new_key.'}
+   ...(ready.pending.length?{pending:ready.pending.slice(0,24)}:{}),
+   message:'Kept in your sketch and checked as a whole; nothing is saved yet. Send the next parts with the same key, then save it with commit_construction_sketch and this new_key.'
+    +(ready.pending.length?' Pending lists what the concept still needs; it must be complete when you save.':'')}
  }
  const newSketchCommit=async(v:Record<string,any>):Promise<Record<string,any>>=>{
   const read=await readNewSketch(v.new_key)
@@ -805,7 +813,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     return await editParts(v)
    }
    if(name===CONSTRUCTION_SKETCH_COMMIT_TOOL.function.name){
-    if(!opts.writer||!opts.prepareEdit||!opts.sketches)return {status:'unavailable'}
+    if(!opts.writer||!opts.sketches||!opts.prepareEdit&&!(opts.newSketches&&v.record_id===null))return {status:'unavailable'}
     return await sketchCommit(v)
    }
    if(name===CONSTRUCTION_PARAMETER_TOOL.function.name){

@@ -1,6 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {SERVER_REVISIONS,JOB_OWNED_FIELDS,createRevisionMemory,fillServerRevisions,stripServerRevisions,withoutServerRevisions} from '../supabase/functions/_shared/server-revisions.ts'
+import {SERVER_REVISIONS,JOB_OWNED_FIELDS,createRefusalGuard,createRevisionMemory,fillServerRevisions,stripServerRevisions,withoutServerRevisions} from '../supabase/functions/_shared/server-revisions.ts'
 import {createBobToolSession} from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {seedToolPolicy} from '../supabase/functions/_shared/project-answer.ts'
@@ -103,4 +103,31 @@ test('a Bob session offers no revision field, fills it on the server and keeps i
  await resumed.execute('cancel_drawing_request',args)
  assert.deepEqual(calls[0],{request_id:'req',expected_revision:3})
  assert.deepEqual((resumed.exportState() as any).revision_memory,[['req',4]],'and remembers the newer revision the result showed')
+})
+
+test('a refused call does not run again unchanged; the third refusal for one reason asks for another approach',async()=>{
+ // Scenario "Fellopp": since 2026-10-25 one requirement write was refused 18 times for one reason.
+ const calls:any[]=[]
+ const lookup=createProjectLookup('A',async()=>({data:{records:[],related:[],truncated:false},error:null}))
+ const extra={spec:spec('cancel_drawing_request'),version:1,gate:()=>'available' as const,execute:async(v:any)=>{calls.push(v)
+  return v.request_id==='read-me'?{status:'invalid',reason:'version_unknown'}:{status:'invalid',reason:'human_text',validation:{code:'human_text',fields:['reason']}}}}
+ const policy=async()=>{const p=await seedToolPolicy();return {...p,tools:[...p.tools.filter(t=>t.name!=='cancel_drawing_request'),{name:'cancel_drawing_request',description:'d',how_to:'h',schema_version:1,always_load:true,preload_phases:[],active:true}]}}
+ const make=()=>createBobToolSession({aiCatalog:fixture,message:'Avbryt.',lookup,readPolicy:policy,extraTools:[extra],refusalGuard:true} as any)
+ const session=make();await session.prepare()
+ assert.equal((await session.execute('cancel_drawing_request',{request_id:'a'})).reason,'human_text')
+ const again=await session.execute('cancel_drawing_request',{request_id:'a'})
+ assert.equal(again.reason,'repeated_refusal');assert.equal(again.refused_before,'human_text');assert.equal(calls.length,1,'the same refused call is not run again')
+ const second=await session.execute('cancel_drawing_request',{request_id:'b'})
+ assert.equal(second.repeated,undefined)
+ const third=await session.execute('cancel_drawing_request',{request_id:'c'})
+ assert.equal(third.repeated.count,3);assert.match(third.repeated.note,/Do not repeat the same fix/)
+ // A refusal that depends on the project's state may succeed after a read: it runs again.
+ await session.execute('cancel_drawing_request',{request_id:'read-me'})
+ assert.equal(calls.at(-1).request_id,'read-me');const n=calls.length
+ await session.execute('cancel_drawing_request',{request_id:'read-me'})
+ assert.equal(calls.length,n+1,'state-dependent refusals are not blocked')
+ // A paused job keeps what was refused.
+ const resumed=make();await resumed.prepare();resumed.restoreState(session.exportState())
+ assert.equal((await resumed.execute('cancel_drawing_request',{request_id:'a'})).reason,'repeated_refusal')
+ const guard=createRefusalGuard();assert.equal(guard.before('x',{}),null)
 })

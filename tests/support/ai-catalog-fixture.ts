@@ -778,7 +778,7 @@ for(const migration of migrations){
   d.worker_operation_bindings.commit_construction_sketch=JSON.parse(text('lean_writes_binding'))
   box.definition={...d,...flags};publishAs(box,publication);box.metadata={...box.metadata,...flags};versions.set(box.key,versions.get(box.key)!+1)
   const contract=seed.find(r=>r.key==='agent-contract.ask-bob')
-  if(contract.metadata.construction_sketch_version!==1||contract.metadata.stable_tools_version!==undefined||contract.metadata.server_target_version!==undefined||contract.metadata.server_revisions_version!==undefined)throw new Error('lean_writes_contract_unexpected')
+  if(contract.metadata.construction_sketch_version!==1||contract.metadata.stable_tools_version!==undefined||contract.metadata.server_target_version!==undefined||contract.metadata.server_revisions_version!==undefined||contract.metadata.refusal_guard_version!==undefined)throw new Error('lean_writes_contract_unexpected')
   publishAs(contract,publication);contract.metadata={...contract.metadata,...flags};versions.set(contract.key,versions.get(contract.key)!+1)
  }
  // Owner decision 2026-11-07: worker gates (chat answer is the review, gate facts in-job, identical-request refusal).

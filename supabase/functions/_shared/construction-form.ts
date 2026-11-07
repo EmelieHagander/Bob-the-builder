@@ -83,7 +83,10 @@ export function constructionFormReadiness(design: DesignReadiness, refinement: F
 
 /** Envelope preservation bounds a refinement; it does NOT prove function,
  * joinery, loads or fidelity. Every explicit refinement remains unverified. */
-export function constructionFormIssues(intent: DesignIntent, recipe: CadAssemblyRequest, referenceIds: Set<string>, raw: unknown, checkpoint = false): ConceptIssue[] {
+/** partial (a construction still being sketched, owner decision 2026-11-07):
+ * a component whose parts lie inside its envelope but do not fill it yet is
+ * reported as form_envelope_incomplete, not as changed geometry. */
+export function constructionFormIssues(intent: DesignIntent, recipe: CadAssemblyRequest, referenceIds: Set<string>, raw: unknown, checkpoint = false, partial = false): ConceptIssue[] {
   const refinement = parseFormRefinement(raw), scope = constructionFormScope(intent, refinement)
   const result = evaluateConcept(intent), issues = [...result.issues]
   const add = (code: string, ids: string[], message: string) => issues.push({ code, ids, message })
@@ -107,7 +110,10 @@ export function constructionFormIssues(intent: DesignIntent, recipe: CadAssembly
       at.forEach((v, k) => { min[k] = Math.min(min[k], v); max[k] = Math.max(max[k], v + dimensions[k]) })
       if ((box.kind !== 'solid') !== referenceIds.has(id)) add('concept_geometry_changed', [m.component_id, id], 'The physical/reference role differs from the selected concept.')
     }
-    if (min.some((v, k) => v !== box.min[k] || Math.abs(max[k] - (box.min[k] + box.size_mm[k])) > 1e-7)) add('concept_geometry_changed', [m.component_id], 'The refinement envelope differs from the exact selected concept.')
+    const exact = !min.some((v, k) => v !== box.min[k] || Math.abs(max[k] - (box.min[k] + box.size_mm[k])) > 1e-7)
+    const inside = min.every((v, k) => v >= box.min[k] - 1e-7) && max.every((v, k) => v <= box.min[k] + box.size_mm[k] + 1e-7)
+    if (!exact && partial && inside) add('form_envelope_incomplete', [m.component_id], 'The parts of this component lie inside its concept envelope but do not fill it yet.')
+    else if (!exact) add('concept_geometry_changed', [m.component_id], 'The refinement envelope differs from the exact selected concept.')
   }
   if (!checkpoint) {
     if (scope.pending_component_ids.length) add('form_components_pending', scope.pending_component_ids, 'These selected concept components remain outside this saved checkpoint.')

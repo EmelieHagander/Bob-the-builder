@@ -204,3 +204,48 @@ export async function fillServerRevisions(name: string, raw: unknown, memory: Re
     message: 'Nothing changed. The server takes each version from the database or from what you read in this request; read these records first: ' + unknown.slice(0, 6).join(', ') + '.' } }
   return { args }
 }
+
+// Owner feedback 2026-11-07 ("stoppa felloopar"): the same refused call must
+// not run again, and a third refusal for the same reason asks for another
+// approach. Since 2026-10-25 one requirement write was refused 18 times for
+// one reason; on 2026-11-07 Konrad sent the same edit with the same wrong
+// target four times. Refusals that depend on the project's state (read
+// first, a changed source) may succeed after a read and are only counted.
+const STATEFUL = new Set(['version_unknown', 'operation_reference_required', 'operation_reference_changed', 'operation_scope_changed',
+  'operation_source_required', 'target_revision_required', 'construction_sources_changed', 'sketch_base_differs', 'key_already_saved',
+  'plan_required', 'construction_changed', 'design_target_required'])
+const REFUSED = new Set(['invalid', 'conflict', 'needs_data'])
+const stable = (value: unknown): string => {
+  if (Array.isArray(value)) return '[' + value.map(stable).join(',') + ']'
+  if (value && typeof value === 'object') return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + stable((value as Json)[k])).join(',') + '}'
+  return JSON.stringify(value) ?? 'null'
+}
+const fnv = (text: string) => { let h = 0x811c9dc5; for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 } return h.toString(16) }
+export function createRefusalGuard() {
+  const refused = new Map<string, string>(), reasons = new Map<string, number>()
+  const reasonOf = (result: Json) => String(result.reason ?? result.validation?.code ?? result.status)
+  return {
+    /** A refusal to return instead of running the call, or null. */
+    before(name: string, args: unknown): Json | null {
+      const earlier = refused.get(name + ':' + fnv(stable(args)))
+      return earlier ? { status: 'invalid', reason: 'repeated_refusal', saved: false, refused_before: earlier,
+        message: 'Not run: this exact call was refused earlier in this request (' + earlier + '). Change what the refusal names, or take another approach.' } : null
+    },
+    after(name: string, args: unknown, result: unknown): unknown {
+      if (!object(result) || !REFUSED.has(String(result.status))) return result
+      const reason = reasonOf(result)
+      if (!STATEFUL.has(reason) && result.status === 'invalid') refused.set(name + ':' + fnv(stable(args)), reason)
+      const count = (reasons.get(name + ':' + reason) ?? 0) + 1
+      reasons.set(name + ':' + reason, count)
+      return count >= 3 ? { ...result, repeated: { count, reason,
+        note: 'Refused ' + count + ' times for the same reason in this request. Do not repeat the same fix: read what the refusal names, use another tool, or report the blocker.' } } : result
+    },
+    exportState: () => ({ refused: [...refused], reasons: [...reasons] }),
+    restoreState(state: unknown) {
+      refused.clear(); reasons.clear()
+      const s = state as { refused?: unknown; reasons?: unknown } | null
+      if (Array.isArray(s?.refused)) for (const r of s!.refused as unknown[]) if (Array.isArray(r) && typeof r[0] === 'string' && typeof r[1] === 'string') refused.set(r[0], r[1])
+      if (Array.isArray(s?.reasons)) for (const r of s!.reasons as unknown[]) if (Array.isArray(r) && typeof r[0] === 'string' && Number.isSafeInteger(r[1])) reasons.set(r[0], r[1] as number)
+    },
+  }
+}

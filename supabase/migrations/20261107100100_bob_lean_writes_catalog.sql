@@ -9,6 +9,8 @@
 --   server_revisions_version 1: no model types any revision number; the
 --     server fills each one (catalog items, measurements, constructions, the
 --     plan, the selected target, or what the model read in this request).
+--   refusal_guard_version 1: a refused call does not run again unchanged;
+--     a third refusal for the same reason asks for another approach.
 --   construction_sketch_version 2: save_construction_draft takes mode
 --     sketch|save; commit_construction_sketch takes new_key and is bound to
 --     the job's construction like the part edits (entry: a new wall did not
@@ -121,7 +123,7 @@ declare
  "card_description": "Use to save, read or discard the sketch of construction changes made with edit_construction_parts mode sketch, or of a new construction sketched with save_construction_draft mode sketch. A commit saves them as one revision with its whole-model check."
 }$lean_writes_commit$::jsonb;
   commit_binding jsonb:=$lean_writes_binding${"schema":[{"path":[],"hide":["record_id"],"refs":[{"field":"source_ref","kind":"construction","nullable":true,"when":"unbound"}],"role":"structure"}]}$lean_writes_binding$::jsonb;
-  flags jsonb:=$lean_writes_contract${"stable_tools_version":1,"server_target_version":1,"server_revisions_version":1,"construction_sketch_version":2}$lean_writes_contract$::jsonb;
+  flags jsonb:=$lean_writes_contract${"stable_tools_version":1,"server_target_version":1,"server_revisions_version":1,"refusal_guard_version":1,"construction_sketch_version":2}$lean_writes_contract$::jsonb;
   occurrences integer;
 begin
   perform pg_advisory_xact_lock(hashtextextended('ai_catalog:bob',0));
@@ -201,7 +203,7 @@ begin
     join shared.ai_prompt_versions v on v.id=p.active_version_id
     where p.app='bob' and p.prompt_key='agent-contract.ask-bob' and p.definition_kind='agent_contract' and p.retired_at is null for update of p;
   if not found or prior.metadata->>'construction_sketch_version' is distinct from '1'
-    or prior.metadata ? 'stable_tools_version' or prior.metadata ? 'server_target_version' or prior.metadata ? 'server_revisions_version' then
+    or prior.metadata ? 'stable_tools_version' or prior.metadata ? 'server_target_version' or prior.metadata ? 'server_revisions_version' or prior.metadata ? 'refusal_guard_version' then
     raise exception 'lean_writes_contract_unexpected';
   end if;
   select coalesce(max(version),0)+1 into next_version from shared.ai_prompt_versions where prompt_id=prior.prompt_id;
