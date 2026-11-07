@@ -2057,3 +2057,148 @@ of 25), start input, `plan_required` rejections and the `update_workpad`
 note before his first write, cache share and cost against the
 [table above](#cache-points-2026-11-06); Bob's picked count and
 `describe_tool` loads per turn.
+
+<a id="locked-paths-2026-11-07"></a>
+## Locked paths: the server rules that steer the models — 2026-11-07
+
+Owner question 2026-11-07: have we built "låsta vägar och hårdkodat
+beteende"? Two read-only code inventories (Bob's loop and tool session;
+workers, construction, writes, drawing) and the hand-over data since
+2026-11-02. Nothing was changed.
+
+**Inventory.** Bob's loop and session: 111 rules (35 refuse/defer/ignore,
+14 forced order, 27 caps or surface closing, 17 changes to the offered
+tools, 18 turn endings, nudges and injected notes). Workers, construction,
+writes and drawing: 185 (97 refusals, about 60 of them fixed refusal texts
+in the writer's error mapping; 21 forced orders; 37 caps and early job
+endings; 15 tool-offer rules; 15 injected notes). Three kinds:
+
+- *Fences* (authority and integrity): server-owned identities, exact
+  revisions, request quotes, `human_text`, schema checks, access checks,
+  the write-uncertain stop, budgets. Right to keep; the model cannot
+  negotiate them away.
+- *Plumbing* (cache and order stability, per-step tool fences, paging,
+  size caps). Invisible when they work.
+- *Steering* that replaced the model's judgement: the piece-progress family
+  (`workerPieceProgressVersion` 1–4: one write per batch, code readback,
+  form evidence, bounded facade review, design-review pause), hand-over
+  readiness, `failed_earlier_this_turn` and
+  `construction_piece_blocked_earlier_this_turn`, the repair role, nudges,
+  the completion gate, and this week's plan gate and focus. These are the
+  locked paths.
+
+**Measured.** 61 hand-overs to Konrad since 2026-11-02: ok 11, unavailable
+21 (mostly the 120 s aborts, now repaired), needs_verification 11,
+awaiting_design_review 9, step_budget 6, paused_at_limit 3. Since
+2026-11-04, when piece progress v2–v4 went live: **1 ok of 33.** Three
+turns ended `needs_verification` three times in a row — Bob re-dispatched
+Konrad into the same wall (Bob to the owner, 11-04 12:12: "Jag gav Konrad
+uppgiften en tredje gång … Ändå stoppades sparningen på samma sätt som de
+två första gångerna"). One turn had five `awaiting_design_review` in a row,
+each a new Konrad job of about 59k tokens. On 11-05 16:30 Bob wrote:
+"Systemet vill att ditt svar om 3D-vyn med det första fönstret ska vara
+sparat ihop med just den vyn. Först då släpper det fram nästa ändring i
+stommen. Du har redan svarat i chatten" — the v4 database facade hold
+(`construction_piece_attempts`) ignored the owner's chat answer, against
+the 2026-10-27 decision ("Ingen särskild godkännandeknapp … Ett tydligt
+svar på den visade modellen räcker"). On 11-05 18:48: "systemet stoppar
+alla nya försök resten av den här omgången. Det beror på att ändringen
+redan har nekats en gång" — the blocked-earlier rule. The specific
+`needs_verification` reason is not in `bob.execution_events` (tool and
+status only), so which sub-gate fired cannot be read back. Rules that never
+fired: the piece boundary deferral and the 8-per-batch deferral (0),
+nudges (0), `plan_required` (new). Loops: one run with 17 identical
+`operation_identity_is_server_owned` rejections — a fence with no exit.
+
+**Assessment.** The fences are right. The steering layer was added in two
+days (2026-11-03/04) as four pinned versions, each answering one incident
+("Box run 14", "ten rejected feature saves in Ladan"). Each is defensible
+alone; together they make Konrad's path read → one write → readback, check,
+form evidence, bounded review → stop → Bob shows → owner answers in chat →
+new job → gate on recorded feedback → …, and when one link is missing the
+job ends and Bob tries the same wall again. That is what the owner saw.
+
+**Proposal (owner decisions, nothing built).**
+1. The owner's chat answer is the review (2026-10-27): retire the v4
+   database facade hold for new jobs; keep `awaiting_design_review` only
+   when a piece changed visible form, not after every write.
+2. `needs_verification` sub-reasons become facts in the tool result Konrad
+   can act on in the same job (except a real write conflict), and the
+   reason is logged in `execution_events`.
+3. `failed_earlier_this_turn` / blocked-earlier apply to the identical
+   request only; a changed request may start a new job.
+4. Keep the fences; keep the plan gate and focus under measurement.
+5. Rule hygiene: one register of steering rules with the incident, the
+   metric and a sunset; a new steering rule is published only with a
+   measurement (CLAUDE.md: inspect tools, context, execution and results
+   before adding behavioural rules).
+
+<a id="worker-gates-2026-11-07"></a>
+### Decisions 1–3 built: the chat answer is the review, gate facts in the job, identical-request refusal — 2026-11-07
+
+Owner decision 2026-11-07 ("Ja bygg 1-3"), from the
+[locked-paths inventory](#locked-paths-2026-11-07).
+
+**Owner turns the same morning (published A and B, before 1–3).** Bed
+05:27–05:31 UTC (run `c85ddb10`, USD 1.46, 4 saved): Konrad got 14 tools
+instead of 25, wrote his plan first, and the cache held across compaction
+(Konrad cache 80 %, Bob 89 %); his part edit was refused with
+`construction_source_refresh_blocked`, the job ended `needs_verification`,
+and Bob's two further hand-overs were refused at once
+(`construction_piece_blocked_earlier_this_turn`). Bed again 05:47–05:50 (run
+`5294d293`, USD 1.27): the same refusal and the same lock; Bob told the
+owner "Sedan spärrade systemet alla ändringar av konstruktionen resten av
+omgången". The bed solution reads `ready` at target 17 when read as the
+owner afterwards, so the refusal concerned the revision or form scope Konrad
+sent; its issues are not logged. Entry 05:28– (run `68e22a5e`, still running
+at 05:51): Konrad's step 5 was cut at 120 s as `model_output_window`, the
+next step with the note succeeded and read 90,896 cached tokens; compaction
+steps read the fixed points (62,526 and 82,833 instead of 0); Bob then had
+five `compact_design_intent_required` and two `edit_path_unsupported`
+refusals on `edit_project_record`.
+
+**Correction (source; not yet published).**
+
+- *Pin.* `agent-contract.ask-bob` gets `worker_gates_version: 1`
+  (`20261107070100_bob_worker_gates_catalog.sql`, publication
+  `bob-worker-gates-v1`); new checkpointed, claimed jobs with `workpad_version`
+  1 pin `workerGatesVersion: 1`. Older jobs and manifests change nothing.
+- *1, the chat answer is the review.* Under the pin Konrad is not stopped
+  after every saved piece (`pauseForDesignReview` is not passed); Bob shows
+  the saved result and the owner answers in chat, as decided 2026-10-27. The
+  database facade hold existed only for "Bygga liten lada";
+  `20261107070000_retire_lada_facade_piece_policy.sql` removes that
+  project's piece policy, its four facade envelopes and its one open attempt
+  (revision 5, front, `awaiting_review` since 2026-11-04), with exact-state
+  guards and the removed values recorded in the file. The existing trigger
+  then returns early and the progress read answers `not_configured`, as for
+  every other project. No construction, solution, plan, task or feedback row
+  changes.
+- *2, gate findings are facts.* Under the pin an open piece verification
+  (readback, check, form scope or evidence, local check) is added to the
+  tool result as `piece_open {reason, saved: true, approval_not_implied:
+  true, note}` and Konrad continues; a rejected piece write is returned to
+  him as its normal `conflict` result instead of ending the job, also after a
+  resume. Every receipt still reaches Bob. A stopped hand-over
+  (`needs_verification`, `awaiting_design_review`, `unavailable`,
+  `not_started`) now logs its reason as the rejection code in
+  `bob.execution_events` (telemetry only, always on).
+- *3, identical request only.* Under the pin the per-turn latches
+  (`failed_earlier_this_turn`, `construction_piece_blocked_earlier_this_turn`)
+  are keyed by the worker and an FNV-1a fingerprint of Bob's request
+  (`structure_r_<16 hex>`), so Bob may start a new job after changing the
+  source or the request; the identical request is still refused without a
+  model call.
+- *Tests.* `bob-worker-piece-progress`: an open form scope is a fact and
+  Konrad continues with both receipts; a rejected v4 write is returned to
+  him, also on resume. `bob-worker-checkpoint`: the identical failed request
+  is refused, a changed one dispatches a second Konrad job, the latch is the
+  fingerprinted key. `bob-worker-focus`: the pin is published; the
+  fingerprint is stable and differs for changed text or findings.
+
+**Publication note.** `main` also carries #490 (another session; chat
+notices) with Edge changes in `ask-openai.ts`, `delivery-language.ts`,
+`drawing-resume-reply.ts`, `project-turn.ts` and an unapplied migration
+`20261106233000_bob_failure_notice_marker.sql`. Publishing the runtimes from
+`main` publishes those changes too; the owner decides whether #490's
+migration is applied in the same publication.

@@ -160,3 +160,13 @@ test('the picker names up to the pinned limit for Bob, and only a worker\'s opti
   assert.equal(input.latest_instruction, 'Sätt dit en dörr.'); assert.deepEqual(input.always_loaded, structure.focus!.core)
   assert.deepEqual((input.candidates as { name: string }[]).map(c => c.name), structure.focus!.optional, 'every optional tool has a card')
 })
+
+test('the worker gates pin is published for new jobs and the request fingerprint tells identical from changed requests', async () => {
+  const { requestFingerprint } = await import('../supabase/functions/_shared/project-answer.ts')
+  assert.equal(catalogFixture().definition('agent-contract.ask-bob', 'agent_contract').metadata.worker_gates_version, 1)
+  const a = requestFingerprint({ job: 'Gör lådan 500 mm bred.', findings: null })
+  assert.match(a, /^[0-9a-f]{16}$/)
+  assert.equal(requestFingerprint({ job: 'Gör lådan 500 mm bred.', findings: null }), a)
+  assert.notEqual(requestFingerprint({ job: 'Gör lådan 500 mm bred, en del i taget.', findings: null }), a)
+  assert.notEqual(requestFingerprint({ job: 'Gör lådan 500 mm bred.', findings: 'ny' }), a)
+})

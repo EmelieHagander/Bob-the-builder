@@ -4,7 +4,7 @@ import { setupSharedSocial } from './shared-social.ts'
 
 /** Operator-approved production data backfills are not schema for synthetic projects. */
 export const isSyntheticSchemaMigration = (name: string) => name.endsWith('.sql')
-  && !/_(living_plan_backfill_five_projects|lada_facade_piece_configuration)\.sql$/.test(name)
+  && !/_(living_plan_backfill_five_projects|lada_facade_piece_configuration|retire_lada_facade_piece_policy)\.sql$/.test(name)
 
 /** Full Bob schema with isolated fake Auth/Storage/shared-app contracts.
  * An explicit boundary is only for testing a historical migration policy. */

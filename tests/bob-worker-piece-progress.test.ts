@@ -18,7 +18,7 @@ const model = (id: string, calls: ReturnType<typeof call>[] = []): OpenAIService
 
 function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; readback?: (revision: number) => unknown;
   checkInSave?: boolean; serverCheck?: 'checked' | 'unavailable'; inspect?: (revision: number) => Record<string, unknown>;
-  unmappedReview?:boolean; pauseForDesignReview?: boolean; boundedReview?: (revision: number) => Record<string, unknown>; conflict?: boolean; afterStep?: () => void;
+  unmappedReview?:boolean; pauseForDesignReview?: boolean; gatesAsFacts?: boolean; boundedReview?: (revision: number) => Record<string, unknown>; conflict?: boolean; afterStep?: () => void;
   restored?: WorkerProgress; finishReadback?: () => Promise<unknown[]>; access?: boolean }) {
   const commands: { name: string; revision: number | null }[] = []
   const scopedChecks: string[][] = []
@@ -47,7 +47,7 @@ function harness(pieces: ReturnType<typeof model>[], opts: { enabled: boolean; r
       scopedChecks.push(t.component_ids ?? [])
       return { ...t, status: opts.serverCheck ?? 'checked', concept_ready: true }
     }),
-    ...(opts.enabled ? { pieceProgress: { unmappedReview:opts.unmappedReview, readSaved: async (receipt: Record<string, unknown>) => {
+    ...(opts.enabled ? { pieceProgress: { unmappedReview:opts.unmappedReview, ...(opts.gatesAsFacts ? { gatesAsFacts: true } : {}), readSaved: async (receipt: Record<string, unknown>) => {
       const revision = receipt.revision as number
       commands.push({ name: 'verify_exact_revision', revision })
       return opts.readback?.(revision) ?? { status: 'ok', artifact_id: 'c1', revision,
@@ -319,4 +319,31 @@ test('unmapped legacy constructions return an exact checked review boundary with
  const h=harness([model('one',[call('a','edit_construction_parts')])],{enabled:true,pauseForDesignReview:true,unmappedReview:true,
   inspect:revision=>({status:'construction_scoped',artifact_id:'c1',revision,scope:'whole_saved_construction',form_mapping:false,verification:'unverified'}),boundedReview:()=>({status:'not_configured'})})
  const report=await h.result;assert.equal(report.status,'awaiting_design_review');assert.equal(report.receipts[0].piece_evidence.form_mapping,false);assert.equal(h.observed.length,1)
+})
+
+// Owner decision 2026-11-07 (decisions 1–2): with worker gates an open piece
+// verification and a rejected piece write are facts Konrad acts on in the same job.
+test('with worker gates an open form scope is a fact in the tool result and Konrad continues', async () => {
+  const { result, observed, commands } = harness([
+    model('one', [call('a', 'edit_construction_parts')]), model('two', [call('b', 'edit_construction_parts')]), model('done'),
+  ], { enabled: true, gatesAsFacts: true, inspect: revision => ({ status: 'no_form_scope', revision, verification: 'unverified' }) })
+  const report = await result
+  assert.equal(report.status, 'ok', 'the job is not ended by the open verification')
+  assert.equal(observed.length, 3, 'Konrad decided the next step himself')
+  assert.equal(commands.filter(c => c.name === 'edit_construction_parts').length, 2)
+  const fact = JSON.parse(String(observed[1].messages!.find(m => m.role === 'tool')!.content))
+  assert.deepEqual([fact.status, fact.piece_open.reason, fact.piece_open.saved, fact.piece_open.approval_not_implied], ['saved', 'saved_form_scope_missing', true, true])
+  assert.ok((report.receipts as unknown[]).length >= 2, 'both saves still reach Bob as receipts')
+})
+
+test('with worker gates a rejected v4 piece write is returned to Konrad instead of ending the job; resume does not stop on it either', async () => {
+  const { result, observed } = harness([
+    model('rejected', [call('a', 'edit_construction_parts')]), model('reported'),
+  ], { enabled: true, gatesAsFacts: true, conflict: true, boundedReview: () => ({ status: 'not_configured' }) })
+  const report = await result
+  assert.equal(report.status, 'ok'); assert.equal(observed.length, 2)
+  assert.equal(JSON.parse(String(observed[1].messages!.find(m => m.role === 'tool')!.content)).status, 'conflict')
+  const restored: WorkerProgress = { version: 1, step: 0, previous: 'rejected', messages: [], calls: [{ tool: 'edit_construction_parts', status: 'conflict' }], receipts: [], order: ['edit_construction_parts'] }
+  const resumed = harness([model('after-resume')], { enabled: true, gatesAsFacts: true, conflict: true, boundedReview: () => ({ status: 'not_configured' }), restored })
+  assert.equal((await resumed.result).status, 'ok'); assert.equal(resumed.observed.length, 1)
 })
