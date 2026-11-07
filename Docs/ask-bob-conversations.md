@@ -1185,6 +1185,20 @@ localisation call before settlement. Complete provider failure or no remaining
 budget uses language-neutral warning/open/saved marks and original labels.
 That path preserves partial evidence and never re-executes writes.
 
+**Chat line for notices — source 2026-11-06 (owner decision).** Every notice the
+server writes into an answer is also recorded in `evidence.notices` (`kind`
+failed / uncertain / info, the notice `code`, its exact `text`, and a stopped
+drawing's owner-actionable `missing` gaps). The stored answer text is unchanged,
+so the transcript, Bob's memory and debugging keep the full notice. The chat
+removes the marked text and shows one line instead: *Bob dropped the hammer,
+nothing was done this turn*; when receipts exist, *Only this was saved: …*; an
+uncertain save asks the owner to check before asking again. `info` notices
+(transcript not synchronised) are hidden without a line. The failed drawing-job
+notice written by `record_failed_drawing_job` carries the same marker
+(migration `20261106233000`). Cost notices about possible double charges
+(K5, 2026-10-07) are not marked and still show. Answers stored before this
+change show their original text. Edge deploy and migration are pending.
+
 ### Receipt-owned drawing event replies — 2026-10-10
 
 **Implemented and technically deployed; actual member acceptance remains in [State, release E](bob-delivery-flow.md#six-outcomes-in-five-releases).** [Verification](foundation-verification.md#receipt-owned-drawing-event-replies--2026-10-10) owns the test, CI and exact deployed-file readback evidence. Drawing-event replies use this same phrasebook/notice composer instead of the separate free `drawing_resume_reply` answer. Only an explicit CAD-writer/request-store receipt for the current project establishes a delivered drawing; provisional `saved` flags and free `outcome.user_message` do not. Other verified writes remain partial results. The message includes exact receipt titles and revisions and original gaps; it cannot manufacture a new owner permission question. *Superseded 2026-10-26 (source only):* the technical/recovery cause code and `next_action` guidance are no longer shown; the outcome selects an owner meaning and gaps with codes or IDs are left out ([human text](ask-bob-writes.md#human-text-holds-only-prose--owner-decision-2026-10-26)).

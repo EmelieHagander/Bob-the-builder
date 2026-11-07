@@ -11,7 +11,7 @@ import { DataError, UserError, toDataError } from '../lib/userErrors'
 export * from './databaseCore'
 // Explicit exports win over the legacy star export above. Ask Bob now resolves
 // server-owned conversation state while the rest of databaseCore stays stable.
-export { renewDrawingRequests, cancelAskBobTurn, subscribeBobInbox, getBobInbox, markBobChatRead, BOB_INBOX_EVENT, BOB_CONTEXT_TOO_LARGE, askBob, getAskBobConversation, getAskBobTurnProgress, getAskBobDrawingRecovery, clearAskBobHistoryCache, resetAskBobConversation, refreshAskBobProject, describeBobProgress } from './bobConversation'
+export { renewDrawingRequests, cancelAskBobTurn, subscribeBobInbox, getBobInbox, getBobUnreadProjects, markBobChatRead, BOB_INBOX_EVENT, BOB_CONTEXT_TOO_LARGE, askBob, getAskBobConversation, getAskBobTurnProgress, getAskBobDrawingRecovery, clearAskBobHistoryCache, resetAskBobConversation, refreshAskBobProject, describeBobProgress } from './bobConversation'
 export type { BobProgress, BobInbox } from './bobConversation'
 
 function checked<T>(result: { data: T | null; error: { message: string } | null }): T {

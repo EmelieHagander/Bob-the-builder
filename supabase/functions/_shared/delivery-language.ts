@@ -1,5 +1,5 @@
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
-import type { ProjectWriteReceipt } from '../../../src/data/provenance.ts'
+import type { AnswerEvidence, AnswerNotice, ProjectWriteReceipt } from '../../../src/data/provenance.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 
 export type DeliveryNotice = 'incomplete' | 'drawing_unavailable' | 'drawing_prerequisite' | 'drawing_incomplete' | 'uncertain' | 'recovered' | 'chat_unsynced'
@@ -29,6 +29,15 @@ export function parseDeliveryLanguage(value:unknown):DeliveryLexicon|null{
  * outcome codes and Bob's internal guidance stay in model-facing channels. */
 export interface NoticeInput { notice?: DeliveryNotice; missing?: string[]; receipts?: ProjectWriteReceipt[] }
 const receiptLabel=(r:ProjectWriteReceipt)=>r.label+(typeof r.revision==='number'&&Number.isSafeInteger(r.revision)?' · v'+r.revision:'')
+/** Marks a formatted notice so the chat can show its short line instead. */
+export function answerNotice(input: NoticeInput, text: string): AnswerNotice {
+  const missing=input.missing?.filter(Boolean)
+  return { kind: input.notice==='uncertain'?'uncertain':input.notice==='chat_unsynced'?'info':'failed', code: input.notice??'receipts', text,
+    ...(missing?.length?{missing}:{}) }
+}
+export function withNotice(evidence: AnswerEvidence, notice: AnswerNotice): AnswerEvidence {
+  return { ...evidence, notices: [...(evidence.notices??[]), notice] }
+}
 export function neutralDeliveryNotice(input: NoticeInput): string {
   return [...(input.notice?['⚠']:[]), ...(input.missing??[]).map(x=>'○ '+x), ...(input.receipts??[]).map(r=>'✓ '+receiptLabel(r))].join('\n')
 }
