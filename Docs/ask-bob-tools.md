@@ -287,6 +287,92 @@ tokens, and every box construction was glue only or screws only by chance.
 
 Pinned manifests keep the former schemas, rule fastener and lookups.
 
+<a id="konrad-lean-writing"></a>
+**Konrad writes the construction, code writes what follows — built 2026-11-07,
+not yet published** (`tools.save_construction_draft`
+`lean_construction_version` 1, owner: "Kör B"; needs `default_zero_version` 1,
+`joint_fastener_version` 2, the FORM refinement and both sketch stores).
+Entry turn 2026-11-07: an 11-part wall was 26,590 characters Konrad typed in
+75–120 s; half were bindings and derived nodes, a quarter joints
+([record](bob-runtime-path-audit-2026-11-04.md#lean-construction-2026-11-07)).
+
+- **Formulas.** A number in the recipe, or in an upserted definition or part,
+  may be a formula over parameter node names (`"D - st"`, `"(h - hdr) / two"`):
+  `+ - * /`, parentheses, spaces around a minus sign. Code compiles each
+  operation to a derived node named `fx.<hash>` (the same formula is the same
+  node in every save) and binds the field, so the saved graph, provenance and
+  read-back are unchanged. Numbers are not formula syntax: each needs a named
+  decision or measurement with its reason. A repeat's `spacing_mm` takes a
+  formula. Fields get their real values from the graph before the recipe is
+  checked. A formula replaces a binding for its field. A binding to a path
+  the recipe lacks is refused and named (`binding_path_unknown`). A number
+  written where code computes the field from a node is refused, with the
+  computed value; the saved number sent again is computed anew and listed in
+  the answer (`recomputed`). Compilation stops at the plan's 1,024 nodes
+  (`formula_too_large`). Source: `cad-formulas.ts`.
+- **Joint rules.** `joint_rules` is Konrad's joining decision for two
+  definitions (fasteners and reason); code writes one joint, id `jr.<a>.<b>`,
+  for every pair of such parts touching face to face that has no joint, with the
+  faces in local coordinates, and the answer lists each joint it wrote and its
+  rule (`rule_joints`). Touching parts that must not be joined that way (resting,
+  sliding, removable) go in the rule's `except`; they stay
+  `contact_without_joint` until they get their own joint, as does any touching
+  pair without a rule. Existing parts are joined as the rule declares;
+  reference geometry is never joined. In a part edit a rule applies only to
+  the parts the edit adds, names or moves (computed place or size changed), so
+  an earlier `except` holds for the rest; a save or an edit with only rules
+  applies to every touching pair. Where a rule applies, code's joints take its
+  fasteners and reason, and code's joint of a pair it names in `except` goes;
+  `except` is sent again whenever the rule is. In saves and part edits a joint
+  code wrote follows its parts: written again when they moved, removed when
+  they are gone, when one becomes reference geometry, or when both are still
+  boxes that no longer touch (`code_joints_removed`). A role or parameter
+  change through its own tool leaves them until the next part edit; the check
+  names a joint whose faces no longer meet. Rules that write nothing say so
+  (`rule_note`; an edit with only such rules is refused as
+  `rules_wrote_nothing`). Rules last for the save or edit (and the sketch)
+  they come with.
+  Source: `construction-joint-rules.ts`.
+- **FORM mapping kept by code.** A part no mapping names goes to the active
+  concept component whose envelope holds it, only when exactly one does; a
+  removed part leaves its mapping;
+  `form_assign` (part edits) moves a part on purpose. A part outside every
+  component, or inside several, is named, not guessed. A part edit now carries
+  the mapping to the database (`20261107150000_construction_edit_form_mapping.sql`),
+  whose readiness seam validates and stores it for the new revision.
+- **A write refused for how it was written stays in the sketch.** Only a text
+  that is not plain prose, a formula or a joint rule (owner review 2026-11-07):
+  the rest is kept in the sketch with the issue, so the next call sends only the
+  correction, and commit checks everything again. A construction error
+  (geometry, concept, readiness, collisions) is refused as before and nothing
+  is kept: a joint-rule refusal, or a number written where a node computes
+  the field, is returned only once the construction passes its checks. A
+  formula that cannot be read hides the geometry, so it is kept and the
+  commit checks everything again. A kept sketch is never a
+  saved construction. A saved construction can be
+  revised whole in a keyed sketch (`save_construction_draft` with its
+  `record_id`, mode sketch), committed with its `new_key`; the sketch keeps the
+  construction and revision of its first call, so a commit never overwrites a
+  newer revision, and it cannot continue or be committed as another
+  construction (`operation_scope_changed`). A refused direct write is kept
+  only when no sketch work is open (for a save, under its key); a second
+  refused try replaces the first, and discards it when it cannot be kept
+  itself. A keyed sketch of a saved construction is fenced to it whether or
+  not the job is bound to one. The sketch of a refused part edit is dropped
+  when a saved change covers it (its ids, rules, assignments and text), and
+  named as open otherwise.
+- **What follows from a part removal.** Removing a part removes its role, its
+  joints, its bindings and formula nodes, and the material of a removed
+  definition; the answer lists the roles, joints and materials
+  (`removed_with_parts`). A node Konrad wrote stays: he removes it in the same
+  edit, or the edit is refused and names it (`parameter_unused_node`).
+- **Roles.** `quantity_policy` follows from the role and is not written; a
+  repeat's copies take the role given for the repeat's id.
+
+The cost ledger prices a Claude answer cut by our own deadline from its known
+input and the output that streamed, marked `cost_basis =
+streamed_output_estimate` (a lower bound: thinking streams as a summary).
+
 <a id="materials-worker"></a>
 **Superseded for new manifests by [the build team](#build-team) (built
 2026-10-31): Mattias's first form, kept by pinned manifests.**

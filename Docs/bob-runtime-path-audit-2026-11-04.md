@@ -2760,3 +2760,211 @@ after. No migration.
 Returned sources match the merged checkout byte for byte except the known
 type-only `cad-intake.ts` erasure; both bundles contain `capCachePoints`.
 Remaining: a new owner turn shows no `cache_control` refusal.
+
+<a id="lean-construction-2026-11-07"></a>
+### Built: Konrad writes the construction, code writes what follows — 2026-11-07
+
+Owner, 2026-11-07, after the Entrén turn: five root measures, then "Kör B"
+(all in one change) "sen auditar vi det några gånger". Built and tested
+locally; not deployed, not applied. Pin: `lean_construction_version` 1 on
+`tools.save_construction_draft` (publication `bob-lean-construction-v1`).
+
+**Root cause, measured.** The saved 11-part wall (`d0e2fa57`, rev 1) holds 1,939
+characters of geometry, but the save Konrad typed was 26,590 characters
+(≈ 8,000 tokens): parameter plan 13,940 (40 nodes, 81 bindings, 27 derived),
+joints 6,714 (21 joints), policy 1,447, materials 748, questions 1,058. Typing
+that took 75–120 s per answer; three answers were cut by the 120 s window, and
+four refusals (`human_text`, `sketch_existing_construction`, twice
+`form_instance_unmapped`) threw away whole written payloads of 7,000–10,700
+output tokens.
+
+| Measure | What code now does | Source |
+|---|---|---|
+| 1. Joint rules | One rule per definition pair; code writes a joint for each touching pair without one, faces in local coordinates. Contact alone still declares nothing. | `construction-joint-rules.ts` |
+| 2. Formulas | A recipe number may be a formula over node names; code adds `fx.<hash>` derived nodes and bindings. Same stored graph. | `cad-formulas.ts` |
+| 3. FORM mapping | Code maps a new part to the component holding it; edits carry the mapping to the database; `form_assign` overrides. | `construction-form.ts`, `20261107150000_…sql` |
+| 4. Cost truth | A cut Claude answer is priced from its input and streamed output, `cost_basis = streamed_output_estimate`. | `anthropic-service.ts` |
+| 5. Kept payloads | A refused construction write stays in the sketch; corrections are small; commit re-checks text. A saved construction can be revised whole in a keyed sketch. | `construction-draft.ts` |
+
+**Dropped from the proposal, with the numbers.** *Trimming Konrad's own saved
+writes from his context* would save under USD 0.10 per job: an 8,000-token
+write read from cache costs about USD 0.003 per later call; measures 1 and 2
+shrink the writes themselves. *Separate thinking tokens* cannot be measured:
+Claude reports one output count, and thinking streams as a summary.
+
+**Size.** The two tool schemas grow from 27.8 to 37.3 kB (save) and 32.5 to
+41.5 kB (edit), mostly the formula alternative repeated at each number field;
+dispatch sends repeated sub-schemas once as `$defs` (`tool_schema_dedup`), and
+the schemas are read from cache within a job. The expected write for the same
+wall is about a third of the former 26,590 characters (formulas instead of 81
+bindings and 27 nodes; two rules instead of 21 joints); measured only after a
+live turn.
+
+**Verification (local, focused).** `lean-construction-units` 6/6 (formula
+graph, refusals by path, negative values and repeat spacing, edit upserts and
+unused formula nodes, rule joints accepted by the check, FORM mapping), and
+`lean-construction` 4/4 against the database: a frame saved with formulas and
+one rule; a part added by an edit, with its joints and mapping (the edit refused
+live at 13:48 and 13:59); a refused edit kept and corrected in the sketch,
+refused text re-checked at commit; a refused new save kept by key, and a saved
+construction revised whole by key. `construction-sketch` 12/12 asserts that code
+validates exactly the published schemas with the production pins.
+`anthropic-service` 11/11 (cut answers priced). Five suites fail identically on
+`main`.
+
+**Owner review the same day (external review relayed by the owner), applied.**
+(1) Joints are not only geometry: a rule is Konrad's decision per definition
+pair, `except` leaves touching pairs unjoined, and the answer lists every joint
+code wrote (`rule_joints`). (2) Formulas must not change the model: a test
+compiles the same wall in the old hand-written format and with formulas and
+asserts identical geometry, bindings and values, and identical geometry after
+the same measure change through the `change_construction_parameters` compiler.
+(3) The size and time gain is a hypothesis until measured. (4) Code maps a part
+to a concept component only when exactly one holds it. (5) Only writing errors
+(text, formula, joint rule) are kept in the sketch, never construction errors.
+
+**Audit 3, offline on the real wall (no model call).** The saved entry wall
+(`d0e2fa57` rev 1) rewritten in the lean format by script: every bound field
+as the formula of its node, code zero bindings as 0, one rule per definition
+pair. Compact JSON as the model would type it, without server-added fields:
+
+| | Old | Lean |
+|---|---:|---:|
+| Characters | 20,651 | 9,808 (−52 %) |
+| Tokens (Bob's counter, approximate for Claude) | 6,495 | 3,245 (−50 %) |
+| Parameter plan | 9,144 (40 nodes, 81 bindings) | 1,579 (12 declared nodes) |
+| Joints | 5,854 (21 joints) | 1,561 (7 rules) |
+| Recipe | 1,680 | 2,759 (formulas in place of numbers) |
+
+The lean wall compiles to byte-identical geometry, and the 7 rules write
+exactly the 21 joints of the original (none missing, none extra). One rule
+(plate–stud) carries one reason where the original had six (corner, king and
+end stud, top and bottom); a different reason per joint needs explicit joints.
+Still typed per part: instance roles (1,357) and open questions (1,053). The
+earlier forecast of about 2,500 tokens was optimistic; time per answer is
+measured only live.
+
+**Audit round 1 (three independent reviewers: formulas; sketches and the
+database; joints, FORM and cost), 32 findings, fixed the same day.**
+
+| Area | Found | Now |
+|---|---|---|
+| Formulas | Removing a part placed by formula failed (`parameter_path_missing`): code's bindings stayed | Bindings for a part that is gone go with it, then unused formula and zero nodes |
+| | A hand-made `fx.` node could change what a formula means | An `fx.` name must be the hash of what it computes; a copied code node is accepted unchanged |
+| | Placeholders failed recipe rules (a tube's diameter) | Fields get their real values from the graph before the recipe is checked |
+| | A number where code computes the field was silently replaced | Refused, naming the field, its node and the computed value |
+| | Unary minus, units per field, unknown names, edit conflicts | Leading minus negates the product; wrong unit and unknown names named by field |
+| Sketches | A keyed sketch could be committed onto another construction, or over a newer revision | A keyed sketch keeps the construction and revision of its first call; the commit is checked against that revision |
+| | A kept text could block rebase; a refused edit's sketch stayed open after the fix saved | Text is checked at commit only; a sketch begun only to keep a refused direct change is dropped when a change saves |
+| | Formula errors in part edits were never kept | Edit sketches keep what was written; formulas compile at each check |
+| Joints and FORM | The sketch check used hand joints and the unextended mapping | It checks what the commit would save |
+| | Existing touching parts stayed unjoined; a moved part kept a stale code joint | Existing pairs get a joint with nothing fastened; code joints follow their parts or go |
+| | A rule alone could not join saved parts | A rule-only edit writes the joints it finds |
+| Cost | The estimate reached the ledger but not the turn budget; it was also written for network errors | The budget and events see it; only our own deadline cuts are estimated, and an unknown input stays unknown |
+
+Not changed: `form_assign` only with a part change (the database refuses an
+edit with no change). Tests: `lean-construction-units` 10/10,
+`lean-construction` 7/7.
+
+**Audit round 2 (two reviewers: the round-1 fixes, and a fresh read of the
+whole diff), fixed the same day.** Round 1's fixes held; these were new or
+not yet whole.
+
+| Area | Found | Now |
+|---|---|---|
+| Formulas | A binding to a mistyped path was dropped without a word | Refused as `binding_path_unknown`, naming each path (save and edit) |
+| | A part sent again with its saved number after its node changed was refused | The saved number is accepted and computed anew; only a new number where code computes the field is refused, and hand bindings are not checked as formulas |
+| | `w * w` passed until the evaluator; a formula and a binding for one path conflicted | Unit rules are checked at compile and named by field; a formula replaces a binding for its path |
+| | A strict schema pattern refused a mistyped formula as a wrong type, so it was never kept | Any short text is accepted by the schema; the compiler names it and the sketch keeps it |
+| Sketches | A refused edit's shadow sketch was dropped by any saved edit | Dropped only when a saved change covers it; otherwise the answer names it as open |
+| | A refused direct edit was merged into ordinary open sketch work | Kept only when no sketch is open |
+| | Rules and assignments piled up across sketch calls, also for removed definitions and parts | Filtered when their definitions or parts go |
+| Joints | An `except` from the save was forgotten by the next part edit | A part edit joins only parts it adds or changes |
+| | Existing pairs got a joint with nothing fastened | The rule applies as declared; `except` is where it does not |
+| | A part turned into a cut or other shape lost its code joints | A code joint goes only when its parts are gone, or both are still boxes and no longer touch |
+| | A rule-only edit did not say what it wrote | It lists `rule_joints` |
+| Removal | Removing a part left its role and joints, so the edit was refused | Its role, joints, bindings, formula nodes and a removed definition's material go with it, and the answer lists them; a node Konrad wrote stays until he removes it, since a decided value is not dropped unseen |
+| Roles | Every role needed `quantity_policy`; a repeat needed one entry per copy | `quantity_policy` follows from the role; a repeat's copies take the role given for its id |
+| Cost | The cut-answer estimate was read as a drawing's reserved cost, so drawing reservations settled early | The failure carries `costEstimate`; reservations stay pending until a real price is known |
+
+Tests: `lean-construction-units` 10/10, `lean-construction` 10/10; 55
+focused files 415/420. The five failures are catalog-parity tests that fail
+identically on `main` (`ai-catalog-fixture-replay`, `construction-fastener-tools`,
+`construction-parameter-catalog`, `konrad-lean-catalog`, `tool-catalog-parity`):
+older publications they assert as the latest. This PR adds no difference to
+them; `konrad-lean-catalog` now also reads the lean pin. Deno check of
+`bob-worker` and `ask-bob` passes.
+
+**Audit round 3 (two reviewers: the round-2 fixes, and correctness and
+security, the owner's Audit 2), fixed the same day.**
+
+| Area | Found | Now |
+|---|---|---|
+| Sketch scope (security) | A keyed sketch of construction A could continue, or be committed, from a job bound to B, and overwrote A | Refused as `operation_scope_changed` |
+| Sketches | The sketch check read a repeat's role unexpanded and stopped at `invalid_instance_policy`, hiding collisions and FORM | It checks the roles the commit saves |
+| | A kept rule-only change was dropped by any saved edit | Dropped only when the saved change also carries its rules, assignments and text |
+| | A save refused for its text was merged into open sketch work under its key | Kept only when no sketch work is open under the key |
+| | Two refused tries were merged, so a part dropped in the second still reached the commit | The second try replaces the first |
+| Keep rules | A construction error behind a joint-rule refusal, or behind a number written where a node computes the field, was kept | Those refusals come only after the construction checks pass; an unreadable formula hides the geometry, so it is still kept and the commit checks everything |
+| Joints | A part made reference geometry kept code's joints | They go |
+| | A rule restated with a pair in `except` kept code's joint for that pair | It goes |
+| | A rule in a node-only edit wrote nothing; upserting a definition lost earlier excepts; new fasteners did not reach code's joints of edited parts | A rule applies to parts the edit adds, names or moves (computed place or size changed), and their code joints take it; rules that write nothing say so |
+| Formulas | The saved number sent again was recomputed without a word | Listed in the answer (`recomputed`) |
+| Limits (security) | Formulas could build tens of thousands of nodes before the plan limit; repeated role rows multiplied | Compilation stops at 1,024 nodes; rows naming an id twice are not expanded |
+| Cost | Execution events showed a cut answer as free | They carry its estimated tokens, cost and `cost_basis` |
+| Tests | One check passed without checking (an invalid `quantity_policy` stopped it early) | It runs, and asserts it ran |
+
+Checked clean: both patched database functions stay SECURITY DEFINER with an
+empty `search_path`, each patch anchor must match once, no grant changes, no
+injection path; edit sketches commit through the database's revision check;
+sketch stores are scoped per thread and turn; formula parsing is linear and
+bounded; server revisions in joint rules come from the catalog.
+
+Tests: `lean-construction-units` 12/12, `lean-construction` 12/12,
+`lean-entrance-wall` 1/1; 57 focused files 432/437, the five failures the same
+catalog-parity tests as on `main`, with identical differences. Deno check
+passes.
+
+Open, low: (1) a cut answer's estimate is not added to the turn budget when the
+step yields at the segment wall; the ledger row is written, and new pinned Bob
+turns have no spending stop. A fix needs the estimate journaled. (2) Sketches
+keep catalog revisions filled at the sketch call (joints, materials, now joint
+rules); an item revised before the commit commits its older revision. (3) A
+`form_assign` naming a part the construction lacks is ignored, not refused.
+(4) Publication order: migration `20261107150000` before the functions, or
+estimated ledger rows fail to insert.
+
+**Audit round 4 (one reviewer, a convergence check of round 3), fixed the
+same day.** Round 3's rows hold. Found: the construction fence skipped jobs
+bound to no construction (`record_id` null), so a new-wall job using the same
+key could continue and commit another construction's sketch (medium,
+confirmed); now any call or commit not naming the sketch's construction is
+refused. Low: a second refused try that could not be kept left the first one
+open (now discarded, `earlier_try`); a rule-only edit that wrote nothing got an
+unexplained database refusal (now `rules_wrote_nothing`), and code joints a
+restated `except` removed were not reported (now `code_joints_removed`); model
+texts did not say `except` is sent again with its rule (now in the schema);
+the formula cap counted old nodes about to be pruned (now only new ones). Not
+changed: a role or parameter change through its own tool leaves code joints
+until the next part edit (documented; the check names faces that no longer
+meet). Tests: `lean-construction` 13/13; 57 focused files 433/438, the same
+five catalog-parity failures as on `main`, with identical differences. Deno
+check passes.
+
+**Audit 4, local, on the real wall (no model call).** The saved entry wall
+(`tests/fixtures/entrance-wall-construction.json`) goes through the same tools
+and database twice: as saved live (old format, 15,463 characters) and in the
+lean format (8,155: formulas, seven rules, one mapped part). Project
+measurements are decisions with the same values; fasteners are left out
+(`tests/lean-entrance-wall.test.ts`). Result: the same geometry, the same 21
+joints on the same faces, the same roles and the same completed mapping; after
+the window width changes, both computed walls are still identical. The part
+edit refused twice live (`form_instance_unmapped`) saves: code maps the new
+stud to the wall and the stud–plate rule writes its two joints. Live
+measurement (Entrén, Våningssäng 2) needs publication.
+
+**Open.** Reads still show the stored graph (nodes and bindings), not formulas;
+an edit names nodes, not the formulas that made them. Instance roles
+(`instance_policy`, 1,447 characters for the wall) are still written per part.
+Live measurement of write size, refusals and cost is the next owner turn.
+The five catalog-parity tests red on `main` are a separate repair.

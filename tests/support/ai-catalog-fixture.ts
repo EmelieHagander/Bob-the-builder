@@ -781,6 +781,16 @@ for(const migration of migrations){
   if(contract.metadata.construction_sketch_version!==1||contract.metadata.stable_tools_version!==undefined||contract.metadata.server_target_version!==undefined||contract.metadata.server_revisions_version!==undefined||contract.metadata.refusal_guard_version!==undefined)throw new Error('lean_writes_contract_unexpected')
   publishAs(contract,publication);contract.metadata={...contract.metadata,...flags};versions.set(contract.key,versions.get(contract.key)!+1)
  }
+ // Owner decision 2026-11-07 ("Kör B"): lean construction writing. The
+ // migration carries the whole definitions; the parity tests compare them with code.
+ if(source.includes('$bob_lean_construction$')){
+  const text=(tag:string)=>source.match(new RegExp('\\$'+tag+'\\$([\\s\\S]+?)\\$'+tag+'\\$'))![1]
+  for(const [key,tag] of [['tools.save_construction_draft','lean_save'],['tools.edit_construction_parts','lean_edit'],['tools.commit_construction_sketch','lean_commit']]){
+   const row=seed.find(r=>r.key===key)
+   if(!row||row.metadata.publication!=='bob-lean-writes-v1'||row.metadata.lean_construction_version!==undefined)throw new Error('lean_construction_tool_unexpected: '+key)
+   row.definition=JSON.parse(text(tag));publishAs(row,'bob-lean-construction-v1');row.metadata={...row.metadata,lean_construction_version:1};versions.set(key,versions.get(key)!+1)
+  }
+ }
  // Owner decision 2026-11-07: worker gates (chat answer is the review, gate facts in-job, identical-request refusal).
  const workerGates=source.match(/\$worker_gates_contract\$([\s\S]+?)\$worker_gates_contract\$/)
  if(workerGates){

@@ -1,0 +1,1565 @@
+{
+ "source": "Entrén, saved left wall (hosted rev 1, 2026-11-07); project measurements as decisions, fasteners left out",
+ "definitions": [
+  "sw_plate",
+  "sw_stud",
+  "sw_jack",
+  "sw_header",
+  "sw_sill"
+ ],
+ "old": {
+  "title": "Väggstomme – inbyggd entré",
+  "description": "Construction draft — not rendered or reviewed. Regelstomme 45×95 för den inbyggda entrén, i samma koordinatsystem som golvbjälklaget (x längs fronten från vänster ytterhörn, y från fronten mot huset, z från mark). Stommen står på golvet, indragen för vindskydd och panel utanför. Hittills finns vänster sidovägg: syll, hammarband, hörn- och ändregel, karmreglar, hjärtreglar, dubbel bärande regel 2×45×145 över sidofönstret och bröstregel under fönstret. Höger sidovägg, fronten med låg balk över dörren och dragband läggs till efter hand.",
+  "open_questions": [
+   "Takets lutande delar (takstolar/sparrar, råspont, papp, ströläkt och bärläkt för teglet) och det spetsiga gavelröstet är inte modellerade, eftersom kontrollen ännu inte klarar lutande delar. Väggens överkant H (2176 mm över golv) är en uppskattning från skissens preliminära takberäkning 27° och fastställs när taket konstrueras.",
+   "Undergolvet (ca 22 mm) mellan golvbjälkarnas överkant och syllen finns inte i någon konstruktion ännu. Syllen står på färdig golvnivå (mark + 30 cm) och förankras genom undergolvet i bärlinor och bjälkar. Förankringen är inte vald.",
+   "Bärande regel över sidofönstret, 2×45×145, och väggarnas förmåga att bära lertegel är bedömda, inte beräknade.",
+   "Sidofönstrens mått 118×170 är uppgivna och ska kontrollmätas på karmens yttermått innan något kapas. Öppningen har 5 mm justerglipa runt karmen.",
+   "Sidoväggens anslutning mot husväggen (ändregel mot befintlig fasad, vindskydd, tätning) är inte vald.",
+   "Hammarbandet är enkelt. Om takstolarna inte hamnar över reglar behövs dubbelt hammarband. Avgörs när taket konstrueras."
+  ],
+  "recipe": {
+   "units": "mm",
+   "views": [
+    "left",
+    "front",
+    "top",
+    "isometric"
+   ],
+   "instances": [
+    {
+     "id": "lw_syll",
+     "placement": {
+      "x": 25,
+      "y": 120,
+      "z": 300,
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_plate"
+    },
+    {
+     "id": "lw_top",
+     "placement": {
+      "x": 25,
+      "y": 120,
+      "z": 2431,
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_plate"
+    },
+    {
+     "id": "lw_s1",
+     "placement": {
+      "x": 25,
+      "y": 120,
+      "z": 345,
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_stud"
+    },
+    {
+     "id": "lw_k1",
+     "placement": {
+      "x": 25,
+      "y": 700,
+      "z": 345,
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_stud"
+    },
+    {
+     "id": "lw_k2",
+     "placement": {
+      "x": 25,
+      "y": 2025,
+      "z": 345,
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_stud"
+    },
+    {
+     "id": "lw_s2",
+     "placement": {
+      "x": 25,
+      "y": 2605,
+      "z": 345,
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_stud"
+    },
+    {
+     "id": "lw_j1",
+     "placement": {
+      "x": 25,
+      "y": 745,
+      "z": 345,
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_jack"
+    },
+    {
+     "id": "lw_j2",
+     "placement": {
+      "x": 25,
+      "y": 1980,
+      "z": 345,
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_jack"
+    },
+    {
+     "id": "lw_h1",
+     "placement": {
+      "x": 25,
+      "y": 745,
+      "z": 2286,
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_header"
+    },
+    {
+     "id": "lw_h2",
+     "placement": {
+      "x": 70,
+      "y": 745,
+      "z": 2286,
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_header"
+    },
+    {
+     "id": "lw_sb",
+     "placement": {
+      "x": 25,
+      "y": 790,
+      "z": 526,
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_sill"
+    }
+   ],
+   "assembly_id": "entre_vaggar",
+   "definitions": [
+    {
+     "id": "sw_plate",
+     "x_mm": 95,
+     "y_mm": 2530,
+     "z_mm": 45,
+     "primitive": "box",
+     "material_ref": null
+    },
+    {
+     "id": "sw_stud",
+     "x_mm": 95,
+     "y_mm": 45,
+     "z_mm": 2086,
+     "primitive": "box",
+     "material_ref": null
+    },
+    {
+     "id": "sw_jack",
+     "x_mm": 95,
+     "y_mm": 45,
+     "z_mm": 1941,
+     "primitive": "box",
+     "material_ref": null
+    },
+    {
+     "id": "sw_header",
+     "x_mm": 45,
+     "y_mm": 1280,
+     "z_mm": 145,
+     "primitive": "box",
+     "material_ref": null
+    },
+    {
+     "id": "sw_sill",
+     "x_mm": 95,
+     "y_mm": 1190,
+     "z_mm": 45,
+     "primitive": "box",
+     "material_ref": null
+    }
+   ],
+   "contract_version": 1
+  },
+  "parameter_plan": {
+   "version": 1,
+   "frames": [],
+   "nodes": [
+    {
+     "id": "st",
+     "role": "decision",
+     "unit": "mm",
+     "value": 95,
+     "reason": "Väggregel 45×95 med 95 genom väggen (skissens väggtjocklek)."
+    },
+    {
+     "id": "D",
+     "role": "decision",
+     "unit": "mm",
+     "value": 2650,
+     "reason": "Projektmått: Designmått härlett från kontrollmätt befintligt djup 165 cm + projektägarens specificerade förlängning 100 cm."
+    },
+    {
+     "id": "inset",
+     "role": "decision",
+     "unit": "mm",
+     "value": 25,
+     "reason": "Stommen indragen från golvets ytterkant för vindskydd och stående panel utanför (som skissen)."
+    },
+    {
+     "id": "t",
+     "role": "derived",
+     "operands": [
+      "inset",
+      "st"
+     ],
+     "rounding": "exact",
+     "operation": "add_v1"
+    },
+    {
+     "id": "DmT",
+     "role": "derived",
+     "operands": [
+      "D",
+      "t"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    },
+    {
+     "id": "lum",
+     "role": "decision",
+     "unit": "mm",
+     "value": 45,
+     "reason": "Virkets tjocklek 45 mm."
+    },
+    {
+     "id": "H",
+     "role": "estimate",
+     "unit": "mm",
+     "value": 2176,
+     "reason": "Väggens överkant över golv enligt skissens preliminära takberäkning 27°; slutlig när taket konstrueras."
+    },
+    {
+     "id": "lum2",
+     "role": "derived",
+     "operands": [
+      "lum",
+      "lum"
+     ],
+     "rounding": "exact",
+     "operation": "add_v1"
+    },
+    {
+     "id": "stud_h",
+     "role": "derived",
+     "operands": [
+      "H",
+      "lum2"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    },
+    {
+     "id": "fl",
+     "role": "decision",
+     "unit": "mm",
+     "value": 300,
+     "reason": "Projektmått: Kontrollmätt på plats av projektägaren 2026-09-13"
+    },
+    {
+     "id": "Hz",
+     "role": "derived",
+     "operands": [
+      "fl",
+      "H"
+     ],
+     "rounding": "exact",
+     "operation": "add_v1"
+    },
+    {
+     "id": "ztop",
+     "role": "derived",
+     "operands": [
+      "Hz",
+      "lum"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    },
+    {
+     "id": "hdr_h",
+     "role": "decision",
+     "unit": "mm",
+     "value": 145,
+     "reason": "Bärande regel över sidofönster: 2×45×145 på högkant (bedömd, ej beräknad)."
+    },
+    {
+     "id": "hdr_z",
+     "role": "derived",
+     "operands": [
+      "ztop",
+      "hdr_h"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    },
+    {
+     "id": "zs",
+     "role": "derived",
+     "operands": [
+      "fl",
+      "lum"
+     ],
+     "rounding": "exact",
+     "operation": "add_v1"
+    },
+    {
+     "id": "jack_h",
+     "role": "derived",
+     "operands": [
+      "hdr_z",
+      "zs"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    },
+    {
+     "id": "win_w",
+     "role": "decision",
+     "unit": "mm",
+     "value": 1180,
+     "reason": "Projektmått: Uppgift från projektägaren i planeringen"
+    },
+    {
+     "id": "win_rem",
+     "role": "derived",
+     "operands": [
+      "DmT",
+      "win_w"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    },
+    {
+     "id": "two",
+     "role": "decision",
+     "unit": "scalar",
+     "value": 2,
+     "reason": "Fönstret centrerat på sidoväggen."
+    },
+    {
+     "id": "win_y",
+     "role": "derived",
+     "operands": [
+      "win_rem",
+      "two"
+     ],
+     "rounding": "exact",
+     "operation": "divide_v1"
+    },
+    {
+     "id": "wy0",
+     "role": "derived",
+     "operands": [
+      "t",
+      "win_y"
+     ],
+     "rounding": "exact",
+     "operation": "add_v1"
+    },
+    {
+     "id": "wy1",
+     "role": "derived",
+     "operands": [
+      "wy0",
+      "win_w"
+     ],
+     "rounding": "exact",
+     "operation": "add_v1"
+    },
+    {
+     "id": "gap",
+     "role": "decision",
+     "unit": "mm",
+     "value": 5,
+     "reason": "Justerglipa runt fönsterkarm."
+    },
+    {
+     "id": "jack2_y",
+     "role": "derived",
+     "operands": [
+      "wy1",
+      "gap"
+     ],
+     "rounding": "exact",
+     "operation": "add_v1"
+    },
+    {
+     "id": "king2_y",
+     "role": "derived",
+     "operands": [
+      "jack2_y",
+      "lum"
+     ],
+     "rounding": "exact",
+     "operation": "add_v1"
+    },
+    {
+     "id": "ya",
+     "role": "derived",
+     "operands": [
+      "wy0",
+      "gap"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    },
+    {
+     "id": "jack1_y",
+     "role": "derived",
+     "operands": [
+      "ya",
+      "lum"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    },
+    {
+     "id": "hdr_len",
+     "role": "derived",
+     "operands": [
+      "king2_y",
+      "jack1_y"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    },
+    {
+     "id": "sreg_len",
+     "role": "derived",
+     "operands": [
+      "jack2_y",
+      "ya"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    },
+    {
+     "id": "king1_y",
+     "role": "derived",
+     "operands": [
+      "jack1_y",
+      "lum"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    },
+    {
+     "id": "end_y",
+     "role": "derived",
+     "operands": [
+      "D",
+      "lum"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    },
+    {
+     "id": "x2",
+     "role": "derived",
+     "operands": [
+      "inset",
+      "lum"
+     ],
+     "rounding": "exact",
+     "operation": "add_v1"
+    },
+    {
+     "id": "sw_gap",
+     "role": "estimate",
+     "unit": "mm",
+     "value": 200,
+     "reason": "Hammarband + bärande regel + glipa ovanför sidofönstret, som i skissen."
+    },
+    {
+     "id": "sw_top",
+     "role": "derived",
+     "operands": [
+      "H",
+      "sw_gap"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    },
+    {
+     "id": "win_h",
+     "role": "decision",
+     "unit": "mm",
+     "value": 1700,
+     "reason": "Projektmått: Uppgift från projektägaren i planeringen"
+    },
+    {
+     "id": "sw_sill",
+     "role": "derived",
+     "operands": [
+      "sw_top",
+      "win_h"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    },
+    {
+     "id": "sill_z",
+     "role": "derived",
+     "operands": [
+      "fl",
+      "sw_sill"
+     ],
+     "rounding": "exact",
+     "operation": "add_v1"
+    },
+    {
+     "id": "sreg_top",
+     "role": "derived",
+     "operands": [
+      "sill_z",
+      "gap"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    },
+    {
+     "id": "sreg_z",
+     "role": "derived",
+     "operands": [
+      "sreg_top",
+      "lum"
+     ],
+     "rounding": "exact",
+     "operation": "subtract_v1"
+    }
+   ],
+   "bindings": [
+    {
+     "node": "st",
+     "path": "definitions/sw_plate/x_mm"
+    },
+    {
+     "node": "DmT",
+     "path": "definitions/sw_plate/y_mm"
+    },
+    {
+     "node": "lum",
+     "path": "definitions/sw_plate/z_mm"
+    },
+    {
+     "node": "st",
+     "path": "definitions/sw_stud/x_mm"
+    },
+    {
+     "node": "lum",
+     "path": "definitions/sw_stud/y_mm"
+    },
+    {
+     "node": "stud_h",
+     "path": "definitions/sw_stud/z_mm"
+    },
+    {
+     "node": "st",
+     "path": "definitions/sw_jack/x_mm"
+    },
+    {
+     "node": "lum",
+     "path": "definitions/sw_jack/y_mm"
+    },
+    {
+     "node": "jack_h",
+     "path": "definitions/sw_jack/z_mm"
+    },
+    {
+     "node": "lum",
+     "path": "definitions/sw_header/x_mm"
+    },
+    {
+     "node": "hdr_len",
+     "path": "definitions/sw_header/y_mm"
+    },
+    {
+     "node": "hdr_h",
+     "path": "definitions/sw_header/z_mm"
+    },
+    {
+     "node": "st",
+     "path": "definitions/sw_sill/x_mm"
+    },
+    {
+     "node": "sreg_len",
+     "path": "definitions/sw_sill/y_mm"
+    },
+    {
+     "node": "lum",
+     "path": "definitions/sw_sill/z_mm"
+    },
+    {
+     "node": "inset",
+     "path": "instances/lw_syll/placement/x"
+    },
+    {
+     "node": "t",
+     "path": "instances/lw_syll/placement/y"
+    },
+    {
+     "node": "fl",
+     "path": "instances/lw_syll/placement/z"
+    },
+    {
+     "node": "inset",
+     "path": "instances/lw_top/placement/x"
+    },
+    {
+     "node": "t",
+     "path": "instances/lw_top/placement/y"
+    },
+    {
+     "node": "ztop",
+     "path": "instances/lw_top/placement/z"
+    },
+    {
+     "node": "inset",
+     "path": "instances/lw_s1/placement/x"
+    },
+    {
+     "node": "t",
+     "path": "instances/lw_s1/placement/y"
+    },
+    {
+     "node": "zs",
+     "path": "instances/lw_s1/placement/z"
+    },
+    {
+     "node": "inset",
+     "path": "instances/lw_k1/placement/x"
+    },
+    {
+     "node": "king1_y",
+     "path": "instances/lw_k1/placement/y"
+    },
+    {
+     "node": "zs",
+     "path": "instances/lw_k1/placement/z"
+    },
+    {
+     "node": "inset",
+     "path": "instances/lw_k2/placement/x"
+    },
+    {
+     "node": "king2_y",
+     "path": "instances/lw_k2/placement/y"
+    },
+    {
+     "node": "zs",
+     "path": "instances/lw_k2/placement/z"
+    },
+    {
+     "node": "inset",
+     "path": "instances/lw_s2/placement/x"
+    },
+    {
+     "node": "end_y",
+     "path": "instances/lw_s2/placement/y"
+    },
+    {
+     "node": "zs",
+     "path": "instances/lw_s2/placement/z"
+    },
+    {
+     "node": "inset",
+     "path": "instances/lw_j1/placement/x"
+    },
+    {
+     "node": "jack1_y",
+     "path": "instances/lw_j1/placement/y"
+    },
+    {
+     "node": "zs",
+     "path": "instances/lw_j1/placement/z"
+    },
+    {
+     "node": "inset",
+     "path": "instances/lw_j2/placement/x"
+    },
+    {
+     "node": "jack2_y",
+     "path": "instances/lw_j2/placement/y"
+    },
+    {
+     "node": "zs",
+     "path": "instances/lw_j2/placement/z"
+    },
+    {
+     "node": "inset",
+     "path": "instances/lw_h1/placement/x"
+    },
+    {
+     "node": "jack1_y",
+     "path": "instances/lw_h1/placement/y"
+    },
+    {
+     "node": "hdr_z",
+     "path": "instances/lw_h1/placement/z"
+    },
+    {
+     "node": "x2",
+     "path": "instances/lw_h2/placement/x"
+    },
+    {
+     "node": "jack1_y",
+     "path": "instances/lw_h2/placement/y"
+    },
+    {
+     "node": "hdr_z",
+     "path": "instances/lw_h2/placement/z"
+    },
+    {
+     "node": "inset",
+     "path": "instances/lw_sb/placement/x"
+    },
+    {
+     "node": "ya",
+     "path": "instances/lw_sb/placement/y"
+    },
+    {
+     "node": "sreg_z",
+     "path": "instances/lw_sb/placement/z"
+    }
+   ]
+  },
+  "joints": [
+   {
+    "id": "lj_s1_b",
+    "first": {
+     "face": "z_min",
+     "instance_id": "lw_s1"
+    },
+    "reason": "Hörnregel spikad genom syll.",
+    "second": {
+     "face": "z_max",
+     "instance_id": "lw_syll"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_s1_t",
+    "first": {
+     "face": "z_max",
+     "instance_id": "lw_s1"
+    },
+    "reason": "Hörnregel spikad genom hammarband.",
+    "second": {
+     "face": "z_min",
+     "instance_id": "lw_top"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_k1_b",
+    "first": {
+     "face": "z_min",
+     "instance_id": "lw_k1"
+    },
+    "reason": "Hjärtregel spikad genom syll.",
+    "second": {
+     "face": "z_max",
+     "instance_id": "lw_syll"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_k1_t",
+    "first": {
+     "face": "z_max",
+     "instance_id": "lw_k1"
+    },
+    "reason": "Hjärtregel spikad genom hammarband.",
+    "second": {
+     "face": "z_min",
+     "instance_id": "lw_top"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_k2_b",
+    "first": {
+     "face": "z_min",
+     "instance_id": "lw_k2"
+    },
+    "reason": "Hjärtregel spikad genom syll.",
+    "second": {
+     "face": "z_max",
+     "instance_id": "lw_syll"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_k2_t",
+    "first": {
+     "face": "z_max",
+     "instance_id": "lw_k2"
+    },
+    "reason": "Hjärtregel spikad genom hammarband.",
+    "second": {
+     "face": "z_min",
+     "instance_id": "lw_top"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_s2_b",
+    "first": {
+     "face": "z_min",
+     "instance_id": "lw_s2"
+    },
+    "reason": "Ändregel spikad genom syll.",
+    "second": {
+     "face": "z_max",
+     "instance_id": "lw_syll"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_s2_t",
+    "first": {
+     "face": "z_max",
+     "instance_id": "lw_s2"
+    },
+    "reason": "Ändregel spikad genom hammarband.",
+    "second": {
+     "face": "z_min",
+     "instance_id": "lw_top"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_j1_b",
+    "first": {
+     "face": "z_min",
+     "instance_id": "lw_j1"
+    },
+    "reason": "Karmregel står på syll.",
+    "second": {
+     "face": "z_max",
+     "instance_id": "lw_syll"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_j2_b",
+    "first": {
+     "face": "z_min",
+     "instance_id": "lw_j2"
+    },
+    "reason": "Karmregel står på syll.",
+    "second": {
+     "face": "z_max",
+     "instance_id": "lw_syll"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_j1_k1",
+    "first": {
+     "face": "y_min",
+     "instance_id": "lw_j1"
+    },
+    "reason": "Karmregel spikad mot hjärtregel.",
+    "second": {
+     "face": "y_max",
+     "instance_id": "lw_k1"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_j2_k2",
+    "first": {
+     "face": "y_max",
+     "instance_id": "lw_j2"
+    },
+    "reason": "Karmregel spikad mot hjärtregel.",
+    "second": {
+     "face": "y_min",
+     "instance_id": "lw_k2"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_h1_j1",
+    "first": {
+     "face": "z_min",
+     "instance_id": "lw_h1"
+    },
+    "reason": "Bärande regel vilar på karmregel.",
+    "second": {
+     "face": "z_max",
+     "instance_id": "lw_j1"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_h1_j2",
+    "first": {
+     "face": "z_min",
+     "instance_id": "lw_h1"
+    },
+    "reason": "Bärande regel vilar på karmregel.",
+    "second": {
+     "face": "z_max",
+     "instance_id": "lw_j2"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_h2_j1",
+    "first": {
+     "face": "z_min",
+     "instance_id": "lw_h2"
+    },
+    "reason": "Bärande regel vilar på karmregel.",
+    "second": {
+     "face": "z_max",
+     "instance_id": "lw_j1"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_h2_j2",
+    "first": {
+     "face": "z_min",
+     "instance_id": "lw_h2"
+    },
+    "reason": "Bärande regel vilar på karmregel.",
+    "second": {
+     "face": "z_max",
+     "instance_id": "lw_j2"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_h12",
+    "first": {
+     "face": "x_max",
+     "instance_id": "lw_h1"
+    },
+    "reason": "De två bärande reglarna spikas ihop.",
+    "second": {
+     "face": "x_min",
+     "instance_id": "lw_h2"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_h1_t",
+    "first": {
+     "face": "z_max",
+     "instance_id": "lw_h1"
+    },
+    "reason": "Bärande regel mot hammarband.",
+    "second": {
+     "face": "z_min",
+     "instance_id": "lw_top"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_h2_t",
+    "first": {
+     "face": "z_max",
+     "instance_id": "lw_h2"
+    },
+    "reason": "Bärande regel mot hammarband.",
+    "second": {
+     "face": "z_min",
+     "instance_id": "lw_top"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_sb_j1",
+    "first": {
+     "face": "y_min",
+     "instance_id": "lw_sb"
+    },
+    "reason": "Bröstregel spikad mellan karmreglarna.",
+    "second": {
+     "face": "y_max",
+     "instance_id": "lw_j1"
+    },
+    "fasteners": []
+   },
+   {
+    "id": "lj_sb_j2",
+    "first": {
+     "face": "y_max",
+     "instance_id": "lw_sb"
+    },
+    "reason": "Bröstregel spikad mellan karmreglarna.",
+    "second": {
+     "face": "y_min",
+     "instance_id": "lw_j2"
+    },
+    "fasteners": []
+   }
+  ],
+  "joint_rules": [],
+  "instance_policy": {
+   "version": 1,
+   "instances": [
+    {
+     "role": "build_part",
+     "reason": "Ny syll, kapas av 45×95.",
+     "instance_id": "lw_syll",
+     "quantity_policy": "manufacture"
+    },
+    {
+     "role": "build_part",
+     "reason": "Nytt hammarband, kapas av 45×95.",
+     "instance_id": "lw_top",
+     "quantity_policy": "manufacture"
+    },
+    {
+     "role": "build_part",
+     "reason": "Ny hörnregel mot fronten.",
+     "instance_id": "lw_s1",
+     "quantity_policy": "manufacture"
+    },
+    {
+     "role": "build_part",
+     "reason": "Ny hjärtregel vid fönsteröppning.",
+     "instance_id": "lw_k1",
+     "quantity_policy": "manufacture"
+    },
+    {
+     "role": "build_part",
+     "reason": "Ny hjärtregel vid fönsteröppning.",
+     "instance_id": "lw_k2",
+     "quantity_policy": "manufacture"
+    },
+    {
+     "role": "build_part",
+     "reason": "Ny ändregel mot husväggen.",
+     "instance_id": "lw_s2",
+     "quantity_policy": "manufacture"
+    },
+    {
+     "role": "build_part",
+     "reason": "Ny karmregel som bär överliggaren.",
+     "instance_id": "lw_j1",
+     "quantity_policy": "manufacture"
+    },
+    {
+     "role": "build_part",
+     "reason": "Ny karmregel som bär överliggaren.",
+     "instance_id": "lw_j2",
+     "quantity_policy": "manufacture"
+    },
+    {
+     "role": "build_part",
+     "reason": "Bärande regel över sidofönster, första delen.",
+     "instance_id": "lw_h1",
+     "quantity_policy": "manufacture"
+    },
+    {
+     "role": "build_part",
+     "reason": "Bärande regel över sidofönster, andra delen.",
+     "instance_id": "lw_h2",
+     "quantity_policy": "manufacture"
+    },
+    {
+     "role": "build_part",
+     "reason": "Ny bröstregel under fönstret.",
+     "instance_id": "lw_sb",
+     "quantity_policy": "manufacture"
+    }
+   ]
+  },
+  "form_refinement": {
+   "version": 1,
+   "mappings": [
+    {
+     "component_id": "wall_left",
+     "instance_ids": [
+      "lw_syll",
+      "lw_top",
+      "lw_s1",
+      "lw_k1",
+      "lw_k2",
+      "lw_s2",
+      "lw_j1",
+      "lw_j2",
+      "lw_h1",
+      "lw_h2",
+      "lw_sb"
+     ]
+    }
+   ]
+  }
+ },
+ "lean": {
+  "title": "Väggstomme – inbyggd entré",
+  "description": "Construction draft — not rendered or reviewed. Regelstomme 45×95 för den inbyggda entrén, i samma koordinatsystem som golvbjälklaget (x längs fronten från vänster ytterhörn, y från fronten mot huset, z från mark). Stommen står på golvet, indragen för vindskydd och panel utanför. Hittills finns vänster sidovägg: syll, hammarband, hörn- och ändregel, karmreglar, hjärtreglar, dubbel bärande regel 2×45×145 över sidofönstret och bröstregel under fönstret. Höger sidovägg, fronten med låg balk över dörren och dragband läggs till efter hand.",
+  "open_questions": [
+   "Takets lutande delar (takstolar/sparrar, råspont, papp, ströläkt och bärläkt för teglet) och det spetsiga gavelröstet är inte modellerade, eftersom kontrollen ännu inte klarar lutande delar. Väggens överkant H (2176 mm över golv) är en uppskattning från skissens preliminära takberäkning 27° och fastställs när taket konstrueras.",
+   "Undergolvet (ca 22 mm) mellan golvbjälkarnas överkant och syllen finns inte i någon konstruktion ännu. Syllen står på färdig golvnivå (mark + 30 cm) och förankras genom undergolvet i bärlinor och bjälkar. Förankringen är inte vald.",
+   "Bärande regel över sidofönstret, 2×45×145, och väggarnas förmåga att bära lertegel är bedömda, inte beräknade.",
+   "Sidofönstrens mått 118×170 är uppgivna och ska kontrollmätas på karmens yttermått innan något kapas. Öppningen har 5 mm justerglipa runt karmen.",
+   "Sidoväggens anslutning mot husväggen (ändregel mot befintlig fasad, vindskydd, tätning) är inte vald.",
+   "Hammarbandet är enkelt. Om takstolarna inte hamnar över reglar behövs dubbelt hammarband. Avgörs när taket konstrueras."
+  ],
+  "recipe": {
+   "units": "mm",
+   "views": [
+    "left",
+    "front",
+    "top",
+    "isometric"
+   ],
+   "instances": [
+    {
+     "id": "lw_syll",
+     "placement": {
+      "x": "inset",
+      "y": "inset + st",
+      "z": "fl",
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_plate"
+    },
+    {
+     "id": "lw_top",
+     "placement": {
+      "x": "inset",
+      "y": "inset + st",
+      "z": "(fl + H) - lum",
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_plate"
+    },
+    {
+     "id": "lw_s1",
+     "placement": {
+      "x": "inset",
+      "y": "inset + st",
+      "z": "fl + lum",
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_stud"
+    },
+    {
+     "id": "lw_k1",
+     "placement": {
+      "x": "inset",
+      "y": "((((inset + st) + (((D - (inset + st)) - win_w) / two)) - gap) - lum) - lum",
+      "z": "fl + lum",
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_stud"
+    },
+    {
+     "id": "lw_k2",
+     "placement": {
+      "x": "inset",
+      "y": "((((inset + st) + (((D - (inset + st)) - win_w) / two)) + win_w) + gap) + lum",
+      "z": "fl + lum",
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_stud"
+    },
+    {
+     "id": "lw_s2",
+     "placement": {
+      "x": "inset",
+      "y": "D - lum",
+      "z": "fl + lum",
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_stud"
+    },
+    {
+     "id": "lw_j1",
+     "placement": {
+      "x": "inset",
+      "y": "(((inset + st) + (((D - (inset + st)) - win_w) / two)) - gap) - lum",
+      "z": "fl + lum",
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_jack"
+    },
+    {
+     "id": "lw_j2",
+     "placement": {
+      "x": "inset",
+      "y": "(((inset + st) + (((D - (inset + st)) - win_w) / two)) + win_w) + gap",
+      "z": "fl + lum",
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_jack"
+    },
+    {
+     "id": "lw_h1",
+     "placement": {
+      "x": "inset",
+      "y": "(((inset + st) + (((D - (inset + st)) - win_w) / two)) - gap) - lum",
+      "z": "((fl + H) - lum) - hdr_h",
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_header"
+    },
+    {
+     "id": "lw_h2",
+     "placement": {
+      "x": "inset + lum",
+      "y": "(((inset + st) + (((D - (inset + st)) - win_w) / two)) - gap) - lum",
+      "z": "((fl + H) - lum) - hdr_h",
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_header"
+    },
+    {
+     "id": "lw_sb",
+     "placement": {
+      "x": "inset",
+      "y": "((inset + st) + (((D - (inset + st)) - win_w) / two)) - gap",
+      "z": "((fl + ((H - sw_gap) - win_h)) - gap) - lum",
+      "rx": 0,
+      "ry": 0,
+      "rz": 0
+     },
+     "definition_id": "sw_sill"
+    }
+   ],
+   "assembly_id": "entre_vaggar",
+   "definitions": [
+    {
+     "id": "sw_plate",
+     "x_mm": "st",
+     "y_mm": "D - (inset + st)",
+     "z_mm": "lum",
+     "primitive": "box",
+     "material_ref": null
+    },
+    {
+     "id": "sw_stud",
+     "x_mm": "st",
+     "y_mm": "lum",
+     "z_mm": "H - (lum + lum)",
+     "primitive": "box",
+     "material_ref": null
+    },
+    {
+     "id": "sw_jack",
+     "x_mm": "st",
+     "y_mm": "lum",
+     "z_mm": "(((fl + H) - lum) - hdr_h) - (fl + lum)",
+     "primitive": "box",
+     "material_ref": null
+    },
+    {
+     "id": "sw_header",
+     "x_mm": "lum",
+     "y_mm": "(((((inset + st) + (((D - (inset + st)) - win_w) / two)) + win_w) + gap) + lum) - ((((inset + st) + (((D - (inset + st)) - win_w) / two)) - gap) - lum)",
+     "z_mm": "hdr_h",
+     "primitive": "box",
+     "material_ref": null
+    },
+    {
+     "id": "sw_sill",
+     "x_mm": "st",
+     "y_mm": "((((inset + st) + (((D - (inset + st)) - win_w) / two)) + win_w) + gap) - (((inset + st) + (((D - (inset + st)) - win_w) / two)) - gap)",
+     "z_mm": "lum",
+     "primitive": "box",
+     "material_ref": null
+    }
+   ],
+   "contract_version": 1
+  },
+  "parameter_plan": {
+   "version": 1,
+   "frames": [],
+   "nodes": [
+    {
+     "id": "st",
+     "role": "decision",
+     "unit": "mm",
+     "value": 95,
+     "reason": "Väggregel 45×95 med 95 genom väggen (skissens väggtjocklek)."
+    },
+    {
+     "id": "D",
+     "role": "decision",
+     "unit": "mm",
+     "value": 2650,
+     "reason": "Projektmått: Designmått härlett från kontrollmätt befintligt djup 165 cm + projektägarens specificerade förlängning 100 cm."
+    },
+    {
+     "id": "inset",
+     "role": "decision",
+     "unit": "mm",
+     "value": 25,
+     "reason": "Stommen indragen från golvets ytterkant för vindskydd och stående panel utanför (som skissen)."
+    },
+    {
+     "id": "lum",
+     "role": "decision",
+     "unit": "mm",
+     "value": 45,
+     "reason": "Virkets tjocklek 45 mm."
+    },
+    {
+     "id": "H",
+     "role": "estimate",
+     "unit": "mm",
+     "value": 2176,
+     "reason": "Väggens överkant över golv enligt skissens preliminära takberäkning 27°; slutlig när taket konstrueras."
+    },
+    {
+     "id": "fl",
+     "role": "decision",
+     "unit": "mm",
+     "value": 300,
+     "reason": "Projektmått: Kontrollmätt på plats av projektägaren 2026-09-13"
+    },
+    {
+     "id": "hdr_h",
+     "role": "decision",
+     "unit": "mm",
+     "value": 145,
+     "reason": "Bärande regel över sidofönster: 2×45×145 på högkant (bedömd, ej beräknad)."
+    },
+    {
+     "id": "win_w",
+     "role": "decision",
+     "unit": "mm",
+     "value": 1180,
+     "reason": "Projektmått: Uppgift från projektägaren i planeringen"
+    },
+    {
+     "id": "two",
+     "role": "decision",
+     "unit": "scalar",
+     "value": 2,
+     "reason": "Fönstret centrerat på sidoväggen."
+    },
+    {
+     "id": "gap",
+     "role": "decision",
+     "unit": "mm",
+     "value": 5,
+     "reason": "Justerglipa runt fönsterkarm."
+    },
+    {
+     "id": "sw_gap",
+     "role": "estimate",
+     "unit": "mm",
+     "value": 200,
+     "reason": "Hammarband + bärande regel + glipa ovanför sidofönstret, som i skissen."
+    },
+    {
+     "id": "win_h",
+     "role": "decision",
+     "unit": "mm",
+     "value": 1700,
+     "reason": "Projektmått: Uppgift från projektägaren i planeringen"
+    }
+   ],
+   "bindings": []
+  },
+  "joints": [],
+  "joint_rules": [
+   {
+    "id": "sw_plate_sw_stud",
+    "between": [
+     "sw_plate",
+     "sw_stud"
+    ],
+    "reason": "Hörnregel spikad genom syll.",
+    "fasteners": [],
+    "except": []
+   },
+   {
+    "id": "sw_jack_sw_plate",
+    "between": [
+     "sw_jack",
+     "sw_plate"
+    ],
+    "reason": "Karmregel står på syll.",
+    "fasteners": [],
+    "except": []
+   },
+   {
+    "id": "sw_jack_sw_stud",
+    "between": [
+     "sw_jack",
+     "sw_stud"
+    ],
+    "reason": "Karmregel spikad mot hjärtregel.",
+    "fasteners": [],
+    "except": []
+   },
+   {
+    "id": "sw_header_sw_jack",
+    "between": [
+     "sw_header",
+     "sw_jack"
+    ],
+    "reason": "Bärande regel vilar på karmregel.",
+    "fasteners": [],
+    "except": []
+   },
+   {
+    "id": "sw_header_sw_header",
+    "between": [
+     "sw_header",
+     "sw_header"
+    ],
+    "reason": "De två bärande reglarna spikas ihop.",
+    "fasteners": [],
+    "except": []
+   },
+   {
+    "id": "sw_header_sw_plate",
+    "between": [
+     "sw_header",
+     "sw_plate"
+    ],
+    "reason": "Bärande regel mot hammarband.",
+    "fasteners": [],
+    "except": []
+   },
+   {
+    "id": "sw_jack_sw_sill",
+    "between": [
+     "sw_jack",
+     "sw_sill"
+    ],
+    "reason": "Bröstregel spikad mellan karmreglarna.",
+    "fasteners": [],
+    "except": []
+   }
+  ],
+  "instance_policy": {
+   "version": 1,
+   "instances": [
+    {
+     "role": "build_part",
+     "reason": "Ny syll, kapas av 45×95.",
+     "instance_id": "lw_syll"
+    },
+    {
+     "role": "build_part",
+     "reason": "Nytt hammarband, kapas av 45×95.",
+     "instance_id": "lw_top"
+    },
+    {
+     "role": "build_part",
+     "reason": "Ny hörnregel mot fronten.",
+     "instance_id": "lw_s1"
+    },
+    {
+     "role": "build_part",
+     "reason": "Ny hjärtregel vid fönsteröppning.",
+     "instance_id": "lw_k1"
+    },
+    {
+     "role": "build_part",
+     "reason": "Ny hjärtregel vid fönsteröppning.",
+     "instance_id": "lw_k2"
+    },
+    {
+     "role": "build_part",
+     "reason": "Ny ändregel mot husväggen.",
+     "instance_id": "lw_s2"
+    },
+    {
+     "role": "build_part",
+     "reason": "Ny karmregel som bär överliggaren.",
+     "instance_id": "lw_j1"
+    },
+    {
+     "role": "build_part",
+     "reason": "Ny karmregel som bär överliggaren.",
+     "instance_id": "lw_j2"
+    },
+    {
+     "role": "build_part",
+     "reason": "Bärande regel över sidofönster, första delen.",
+     "instance_id": "lw_h1"
+    },
+    {
+     "role": "build_part",
+     "reason": "Bärande regel över sidofönster, andra delen.",
+     "instance_id": "lw_h2"
+    },
+    {
+     "role": "build_part",
+     "reason": "Ny bröstregel under fönstret.",
+     "instance_id": "lw_sb"
+    }
+   ]
+  },
+  "form_refinement": {
+   "version": 1,
+   "mappings": [
+    {
+     "component_id": "wall_left",
+     "instance_ids": [
+      "lw_syll"
+     ]
+    }
+   ]
+  }
+ }
+}

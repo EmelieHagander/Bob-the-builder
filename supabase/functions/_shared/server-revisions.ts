@@ -27,9 +27,9 @@ const construction = rule('expected_revision', 'construction', { id: ['record_id
 export const SERVER_REVISIONS: Rules = {
   // Konrad
   save_construction_draft: [construction, ...materials('materials.*'), rule('joints.*.fasteners.*.material_revision', 'catalog', { id: ['material_id'] }),
-    ...sources('parameter_plan.nodes.*')],
+    rule('joint_rules.*.fasteners.*.material_revision', 'catalog', { id: ['material_id'] }), ...sources('parameter_plan.nodes.*')],
   edit_construction_parts: [construction, ...materials('changes.materials.upsert.*'), rule('changes.joints.upsert.*.fasteners.*.material_revision', 'catalog', { id: ['material_id'] }),
-    ...sources('changes.nodes.upsert.*')],
+    rule('joint_rules.*.fasteners.*.material_revision', 'catalog', { id: ['material_id'] }), ...sources('changes.nodes.upsert.*')],
   change_construction_parameters: [construction, ...sources('changes.*')],
   change_construction_roles: [construction],
   calculate_project: [...sources('calculation.nodes.*'), rule('calculation.needs.*.revision', 'memory', { id: ['id'] }),

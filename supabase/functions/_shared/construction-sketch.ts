@@ -17,6 +17,10 @@ export type BaseKeys = Record<SketchCollection, string[]>
 export type ConstructionSketch = {
   version: 1; base_revision: number; base_keys: BaseKeys; changes: SketchChanges; change_count: number
   text: Record<string, unknown> | null; target_revision: number | null; notes: string[]
+  /** lean_construction_version 1: the joint rules and FORM assignments sent so far. */
+  joint_rules?: Record<string, unknown>[]; form_assign?: Record<string, unknown>[]
+  /** Begun only to keep a refused direct change; dropped when a change saves. */
+  shadow?: true
 }
 /** The job's private sketch table, bound to the claimed turn by the runtime. */
 export type ConstructionSketchStore = {
@@ -126,6 +130,9 @@ export function parseSketch(value: unknown): ConstructionSketch | null {
   if (s.change_count !== sketchChangeCount(s.changes) || !Array.isArray(s.notes) || s.notes.some(n => typeof n !== 'string')) return null
   if (s.text !== null && (typeof s.text !== 'object' || Array.isArray(s.text))) return null
   if (s.target_revision !== null && !Number.isSafeInteger(s.target_revision)) return null
+  if ('shadow' in s && s.shadow !== true) return null
+  for (const k of ['joint_rules', 'form_assign'] as const)
+    if (k in s && (!Array.isArray(s[k]) || s[k]!.some(x => !x || typeof x !== 'object' || Array.isArray(x)))) return null
   return s
 }
 
@@ -154,7 +161,7 @@ export function withConstructionSketch<T extends { type: 'function'; function: {
 // construction can be built in a sketch too. Entry, 09:18-09:30: one new wall
 // was too large for Konrad to write within the 120 s answer window, seven
 // times. Each sketch call carries the next parts under the same key.
-export type NewConstructionSketch = { version: 1; kind: 'new'; key: string; save: Record<string, any>; part_count: number; notes: string[] }
+export type NewConstructionSketch = { version: 1; kind: 'new'; key: string; save: Record<string, any>; part_count: number; notes: string[]; shadow?: true }
 const byId = (prior: unknown, next: unknown, key: string): Record<string, any>[] => {
   const out = Array.isArray(prior) ? structuredClone(prior) as Record<string, any>[] : []
   for (const item of Array.isArray(next) ? next as Record<string, any>[] : []) {
@@ -181,6 +188,7 @@ export function parseNewSketch(value: unknown): NewConstructionSketch | null {
   const s = value as NewConstructionSketch
   if (!s || typeof s !== 'object' || s.version !== 1 || s.kind !== 'new' || typeof s.key !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(s.key)) return null
   if (!s.save || typeof s.save !== 'object' || Array.isArray(s.save) || !Number.isSafeInteger(s.part_count) || !Array.isArray(s.notes) || s.notes.some(n => typeof n !== 'string')) return null
+  if ('shadow' in s && s.shadow !== true) return null
   return s
 }
 export const CONSTRUCTION_NEW_SKETCH_NOTE = ' mode sketch builds a new construction in your sketch instead of saving it: send it in parts, every call with the same key, the current title, description, area and refinement, and the next parts; a definition, part, node, binding, material, joint or role with the same id replaces the earlier one. Each call is checked as a whole like a save and saves nothing. Save it once with commit_construction_sketch, new_key being that key. mode save saves at once.'
