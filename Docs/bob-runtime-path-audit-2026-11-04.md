@@ -2290,3 +2290,125 @@ isolate is slower, and its CPU budget per request is small):
    is to let his plan's steps bound each write (one opening or one wall per
    call), so a single answer fits the window — or, if the project's plan
    allows a longer wall clock, raise the Claude window.
+
+<a id="numbers-and-field-rules-2026-11-07"></a>
+## Numbers between roles and field rules before the call — 2026-11-07
+
+Owner direction 2026-11-07, after the locked-paths inventory ("where we were
+too hard and steering we were probably too loose with the numbers"):
+
+- **A.** Bob and the team do not write numbers to each other; numbers go
+  through variables and reads, never AI-invented.
+- **B.** Bob and the team know a field's rules before the call: how it is
+  linked to other fields and which values are allowed.
+
+Two read-only code inventories; nothing was changed.
+
+### A — where numbers cross
+
+Already right (22 patterns): request quotes filled by the server; worker
+receipts, readback and checks by code; worker knowledge reads; ids and
+revisions bound by the server for workers; the parameter graph (`source`
+nodes read the measurement, `derived` nodes compute exactly, every
+controlling number must be bound, rounding reported); concept measurements
+bound by reference; lists, cut layouts, requirement quantities and pack
+counts derived by the server; the calculator; echo checks against saved
+fastener schedules and sheet formats; tool repair cannot change a value.
+
+Gaps where an AI-typed number reaches another role or saved truth
+unchecked (16):
+
+1. Bob's hand-over `request` (2000 chars): "leave ids, measurements and other
+   values out" is tool prose only; code checks length.
+2. Workers receive Bob's earlier chat answers and AI summaries word for word.
+3. A worker's report prose is never compared with the code readback.
+4. Stage-handoff observations and compactor summaries replace raw tool
+   output in the active context.
+5. Workpad notes carry numbers across jobs.
+6. `decision`/`estimate` parameter and concept values become geometry with
+   only a free-text reason.
+7. Unbinding a concept measurement leaves the copied number as an editable
+   estimate.
+8. Measurement `value` and `truth: measured` are model-chosen; the quote
+   check does not check the number.
+9. Fastener sizes, counts and spacing are literals; `add_catalog_fastener`
+   saves Konrad's typed sizes as `provided_spec`.
+10. Material numbers: stock quantity and format, manual requirement
+    quantities, waste, allocations, pack size, catalog properties.
+11. Hypothetical cut sheets, kerf and trim, with a self-declared basis.
+12. Older geometry writers (storage box, stair, building plan, room layout,
+    shell) save literals; linked measurements do not drive them.
+13. Numbers in saved prose (titles, descriptions, notes, plan text) pass the
+    human-text check and reach drawings and CAD requirements.
+14. The source reader's `statement` is not checked against its quote.
+15. Tool repair checks values as a set, so width ↔ depth swaps pass.
+16. Bob types revisions (rejected when stale, so not truth).
+
+### B — rules known before the call
+
+The model sees the bound schema and description; the manual only once the
+tool is loaded. Ranked gaps behind repeated refusals:
+
+1. **`compact_design_intent_required`** (edit_project_record,
+   create/select solution): after the save the database re-reads the whole
+   record (text, ids, the whole design_intent with the concept model, up to
+   25 linked measurements) and requires ≤ 30,000 bytes. Not stated
+   anywhere, no size is reported, and for the `bound_*` payload kinds the
+   refusal falls through to the generic "The database rejected this
+   command" without the limit or a remedy (`project-write.ts:432` matches
+   only `solution`/`target`). Five refusals in this morning's entry turn.
+2. **edit_project_record path grammar** (`edit_path_unsupported`): `path` is
+   a free string; allowed paths, per-item editable fields, "no remove on a
+   field", and where references and measurements are edited instead, are
+   partly prose and not in the schema; the coherent read lists section names
+   that are not paths.
+3. **Construction `target_revision` / readiness coupling**
+   (`construction_source_refresh_blocked`, `target_revision_required`):
+   readiness preconditions are not in the tool text; behind both bed
+   lock-ups this morning.
+4. **Design-intent limits and choice status coupling**
+   (`edit_design_inconsistent`): summary 1–2000, feature ≤1000, choices'
+   alternatives/recommendation/basis/consequences/decision_basis rules,
+   counts 24/16/8, 48,000 bytes; exist in `DESIGN_INTENT_SCHEMA` but not in
+   this tool's schema; the refusal names no field.
+5. Construction preparation refusals collapse to
+   `*_preparation_failed`; the database code and path are dropped.
+6. Work records: value format (decimal string, ≤3 decimals, ≤1,000,000),
+   truth ↔ value ↔ source coupling, unit and truth enums missing in the v2
+   schema, the date rule; the refusal names no field.
+7. `derive_cad_material_requirement`: `data` is an untyped object; modes,
+   fastener keys and couplings live in prose or the manual.
+8. The human-text rule (no ids, codes, "revision N" in prose) is stated in
+   no tool description.
+9. save_construction_draft create/revise revision coupling, area coupling
+   and exact concept mapping.
+10. add_catalog_fastener counting ↔ size couplings; what counts as a plan
+    for the plan gate.
+
+### Proposal (owner decisions; nothing built)
+
+**A — numbers travel as references.**
+- A1 Hand-overs and reports carry no physical numbers: the server refuses a
+  hand-over `request` that contains a dimension or quantity (number with
+  unit, or a number of two or more digits) with a code-named refusal and
+  points to the record to name instead; a worker report's numbers are
+  replaced by the code readback Bob already receives.
+- A2 Every physical number in saved truth has a basis the server can
+  follow: a measurement (by id/revision), a computation (derived node or
+  calculator), or an owner decision quoted from the conversation; a free
+  `decision`/`estimate` stays allowed but is labelled `ai_estimate` so it is
+  never shown or used as measured. Measurement values marked `measured` or
+  `provided_spec` must appear in their source quote.
+- A3 Catalog fasteners Konrad adds are saved as `design_choice`, not
+  `provided_spec`.
+
+**B — rules before the call, generated from the validators.**
+- B1 Every refusal names the field, the rule and the limit (first: the
+  30 kB readback for the `bound_*` kinds, construction preparation codes,
+  work-record field messages).
+- B2 The read before a write returns the budget and the paths:
+  `read_project_edit_context` reports the record's readback size against
+  30,000 bytes and the editable paths and item fields.
+- B3 Each write tool's schema and description are generated from the same
+  parser that validates it (lengths, enums, patterns, counts, couplings), so
+  a rule cannot exist only after the call; a test compares them.
