@@ -706,6 +706,21 @@ for(const migration of migrations){
   seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-image-describer-v1'}})
   versions.set(addition.key,1)
  }
+ // Owner decision 2026-11-07 (sketchbook A): edit_project_record takes mode check|save.
+ const writeCheck=source.match(/\$write_check_note\$([\s\S]+?)\$write_check_note\$/)
+ if(writeCheck){
+  const publication='bob-write-check-v1',row=seed.find(r=>r.key==='tools.edit_project_record')
+  if(!row||row.definition.parameters?.properties?.mode)throw new Error('write_check_tool_unexpected')
+  row.definition=structuredClone(row.definition)
+  row.definition.parameters.properties.mode={type:'string',enum:['check','save']}
+  row.definition.parameters.required=[...row.definition.parameters.required,'mode']
+  if(Array.isArray(row.definition.required_parameters))row.definition.required_parameters=[...row.definition.required_parameters,'mode']
+  row.definition.description+=writeCheck[1]
+  publishAs(row,publication);versions.set(row.key,versions.get(row.key)!+1)
+  const contract=seed.find(r=>r.key==='agent-contract.ask-bob')
+  if(contract.metadata.worker_gates_version!==1||contract.metadata.write_check_version!==undefined)throw new Error('write_check_contract_unexpected')
+  publishAs(contract,publication);contract.metadata={...contract.metadata,...JSON.parse(source.match(/\$write_check_contract\$([\s\S]+?)\$write_check_contract\$/)![1])};versions.set(contract.key,versions.get(contract.key)!+1)
+ }
  // Owner decision 2026-11-07: worker gates (chat answer is the review, gate facts in-job, identical-request refusal).
  const workerGates=source.match(/\$worker_gates_contract\$([\s\S]+?)\$worker_gates_contract\$/)
  if(workerGates){
