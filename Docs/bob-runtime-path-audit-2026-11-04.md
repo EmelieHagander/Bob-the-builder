@@ -2652,3 +2652,52 @@ shape, tested through the real work loop. Remaining before merge: a live
 Våningssäng 2 turn to measure what Bob saves, how many calls are refused and
 what the turn costs; aborted Claude calls make the recorded total a lower
 bound.
+
+<a id="publication-498-2026-11-07"></a>
+#### Hosted publication of #498 (lean writes) — 2026-11-07, 12:55 UTC
+
+Owner, 2026-11-07: "Publicera och så testar vi". Design and build:
+[versions and cost](#versions-and-cost-2026-11-07),
+[lean writes](#lean-writes-2026-11-07),
+[server revisions](#server-revisions-2026-11-07).
+
+- #498 is merged at `363f9f483772d35bb340e37e18d9ce5938293931`; its tree
+  `46df896f6bc964b6124e08a4995043f55b4a83a7` equals the tested branch tree.
+  Safety branch `save/bob-before-lean-writes-2026-11-07` retains the previous
+  published source `c1be61b33dec53d6a7bf1b757e31dd302994fa6e`.
+- Preflight: zero active Bob jobs, last delivery 09:30; running bundles
+  bob-worker v214, ask-bob v246.
+- Published from the merged checkout (Supabase CLI, `--use-api`, worker
+  first):
+
+| Consumer | Version | Files compared | JWT policy | Bundle SHA-256 |
+|---|---:|---:|---|---|
+| bob-worker | 215 | 152 | Existing private job capability, JWT false | `55d9113c62f25c33909b6fcb997fe9f23e97cc0e1f7a65f9090ba908b945bdb4` |
+| ask-bob | 247 | 154 | JWT true | `55ebb6a53a27feab880aee7c1583df736f12d5484601b88129471bb5f5d6a76a` |
+
+  Returned sources match the merged checkout byte for byte except the known
+  type-only `cad-intake.ts` erasure; both bundles contain the server-revision,
+  stable-tool and refusal-guard pins, the catalog rebuild strip and the
+  new-construction sketch store.
+- Migrations, applied through the management API after the runtimes, in
+  order: `20261107100000_construction_new_sketches.sql` as ledger
+  `20261107125435`; `20261107100100_bob_lean_writes_catalog.sql` as
+  `20261107125441`.
+- Read back: `bob.construction_new_sketch` executable by `authenticated` only;
+  `bob_private.construction_new_sketches` has RLS on and 0 rows; the
+  finished-job function drops both sketch tables. Active catalog (publication
+  `bob-lean-writes-v1`): `agent-contract.ask-bob` v31 with
+  `stable_tools_version`, `server_target_version`, `server_revisions_version`,
+  `refusal_guard_version` 1 and `construction_sketch_version` 2; `bob.tools`
+  v53 with the same flags and the `commit_construction_sketch` binding
+  (`record_id` hidden, nullable `source_ref` when unbound);
+  `tools.edit_construction_parts` v11, `tools.change_construction_parameters`
+  v12 and `tools.save_construction_draft` v16 without `target_revision`
+  (save with `mode: sketch | save`); `tools.commit_construction_sketch` v2 with
+  nullable `record_id` and `new_key`. Zero active jobs after.
+
+Remaining: the owner's Våningssäng 2 turn, read back for what Bob and Konrad
+save, how many calls are refused (and for which reason), whether the guard's
+`repeated` note appears, cache reads per Konrad call, and cost per role.
+Aborted Claude calls are recorded without a price, so the recorded total is a
+lower bound.
