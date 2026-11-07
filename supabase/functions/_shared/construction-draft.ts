@@ -25,6 +25,7 @@ import type { ProjectEdits } from './project-edits.ts'
 import { countSerializedTokens } from './bob-token-budget.ts'
 import { compactConstructionCheck } from './write-state.ts'
 import { recipeSize, staleSizeText, staleTextRejection, withConstructionText } from './construction-text.ts'
+import { CONSTRUCTION_SKETCH_COMMIT_TOOL, baseKeysOf, composeSketchChanges, parseSketch, sketchChangeCount, sketchSummary, withConstructionSketch, type ConstructionSketch, type ConstructionSketchStore } from './construction-sketch.ts'
 
 /** Reconstruct a historical tool check; a new check position still reads live.
  * CAD render/review gates use their independent fresh readers. Old executions
@@ -134,6 +135,7 @@ const CONSTRUCTION_PROSE:Record<string,readonly string[]>={
  change_construction_roles:['change_note','changes.*.reason'],
  continue_construction_change:['change_note','review_note'],
  save_construction_cut_plan:['change_note','candidates.*.note'],
+ commit_construction_sketch:['change_note'],
 }
 /** The table's schedule for one exact saved revision. A failed or mismatched
  * read is shown as unavailable; fasteners are never recomputed here. */
@@ -238,6 +240,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  readCatalog?:(id:string,revision:number)=>Promise<Record<string,any>>;now?:()=>Date;
  /** Server fastener schedule for one saved revision; present only for catalogs with joint fasteners. */
  readFasteners?:(id:string,revision:number)=>Promise<unknown>;
+ /** Pinned per manifest (construction_sketch_version 1, owner decision
+  * 2026-11-07): part edits can go to the job's private sketch, checked whole
+  * and saved once with commit_construction_sketch. */
+ sketches?:ConstructionSketchStore;
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
  const views=createConstructionViews(opts.projectId,opts.now,opts.fastPageFit)
@@ -256,7 +262,9 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  const withText=(tool:typeof CONSTRUCTION_EDIT_TOOL)=>opts.constructionText?withConstructionText(tool,opts.constructionNotes):tool
  const parameterTool=opts.coherentWork?withText(withConstructionWorkWrite(baseParameterTool)):baseParameterTool
  const workEditTool=opts.coherentWork?withText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL)):CONSTRUCTION_EDIT_TOOL
- const editTool=zeroText(opts.chosenJointFasteners?withChosenJointFasteners(workEditTool):workEditTool)
+ const fastenedEditTool=zeroText(opts.chosenJointFasteners?withChosenJointFasteners(workEditTool):workEditTool)
+ const editTool=opts.sketches?withConstructionSketch(fastenedEditTool):fastenedEditTool
+ const sketchTools=opts.writer&&opts.sketches?[CONSTRUCTION_SKETCH_COMMIT_TOOL]:[]
  const prepareChange=async(v:Record<string,any>,domain:WritePayload,prepare:(p:WritePayload)=>Promise<Record<string,any>>)=>{
   let payload=domain
   if(opts.coherentWork&&v.solution_edit!==null){
@@ -306,6 +314,190 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   }
   return result
  }
+ // A part edit, prepared against its saved revision and compiled, not saved.
+ // The same path serves a direct save, a sketched change and a sketch commit.
+ const prepareParts=async(v:Record<string,any>):Promise<{error:Record<string,any>}|{payload:WritePayload;domain:WritePayload;prepared:Record<string,any>}>=>{
+  if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {error:{status:'invalid',issues:[{code:'request_quote',path:'request_quote'}]}}
+  const editPayload=(changes:Record<string,any>):WritePayload=>({kind:'construction_edit',record_id:v.record_id,expected_revision:v.expected_revision,expected_updated_at:null,request_quote:v.request_quote,
+   data:{key:v.key,change_note:v.change_note,changes:changes?.joints?{...changes,joints:{...changes.joints,upsert:joints(changes.joints.upsert)}}:changes,computed:null,
+    ...(opts.coherentWork?{target_revision:v.target_revision}:{}),...(opts.constructionText&&v.text?{text:v.text}:{})}})
+  let change=await prepareChange(v,editPayload(v.changes),opts.prepareEdit!)
+  if(change.error)return {error:change.error}
+  // The server merges the plan, so zero defaults are known only after a first
+  // prepare; they ride a second prepare as ordinary binding and node changes.
+  const merged=opts.defaultZero&&change.prepared.status==='ready'&&change.prepared.next?parseCadAssemblyRequest(structuredClone(change.prepared.next.recipe)):null
+  if(merged){
+   const d=zeroDefaults(merged,parseParameterPlan(change.prepared.next.parameter_plan))
+   if(d.bindings.length||d.nodes.length||d.unused.length||d.stale.length){
+    const c=structuredClone(v.changes) as Record<string,any>,list=(k:string)=>c[k]??={upsert:[],remove:[]}
+    if(d.bindings.length)list('bindings').upsert.push(...d.bindings)
+    if(d.stale.length)list('bindings').remove.push(...d.stale.filter(path=>!c.bindings.remove.includes(path)))
+    if(d.nodes.length)list('nodes').upsert.push(...d.nodes)
+    if(d.unused.length)list('nodes').remove.push(...d.unused.filter(id=>!c.nodes.remove.includes(id)))
+    change=await prepareChange(v,editPayload(c),opts.prepareEdit!)
+    if(change.error)return {error:change.error}
+   }
+  }
+  const {payload,domain,prepared}=change
+  if(!await opts.hasAccess())return {error:{status:'denied'}}
+  // Bob may first save the owner's decisions in the selected Solution; the
+  // unchanged construction then points at an older target and the server
+  // refuses target_revision:null. That is a missing input, not a write race,
+  // so it stays repairable in the same job (bed, 2026-11-06).
+  if(opts.coherentWork&&payload.kind==='construction_edit'&&v.target_revision===null&&prepared.status==='conflict'&&prepared.reason==='construction_changed'){
+   const current=await (opts.readCurrent?.(v.record_id)??opts.read(v.record_id,null,null)) as Record<string,any>
+   if(!await opts.hasAccess())return {error:{status:'denied'}}
+   if(current?.projectId===opts.projectId&&current.status==='ok'&&current.artifact_id===v.record_id
+    &&current.revision===v.expected_revision&&current.archived===false&&current.source_state==='changed')
+    return {error:{status:'invalid',reason:'target_revision_required',source_state:current.source_state,
+     message:'No construction changed. This revision still uses an older selected Solution or changed sources, so target_revision:null (keep the old pin) is refused. Read view=work for the current selected Solution and resend this same edit with its current target_revision. Changed measurements use change_construction_parameters with their newer revisions.'}}
+  }
+  if(prepared.status!=='ready'&&prepared.status!=='saved')return {error:prepared}
+  if(prepared.status==='ready'){
+   const draft=prepared.draft,next=prepared.next
+   if(draft?.projectId!==opts.projectId||draft.artifact_id!==v.record_id||draft.revision!==v.expected_revision||draft.current_revision!==v.expected_revision||draft.archived)return {error:{status:'conflict'}}
+   if(!next)return {error:{status:'unavailable'}}
+   const issues=constructionEditIssues(next,draft)
+   if(issues.length)return {error:{status:'invalid',issues,message:'No construction changed. Correct only the named posts and their dependencies.'}}
+   const recipe=parseCadAssemblyRequest(structuredClone(next.recipe))
+   if(!recipe)return {error:{status:'invalid',issues:[{code:'invalid_recipe',path:'changes'}]}}
+   constructionInstancePolicy(recipe,next.instance_policy)
+   const plan=parseParameterPlan(next.parameter_plan)
+   if(plan.frames.some(f=>f.kind==='image'))return {error:{status:'invalid',issues:[{code:'unsupported_image_frame',path:'frames'}]}}
+   const sources=await opts.readSources(parameterSourcePins(plan))
+   const parameters=compileCadParameters(opts.projectId,recipe,plan,sources.project,sources.physical)
+   if(!parseCadAssemblyRequest(recipe))return {error:{status:'invalid',issues:[{code:'computed_geometry_invalid',path:'changes'}]}}
+   if(opts.constructionText){
+    const after=recipeSize(recipe,next.instance_policy),stale=staleSizeText(v.text??draft,recipeSize(draft.recipe,draft.instance_policy),after)
+    if(stale.length)return {error:staleTextRejection(stale,after!,!!v.text)}
+   }
+   domain.data.computed={recipe,parameters}
+  }
+  return {payload,domain,prepared}
+ }
+ const editParts=async(v:Record<string,any>):Promise<Record<string,any>>=>{
+  const ready=await prepareParts(v)
+  if('error' in ready)return ready.error
+  if(!await opts.hasAccess())return {status:'denied'}
+  return changed(await opts.writer!.commit(ready.payload),ready.prepared,v.expected_revision)
+ }
+ // Owner decision 2026-11-07 (sketchbook B): the whole-model check of a sketch,
+ // run on the merged draft in code, the same check a saved revision gets.
+ const sketchCheck=async(draft:Record<string,any>):Promise<Record<string,any>>=>{
+  const unchecked={status:'unavailable',message:'The sketch could not be checked; it is checked again when it is saved.'}
+  if(!opts.readCatalog)return unchecked
+  const catalog=new Map<string,Record<string,any>>()
+  for(const m of draft.materials??[])for(const kind of ['material','part']){
+   const id=m[kind+'_id'],revision=m[kind+'_revision']
+   if(!id||catalog.has(`${id}@${revision}`))continue
+   if(catalog.size>=32)return {status:'unsupported',message:'This check supports at most 32 distinct catalog revisions.'}
+   const row=await opts.readCatalog(id,revision)
+   if(row?.projectId!==opts.projectId||row.status!=='ok'||row.record?.id!==id||row.record?.revision!==revision)return unchecked
+   catalog.set(`${id}@${revision}`,row.record)
+  }
+  const today=(opts.now?.()??new Date()).toISOString().slice(0,10)
+  const model=opts.formEvidence?checkConstructionEvidence(draft,catalog,today,[],[]):checkConstruction(draft,catalog,today,!!opts.constructionViews)
+  const {details_read:_read,result_id:_result,...check}=compactConstructionCheck({...model,status:'checked'})
+  return {...check,scope:'sketch'}
+ }
+ const SKETCH_KEPT='Nothing sketched; your sketch is unchanged.'
+ const sketchRefusal=(error:Record<string,any>)=>({...error,saved:false,sketched:false,
+  message:[typeof error.message==='string'?error.message:null,SKETCH_KEPT].filter(Boolean).join(' ')})
+ const readSketch=async(id:string):Promise<{error:Record<string,any>}|{revision:number;sketch:ConstructionSketch|null}>=>{
+  const stored=await opts.sketches!.read(id)
+  if(stored.status!=='ok')return {error:{status:'unavailable',saved:false,message:'The sketch could not be read; nothing changed.'}}
+  const sketch=stored.sketch==null?null:parseSketch(stored.sketch)
+  if(stored.sketch!=null&&!sketch)return {error:{status:'unavailable',saved:false,message:'The sketch could not be read; nothing changed.'}}
+  return {revision:stored.revision,sketch}
+ }
+ // The merged change list, prepared and checked on its base, then stored.
+ const storeSketch=async(next:Record<string,any>,prior:ConstructionSketch|null,storedRevision:number,notes:string[],baseKeys?:ConstructionSketch['base_keys']):Promise<Record<string,any>>=>{
+  const count=sketchChangeCount(next.changes)
+  if(!count&&!next.text){
+   const dropped=await opts.sketches!.drop(next.record_id)
+   return dropped.status==='dropped'?{status:'sketched',saved:false,record_id:next.record_id,change_count:0,message:'Your sketch has no changes left and was closed.'}
+    :{status:'unavailable',saved:false,message:'The sketch could not be closed.'}
+  }
+  const ready=await prepareParts({...next,changes:count?next.changes:{instances:{upsert:[],remove:[]}}})
+  if('error' in ready)return sketchRefusal(ready.error)
+  if(ready.prepared.status!=='ready')return sketchRefusal({status:'invalid',reason:'key_already_saved',message:'This key belongs to a change saved in this request; give the sketched change a new key.'})
+  const draft=ready.prepared.draft,merged=ready.prepared.next,computed=ready.domain.data.computed as Record<string,any>
+  const check=await sketchCheck({...draft,recipe:computed.recipe,parameters:computed.parameters,materials:merged.materials,joints:merged.joints,instance_policy:merged.instance_policy})
+  const sketch:ConstructionSketch={version:1,base_revision:next.expected_revision,base_keys:baseKeys??prior?.base_keys??baseKeysOf(draft),changes:next.changes,
+   change_count:count,text:next.text??null,target_revision:next.target_revision??null,notes:notes.slice(-20)}
+  if(!await opts.hasAccess())return {status:'denied'}
+  const put=await opts.sketches!.put(next.record_id,storedRevision,sketch)
+  if(put.status!=='stored')return {status:put.status,saved:false,message:'The sketch was not stored; read it with commit_construction_sketch action read before continuing.'}
+  return {status:'sketched',saved:false,record_id:next.record_id,base_revision:sketch.base_revision,change_count:count,sketch:sketchSummary(sketch.changes),check,
+   message:'Kept in your sketch and checked as a whole; nothing is saved yet. Save it with commit_construction_sketch when the assignment is done or at a step the owner should see.'}
+ }
+ const sketchParts=async(v:Record<string,any>):Promise<Record<string,any>>=>{
+  if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {status:'invalid',issues:[{code:'request_quote',path:'request_quote'}]}
+  if(v.solution_edit!=null)return sketchRefusal({status:'invalid',reason:'sketch_construction_only',
+   message:'A sketch changes only this construction. Save the Solution change first, or use mode save for a joint Solution and Construction change.'})
+  const read=await readSketch(v.record_id)
+  if('error' in read)return read.error
+  const prior=read.sketch
+  if(prior&&prior.base_revision!==v.expected_revision)return sketchRefusal({status:'conflict',reason:'sketch_base_differs',base_revision:prior.base_revision,
+   message:`Your sketch of this construction starts from revision ${prior.base_revision}. Send changes with that expected_revision, or commit, rebase or discard the sketch first.`})
+  let changes=v.changes
+  if(prior){
+   const composed=composeSketchChanges(prior.changes,v.changes,prior.base_keys)
+   if('issues' in composed)return sketchRefusal({status:'invalid',issues:composed.issues,
+    message:'An id is both upserted and removed, or a removed id is neither saved nor in the sketch.'})
+   changes=composed.changes
+  }else if(!sketchChangeCount(changes))changes={}
+  return await storeSketch({...v,changes,text:v.text??prior?.text??null,target_revision:v.target_revision??prior?.target_revision??null},
+   prior,read.revision,[...(prior?.notes??[]),v.change_note])
+ }
+ const sketchCommit=async(v:Record<string,any>):Promise<Record<string,any>>=>{
+  const read=await readSketch(v.record_id)
+  if('error' in read)return read.error
+  const sketch=read.sketch
+  if(!sketch)return {status:'not_found',saved:false,message:'No sketch of this construction is open in this request.'}
+  const kept={status:'kept',base_revision:sketch.base_revision,change_count:sketch.change_count}
+  if(v.action==='read'){
+   const full=countSerializedTokens(sketch.changes)<=6000
+   return {status:'ok',saved:false,record_id:v.record_id,base_revision:sketch.base_revision,change_count:sketch.change_count,sketch:sketchSummary(sketch.changes),
+    ...(full?{changes:sketch.changes}:{changes_omitted:true}),text:sketch.text,target_revision:sketch.target_revision,notes:sketch.notes}
+  }
+  if(v.action==='discard'){
+   const dropped=await opts.sketches!.drop(v.record_id)
+   return dropped.status==='dropped'?{status:'discarded',saved:false,record_id:v.record_id,change_count:sketch.change_count}
+    :{status:'unavailable',saved:false,sketch:kept,message:'The sketch could not be discarded.'}
+  }
+  if(v.key===null||v.change_note===null)return {status:'invalid',saved:false,sketch:kept,
+   validation:{code:'commit_fields_required',fields:['key','change_note'].filter(f=>v[f]===null)},message:'commit and rebase need a key and a change_note.'}
+  const edit={record_id:v.record_id,key:v.key,change_note:v.change_note,request_quote:v.request_quote,
+   ...(opts.coherentWork?{solution_edit:null}:{}),...(opts.constructionText?{text:sketch.text}:{})}
+  if(v.action==='rebase'){
+   const current=await (opts.readCurrent?.(v.record_id)??opts.read(v.record_id,null,null)) as Record<string,any>
+   if(!await opts.hasAccess())return {status:'denied'}
+   if(current?.projectId!==opts.projectId||current.status!=='ok'||current.artifact_id!==v.record_id||current.archived!==false||!Number.isSafeInteger(current.revision))
+    return {status:'unavailable',saved:false,sketch:kept,message:'The current revision could not be read; the sketch is unchanged.'}
+   // A removal the current revision no longer holds is already done.
+   const keys=baseKeysOf(current),changes=Object.fromEntries(Object.entries(sketch.changes)
+    .map(([name,d])=>[name,{upsert:d!.upsert,remove:d!.remove.filter(r=>keys[name as keyof typeof keys].includes(r))}])
+    .filter(([,d])=>(d as any).upsert.length||(d as any).remove.length))
+   const moved={...edit,expected_revision:current.revision,changes,text:sketch.text,target_revision:sketch.target_revision}
+   const result=await storeSketch(moved,sketch,read.revision,sketch.notes,keys)
+   if(result.status==='sketched')return {...result,status:'rebased',previous_base_revision:sketch.base_revision}
+   if(!['invalid','needs_data','conflict'].includes(result.status))return result
+   // It does not apply cleanly yet: keep it on the current revision, unchecked,
+   // so the named items can be corrected there with mode sketch.
+   const put=await opts.sketches!.put(v.record_id,read.revision,{...sketch,base_revision:current.revision,base_keys:keys,changes,change_count:sketchChangeCount(changes)})
+   if(put.status!=='stored')return result
+   return {...result,saved:false,sketch:{status:'moved_unchecked',base_revision:current.revision,previous_base_revision:sketch.base_revision,change_count:sketchChangeCount(changes)},
+    message:[typeof result.message==='string'?result.message.replace(' '+SKETCH_KEPT,''):null,
+     `Your sketch now starts from revision ${current.revision} but does not apply there yet. Correct the named items with mode sketch and expected_revision ${current.revision}, or discard it.`].filter(Boolean).join(' ')}
+  }
+  const result=await editParts({...edit,expected_revision:sketch.base_revision,changes:sketch.change_count?sketch.changes:{instances:{upsert:[],remove:[]}},
+   ...(opts.coherentWork?{target_revision:sketch.target_revision}:{})})
+  if(result.status!=='saved')return {...result,saved:false,sketch:kept,message:[typeof result.message==='string'?result.message:null,
+   'Your sketch is kept.',result.status==='conflict'?'If the construction changed since the sketch began, use action rebase, then commit.':null].filter(Boolean).join(' ')}
+  const dropped=await opts.sketches!.drop(v.record_id)
+  return {...result,sketch:{status:dropped.status==='dropped'?'committed':'committed_not_closed',change_count:sketch.change_count}}
+ }
  const tools={
  // Durable checks already have an exact, access-controlled result ID in the
  // evidence store. Keep its reference, not a second full report in every save.
@@ -352,7 +544,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   const query={artifact_id:id,revision,view:'overview',ids:[],after:null,result_id:null,section:null}
   return await views.read(draft,query,undefined,undefined,opts.formEvidence?{saved_results_read:{...query,view:'results'}}:{})
  },
- tools:[readTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.readDelivery?[CONSTRUCTION_DELIVERY_TOOL]:[]),...(opts.writer?[saveTool,editTool,parameterTool,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
+ tools:[readTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.readDelivery?[CONSTRUCTION_DELIVERY_TOOL]:[]),...(opts.writer?[saveTool,editTool,parameterTool,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL,...sketchTools]:[])],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
  async execute(name:string,raw:unknown):Promise<Record<string,any>>{
   // Owner decision 2026-11-01: a value with too many decimals no longer costs a
   // whole save; code rounds it and says which values it rounded.
@@ -365,7 +557,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  },
  async executeTool(name:string,raw:unknown):Promise<Record<string,any>>{
   if(++used>12&&!opts.unlimitedWork)return {status:'budget_exhausted'}
-  const spec=[editTool,CONSTRUCTION_LEGACY_TOOL,parameterTool,readTool,saveTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CUT_SAVE_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL,...(opts.readDelivery?[CONSTRUCTION_DELIVERY_TOOL]:[])].find(s=>s.function.name===name)
+  const spec=[editTool,CONSTRUCTION_LEGACY_TOOL,parameterTool,readTool,saveTool,checkTool,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CUT_SAVE_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL,...sketchTools,...(opts.readDelivery?[CONSTRUCTION_DELIVERY_TOOL]:[])].find(s=>s.function.name===name)
   if(!spec)return {status:'invalid'}
   // Old exact result pointers remain usable after an upgrade; the new native
   // schemas still show every field explicitly to new model requests.
@@ -453,64 +645,16 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    }
    if(name===CONSTRUCTION_EDIT_TOOL.function.name){
     if(!opts.writer||!opts.prepareEdit)return {status:'unavailable'}
-    if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {status:'invalid',issues:[{code:'request_quote',path:'request_quote'}]}
-    const editPayload=(changes:Record<string,any>):WritePayload=>({kind:'construction_edit',record_id:v.record_id,expected_revision:v.expected_revision,expected_updated_at:null,request_quote:v.request_quote,
-     data:{key:v.key,change_note:v.change_note,changes:changes?.joints?{...changes,joints:{...changes.joints,upsert:joints(changes.joints.upsert)}}:changes,computed:null,
-      ...(opts.coherentWork?{target_revision:v.target_revision}:{}),...(opts.constructionText&&v.text?{text:v.text}:{})}})
-    let change=await prepareChange(v,editPayload(v.changes),opts.prepareEdit)
-    if(change.error)return change.error
-    // The server merges the plan, so zero defaults are known only after a first
-    // prepare; they ride a second prepare as ordinary binding and node changes.
-    const merged=opts.defaultZero&&change.prepared.status==='ready'&&change.prepared.next?parseCadAssemblyRequest(structuredClone(change.prepared.next.recipe)):null
-    if(merged){
-     const d=zeroDefaults(merged,parseParameterPlan(change.prepared.next.parameter_plan))
-     if(d.bindings.length||d.nodes.length||d.unused.length||d.stale.length){
-      const c=structuredClone(v.changes) as Record<string,any>,list=(k:string)=>c[k]??={upsert:[],remove:[]}
-      if(d.bindings.length)list('bindings').upsert.push(...d.bindings)
-      if(d.stale.length)list('bindings').remove.push(...d.stale.filter(path=>!c.bindings.remove.includes(path)))
-      if(d.nodes.length)list('nodes').upsert.push(...d.nodes)
-      if(d.unused.length)list('nodes').remove.push(...d.unused.filter(id=>!c.nodes.remove.includes(id)))
-      change=await prepareChange(v,editPayload(c),opts.prepareEdit)
-      if(change.error)return change.error
-     }
+    if(opts.sketches){
+     const {mode,...input}=v
+     if(mode==='sketch')return await sketchParts(input)
+     return await editParts(input)
     }
-    const {payload,domain,prepared}=change
-    if(!await opts.hasAccess())return {status:'denied'}
-    // Bob may first save the owner's decisions in the selected Solution; the
-    // unchanged construction then points at an older target and the server
-    // refuses target_revision:null. That is a missing input, not a write race,
-    // so it stays repairable in the same job (bed, 2026-11-06).
-    if(opts.coherentWork&&payload.kind==='construction_edit'&&v.target_revision===null&&prepared.status==='conflict'&&prepared.reason==='construction_changed'){
-     const current=await (opts.readCurrent?.(v.record_id)??opts.read(v.record_id,null,null)) as Record<string,any>
-     if(!await opts.hasAccess())return {status:'denied'}
-     if(current?.projectId===opts.projectId&&current.status==='ok'&&current.artifact_id===v.record_id
-      &&current.revision===v.expected_revision&&current.archived===false&&current.source_state==='changed')
-      return {status:'invalid',reason:'target_revision_required',source_state:current.source_state,
-       message:'No construction changed. This revision still uses an older selected Solution or changed sources, so target_revision:null (keep the old pin) is refused. Read view=work for the current selected Solution and resend this same edit with its current target_revision. Changed measurements use change_construction_parameters with their newer revisions.'}
-    }
-    if(prepared.status!=='ready'&&prepared.status!=='saved')return prepared
-    if(prepared.status==='ready'){
-     const draft=prepared.draft,next=prepared.next
-     if(draft?.projectId!==opts.projectId||draft.artifact_id!==v.record_id||draft.revision!==v.expected_revision||draft.current_revision!==v.expected_revision||draft.archived)return {status:'conflict'}
-     if(!next)return {status:'unavailable'}
-     const issues=constructionEditIssues(next,draft)
-     if(issues.length)return {status:'invalid',issues,message:'No construction changed. Correct only the named posts and their dependencies.'}
-     const recipe=parseCadAssemblyRequest(structuredClone(next.recipe))
-     if(!recipe)return {status:'invalid',issues:[{code:'invalid_recipe',path:'changes'}]}
-     constructionInstancePolicy(recipe,next.instance_policy)
-     const plan=parseParameterPlan(next.parameter_plan)
-     if(plan.frames.some(f=>f.kind==='image'))return {status:'invalid',issues:[{code:'unsupported_image_frame',path:'frames'}]}
-     const sources=await opts.readSources(parameterSourcePins(plan))
-     const parameters=compileCadParameters(opts.projectId,recipe,plan,sources.project,sources.physical)
-     if(!parseCadAssemblyRequest(recipe))return {status:'invalid',issues:[{code:'computed_geometry_invalid',path:'changes'}]}
-     if(opts.constructionText){
-      const after=recipeSize(recipe,next.instance_policy),stale=staleSizeText(v.text??draft,recipeSize(draft.recipe,draft.instance_policy),after)
-      if(stale.length)return staleTextRejection(stale,after!,!!v.text)
-     }
-     domain.data.computed={recipe,parameters}
-    }
-    if(!await opts.hasAccess())return {status:'denied'}
-    return changed(await opts.writer.commit(payload),prepared,v.expected_revision)
+    return await editParts(v)
+   }
+   if(name===CONSTRUCTION_SKETCH_COMMIT_TOOL.function.name){
+    if(!opts.writer||!opts.prepareEdit||!opts.sketches)return {status:'unavailable'}
+    return await sketchCommit(v)
    }
    if(name===CONSTRUCTION_PARAMETER_TOOL.function.name){
     if(!opts.writer||!opts.prepareParameterChange)return {status:'unavailable'}
@@ -800,7 +944,7 @@ export function withSubBuild<T extends typeof CONSTRUCTION_SAVE_TOOL>(spec:T):T{
  parameters:{...spec.function.parameters,required:[...spec.function.parameters.required,'sub_build_id'],properties:{...spec.function.parameters.properties,
   sub_build_id:{anyOf:[uuid,{type:'null'}],description:'The sub-build this construction belongs in, from read_build_tree or the request. It is placed there right after saving. null keeps its current place.'}}},
 }}}
-const CHECKED_WRITES=new Set(['save_construction_draft','edit_construction_parts','change_construction_parameters'])
+const CHECKED_WRITES=new Set(['save_construction_draft','edit_construction_parts','change_construction_parameters','commit_construction_sketch'])
 export type ConstructionTools=ReturnType<typeof createConstructionTools>
 
 /** The drawing desk uses the same checker and exact caller reads, without

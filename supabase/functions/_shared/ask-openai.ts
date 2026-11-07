@@ -20,6 +20,7 @@ import { parameterSourcePins } from './cad-parameters.ts'
 import { bobCompleteRequestVersions, type BobImageInputCounts } from './bob-complete-request.ts'
 import { bobStageContextVersion, stageImageRef } from './bob-stage-context.ts'
 import { createConstructionTools, checkedConstructionForDrawing, constructionCurrentReader, constructionChangeReaders, constructionPreparationFailure } from './construction-draft.ts'
+import { createConstructionSketchStore } from './construction-sketch.ts'
 import {parseDesignReadiness,type DesignPurpose,type DesignReadiness} from './project-design-intent.ts'
 import { readBudgetStop } from './bob-budget-stop.ts'
 import {drawingResumeReply,drawingResumeDelivery,confirmedDrawingReceipt} from './drawing-resume-reply.ts'
@@ -734,6 +735,10 @@ export async function answerWithOpenAi(opts: {
     if(!result||result.project_id!==opts.projectId||result.area_id!==areaId)throw new Error('design_readiness_unavailable')
     return result
   }
+  // Owner decision 2026-11-07 (sketchbook B): the job's private construction
+  // sketches, through the claimed caller of this turn; never project truth.
+  const constructionSketches = execution.constructionSketchVersion === 1 ? createConstructionSketchStore(async (action, artifact, expected, sketch) =>
+    await rpc('construction_sketch', { ...binding, p_action: action, p_artifact: artifact, p_expected_revision: expected, p_sketch: sketch }, AbortSignal.timeout(12000)) as { data: any; error: { code?: string } | null }) : undefined
   const constructionOptions = {unlimitedWork,projectId:opts.projectId,message:opts.message,writer,hasAccess,
     ...(execution.workingStateVersion === 1 ? { fastPageFit: true, readSummary: async (id:string,revision:number) => {
       const {data,error}=await readRpc('read_construction_summary',{p_project:opts.projectId,p_artifact:id,p_revision:revision})
@@ -831,6 +836,7 @@ export async function answerWithOpenAi(opts: {
     ...(aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.build_place_version===1)?{
       placeIn:(id:string,subBuild:string)=>buildTree.execute('place_build',{build_id:id,sub_build_id:subBuild,room_id:null})}:{}),
     observationTime:(input:unknown)=>memo('construction:observation',input,async()=>new Date().toISOString()),
+    ...(constructionSketches?{sketches:constructionSketches}:{}),
     prepareEdit:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_edit',{...binding,p_payload:payload},AbortSignal.timeout(12000))
       if(error)return constructionPreparationFailure(error,'construction_edit_preparation_failed')
@@ -1305,6 +1311,7 @@ export async function answerWithOpenAi(opts: {
     ...(execution.workerFocusVersion === 1 ? { workerFocus: true } : {}),
     ...(execution.workerPlanVersion === 1 ? { workerPlan: true } : {}),
     ...(execution.workerGatesVersion === 1 ? { workerGates: true } : {}),
+    ...(constructionSketches ? { openSketches: async () => { const listed = await constructionSketches.list(); return listed.status === 'ok' ? listed.sketches : null } } : {}),
     ...(execution.toolPickLimit !== undefined ? { toolPickLimit: execution.toolPickLimit } : {}),
     ...(execution.workerPieceProgressVersion === 3 || execution.workerPieceProgressVersion === 4 ? { workerDesignReview: true } : {}),
     ...(execution.workerPieceProgressVersion === 2 || execution.workerPieceProgressVersion === 3 || execution.workerPieceProgressVersion === 4 ? { workerFormPiece: {

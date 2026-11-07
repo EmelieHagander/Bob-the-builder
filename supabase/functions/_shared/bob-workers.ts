@@ -230,8 +230,18 @@ export function verifiedConstructionPiece(receipt: Record<string, unknown>, open
 
 const CONSTRUCTION_PIECE_WRITES = new Set([
   'save_construction_draft', 'edit_construction_parts', 'change_construction_parameters',
-  'change_construction_roles',
+  'change_construction_roles', 'commit_construction_sketch',
 ])
+/** A call that can save a construction revision. Owner decision 2026-11-07
+ * (sketchbook B): a sketched part change and reading, rebasing or discarding a
+ * sketch save nothing, so several may follow each other in one batch. */
+const pieceWrite = (name: string, args: unknown) => {
+  if (!CONSTRUCTION_PIECE_WRITES.has(name)) return false
+  const a = args && typeof args === 'object' ? args as Record<string, unknown> : {}
+  if (name === 'edit_construction_parts') return a.mode !== 'sketch'
+  if (name === 'commit_construction_sketch') return a.action === 'commit'
+  return true
+}
 
 export async function runWorker(opts: {
   aiCatalog: AiCatalogSession; worker: WorkerDefinition; callModel: ModelCall; userId: string
@@ -287,6 +297,9 @@ export async function runWorker(opts: {
   progress?: { restored?: WorkerProgress; save(progress: WorkerProgress): Promise<void>; afterStep?(): void }
   /** Drops the worker's model chain once it has returned; it is never continued. */
   releaseChain?: (responseId: string) => void
+  /** Owner decision 2026-11-07 (sketchbook B): sketches still open when the job
+   * ends are reported as not saved; null when they could not be read. */
+  openSketches?: () => Promise<{ artifact_id: string; base_revision: number; change_count: number }[] | null>
 }): Promise<Record<string, unknown>> {
   const roleKey = opts.worker.role.replace(/^role\./, '')
   const restored = opts.progress?.restored
@@ -335,7 +348,14 @@ export async function runWorker(opts: {
   const receipts: Record<string, unknown>[] = structuredClone(restored?.receipts ?? [])
   // Last, after any server work that can yield: a resumed worker still finds its chain.
   const release = () => { if (previous) opts.releaseChain?.(previous) }
-  const finish = async (result: Record<string, unknown>) => {
+  const finish = async (reported: Record<string, unknown>) => {
+    let result = reported
+    if (opts.openSketches) {
+      const open = await opts.openSketches()
+      if (open === null) result = { ...result, open_sketches: { status: 'unavailable', note: 'Whether a construction sketch is still open could not be read.' } }
+      else if (open.length) result = { ...result, open_sketches: { status: 'not_saved', sketches: open,
+        note: 'These sketched changes are not saved. Ask Konrad to commit or discard them in this request; they are dropped when it ends.' } }
+    }
     if (!opts.readKnowledge) { release(); return result }
     const targets = opts.autoCheck ? uncheckedConstructions(receipts) : []
     if (targets.length) for (const checked of await opts.autoCheck!(targets))
@@ -426,14 +446,14 @@ export async function runWorker(opts: {
         try { result = await opts.session.execute(name, args) }
         catch (error) { rethrowContinuation(error); throw error }
       }
-      if (opts.pieceProgress && allowed.has(name) && CONSTRUCTION_PIECE_WRITES.has(name) && !pieceWriteSeen) pieceWriteSeen = true
+      if (opts.pieceProgress && allowed.has(name) && pieceWrite(name, args) && !pieceWriteSeen) pieceWriteSeen = true
       if (result && typeof result === 'object' && 'diagnostics' in result) { const { diagnostics: _d, ...content } = result; result = content }
       const status = String(result?.status ?? 'returned')
       // A v4 spatially guarded edit whose canonical writer says conflict cannot
       // be repaired by changing unrelated parts or reading forever in this
       // worker chain. Return to Bob so the current Plan/source is reconciled.
       // Older worker contracts without a bounded review stay unchanged.
-      if (opts.pieceProgress?.readBoundedReview && !opts.pieceProgress.gatesAsFacts && CONSTRUCTION_PIECE_WRITES.has(name) && status === 'conflict')
+      if (opts.pieceProgress?.readBoundedReview && !opts.pieceProgress.gatesAsFacts && pieceWrite(name, args) && status === 'conflict')
         rejectedBoundedPiece = name
       calls.push({ tool: NAME.test(name) ? name : 'invalid_name', status })
       // A check stores its result too, so it is reported (and read back) like a save.

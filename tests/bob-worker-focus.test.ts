@@ -123,7 +123,8 @@ test('the catalog publishes Konrad\'s focus, the plan paragraph, the three pins 
   const fixture = catalogFixture()
   const structure = catalogWorkers(fixture)!.structure
   assert.deepEqual(structure.focus, { version: 1,
-    core: ['read_construction_draft', 'edit_construction_parts', 'save_construction_draft', 'check_construction_draft', 'find_catalog_materials', 'add_catalog_fastener', 'search_project_data'],
+    // commit_construction_sketch joined the core with the sketchbook (bob-construction-sketch-v1, 2026-11-07).
+    core: ['read_construction_draft', 'edit_construction_parts', 'save_construction_draft', 'check_construction_draft', 'find_catalog_materials', 'add_catalog_fastener', 'search_project_data', 'commit_construction_sketch'],
     optional: ['change_construction_parameters', 'continue_construction_change', 'read_build_tree', 'read_solution_context', 'read_construction_changes', 'search_building_knowledge', 'open_project_item', 'list_project_category', 'calculate_project', 'change_construction_roles', 'read_construction_delivery'],
     optional_limit: 4 })
   for (const never of ['create_sub_build', 'place_build', 'derive_construction_lists', 'transition_legacy_drawing'])

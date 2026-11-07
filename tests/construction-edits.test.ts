@@ -14,6 +14,7 @@ import {withChosenJointFasteners} from '../supabase/functions/_shared/constructi
 import {withConstructionWorkWrite} from '../supabase/functions/_shared/construction-work.ts'
 import {withConstructionText} from '../supabase/functions/_shared/construction-text.ts'
 import {createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
+import {withConstructionSketch} from '../supabase/functions/_shared/construction-sketch.ts'
 import {createProjectWriter} from '../supabase/functions/_shared/project-write.ts'
 import {createBobToolSession} from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
@@ -98,7 +99,9 @@ test('bounded construction edits preserve canonical data, receipts and authority
   // Typed solution_edit items arrived later (bob-typed-design-items-v1, bob-typed-concept-items-v1).
   const untyped=(parameters:any)=>{const p=structuredClone(parameters),edit=p.properties.solution_edit.anyOf[0];edit.properties.changes.items=edit.properties.changes.items.anyOf[0];return p}
   assert.deepEqual(preKonradLeanCatalogFixture().tool('edit_construction_parts').function.parameters,untyped(textEdit))
-  assert.deepEqual(current.tool('edit_construction_parts').function.parameters,withDefaultZeroText(withChosenJointFasteners(textEdit),former))
+  // Open questions with the text (construction_notes), and mode sketch|save (bob-construction-sketch-v1, 2026-11-07).
+  const latest=withDefaultZeroText(withChosenJointFasteners(withConstructionText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL),true).function.parameters),former)
+  assert.deepEqual(current.tool('edit_construction_parts').function.parameters,withConstructionSketch({type:'function',function:{name:'edit_construction_parts',description:'',parameters:latest}}).function.parameters)
   const options={message,writer:writer(),constructionTools:tools(),lookup:createProjectLookup(project,async()=>({data:[],error:null}),async()=>({data:[],error:null})),readPolicy:seedToolPolicy}
   const old=createBobToolSession({...options,aiCatalog:preConstructionEditsCatalogFixture()})
   assert(!(await old.prepare()).some(t=>t.function.name==='edit_construction_parts'))

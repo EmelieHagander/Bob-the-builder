@@ -352,6 +352,9 @@ export type ProjectAnswerOptions = {
    * Konrad as facts in the same job; a failed or blocked hand-over refuses only
    * the identical request this turn. */
   workerGates?: boolean;
+  /** Owner decision 2026-11-07 (constructionSketchVersion 1): the construction
+   * sketches open in this turn, so Konrad's report says what is not saved. */
+  openSketches?: () => Promise<{ artifact_id: string; base_revision: number; change_count: number }[] | null>;
   /** New v2 jobs: caller-authorized, code-only reads of the approved Plan and
    * exact Construction revisions, not a second planner or worker tool. */
   workerFormPiece?: {
@@ -614,6 +617,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         ...(workerPads ? { workpadEnabled: true, ...(workerWorkpad ? { workpad: workerWorkpad } : {}) } : {}),
         ...(opts.workerFocus && worker.focus && workerPads ? { focus: { pick: (candidates: string[]) => pickWorkerTools(opts, job.job, worker.focus!.core, candidates, deadline, worker.focus!.optional_limit) } } : {}),
         ...(opts.workerPlan && workerPads ? { planGate: true } : {}),
+        ...(opts.openSketches && key === 'structure' ? { openSketches: opts.openSketches } : {}),
         ...(opts.workerPieceProgress && key === 'structure' && workerPads && reportReadback && worker.knowledge
           ? { pieceProgress: { ...(opts.continuedWork?{unmappedReview:true}:{}), ...(opts.workerGates ? { gatesAsFacts: true } : {}), readSaved: async (receipt: Record<string, unknown>) => {
             const read = readbackReads([receipt])[0]
