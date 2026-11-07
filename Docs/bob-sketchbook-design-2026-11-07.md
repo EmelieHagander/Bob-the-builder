@@ -2,8 +2,9 @@
 
 > **Status:** owner-approved 2026-11-07 ("Ja kör på rek!": A first, then B for
 > constructions; private job table; one commit per assignment, milestones
-> allowed). **Built, not published**: see [§6 Built](#6-built-2026-11-07). Not
-> live until deploy and the catalog publication; then needs owner runs.
+> allowed). **Built and published 2026-11-07, 08:55 UTC**
+> ([§6](#6-built-2026-11-07), [publication record](bob-runtime-path-audit-2026-11-04.md#publication-496-2026-11-07));
+> not yet owner-run.
 > **Owns:** the target write cycle for Bob and the build team (A: check
 > before saving; B: a job-scoped working copy committed once).
 > **Does not own:** the domain contracts it reuses — constructions
@@ -169,7 +170,9 @@ Owner, 2026-11-07: "Ja kör på rek!" — all four as recommended.
 
 ## 6. Built 2026-11-07
 
-Built and tested locally; **not deployed, not published, not owner-run.**
+Built and tested locally; published 2026-11-07, 08:55 UTC (bob-worker v214,
+ask-bob v246, [record](bob-runtime-path-audit-2026-11-04.md#publication-496-2026-11-07));
+**not yet owner-run.**
 Both behind pins new claimed jobs adopt from the catalog; pinned manifests
 keep their behaviour.
 
