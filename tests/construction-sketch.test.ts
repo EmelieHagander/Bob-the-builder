@@ -11,7 +11,7 @@ import {createProjectWriter} from '../supabase/functions/_shared/project-write.t
 import {createAiCatalogSession} from '../supabase/functions/_shared/ai-catalog.ts'
 import {CONSTRUCTION_SKETCH_COMMIT_TOOL_V2,CONSTRUCTION_NEW_SKETCH_NOTE,CONSTRUCTION_SKETCH_NOTE,baseKeysOf,composeSketchChanges,createConstructionSketchStore,parseSketch,sketchChangeCount,sketchSummary,
  type BaseKeys,type SketchChanges} from '../supabase/functions/_shared/construction-sketch.ts'
-import {LEAN_EDIT_NOTE,LEAN_SAVE_NOTE} from '../supabase/functions/_shared/construction-lean.ts'
+import {LEAN_EDIT_NOTE,LEAN_SAVE_NOTE,withLeanCommit} from '../supabase/functions/_shared/construction-lean.ts'
 
 // Owner decision 2026-11-07 (sketchbook, design B; "Ja kör på rek!"): Konrad
 // builds a construction in a private job sketch, checked whole, and saves it
@@ -278,8 +278,9 @@ test('sketch, check and commit once against the database: one revision, one rece
   // bob-lean-writes-v1 (later the same day) moved the pins to version 2 and added server_target / stable_tools.
   assert.deepEqual(['construction_sketch_version','server_target_version','stable_tools_version'].map(k=>live.definition('agent-contract.ask-bob').metadata[k]),[2,1,1])
   const published=fixture.definition('tools.commit_construction_sketch','tool_contract').definition as any
-  assert.deepEqual(published.parameters,CONSTRUCTION_SKETCH_COMMIT_TOOL_V2.function.parameters)
-  assert.equal(published.description,CONSTRUCTION_SKETCH_COMMIT_TOOL_V2.function.description)
+  // bob-lean-construction-v1: a keyed sketch may also be a whole revision of a saved construction.
+  assert.deepEqual(published.parameters,withLeanCommit(CONSTRUCTION_SKETCH_COMMIT_TOOL_V2).function.parameters)
+  assert.equal(published.description,withLeanCommit(CONSTRUCTION_SKETCH_COMMIT_TOOL_V2).function.description)
   const editTool=fixture.definition('tools.edit_construction_parts','tool_contract').definition as any
   // bob-lean-construction-v1 (later the same day) appends its note after the sketch note.
   assert(editTool.description.endsWith(CONSTRUCTION_SKETCH_NOTE+LEAN_EDIT_NOTE));assert.deepEqual(editTool.parameters.properties.mode,{type:'string',enum:['sketch','save']})

@@ -303,8 +303,11 @@ Entry turn 2026-11-07: an 11-part wall was 26,590 characters Konrad typed in
   node in every save) and binds the field, so the saved graph, provenance and
   read-back are unchanged. Numbers are not formula syntax: each needs a named
   decision or measurement with its reason. A repeat's `spacing_mm` takes a
-  formula. Formula nodes nothing uses any more are removed by code; a declared
-  node nothing uses is still refused. Source: `cad-formulas.ts`.
+  formula. Fields get their real values from the graph before the recipe is
+  checked. Bindings for a part that is gone, and formula nodes nothing uses
+  any more, are removed by code; a declared node nothing uses is still refused.
+  A number written where code computes the field from a node is refused, with
+  the computed value. Source: `cad-formulas.ts`.
 - **Joint rules.** `joint_rules` is Konrad's joining decision for two
   definitions (fasteners and reason); code writes one joint, id `jr.<a>.<b>`,
   for every pair of such parts touching face to face that has no joint, with the
@@ -312,8 +315,11 @@ Entry turn 2026-11-07: an 11-part wall was 26,590 characters Konrad typed in
   rule (`rule_joints`). Touching parts that must not be joined that way (resting,
   sliding, removable) go in the rule's `except`; they stay
   `contact_without_joint` until they get their own joint, as does any touching
-  pair without a rule. Two existing parts and reference geometry are never
-  joined. Rules last for the save or edit (and the sketch) they come with.
+  pair without a rule. Two existing parts covered by a rule get a joint with
+  nothing fastened; reference geometry is never joined. A joint code wrote
+  follows its parts: written again when they moved, removed when they no
+  longer touch. Rules last for the save or edit (and the sketch) they come
+  with; an edit may send only rules.
   Source: `construction-joint-rules.ts`.
 - **FORM mapping kept by code.** A part no mapping names goes to the active
   concept component whose envelope holds it, only when exactly one does; a
@@ -329,7 +335,9 @@ Entry turn 2026-11-07: an 11-part wall was 26,590 characters Konrad typed in
   (geometry, concept, readiness, collisions) is refused as before and nothing
   is kept; a kept sketch is never a saved construction. A saved construction can be
   revised whole in a keyed sketch (`save_construction_draft` with its
-  `record_id`, mode sketch), committed with its `new_key`.
+  `record_id`, mode sketch), committed with its `new_key`; the sketch keeps the
+  construction and revision of its first call, so a commit never overwrites a
+  newer revision.
 
 The cost ledger prices a Claude answer cut by our own deadline from its known
 input and the output that streamed, marked `cost_basis =

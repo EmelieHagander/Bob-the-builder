@@ -2844,6 +2844,28 @@ Still typed per part: instance roles (1,357) and open questions (1,053). The
 earlier forecast of about 2,500 tokens was optimistic; time per answer is
 measured only live.
 
+**Audit round 1 (three independent reviewers: formulas; sketches and the
+database; joints, FORM and cost), 32 findings, fixed the same day.**
+
+| Area | Found | Now |
+|---|---|---|
+| Formulas | Removing a part placed by formula failed (`parameter_path_missing`): code's bindings stayed | Bindings for a part that is gone go with it, then unused formula and zero nodes |
+| | A hand-made `fx.` node could change what a formula means | An `fx.` name must be the hash of what it computes; a copied code node is accepted unchanged |
+| | Placeholders failed recipe rules (a tube's diameter) | Fields get their real values from the graph before the recipe is checked |
+| | A number where code computes the field was silently replaced | Refused, naming the field, its node and the computed value |
+| | Unary minus, units per field, unknown names, edit conflicts | Leading minus negates the product; wrong unit and unknown names named by field |
+| Sketches | A keyed sketch could be committed onto another construction, or over a newer revision | A keyed sketch keeps the construction and revision of its first call; the commit is checked against that revision |
+| | A kept text could block rebase; a refused edit's sketch stayed open after the fix saved | Text is checked at commit only; a sketch begun only to keep a refused direct change is dropped when a change saves |
+| | Formula errors in part edits were never kept | Edit sketches keep what was written; formulas compile at each check |
+| Joints and FORM | The sketch check used hand joints and the unextended mapping | It checks what the commit would save |
+| | Existing touching parts stayed unjoined; a moved part kept a stale code joint | Existing pairs get a joint with nothing fastened; code joints follow their parts or go |
+| | A rule alone could not join saved parts | A rule-only edit writes the joints it finds |
+| Cost | The estimate reached the ledger but not the turn budget; it was also written for network errors | The budget and events see it; only our own deadline cuts are estimated, and an unknown input stays unknown |
+
+Not changed: `form_assign` only with a part change (the database refuses an
+edit with no change). Tests: `lean-construction-units` 10/10,
+`lean-construction` 7/7.
+
 **Open.** Reads still show the stored graph (nodes and bindings), not formulas;
 an edit names nodes, not the formulas that made them. Instance roles
 (`instance_policy`, 1,447 characters for the wall) are still written per part.

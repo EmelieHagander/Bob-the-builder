@@ -11,7 +11,7 @@ import type { CadAssemblyRequest } from './cad-adapter.ts'
  * wall Konrad typed in one answer. */
 export type JointRule = { id: string; between: [string, string]; reason: string; fasteners: Record<string, unknown>[]; except?: [string, string][] }
 /** What code wrote, for the answer: each joint, its parts and its rule. */
-export type RuleJoint = { id: string; parts: [string, string]; rule: string }
+export type RuleJoint = { id: string; parts: [string, string]; rule: string | null }
 export type RuleIssue = { code: string; path: string; message: string }
 type Row = Record<string, any>
 
@@ -36,17 +36,23 @@ function fnv(text: string): string {
   for (const ch of new TextEncoder().encode(text)) { h ^= BigInt(ch); h = (h * 0x100000001b3n) & 0xffffffffffffffffn }
   return h.toString(16).padStart(16, '0').slice(0, 12)
 }
-/** A stable joint id for one pair, the same in every save and edit. */
+/** A stable joint id for one pair, the same in every save and edit. Part ids
+ * may hold dots, so a pair with one gets a short hash of the exact pair. */
 export function ruleJointId(a: string, b: string): string {
-  const [x, y] = [a, b].sort(), id = `jr.${x}.${y}`
+  const [x, y] = [a, b].sort(), id = x.includes('.') || y.includes('.') ? `jr.${x}.${y}.${fnv(`${x}|${y}`).slice(0, 4)}` : `jr.${x}.${y}`
   return id.length <= 80 ? id : 'jr.' + fnv(`${x}|${y}`)
 }
+export const RULE_JOINT_PREFIX = 'jr.'
+/** Two existing parts are already joined; the rule records that, nothing is fastened. */
+export const EXISTING_JOINT_REASON = 'Existing parts, already joined; nothing new is fastened.'
 
 /** Joints for the touching pairs the rules cover. recipe holds computed
- * numbers; joints are the joints already declared or saved. */
-export function ruleJoints(recipe: CadAssemblyRequest, joints: Row[], rules: JointRule[], roles: Map<string, string>): { joints: Row[]; made: RuleJoint[]; issues: RuleIssue[] } {
+ * numbers; joints are the joints already declared or saved. A joint code wrote
+ * earlier (id jr.) is code's to keep in step: written again when its parts
+ * moved and its faces no longer meet, and named in stale when its parts no
+ * longer touch or are gone. */
+export function ruleJoints(recipe: CadAssemblyRequest, joints: Row[], rules: JointRule[], roles: Map<string, string>): { joints: Row[]; made: RuleJoint[]; issues: RuleIssue[]; stale: string[] } {
   const issues: RuleIssue[] = [], out: Row[] = [], made: RuleJoint[] = []
-  if (!rules.length) return { joints: out, made, issues }
   const definitions = new Map(recipe.definitions.map(d => [d.id, d as Row]))
   const seen = new Set<string>()
   rules.forEach((r, i) => {
@@ -54,25 +60,38 @@ export function ruleJoints(recipe: CadAssemblyRequest, joints: Row[], rules: Joi
     seen.add(r.id)
     for (const d of r.between) if (!definitions.has(d)) issues.push({ code: 'joint_rule_unknown_definition', path: `joint_rules/${i}/between`, message: `No definition ${d} in this construction.` })
   })
-  if (issues.length) return { joints: out, made, issues }
+  if (issues.length) return { joints: out, made, issues, stale: [] }
   const excluded = new Set(rules.flatMap(r => (r.except ?? []).map(p => `${r.id}|${pair(p[0], p[1])}`)))
   const byPair = new Map<string, JointRule[]>()
   for (const r of rules) byPair.set(pair(...r.between), [...(byPair.get(pair(...r.between)) ?? []), r])
-  const joined = new Set(joints.map(j => pair(j?.first?.instance_id, j?.second?.instance_id)))
+  const jointOf = new Map<string, Row>()
+  for (const j of joints) jointOf.set(pair(j?.first?.instance_id, j?.second?.instance_id), j)
   const taken = new Set(joints.map(j => j?.id))
   const boxes = recipe.instances.flatMap(i => {
     if (roles.get(i.id) === 'reference') return []
     const box = constructionBox(i as Row, definitions.get(i.definition_id)!)
     return box ? [{ box, definition: i.definition_id, existing: roles.get(i.id) === 'existing_part' }] : []
   })
+  const boxOf = new Map(boxes.map(b => [b.box.id, b.box]))
+  // The checker's test: local faces opposed on one plane with positive contact area.
+  const meets = (j: Row) => {
+    const a = boxOf.get(j?.first?.instance_id), b = boxOf.get(j?.second?.instance_id)
+    const fa = a?.faces.get(j.first.face), fb = b?.faces.get(j.second.face)
+    return !!a && !!b && !!fa && !!fb && a.id !== b.id && fa.axis === fb.axis && fa.sign === -fb.sign && Math.abs(fa.plane - fb.plane) <= tolerance
+      && [0, 1, 2].every(k => k === fa.axis || Math.min(a.max[k], b.max[k]) - Math.max(a.min[k], b.min[k]) > tolerance)
+  }
+  const touching = new Set<string>()
   for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
     const a = boxes[i], b = boxes[j]
-    if (a.existing && b.existing) continue // Two parts that already exist are already joined.
-    if (joined.has(pair(a.box.id, b.box.id))) continue
     const overlap = [0, 1, 2].map(k => Math.min(a.box.max[k], b.box.max[k]) - Math.max(a.box.min[k], b.box.min[k]))
     if (overlap.filter(v => Math.abs(v) <= tolerance).length !== 1 || overlap.filter(v => v > tolerance).length !== 2) continue
-    const matched = (byPair.get(pair(a.definition, b.definition)) ?? []).filter(r => !excluded.has(`${r.id}|${pair(a.box.id, b.box.id)}`))
-    if (!matched.length) continue
+    const key = pair(a.box.id, b.box.id), earlier = jointOf.get(key)
+    touching.add(key)
+    const code = typeof earlier?.id === 'string' && earlier.id.startsWith(RULE_JOINT_PREFIX)
+    if (earlier && (!code || meets(earlier))) continue
+    const matched = (byPair.get(pair(a.definition, b.definition)) ?? []).filter(r => !excluded.has(`${r.id}|${key}`))
+    // A code joint whose parts moved keeps its fasteners and reason unless a rule is sent again.
+    if (!matched.length && !earlier) continue
     if (matched.length > 1) { issues.push({ code: 'joint_rule_ambiguous', path: `joint_rules/${matched.map(r => r.id).join(',')}`, message: `Several rules join ${a.definition} and ${b.definition}; keep one.` }); continue }
     const axis = overlap.findIndex(v => Math.abs(v) <= tolerance)
     // a below b along the contact axis, or the other way round.
@@ -80,11 +99,17 @@ export function ruleJoints(recipe: CadAssemblyRequest, joints: Row[], rules: Joi
     const face = (box: typeof a.box, sign: number) => [...box.faces].find(([, f]) => f.axis === axis && f.sign === sign)?.[0]
     const first = face(low, 1), second = face(high, -1)
     if (!first || !second) continue
-    const id = ruleJointId(low.id, high.id)
-    if (taken.has(id)) { issues.push({ code: 'joint_rule_id_taken', path: `joints/${id}`, message: 'A declared joint already uses the id code gives this pair.' }); continue }
+    const id = earlier ? earlier.id as string : ruleJointId(low.id, high.id)
+    if (!earlier && taken.has(id)) { issues.push({ code: 'joint_rule_id_taken', path: `joints/${id}`, message: 'A declared joint already uses the id code gives this pair.' }); continue }
     taken.add(id)
-    out.push({ id, first: { instance_id: low.id, face: first }, second: { instance_id: high.id, face: second }, reason: matched[0].reason, fasteners: structuredClone(matched[0].fasteners) })
-    made.push({ id, parts: [low.id, high.id], rule: matched[0].id })
+    const existing = a.existing && b.existing, rule = matched[0] ?? null
+    out.push({ id, first: { instance_id: low.id, face: first }, second: { instance_id: high.id, face: second },
+      reason: existing ? EXISTING_JOINT_REASON : rule ? rule.reason : earlier!.reason,
+      fasteners: existing ? [] : structuredClone(rule ? rule.fasteners : earlier!.fasteners ?? []) })
+    made.push({ id, parts: [low.id, high.id], rule: rule?.id ?? null })
   }
-  return { joints: out, made, issues }
+  // Code's joints whose parts no longer touch, or are gone or became reference geometry.
+  const stale = joints.filter(j => typeof j?.id === 'string' && j.id.startsWith(RULE_JOINT_PREFIX)
+    && !touching.has(pair(j.first?.instance_id, j.second?.instance_id))).map(j => j.id as string)
+  return { joints: out, made, issues, stale }
 }

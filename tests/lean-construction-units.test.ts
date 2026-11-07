@@ -81,7 +81,7 @@ test('a negative value and an array spacing compile; the spacing leaves the reci
 test('an edit compiles formulas in its upserts into node and binding upserts, and drops formula nodes no longer used',()=>{
  const {plan}=compile(wall(),{version:1,frames:[],nodes,bindings:[]})
  const changes=compileEditFormulas({instances:{upsert:[{id:'s3',definition_id:'stud',placement:{x:0,y:'D - st - lum - lum',z:'lum',rx:0,ry:0,rz:0}}],remove:[]}},plan.nodes) as any
- assert.equal(changes.instances.upsert[0].placement.y,0)
+ assert.equal(changes.instances.upsert[0].placement.y,2465,'the field gets its real value before the recipe is checked')
  assert.deepEqual(changes.bindings.upsert.map((b:any)=>b.path),['instances/s3/placement/y','instances/s3/placement/z'])
  assert.equal(changes.nodes.upsert.length,1,'D - st - lum is saved already; only the new subtraction is added')
  // Moving s2 back to y = 0 leaves its formula node unused.
@@ -107,7 +107,8 @@ test('joint rules write one joint per touching pair of those definitions, with f
  // A declared joint for a pair wins; two existing parts are not joined again.
  const declared=[{id:'mine',first:{instance_id:'sill',face:'z_max'},second:{instance_id:'s1',face:'z_min'}}]
  assert.equal(ruleJoints(recipe,declared,rules,new Map()).joints.length,3)
- assert.equal(ruleJoints(recipe,[],rules,new Map([['sill','existing_part'],['s1','existing_part']])).joints.length,3)
+ // Two existing parts are joined with nothing fastened (the schedule counts no hardware).
+ assert.deepEqual(ruleJoints(recipe,[],rules,new Map([['sill','existing_part'],['s1','existing_part']])).joints.find(j=>j.id===ruleJointId('s1','sill'))!.fasteners,[])
  assert.equal(ruleJoints(recipe,[],rules,new Map([['s1','reference']])).joints.length,2)
  // Two rules for one pair, or a rule naming a missing definition, are refused.
  assert.equal(ruleJoints(recipe,[],[...rules,{...rules[0],id:'again'}],new Map()).issues[0].code,'joint_rule_ambiguous')
@@ -176,4 +177,63 @@ test('old and new format are the same model: identical geometry, and identical g
  const [a,b]=[await change(old),await change(lean)]
  assert.deepEqual(b.recipe,a.recipe,'identical geometry after the change')
  assert.deepEqual(b.recipe.definitions.map((x:any)=>x.y_mm),[2605,45]);assert.equal(b.recipe.instances.find((i:any)=>i.id==='top').placement.z,2455)
+})
+
+test('joints code wrote follow their parts: faces rewritten after a move, gone when parts part; existing pairs need nothing fastened; dotted ids stay distinct',()=>{
+ const {recipe}=compile(wall(),{version:1,frames:[],nodes,bindings:[]})
+ const fasteners=[{material_id:'00000000-0000-4000-8000-000000000001',material_revision:1,count:2,spacing_mm:null}]
+ const rules=[{id:'plate_stud',between:['plate','stud'] as [string,string],reason:'Spikas.',fasteners,except:[]}]
+ const first=ruleJoints(recipe,[],rules,new Map())
+ // A saved code joint whose faces no longer meet is written again with the same id, even without its rule.
+ const wrong=first.joints.map(j=>j.id===ruleJointId('s1','sill')?{...j,first:{...j.first,face:'x_max'}}:j)
+ const again=ruleJoints(recipe,wrong,[],new Map())
+ assert.deepEqual(again.joints.map(j=>[j.id,j.first.face,j.fasteners.length]),[[ruleJointId('s1','sill'),'z_max',1]])
+ assert.deepEqual(again.made,[{id:ruleJointId('s1','sill'),parts:['sill','s1'],rule:null}])
+ // A code joint whose parts no longer touch is stale; a declared one is left alone.
+ const moved=structuredClone(recipe);moved.instances.find(i=>i.id==='s1')!.placement.z=500
+ const later=ruleJoints(moved,[...first.joints,{id:'mine',first:{instance_id:'s1',face:'z_max'},second:{instance_id:'top',face:'z_min'}}],[],new Map())
+ assert.deepEqual(later.stale.sort(),[ruleJointId('s1','sill'),ruleJointId('s1','top')].sort())
+ // Two existing parts: joined, nothing fastened (the schedule counts no hardware for them).
+ const existing=ruleJoints(recipe,[],rules,new Map([['sill','existing_part'],['s1','existing_part']]))
+ const both=existing.joints.find(j=>j.id===ruleJointId('s1','sill'))!
+ assert.deepEqual(both.fasteners,[]);assert.equal(existing.joints.length,4)
+ const check=checkConstruction({artifact_id:'a',revision:1,current_revision:1,source_state:'current',archived:false,recipe,materials:[],open_questions:[],
+  instance_policy:{version:1,instances:recipe.instances.map(i=>({instance_id:i.id,role:['sill','s1'].includes(i.id)?'existing_part':'build_part',quantity_policy:['sill','s1'].includes(i.id)?'reuse':'manufacture',reason:'x'}))},
+  joints:existing.joints.map(j=>({...j,method:'butt'}))},new Map(),'2026-11-07')
+ assert.deepEqual(check.issues.filter((i:any)=>['contact_without_joint','joint_faces_do_not_meet','joint_fasteners_missing'].includes(i.code)&&i.ids.includes('s1')&&i.ids.includes('sill')),[])
+ // (a, b.c) and (a.b, c) once met as jr.a.b.c.
+ assert.notEqual(ruleJointId('a','b.c'),ruleJointId('a.b','c'))
+ assert.match(ruleJointId('a','b.c'),/^[A-Za-z][A-Za-z0-9_.:-]{0,79}$/)
+})
+
+test('audit round 1, formulas: real values before checks, copied code nodes, unary minus, unit by field, conflicts resolved',async()=>{
+ const {formulaNodeIssues,formulaNodeId}=await import('../supabase/functions/_shared/cad-formulas.ts')
+ // A tube's outside diameter as a formula passes the tube rule with its real value (placeholder 1 failed it).
+ const tube={contract_version:1,units:'mm',assembly_id:'t',views:['front'],definitions:[{id:'pipe',primitive:'tube',material_ref:null,outside_diameter_mm:'od',wall_thickness_mm:3,length_mm:'h'}],
+  instances:[{id:'p1',definition_id:'pipe',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}]}
+ const t=compileSaveFormulas(tube,{version:1,frames:[],nodes:[decision('od',42),decision('h',2400)],bindings:[]}) as any
+ assert.deepEqual([t.recipe.definitions[0].outside_diameter_mm,t.recipe.definitions[0].length_mm],[42,2400])
+ assert.ok(parseCadAssemblyRequest(structuredClone(t.recipe)),'the tube recipe is valid before compilation')
+ // A whole revision may copy code's own formula nodes; a hand-made one under that name is refused.
+ const {plan}=compile(wall(),{version:1,frames:[],nodes,bindings:[]})
+ const copied=compileSaveFormulas(wall(),{version:1,frames:[],nodes:plan.nodes.filter(n=>!n.id.startsWith('origin.')),bindings:[]}) as any
+ assert.equal(copied.plan.nodes.filter((n:any)=>n.id.startsWith('fx.')).length,5,'copies reused, nothing doubled')
+ const id=formulaNodeId('subtract_v1','D','st','exact')
+ assert.deepEqual(formulaNodeIssues([{id,role:'derived',operation:'add_v1',operands:['w','w'],rounding:'exact'}]).map(i=>i.code),['formula_reserved_id'])
+ assert.deepEqual(formulaNodeIssues([{id,role:'derived',operation:'subtract_v1',operands:['D','st'],rounding:'exact'}]),[])
+ // A leading minus negates the product; a negated sub-expression needs no declared zero node.
+ const neg={...wall(),instances:[{id:'a',definition_id:'plate',placement:{x:'-two * lum',y:'-(-lum + st)',z:0,rx:0,ry:0,rz:0}}],definitions:[wall().definitions[0]]}
+ const n=compileSaveFormulas(neg,{version:1,frames:[],nodes,bindings:[]}) as any
+ assert.deepEqual([n.recipe.instances[0].placement.x,n.recipe.instances[0].placement.y],[-90,-50])
+ // A formula in the wrong unit is named by its field.
+ const deg={...neg,instances:[{id:'a',definition_id:'plate',placement:{x:0,y:0,z:0,rx:'lum',ry:0,rz:0}}]}
+ assert.throws(()=>compileSaveFormulas(deg,{version:1,frames:[],nodes,bindings:[]}),(e:any)=>e.issues[0].code==='formula_unit'&&e.issues[0].path==='instances/a/placement/rx')
+ // An unknown name is named, with the hint about hyphens.
+ assert.throws(()=>compileSaveFormulas({...neg,instances:[{id:'a',definition_id:'plate',placement:{x:'D-st',y:0,z:0,rx:0,ry:0,rz:0}}]},{version:1,frames:[],nodes,bindings:[]}),
+  (e:any)=>e.issues[0].detail==='D-st'&&/hyphen/.test(e.issues[0].message))
+ // An edit that removes a formula node and uses the same formula keeps it; a formula replaces a removed binding path.
+ const edit=compileEditFormulas({nodes:{upsert:[],remove:[id]},bindings:{upsert:[],remove:['instances/s3/placement/y']},
+  instances:{upsert:[{id:'s3',definition_id:'stud',placement:{x:0,y:'D - st',z:0,rx:0,ry:0,rz:0}}],remove:[]}},plan.nodes) as any
+ assert.deepEqual(edit.nodes.remove,[]);assert.ok(edit.nodes.upsert.some((x:any)=>x.id===id))
+ assert.deepEqual(edit.bindings.remove,[])
 })

@@ -42,8 +42,8 @@ function withArraySpacing(recipe: any): any {
     ...items, properties: { ...items.properties, spacing_mm: SPACING }, required: [...items.required, 'spacing_mm'] } } } }
 }
 
-export const LEAN_SAVE_NOTE = ' Lean writing: a number in the recipe may be a formula over parameter node names, with + - * / and parentheses and spaces around a minus sign; code adds its nodes and bindings, so bind by hand only fields written as numbers. joint_rules joins touching parts by definition pair; code writes those joints. Code completes form_refinement: a part no mapping names goes to the concept component whose envelope holds it. A refused save is kept as a sketch under its key: send only the corrections with mode sketch and the same key, then commit it.'
-export const LEAN_EDIT_NOTE = ' Lean writing: a number in an upserted definition or part may be a formula over parameter node names; code adds its nodes and bindings and removes formula nodes nothing uses any more. joint_rules joins touching parts by definition pair; code writes the joints for touching pairs that have none. Code maps added parts to the concept component whose envelope holds them and drops removed ones; form_assign moves a part to another component. A refused change is kept in your sketch: send only the corrections with mode sketch, then commit it.'
+export const LEAN_SAVE_NOTE = ' Lean writing: a number in the recipe may be a formula over parameter node names, with + - * / and parentheses and spaces around a minus sign; code adds its nodes and bindings, so bind by hand only fields written as numbers. joint_rules joins touching parts by definition pair; code writes those joints. Code completes form_refinement: a part no mapping names goes to the concept component whose envelope holds it, when exactly one does. A save refused only for a text, a formula or a joint rule is kept as a sketch under its key: send only the correction with mode sketch and the same key, then commit it.'
+export const LEAN_EDIT_NOTE = ' Lean writing: a number in an upserted definition or part may be a formula over parameter node names; code adds its nodes and bindings and removes formula nodes nothing uses any more. joint_rules joins touching parts by definition pair; code writes the joints for touching pairs that have none. Code maps an added part to the concept component whose envelope holds it, when exactly one does, and drops removed ones; form_assign names the component for a part several hold. Joints code wrote follow their parts when they move. A change refused only for a text, a formula or a joint rule is kept in your sketch: send only the correction with mode sketch, then commit it.'
 const MAPPING_OLD = 'Small edits inherit the saved mapping; use a complete save to change the mapping.'
 const MAPPING_NEW = 'Part edits keep the mapping in step with the parts.'
 
@@ -71,4 +71,17 @@ export function withLeanEdit<T extends Spec>(spec: T): T {
     definitions: withFormulaNumbers(c.properties.definitions), instances: withFormulaNumbers(c.properties.instances) } }
   return { ...spec, function: { ...spec.function, description: spec.function.description + LEAN_EDIT_NOTE,
     parameters: { ...p, required: [...p.required, 'joint_rules', 'form_assign'], properties: { ...p.properties, changes, joint_rules: JOINT_RULES_SCHEMA, form_assign: FORM_ASSIGN_SCHEMA } } } }
+}
+
+const COMMIT_OLD = 'For a new construction new_key is the key its save_construction_draft sketch used; otherwise new_key is null.'
+const COMMIT_NEW = 'new_key is the key of a sketch made with save_construction_draft (a new construction, or a whole revision of a saved one); for a sketch made with edit_construction_parts new_key is null.'
+const REBASE_OLD = 'rebase moves a sketch of an existing construction onto its current saved revision'
+const REBASE_NEW = 'rebase moves an edit_construction_parts sketch onto the current saved revision'
+/** commit_construction_sketch under lean_construction_version 1: a keyed
+ * sketch may also be a whole revision of a saved construction. */
+export function withLeanCommit<T extends Spec>(spec: T): T {
+  const p = spec.function.parameters, key = p.properties.new_key
+  if (!spec.function.description.includes(COMMIT_OLD) || !spec.function.description.includes(REBASE_OLD)) throw new Error('lean_commit_text_unexpected')
+  return { ...spec, function: { ...spec.function, description: spec.function.description.replace(COMMIT_OLD, COMMIT_NEW).replace(REBASE_OLD, REBASE_NEW),
+    parameters: { ...p, properties: { ...p.properties, new_key: { ...key, description: 'The key of a save_construction_draft sketch; null for an edit_construction_parts sketch.' } } } } }
 }

@@ -149,3 +149,60 @@ test('a refused new save is kept under its key, and a saved construction can be 
  const draft=await read(id)
  assert.equal(draft.revision,2);assert.equal(draft.description,'Ram med bredare tvärslå')
 })
+
+test('audit round 1, edits: a part placed by formula can be removed; a number where a formula rules is refused; a rule alone joins saved parts',async()=>{
+ const message='Lägg till och ta bort en bakre slå.',{tools,material,read}=await setup(message)
+ const id=(await tools.execute('save_construction_draft',{...frameSave(message,material),joint_rules:[{...rule,except:[['right','front']]}]})).receipt.recordId
+ // A rule alone: the touching pair left out before is joined now (the database refuses an empty change).
+ const joined=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:1,key:'join',change_note:'Foga höger',request_quote:message,mode:'save',changes:{},joint_rules:[rule],form_assign:[]})
+ assert.equal(joined.status,'saved',JSON.stringify(joined));assert.equal((await read(id)).joints.length,2)
+ const added=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:2,key:'bak',change_note:'Bakre slå',request_quote:message,mode:'save',
+  changes:{instances:{upsert:[{id:'back',definition_id:'cross',placement:at('w','depth - w')}],remove:[]},roles:{upsert:[role('back')],remove:[]}},joint_rules:[rule],form_assign:[]})
+ assert.equal(added.status,'saved',JSON.stringify(added))
+ // A number where code computes the field from a node is refused, not silently replaced.
+ const clash=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:3,key:'tal',change_note:'Flytta',request_quote:message,mode:'save',
+  changes:{instances:{upsert:[{id:'back',definition_id:'cross',placement:at(18,300)}],remove:[]}},joint_rules:[],form_assign:[]})
+ assert.equal(clash.status,'invalid',JSON.stringify(clash));assert.deepEqual(clash.issues.map((i:any)=>[i.path,i.computed]),[['instances/back/placement/y',382]])
+ // Removing the part: code removes the bindings it wrote for it, its formula nodes and its rule joints.
+ const removed=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:3,key:'bort',change_note:'Ta bort bakre slå',request_quote:message,mode:'save',
+  changes:{instances:{upsert:[],remove:['back']},roles:{upsert:[],remove:['back']}},joint_rules:[],form_assign:[]})
+ assert.equal(removed.status,'saved',JSON.stringify(removed))
+ const draft=await read(id)
+ assert.equal(draft.revision,4);assert.equal(draft.joints.length,2)
+ assert.ok(!draft.parameters.bindings.some((b:any)=>b.path.startsWith('instances/back/')))
+ assert.ok(!draft.parameters.nodes.some((n:any)=>n.id.startsWith('fx.')&&!draft.parameters.bindings.some((b:any)=>b.node===n.id)&&!draft.parameters.nodes.some((m:any)=>m.operands?.includes(n.id))))
+})
+
+test('audit round 1, keyed sketches keep their construction and base; a refused edit\'s shadow goes when the change saves; the sketch check matches the commit',async()=>{
+ const message='Skissa ramar och revidera utan att skriva över.',{tools,material,read}=await setup(message)
+ // The sketch check sees code's joints and the completed mapping, as the commit will.
+ const sketched=await tools.execute('save_construction_draft',{...frameSave(message,material),mode:'sketch'})
+ assert.equal(sketched.status,'sketched',JSON.stringify(sketched))
+ assert.deepEqual(sketched.check.issues.filter((i:any)=>['form_instance_unmapped','contact_without_joint','concept_geometry_changed','disconnected_parts'].includes(i.code)),[])
+ const a=(await tools.execute('commit_construction_sketch',{record_id:null,new_key:'ram',action:'commit',key:'ram_c',change_note:'Ram A',request_quote:message})).receipt.recordId
+ // A new frame B sketched by key; a later call arrives bound to A, as the job binding does.
+ await tools.execute('save_construction_draft',{...frameSave(message,material),key:'b',title:'Ram B',mode:'sketch'})
+ await tools.execute('save_construction_draft',{...frameSave(message,material),key:'b',title:'Ram B',record_id:a,expected_revision:1,mode:'sketch'})
+ const b=await tools.execute('commit_construction_sketch',{record_id:a,new_key:'b',action:'commit',key:'b_c',change_note:'Ram B',request_quote:message})
+ assert.equal(b.status,'saved',JSON.stringify(b));assert.notEqual(b.receipt.recordId,a,'B is a new construction')
+ assert.equal((await read(a)).title,'Ram');assert.equal((await read(a)).revision,1)
+ // A whole revision of A sketched at revision 1; A changes to revision 2; the commit does not overwrite it.
+ await tools.execute('save_construction_draft',{...frameSave(message,material),key:'rev',record_id:a,expected_revision:1,description:'Ny text',mode:'sketch'})
+ const edit=await tools.execute('edit_construction_parts',{record_id:a,expected_revision:1,key:'bak',change_note:'Bakre slå',request_quote:message,mode:'save',
+  changes:{instances:{upsert:[{id:'back',definition_id:'cross',placement:at('w','depth - w')}],remove:[]},roles:{upsert:[role('back')],remove:[]}},joint_rules:[rule],form_assign:[]})
+ assert.equal(edit.status,'saved',JSON.stringify(edit))
+ await tools.execute('save_construction_draft',{...frameSave(message,material),key:'rev',record_id:a,expected_revision:2,description:'Ny text igen',mode:'sketch'})
+ const stale=await tools.execute('commit_construction_sketch',{record_id:a,new_key:'rev',action:'commit',key:'rev_c',change_note:'Revision',request_quote:message})
+ assert.notEqual(stale.status,'saved',JSON.stringify(stale))
+ assert.equal((await read(a)).revision,2);assert.ok((await read(a)).recipe.instances.some((i:any)=>i.id==='back'),'nothing overwritten')
+ // A direct edit refused for its text leaves a shadow sketch; the corrected edit saves and the shadow goes.
+ const sketches=async()=>Number((await pg.query('select count(*) n from bob_private.construction_sketches where artifact_id=$1',[a])).rows[0].n)
+ const mid={nodes:{upsert:[decision('mid',191,'Mitt i ramen.')],remove:[]},instances:{upsert:[{id:'mid',definition_id:'cross',placement:at('w','mid')}],remove:[]},roles:{upsert:[role('mid')],remove:[]}}
+ const refused=await tools.execute('edit_construction_parts',{record_id:a,expected_revision:2,key:'t1',change_note:'Se save_construction_draft',request_quote:message,mode:'save',
+  changes:mid,joint_rules:[rule],form_assign:[]})
+ assert.equal(refused.validation?.code,'human_text');assert.equal(refused.sketch?.status,'kept',JSON.stringify(refused));assert.equal(await sketches(),1)
+ const fixed=await tools.execute('edit_construction_parts',{record_id:a,expected_revision:2,key:'t2',change_note:'Mittslå',request_quote:message,mode:'save',
+  changes:mid,joint_rules:[rule],form_assign:[]})
+ assert.equal(fixed.status,'saved',JSON.stringify(fixed))
+ if(fixed.status==='saved')assert.equal(await sketches(),0,'the shadow of the refused try is gone')
+})

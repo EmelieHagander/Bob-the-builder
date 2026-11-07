@@ -95,8 +95,8 @@ test('a locally timed-out Claude stream after message_start reports content-free
     assert.equal(result.success, false)
     assert.equal(result.error, 'model_output_window')
     assert.deepEqual((result as any).failure, { code: 'model_output_window' })
-    // Nothing streamed but the start: the input is billed, no output is estimated.
-    assert.deepEqual(logged.map(r => [r.errorCode, r.costUsd, r.costBasis, r.outputTokens, r.success]), [['model_output_window_silent', 0, 'streamed_output_estimate', 0, false]])
+    // The stream never reported its input: the cost stays unknown, not 0.
+    assert.deepEqual(logged.map(r => [r.errorCode, r.costUsd, r.costBasis, r.outputTokens, r.success]), [['model_output_window_silent', null, undefined, 0, false]])
     assert.equal(diagnostics.length, 1)
     const diagnostic = JSON.parse(diagnostics[0].slice('[Anthropic Service] Request error '.length))
     assert.equal(diagnostic.kind, 'local_timeout')
@@ -139,6 +139,9 @@ test('an answer still streaming when our deadline closes is reported as too long
     assert.ok(outputTokens > 0, 'the streamed text counts as output')
     assert.equal(totalTokens, 1000 + outputTokens)
     assert.equal(costUsd, anthropicCostUsd(ctx({}).model, { input_tokens: 10, cache_read_input_tokens: 900, cache_creation_input_tokens: 90, output_tokens: outputTokens }))
+    // The turn budget and execution events see the same estimate as the ledger.
+    assert.equal((result as any).estimatedCostUsd, costUsd)
+    assert.deepEqual([result.usage.input_tokens, result.usage.output_tokens], [1000, outputTokens])
     assert.deepEqual((result as any).failure, { code: 'model_output_window' })
   } finally { console.error = originalError }
 })

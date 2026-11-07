@@ -89,7 +89,7 @@ export function constructionFormReadiness(design: DesignReadiness, refinement: F
  * (form_instance_unmapped) and only a complete save could add one. */
 export type FormAssignment = { instance_id: string; component_id: string }
 export const FORM_ASSIGN_SCHEMA = { type: 'array', maxItems: 128,
-  description: 'Map a part to another concept component than the one whose envelope holds it. Code maps every other part itself; empty for none.',
+  description: 'The concept component for a part that several components hold. Code maps every other part itself; empty for none.',
   items: object({ instance_id: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_.:-]{0,79}$' }, component_id: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_-]{0,31}$' } }) }
 export function extendFormMapping(intent: DesignIntent, recipe: CadAssemblyRequest, raw: unknown, referenceIds: Set<string>, assign: FormAssignment[] = []): { refinement: FormRefinement; issues: ConceptIssue[]; changed: boolean } {
   const before = parseFormRefinement(raw), issues: ConceptIssue[] = []
@@ -117,7 +117,7 @@ export function extendFormMapping(intent: DesignIntent, recipe: CadAssemblyReque
     if (holding.length === 1) mapping.set(i.id, holding[0].id)
     else issues.push(holding.length
       ? { code: 'form_instance_ambiguous', ids: [i.id, ...holding.map(b => b.id)], message: 'Several concept components hold this part; assign it to one.' }
-      : { code: 'form_instance_outside', ids: [i.id], message: 'No concept component holds this part; move it inside one, assign it, or revise the Solution concept.' })
+      : { code: 'form_instance_outside', ids: [i.id], message: 'No concept component holds this part; move it inside one or revise the Solution concept.' })
   }
   const grouped = new Map<string, string[]>()
   for (const i of recipe.instances) { const c = mapping.get(i.id); if (c) grouped.set(c, [...(grouped.get(c) ?? []), i.id]) }

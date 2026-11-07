@@ -446,23 +446,32 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
     // note. A deadline before the first event keeps the plain network code.
     const cut = controller.signal.aborted && response?.ok === true && firstEventAt !== null
     const active = lastOutputAt !== null && Date.now() - lastOutputAt <= CLAUDE_ACTIVE_STREAM_MS
-    // A request that reached the provider is billed. Its input is known from
-    // the start of the stream; its output is estimated from what streamed
-    // (owner decision 2026-11-07: three cut Konrad answers had no price).
-    // Thinking that streamed as a summary counts at its summary length, so
-    // the estimate is a lower bound.
+    // A request our own deadline cut was billed for what the provider did.
+    // Its input is known from the start of the stream and its output is
+    // estimated from what streamed (owner decision 2026-11-07: three cut
+    // Konrad answers had no price); a later count from the provider wins.
+    // Thinking streams as a summary, so the estimate is a lower bound. A
+    // network or provider error keeps an unknown cost, and so does a stream
+    // that never reported its input.
+    let priced: { cost: number; input: number; read: number; output: number } | null = null
     if (response?.ok) {
       const raw = ((streamed as Json | null)?.usage ?? {}) as Json
       const read = Number(raw.cache_read_input_tokens ?? 0)
       const input = Number(raw.input_tokens ?? 0) + Number(raw.cache_creation_input_tokens ?? 0) + read
-      const output = Math.ceil(outputChars / STREAMED_CHARS_PER_TOKEN)
-      const priced = firstEventAt !== null ? anthropicCostUsd(ctx.model, { ...raw, output_tokens: output }) : null
-      try { await ctx.log({ model, inputTokens: input, cachedInputTokens: read, outputTokens: priced === null ? 0 : output, reasoningTokens: 0, totalTokens: input + (priced === null ? 0 : output),
-        costUsd: priced, ...(priced === null ? {} : { costBasis: 'streamed_output_estimate' as const }), success: false, latencyMs: Date.now() - startedAt,
+      const output = Math.max(Number(raw.output_tokens ?? 0), Math.ceil(outputChars / STREAMED_CHARS_PER_TOKEN))
+      const cost = controller.signal.aborted && firstEventAt !== null && Number.isFinite(Number(raw.input_tokens)) && typeof raw.input_tokens === 'number'
+        ? anthropicCostUsd(ctx.model, { ...raw, output_tokens: output }) : null
+      if (cost !== null) priced = { cost, input, read, output }
+      try { await ctx.log({ model, inputTokens: input, cachedInputTokens: read, outputTokens: priced ? output : 0, reasoningTokens: 0, totalTokens: input + (priced ? output : 0),
+        costUsd: priced ? priced.cost : null, ...(priced ? { costBasis: 'streamed_output_estimate' as const } : {}), success: false, latencyMs: Date.now() - startedAt,
         errorCode: cut ? active ? 'model_output_window' : 'model_output_window_silent' : controller.signal.aborted ? 'local_timeout' : 'network_or_stream' }) }
       catch { /* the ledger never decides the call outcome */ }
     }
-    if (cut) return { ...fail<T>(model, 'model_output_window'), failure: { code: 'model_output_window' } }
+    // The turn budget and execution events see the same estimate as the ledger.
+    const spent = priced ? { usage: { input_tokens: priced.input, output_tokens: priced.output, total_tokens: priced.input + priced.output, cached_input_tokens: priced.read, reasoning_tokens: 0 },
+      estimatedCostUsd: priced.cost } : {}
+    if (cut) return { ...fail<T>(model, 'model_output_window'), ...spent, failure: { code: 'model_output_window' } }
+    if (priced) return { ...fail<T>(model, `Network error: ${msg}`), ...spent }
     return fail(model, `Network error: ${msg}`)
   } finally { clearTimeout(timer) }
 

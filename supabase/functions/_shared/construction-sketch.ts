@@ -19,6 +19,8 @@ export type ConstructionSketch = {
   text: Record<string, unknown> | null; target_revision: number | null; notes: string[]
   /** lean_construction_version 1: the joint rules and FORM assignments sent so far. */
   joint_rules?: Record<string, unknown>[]; form_assign?: Record<string, unknown>[]
+  /** Begun only to keep a refused direct change; dropped when a change saves. */
+  shadow?: true
 }
 /** The job's private sketch table, bound to the claimed turn by the runtime. */
 export type ConstructionSketchStore = {
@@ -128,6 +130,7 @@ export function parseSketch(value: unknown): ConstructionSketch | null {
   if (s.change_count !== sketchChangeCount(s.changes) || !Array.isArray(s.notes) || s.notes.some(n => typeof n !== 'string')) return null
   if (s.text !== null && (typeof s.text !== 'object' || Array.isArray(s.text))) return null
   if (s.target_revision !== null && !Number.isSafeInteger(s.target_revision)) return null
+  if ('shadow' in s && s.shadow !== true) return null
   for (const k of ['joint_rules', 'form_assign'] as const)
     if (k in s && (!Array.isArray(s[k]) || s[k]!.some(x => !x || typeof x !== 'object' || Array.isArray(x)))) return null
   return s

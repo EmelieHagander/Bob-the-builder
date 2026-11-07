@@ -24,6 +24,9 @@ const FORMULA=new RegExp(FORMULA_PATTERN)
 /** Identifiers keep their hyphens when written without spaces ("lw-s1");
  * subtraction is "a - b". Numbers are not formula syntax: a number needs a
  * named node with its reason. */
+class FormulaParseError extends Error {
+ constructor(code:string,readonly detail=''){super(code)}
+}
 function tokens(text:string):string[]{
  const out:string[]=[]
  let i=0
@@ -33,24 +36,27 @@ function tokens(text:string):string[]{
   if('()+*/-'.includes(c)){out.push(c);i++;continue}
   const m=/^[A-Za-z][A-Za-z0-9_.:]*(?:-[A-Za-z0-9_.:]+)*/.exec(text.slice(i))
   if(m){out.push(m[0]);i+=m[0].length;continue}
-  throw new Error(/[0-9]/.test(c)?'formula_number':'formula_syntax')
+  throw new FormulaParseError(/[0-9]/.test(c)?'formula_number':'formula_syntax',text.slice(i,i+12))
  }
  return out
 }
+/** Usual precedence: * and / before + and -, left to right; a leading minus
+ * negates the whole product after it ("-two * lum" is -(two * lum)). */
 function parse(text:string):Ast{
  const t=tokens(text);let at=0
  const peek=()=>t[at],take=()=>t[at++]
  const primary=():Ast=>{
   const x=take()
-  if(x==='('){const e=expr();if(take()!==')')throw new Error('formula_syntax');return e}
-  if(x===undefined||!ID.test(x))throw new Error('formula_syntax')
+  if(x==='('){const e=expr();if(take()!==')')throw new FormulaParseError('formula_syntax');return e}
+  if(x===undefined||!ID.test(x))throw new FormulaParseError('formula_syntax',x??'')
   return {kind:'id',id:x}
  }
- const unary=():Ast=>peek()==='-'?(take(),{kind:'neg',value:unary()}):primary()
- const term=():Ast=>{let left=unary();while(peek()==='*'||peek()==='/'){const op=take() as Op;left={kind:'op',op,left,right:unary()}}return left}
+ const factor=():Ast=>peek()==='-'?(take(),{kind:'neg',value:factor()}):primary()
+ const product=():Ast=>{let left=factor();while(peek()==='*'||peek()==='/'){const op=take() as Op;left={kind:'op',op,left,right:factor()}}return left}
+ const term=():Ast=>peek()==='-'?(take(),{kind:'neg',value:product()}):product()
  const expr=():Ast=>{let left=term();while(peek()==='+'||peek()==='-'){const op=take() as Op;left={kind:'op',op,left,right:term()}}return left}
  const e=expr()
- if(at!==t.length)throw new Error('formula_syntax')
+ if(at!==t.length)throw new FormulaParseError('formula_syntax',t[at])
  return e
 }
 /** FNV-1a 64-bit: a stable name for one operation, so the same formula gives
@@ -60,27 +66,42 @@ function fnv(text:string):string{
  for(const ch of new TextEncoder().encode(text)){h^=BigInt(ch);h=(h*0x100000001b3n)&0xffffffffffffffffn}
  return h.toString(16).padStart(16,'0').slice(0,12)
 }
+export const formulaNodeId=(operation:string,a:string,b:string,rounding:string)=>FORMULA_NODE_PREFIX+fnv(`${operation}|${a}|${b}|${rounding}`)
+/** A node named fx. is code's: its name is the hash of what it computes, so a
+ * copied one is accepted only unchanged, and code never reuses a name for
+ * something else. */
+export function validFormulaNode(n:unknown):boolean{
+ const x=n as any
+ return !!x&&x.role==='derived'&&Array.isArray(x.operands)&&x.operands.length===2&&x.id===formulaNodeId(x.operation,x.operands[0],x.operands[1],x.rounding)
+}
 const MESSAGES:Record<string,string>={
  formula_number:'Name each number as a parameter node with its reason (a decision or a measurement) and use that name in the formula.',
  formula_syntax:'Write a formula with node names, + - * / and parentheses; put spaces around a minus sign.',
- formula_unknown_node:'The formula names a node that is not in parameter_plan.nodes.',
- formula_unit:'A negative value needs a node whose unit is mm or deg.',
+ formula_unknown_node:'The formula names a node that is not in parameter_plan.nodes; a name with a hyphen is one name, so write a minus sign with spaces.',
+ formula_unit:'The formula gives another unit than this field takes (mm for sizes and positions, deg for rotations); a negative value needs a node in mm or deg.',
  formula_binding_conflict:'This field has both a formula and a binding; keep one.',
- formula_reserved_id:'Node IDs starting with fx. are made by code from formulas.',
+ formula_reserved_id:'Node IDs starting with fx. are made by code from formulas; a copied one must stay exactly as code made it.',
 }
-const issue=(code:string,path:string):FormulaIssue=>({code,path,message:MESSAGES[code]??code})
+const issue=(code:string,path:string,detail=''):FormulaIssue=>({code,path,message:MESSAGES[code]??code,...(detail?{detail}:{})})
+/** The fx. nodes a caller wrote that code did not make. */
+export function formulaNodeIssues(nodes:unknown,base='nodes'):FormulaIssue[]{
+ return Array.isArray(nodes)?nodes.filter((n:any)=>typeof n?.id==='string'&&n.id.startsWith(FORMULA_NODE_PREFIX)&&!validFormulaNode(n)).map((n:any)=>issue('formula_reserved_id',base+'/'+n.id)):[]
+}
 
 /** One compiler over a set of known nodes. Generated nodes accumulate, shared
- * by every formula it compiles. */
-export function formulaCompiler(known:ParameterInput[]){
+ * by every formula it compiles. valueOf gives a source node's value in mm when
+ * it is known, so a field gets its real value before the recipe is checked. */
+export function formulaCompiler(known:ParameterInput[],valueOf:(id:string)=>number|undefined=()=>undefined){
  const nodes=new Map(known.map(n=>[n.id,n])),generated=new Map<string,ParameterInput>()
- const units=new Map<string,ParameterUnit|null>()
+ const units=new Map<string,ParameterUnit|null>(),values=new Map<string,number|undefined>()
+ const zero=(id:string)=>id===ZERO_NODE_IDS.mm?'mm':id===ZERO_NODE_IDS.deg?'deg':null
+ const node=(id:string)=>nodes.get(id)??generated.get(id)
  const unitOf=(id:string):ParameterUnit|null=>{
   if(units.has(id))return units.get(id)!
   units.set(id,null)
-  const n=nodes.get(id)??generated.get(id)
-  let u:ParameterUnit|null=null
-  if(!n)u=null
+  const n=node(id)
+  let u:ParameterUnit|null=zero(id)
+  if(!n||u)u=u??null
   else if(n.role==='source')u='mm'
   else if(n.role==='derived'){
    const [a,b]=n.operands.map(unitOf)
@@ -90,20 +111,35 @@ export function formulaCompiler(known:ParameterInput[]){
   }else u=n.unit
   units.set(id,u);return u
  }
+ const valueOfNode=(id:string):number|undefined=>{
+  if(values.has(id))return values.get(id)
+  values.set(id,undefined)
+  const n=node(id)
+  let v:number|undefined=zero(id)?0:undefined
+  if(n&&v===undefined){
+   if(n.role==='decision'||n.role==='estimate')v=n.value
+   else if(n.role==='source')v=valueOf(id)
+   else if(n.role==='derived'){
+    const [a,b]=n.operands.map(valueOfNode)
+    if(a!==undefined&&b!==undefined)v=n.operation==='add_v1'?a+b:n.operation==='subtract_v1'?a-b:n.operation==='multiply_v1'?a*b:b!==0?a/b:undefined
+   }
+  }
+  values.set(id,v);return v
+ }
  const derive=(op:keyof typeof OPERATION,a:string,b:string):string=>{
   const rounding=op==='+'||op==='-'?'exact':'half_away_6'
-  const id=FORMULA_NODE_PREFIX+fnv(`${OPERATION[op]}|${a}|${b}|${rounding}`)
+  const id=formulaNodeId(OPERATION[op],a,b,rounding)
   if(!nodes.has(id)&&!generated.has(id))generated.set(id,{id,role:'derived',operation:OPERATION[op],operands:[a,b],rounding})
   return id
  }
  const emit=(ast:Ast):string=>{
   if(ast.kind==='id'){
-   if(!nodes.has(ast.id)&&!generated.has(ast.id))throw new Error('formula_unknown_node')
+   if(!node(ast.id)&&!zero(ast.id))throw new FormulaParseError('formula_unknown_node',ast.id)
    return ast.id
   }
   if(ast.kind==='neg'){
    const value=emit(ast.value),u=unitOf(value)
-   if(u!=='mm'&&u!=='deg')throw new Error('formula_unit')
+   if(u!=='mm'&&u!=='deg')throw new FormulaParseError('formula_unit',value)
    return derive('-',ZERO_NODE_IDS[u],value)
   }
   return derive(ast.op,emit(ast.left),emit(ast.right))
@@ -111,8 +147,8 @@ export function formulaCompiler(known:ParameterInput[]){
  return {
   /** The node a formula ends in (an existing node for a bare name). */
   compile(text:string):string{return emit(parse(text))},
+  unitOf,valueOf:valueOfNode,
   generated:()=>[...generated.values()],
-  uses:(id:string)=>generated.has(id)||nodes.has(id),
  }
 }
 
@@ -157,22 +193,26 @@ function compileFields(fields:Field[],compiler:ReturnType<typeof formulaCompiler
   if(typeof text!=='string')continue
   if(bound.has(f.path)){issues.push(issue('formula_binding_conflict',f.path));continue}
   if(!FORMULA.test(text)){issues.push(issue(/[0-9]/.test(text)?'formula_number':'formula_syntax',f.path));continue}
-  try{bindings.push({path:f.path,node:compiler.compile(text)});f.obj[f.key]=f.placeholder}
-  catch(e){issues.push(issue(e instanceof Error?e.message:'formula_syntax',f.path))}
+  try{
+   const node=compiler.compile(text),unit=compiler.unitOf(node),wants=/\/r[xyz]$/.test(f.path)?'deg':'mm'
+   if(unit!==null&&unit!==wants){issues.push(issue('formula_unit',f.path,`${text} is ${unit}`));continue}
+   // The real value where the graph already knows it, so the recipe checks
+   // see true sizes; code computes it again exactly from the saved graph.
+   const value=compiler.valueOf(node)
+   bindings.push({path:f.path,node});f.obj[f.key]=value!==undefined&&Number.isFinite(value)?Number(value.toFixed(6)):f.placeholder
+  }catch(e){issues.push(issue(e instanceof Error?e.message:'formula_syntax',f.path,e instanceof FormulaParseError?e.detail:''))}
  }
  return {bindings,issues}
 }
-const reserved=(nodes:unknown)=>Array.isArray(nodes)?nodes.filter((n:any)=>typeof n?.id==='string'&&n.id.startsWith(FORMULA_NODE_PREFIX)).map((n:any)=>issue('formula_reserved_id','nodes/'+n.id)):[]
-
 /** A new construction: the recipe with numbers, and the plan with the
  * formula bindings and their nodes. An array's spacing_mm leaves the recipe,
- * where only its binding is read. */
-export function compileSaveFormulas(rawRecipe:unknown,rawPlan:unknown):{recipe:unknown;plan:unknown}{
+ * where only its binding is read. valueOf gives source values in mm. */
+export function compileSaveFormulas(rawRecipe:unknown,rawPlan:unknown,valueOf?:(id:string)=>number|undefined):{recipe:unknown;plan:unknown}{
  if(!rawRecipe||typeof rawRecipe!=='object'||!rawPlan||typeof rawPlan!=='object')return {recipe:rawRecipe,plan:rawPlan}
  const recipe=structuredClone(rawRecipe) as Record<string,any>,plan=structuredClone(rawPlan) as Record<string,any>
  const declared=Array.isArray(plan.nodes)?plan.nodes:[],explicit=Array.isArray(plan.bindings)?plan.bindings:[]
- const issues=reserved(declared)
- const compiler=formulaCompiler(declared as ParameterInput[])
+ const issues=formulaNodeIssues(declared)
+ const compiler=formulaCompiler(declared as ParameterInput[],valueOf)
  const out=compileFields(recipeFields(recipe),compiler,new Set(explicit.map((b:any)=>b?.path)))
  issues.push(...out.issues)
  if(issues.length)throw new CadFormulaError(issues.slice(0,24))
@@ -183,25 +223,35 @@ export function compileSaveFormulas(rawRecipe:unknown,rawPlan:unknown):{recipe:u
 
 /** A part edit: the upserted definitions and parts with numbers, plus node
  * and binding upserts for their formulas. A formula field replaces that
- * field's saved binding; a number keeps it. */
-export function compileEditFormulas(rawChanges:unknown,savedNodes:ParameterInput[]):unknown{
+ * field's saved binding; a number keeps it. savedNodes carry their computed
+ * values (normalized), which give fields their real values. */
+export function compileEditFormulas(rawChanges:unknown,savedNodes:(ParameterInput&{normalized?:{value:number}})[]):unknown{
  if(!rawChanges||typeof rawChanges!=='object')return rawChanges
  const changes=structuredClone(rawChanges) as Record<string,any>
  const upserts=(name:string):any[]=>Array.isArray(changes[name]?.upsert)?changes[name].upsert:[]
- const issues=reserved(upserts('nodes'))
- const removed=new Set(Array.isArray(changes.nodes?.remove)?changes.nodes.remove:[])
+ const issues=formulaNodeIssues(upserts('nodes'),'changes/nodes')
+ const removed=new Set<string>(Array.isArray(changes.nodes?.remove)?changes.nodes.remove:[])
  const known=[...savedNodes.filter(n=>!removed.has(n.id)&&!upserts('nodes').some((u:any)=>u?.id===n.id)),...upserts('nodes')] as ParameterInput[]
- const compiler=formulaCompiler(known)
+ const saved=new Map(savedNodes.map(n=>[n.id,n]))
+ const compiler=formulaCompiler(known,id=>removed.has(id)?undefined:saved.get(id)?.normalized?.value)
  const fields:Field[]=[]
  for(const d of upserts('definitions'))if(d&&typeof d==='object')definitionFields(d,fields)
  for(const i of upserts('instances'))if(i&&typeof i==='object')instanceFields(i,fields)
  const out=compileFields(fields,compiler,new Set(upserts('bindings').map((b:any)=>b?.path)))
  issues.push(...out.issues)
  if(issues.length)throw new CadFormulaError(issues.slice(0,24))
- const saved=new Set(savedNodes.map(n=>n.id))
- const fresh=compiler.generated().filter(n=>!saved.has(n.id))
- if(fresh.length)(changes.nodes??={upsert:[],remove:[]}).upsert.push(...fresh)
- if(out.bindings.length)(changes.bindings??={upsert:[],remove:[]}).upsert.push(...out.bindings)
+ // New to this change: not in the saved plan, or removed by it and needed again.
+ const knownIds=new Set(known.map(n=>n.id))
+ const fresh=compiler.generated().filter(n=>!knownIds.has(n.id))
+ if(fresh.length){
+  const list=changes.nodes??={upsert:[],remove:[]}
+  list.upsert.push(...fresh);list.remove=list.remove.filter((r:string)=>!fresh.some(n=>n.id===r))
+ }
+ if(out.bindings.length){
+  // A formula replaces the field's binding; removing that path as well would conflict.
+  const list=changes.bindings??={upsert:[],remove:[]},paths=new Set(out.bindings.map(b=>b.path))
+  list.upsert.push(...out.bindings);list.remove=list.remove.filter((r:string)=>!paths.has(r))
+ }
  return changes
 }
 
