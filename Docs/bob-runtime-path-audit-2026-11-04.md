@@ -2548,3 +2548,47 @@ cost is unknown and not included.
 4. **Cheaper model for Konrad, tested** (cheaper, quality risk):
    `claude-sonnet-5-5` is half the price per token; one bed and one entry turn
    would show whether his geometry holds.
+
+<a id="lean-writes-2026-11-07"></a>
+### Built: proposals 1–3 — 2026-11-07
+
+Owner, 2026-11-07: "1. Ja 2. ja 3. Ja 4. Nej, kör opus för for now." Built and
+tested locally in #498; **not deployed, not applied, not owner-run.** New
+claimed jobs adopt the pins from publication `bob-lean-writes-v1`
+(`20261107100100_bob_lean_writes_catalog.sql`, after
+`20261107100000_construction_new_sketches.sql`); pinned manifests keep their
+behaviour. Konrad and Bob stay on `claude-opus-5-5`.
+
+1. **Server-bound target (`server_target_version 1`).** `save_construction_draft`,
+   `edit_construction_parts` and `change_construction_parameters` no longer
+   take `target_revision`, for Konrad or Bob. A save uses the current selected
+   target of its area. An edit whose construction is behind the current
+   target is bound to it on the server and retried once; the readiness check
+   still applies and its issues are returned. A changed measurement is named
+   as such instead of as a changed target. A sent `target_revision` is refused
+   as an unknown field. `commit_construction_sketch` is bound to the job's
+   construction like the part edits (`record_id` hidden, `source_ref`).
+2. **Stable tool schemas (`stable_tools_version 1`).** Operation reference
+   fields are a fixed pattern checked by the server, present whether or not
+   the job is bound; a refused reference returns the current ones. Konrad's
+   core tools and workpad come first in catalog focus order, with a Claude
+   cache point after them (three of four points: core tools, system, tail),
+   so a new Konrad job reads them from cache.
+3. **New constructions in parts (`construction_sketch_version 2`).**
+   `save_construction_draft` takes `mode: sketch | save`. Sketch calls under one
+   key are merged by id (definitions, parts, nodes, bindings, materials,
+   joints, roles; header fields and question lists from the latest call),
+   checked whole through the same save preparation, and stored in
+   `bob_private.construction_new_sketches` (same claim and cleanup rules as
+   the existing-construction sketches). `commit_construction_sketch` with
+   `new_key` saves it once as revision 1, with the target current at the
+   commit, and places it in its sub-build. A part cannot be removed from a new
+   sketch; discard and sketch again.
+
+Also in #498: a plan note sent as JSON text is accepted, and a refused note
+names its bounds; project-edits now expects the `mode` field that
+`bob-write-check-v1` added (missed when design A was built).
+
+**Not covered yet.** Material, part and fastener revisions and measurement
+source revisions are still typed by Konrad, and about 30 of Bob's tools still
+take `expected_revision`; these are the second step of proposal 1.
