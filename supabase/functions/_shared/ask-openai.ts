@@ -402,7 +402,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; toolSchemaDedupVersion?: 1; promptCachePointsVersion?: 1; workerFocusVersion?: 1; workerPlanVersion?: 1; workerGatesVersion?: 1; writeCheckVersion?: 1; constructionSketchVersion?: 1 | 2; stableToolsVersion?: 1; serverTargetVersion?: 1; toolPickLimit?: number; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; toolSchemaDedupVersion?: 1; promptCachePointsVersion?: 1; workerFocusVersion?: 1; workerPlanVersion?: 1; workerGatesVersion?: 1; writeCheckVersion?: 1; constructionSketchVersion?: 1 | 2; stableToolsVersion?: 1; serverTargetVersion?: 1; serverRevisionsVersion?: 1; toolPickLimit?: number; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -458,6 +458,8 @@ export async function answerWithOpenAi(opts: {
       // and the server, not the model, binding a construction to the current selected target. New claimed jobs only.
       ...(checkpoint && claimedServer && contract.stable_tools_version === 1 ? { stableToolsVersion: 1 as const } : {}),
       ...(checkpoint && claimedServer && contract.server_target_version === 1 ? { serverTargetVersion: 1 as const } : {}),
+      // Owner decision 2026-11-07: no model types a revision; the server fills each one. New claimed jobs only.
+      ...(checkpoint && claimedServer && contract.server_revisions_version === 1 ? { serverRevisionsVersion: 1 as const } : {}),
       ...(checkpoint && Number.isInteger(contract.tool_pick_limit) && Number(contract.tool_pick_limit) >= 1 && Number(contract.tool_pick_limit) <= 8 ? { toolPickLimit: Number(contract.tool_pick_limit) } : {}),
       ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_checkpoint_version === 1
         && contract.worker_verified_renewal_version === 1 ? { workerVerifiedRenewalVersion: 1 as const } : {}),
@@ -483,6 +485,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.constructionSketchVersion !== undefined && (![1, 2].includes(execution.constructionSketchVersion) || execution.writeCheckVersion !== 1)) throw new Error('construction_sketch_version_invalid')
   if (execution.stableToolsVersion !== undefined && execution.stableToolsVersion !== 1) throw new Error('stable_tools_version_invalid')
   if (execution.serverTargetVersion !== undefined && execution.serverTargetVersion !== 1) throw new Error('server_target_version_invalid')
+  if (execution.serverRevisionsVersion !== undefined && execution.serverRevisionsVersion !== 1) throw new Error('server_revisions_version_invalid')
   if (execution.toolPickLimit !== undefined && !(Number.isInteger(execution.toolPickLimit) && execution.toolPickLimit >= 1 && execution.toolPickLimit <= 8)) throw new Error('tool_pick_limit_invalid')
   if (execution.workerVerifiedRenewalVersion !== undefined
     && (execution.workerVerifiedRenewalVersion !== 1 || execution.workpadVersion !== 1 || execution.workerCheckpointVersion !== 1))
@@ -1330,6 +1333,36 @@ export async function answerWithOpenAi(opts: {
     ...(execution.workerPlanVersion === 1 ? { workerPlan: true } : {}),
     ...(execution.workerGatesVersion === 1 ? { workerGates: true } : {}),
     ...(execution.stableToolsVersion === 1 ? { stableTools: true } : {}),
+    // Owner decision 2026-11-07: the server's current revisions, read through this turn's journal.
+    ...(execution.serverRevisionsVersion === 1 ? { serverRevisions: { readers: {
+      catalog: async (id: string) => {
+        const { data, error } = await readRpc('catalog_read', { p_project: opts.projectId, p_input: { action: 'read', id, revision: null, kind: null, query: null, after: null, profile_code: null, categories: [], properties: {} } })
+        return !error && data?.status === 'ok' && data.record?.id === id && Number.isSafeInteger(data.record.revision) ? data.record.revision as number : null
+      },
+      measurement: (id: string) => memo('revision:measurement', { id }, async () => {
+        const { data, error } = await client.from('current_measurements').select('id,revision').eq('project_id', opts.projectId).eq('id', id).abortSignal(AbortSignal.timeout(10000)).maybeSingle()
+        if (error) throw new Error('revision_unavailable')
+        return data && Number.isSafeInteger(data.revision) ? data.revision as number : null
+      }),
+      spaceMeasurement: async (id: string) => {
+        const read = await lookup.search({ dataset: 'physical_space_measurements', record_id: id, query: null, status: null, area_id: null, after_id: null })
+        const row = read.status === 'ok' ? read.records.find(r => r.id === id) : undefined
+        return row && Number.isSafeInteger(row.revision) ? row.revision as number : null
+      },
+      construction: (id: string) => memo('revision:construction', { id }, async () => {
+        const { data, error } = await client.from('artifacts').select('id,current_revision').eq('project_id', opts.projectId).eq('id', id).abortSignal(AbortSignal.timeout(10000)).maybeSingle()
+        if (error) throw new Error('revision_unavailable')
+        return data && Number.isSafeInteger(data.current_revision) ? data.current_revision as number : null
+      }),
+      plan: async () => {
+        const { data, error } = await readRpc('project_plan_read', { p_project: opts.projectId, p_revision: null })
+        return !error && data?.status === 'ok' && Number.isSafeInteger(data.record?.revision) ? data.record.revision as number : null
+      },
+      target: async (areaId: string | null) => {
+        const { data, error } = await readRpc('read_design_readiness', { p_project: opts.projectId, p_area: areaId, p_target_revision: null, p_purpose: null })
+        return !error && data?.project_id === opts.projectId && Number.isSafeInteger(data.target_revision) && data.target_revision > 0 ? data.target_revision as number : null
+      },
+    } } } : {}),
     ...(constructionSketches ? { openSketches: async () => {
       const listed = await constructionSketches.list(), added = constructionNewSketches ? await constructionNewSketches.list() : { status: 'ok' as const, sketches: [] }
       return listed.status === 'ok' && added.status === 'ok' ? [...listed.sketches, ...added.sketches] as Record<string, unknown>[] : null } } : {}),

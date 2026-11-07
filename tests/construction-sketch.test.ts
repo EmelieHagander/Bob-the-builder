@@ -245,6 +245,24 @@ test('sketch, check and commit once against the database: one revision, one rece
   assert.equal(existing.reason,'sketch_existing_construction')
  })
 
+ await t.test('server revisions: an edit with no revision numbers is filled from the database and saves',async()=>{
+  const {fillServerRevisions,stripServerRevisions,createRevisionMemory}=await import('../supabase/functions/_shared/server-revisions.ts')
+  const readers={
+   catalog:async(cid:string)=>{const r=await rpc(owner,'bob.catalog_read',[project,JSON.stringify({action:'read',id:cid,revision:null,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}})]);return r?.record?.revision??null},
+   construction:async(aid:string)=>(await asProjectUser(pg,owner,'select current_revision from bob.artifacts where project_id=$1 and id=$2',[project,aid])).rows[0]?.current_revision??null}
+  const head=(await read()).revision
+  // What Konrad sends: no expected revision and no material revision.
+  const sent:any=edit(drawer(10),{expected_revision:1,mode:'save'})
+  sent.changes.materials.upsert=[{definition_id:'drawer',material_id:material.recordId,material_revision:1,part_id:null,part_revision:null}]
+  const filled=await fillServerRevisions('edit_construction_parts',stripServerRevisions('edit_construction_parts',{...sent,record_id:id},undefined,{}),createRevisionMemory(),readers)
+  assert('args' in filled,JSON.stringify(filled))
+  const args=filled.args as any
+  assert.equal(args.expected_revision,head,'the current head, not the 1 the model sent')
+  assert.deepEqual(args.changes.materials.upsert[0],{definition_id:'drawer',material_id:material.recordId,material_revision:1,part_id:null,part_revision:null})
+  const saved=await lean().execute('edit_construction_parts',args)
+  assert.equal(saved.status,'saved',JSON.stringify(saved));assert.equal(saved.receipt.revision,head+1)
+ })
+
  await t.test('the database catalog and the fixture agree, and the published schemas are the ones code validates',async()=>{
   const manifest=await rpc(null,'shared.resolve_ai_catalog',['bob'],'service_role')
   const live=createAiCatalogSession({rpc:async()=>{throw new Error('Pinned')}},{app:'bob',manifest}),fixture=catalogFixture()
