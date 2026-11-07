@@ -2823,6 +2823,27 @@ the same measure change through the `change_construction_parameters` compiler.
 to a concept component only when exactly one holds it. (5) Only writing errors
 (text, formula, joint rule) are kept in the sketch, never construction errors.
 
+**Audit 3, offline on the real wall (no model call).** The saved entry wall
+(`d0e2fa57` rev 1) rewritten in the lean format by script: every bound field
+as the formula of its node, code zero bindings as 0, one rule per definition
+pair. Compact JSON as the model would type it, without server-added fields:
+
+| | Old | Lean |
+|---|---:|---:|
+| Characters | 20,651 | 9,808 (−52 %) |
+| Tokens (Bob's counter, approximate for Claude) | 6,495 | 3,245 (−50 %) |
+| Parameter plan | 9,144 (40 nodes, 81 bindings) | 1,579 (12 declared nodes) |
+| Joints | 5,854 (21 joints) | 1,561 (7 rules) |
+| Recipe | 1,680 | 2,759 (formulas in place of numbers) |
+
+The lean wall compiles to byte-identical geometry, and the 7 rules write
+exactly the 21 joints of the original (none missing, none extra). One rule
+(plate–stud) carries one reason where the original had six (corner, king and
+end stud, top and bottom); a different reason per joint needs explicit joints.
+Still typed per part: instance roles (1,357) and open questions (1,053). The
+earlier forecast of about 2,500 tokens was optimistic; time per answer is
+measured only live.
+
 **Open.** Reads still show the stored graph (nodes and bindings), not formulas;
 an edit names nodes, not the formulas that made them. Instance roles
 (`instance_policy`, 1,447 characters for the wall) are still written per part.
