@@ -791,6 +791,14 @@ for(const migration of migrations){
    row.definition=JSON.parse(text(tag));publishAs(row,'bob-lean-construction-v1');row.metadata={...row.metadata,lean_construction_version:1};versions.set(key,versions.get(key)!+1)
   }
  }
+ // Deep audit 2026-11-08: one sentence of the edit tool's additional_description.
+ if(source.includes('$bob_lean_edit_text$')){
+  const quoted=(name:string)=>source.match(new RegExp(name+" text:='((?:[^']|'')*)';"))![1].replaceAll("''","'")
+  const row=seed.find(r=>r.key==='tools.edit_construction_parts'),from=quoted('old_text'),to=quoted('new_text')
+  const extra=row?.definition.additional_description
+  if(!row||row.metadata.publication!=='bob-lean-construction-v1'||row.metadata.lean_construction_version!==1||typeof extra!=='string'||extra.split(from).length!==2)throw new Error('lean_edit_text_unexpected')
+  row.definition={...row.definition,additional_description:extra.replace(from,()=>to)};publishAs(row,'bob-lean-edit-text-v1');versions.set(row.key,versions.get(row.key)!+1)
+ }
  // Owner decision 2026-11-07: worker gates (chat answer is the review, gate facts in-job, identical-request refusal).
  const workerGates=source.match(/\$worker_gates_contract\$([\s\S]+?)\$worker_gates_contract\$/)
  if(workerGates){

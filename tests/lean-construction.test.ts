@@ -384,3 +384,14 @@ test('audit round 4: the fence holds for unbound jobs; superseded tries go; remo
  const refused=await t.execute('save_construction_draft',far)
  assert.equal(refused.status,'needs_data',JSON.stringify(refused));assert.equal(refused.sketch,undefined)
 })
+
+test('deep audit: an edit the database refuses for the concept names the component, the part outside it and the numbers',async()=>{
+ const message='Flytta högra sidan.',{tools:t,material}=await setup(message)
+ const id=(await t.execute('save_construction_draft',frameSave(message,material))).receipt.recordId
+ const moved=await t.execute('edit_construction_parts',{record_id:id,expected_revision:1,key:'ut',change_note:'Flytta ut',request_quote:message,mode:'save',joint_rules:[],form_assign:[],
+  changes:{nodes:{upsert:[decision('ten',10,'Tio millimeter ut.')],remove:[]},instances:{upsert:[{id:'right',definition_id:'rail',placement:at('span - w + ten')}],remove:[]}}})
+ assert.equal(moved.reason,'concept_geometry_changed',JSON.stringify(moved))
+ const issue=moved.issues?.find((i:any)=>i.code==='concept_geometry_changed')
+ assert.ok(issue&&issue.ids[0]==='frame'&&issue.ids.includes('right'),JSON.stringify(moved.issues))
+ assert.match(issue.message,/x 0\.\.600/);assert.match(issue.message,/x 0\.\.610/)
+})

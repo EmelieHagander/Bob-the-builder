@@ -1371,7 +1371,22 @@ export async function answerWithOpenAi(opts: {
     } } } : {}),
     ...(constructionSketches ? { openSketches: async () => {
       const listed = await constructionSketches.list(), added = constructionNewSketches ? await constructionNewSketches.list() : { status: 'ok' as const, sketches: [] }
-      return listed.status === 'ok' && added.status === 'ok' ? [...listed.sketches, ...added.sketches] as Record<string, unknown>[] : null } } : {}),
+      if (listed.status !== 'ok' || added.status !== 'ok') return null
+      // A sketch kept from a refused try says so, and which construction it
+      // revises, so Bob can tell it from real work (deep audit 2026-11-08: a
+      // refused save replaced by a later one was committed as a duplicate).
+      const edits = await Promise.all(listed.sketches.map(async row => {
+        const read = await constructionSketches.read(row.artifact_id)
+        return read.status === 'ok' && read.sketch && (read.sketch as { shadow?: unknown }).shadow === true ? { ...row, refused_try: true } : row
+      }))
+      const fresh = await Promise.all((added.sketches as Record<string, unknown>[]).map(async row => {
+        const read = constructionNewSketches && typeof row.new_key === 'string' ? await constructionNewSketches.read(row.new_key) : null
+        const sketch = read?.status === 'ok' ? read.sketch as { shadow?: unknown; save?: Record<string, unknown> } | null : null
+        if (!sketch) return row
+        return { ...row, ...(typeof sketch.save?.title === 'string' ? { title: sketch.save.title } : {}),
+          revises: typeof sketch.save?.record_id === 'string' ? sketch.save.record_id : null, ...(sketch.shadow === true ? { refused_try: true } : {}) }
+      }))
+      return [...edits, ...fresh] as Record<string, unknown>[] } } : {}),
     ...(execution.toolPickLimit !== undefined ? { toolPickLimit: execution.toolPickLimit } : {}),
     ...(execution.workerPieceProgressVersion === 3 || execution.workerPieceProgressVersion === 4 ? { workerDesignReview: true } : {}),
     ...(execution.workerPieceProgressVersion === 2 || execution.workerPieceProgressVersion === 3 || execution.workerPieceProgressVersion === 4 ? { workerFormPiece: {

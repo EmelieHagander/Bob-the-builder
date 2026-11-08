@@ -161,7 +161,19 @@ export function constructionFormIssues(intent: DesignIntent, recipe: CadAssembly
     const exact = !min.some((v, k) => v !== box.min[k] || Math.abs(max[k] - (box.min[k] + box.size_mm[k])) > 1e-7)
     const inside = min.every((v, k) => v >= box.min[k] - 1e-7) && max.every((v, k) => v <= box.min[k] + box.size_mm[k] + 1e-7)
     if (!exact && partial && inside) add('form_envelope_incomplete', [m.component_id], 'The parts of this component lie inside its concept envelope but do not fill it yet.')
-    else if (!exact) add('concept_geometry_changed', [m.component_id], 'The refinement envelope differs from the exact selected concept.')
+    else if (!exact) {
+      // Name the parts that reach past the envelope and the numbers (deep audit
+      // 2026-11-08: a door beam was refused three times with no part named).
+      const hi = box.min.map((v, k) => v + box.size_mm[k]), axes = ['x', 'y', 'z']
+      const outside = parts.filter(({ i, d }) => {
+        const p = i!.placement, size = d as { x_mm: number; y_mm: number; z_mm: number }, at = [p.x, p.y, p.z], dims = [size.x_mm, size.y_mm, size.z_mm]
+        return at.some((v, k) => v < box.min[k] - 1e-7 || v + dims[k] > hi[k] + 1e-7)
+      }).map(p => p.id)
+      const span = (lo: number[], up: number[]) => axes.map((a, k) => `${a} ${+lo[k].toFixed(3)}..${+up[k].toFixed(3)}`).join(', ')
+      add('concept_geometry_changed', [m.component_id, ...outside.slice(0, 12)],
+        `The refinement envelope differs from the exact selected concept. Component ${m.component_id} spans ${span(box.min, hi)} mm; its parts span ${span(min, max)} mm.`
+        + (outside.length ? ` Parts outside it: ${outside.slice(0, 12).join(', ')}.` : ' Its parts do not fill it.'))
+    }
   }
   if (!checkpoint) {
     if (scope.pending_component_ids.length) add('form_components_pending', scope.pending_component_ids, 'These selected concept components remain outside this saved checkpoint.')
