@@ -3352,3 +3352,35 @@ release still shows long specialist contexts or many history reads.
 Known failures on `main`, unchanged here: `bob-final-answer` (spending-stop
 readback), `ai-catalog-fixture-replay` (fixture lacks the workpad
 publications), `worker-checkpoint-catalog` (expects an older publication name).
+
+<a id="publication-508-2026-11-08"></a>
+**Hosted publication of #508 (with #507) — 2026-11-08, 10:45–10:54 UTC.** Owner:
+"Kör enligt rek, publicera". Quick CI on the branch head `aa49421` passed
+(run 42472792006: vocabulary, `check:edge`, build, PWA, smoke). Merged at
+`752d3909251923712a2295c74aca05713491c692` (tree
+`cfd50fbdee95be281291d5aa6efbc121aee7cd2f` equals the tested branch); #507 is
+marked merged with it. Safety branch `save/bob-before-material-follow-2026-11-08`
+retains `51cd223`. Zero active jobs before each step and after.
+
+1. `20261108120000_operational_revise_key.sql` as ledger `20261108105243`:
+   the guard found its anchor once, after the expected-revision line; the live
+   `bob_private.bob_project_write_v12` now keys a write to an existing record
+   with `@<expected revision>`.
+2. bob-worker v222 (ezbr
+   `76fd165ee2de11d0e13e5359ffd174f000f778446150a73e9c6faa2b29bf77e8`), ask-bob
+   v254 (`7dafb82b3aa2acde0a0e4e82994003e6b7352f98be4df16859c83e546fa09270`),
+   deployed from `752d390` with the Supabase CLI 2.117.0 (`--use-api`);
+   `verify_jwt` unchanged (bob-worker off, ask-bob on). Both returned bundles
+   contain the follow-up, the Konrad-only plan gate, the worker outcome, the
+   workpad normalization and the reference candidates.
+3. `20261108130000_bob_material_follow_catalog.sql` as ledger `20261108105406`:
+   `bob.tools` v54 binds `continue_construction_change` under
+   `record_id/expected_revision`; `agent-contract.ask-bob` v32 adds
+   `material_follow_version` 1, publication `bob-material-follow-v1`. The same
+   versions as the migration replay in the test database.
+
+Next: the owner's Våningssäng 2 turn, read back for `follow_up` (rows
+recalculated by code, rows left), hand-over `outcome` per worker,
+`plan_required` (Konrad only), `workpad_note_bounds`,
+`operation_scope_ambiguous` with candidates, `operation_reference_required`,
+the drawing, and cost per delivered product.
