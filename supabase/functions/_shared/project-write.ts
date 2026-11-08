@@ -283,6 +283,32 @@ export interface ProjectWriterState {
 /** Box run 15 (2026-11-01): the catch-all rejection hid the database's reason. With
  * rejectionReasons the result carries a short code: a coded exception name the
  * database raised, else the SQLSTATE. Codes only, never message text. */
+/** Våningssäng 2 (2026-11-08): the older stock and requirement commands raise
+ * fixed English sentences without a code, so Mattias saw only "the database
+ * rejected this command" (db_p0001) twice and could not tell why. Each known
+ * sentence maps to a code and fixed guidance; the database text itself is
+ * never forwarded. [code, guidance, conflict] */
+export const MATERIAL_REFUSALS: Record<string, readonly [string, string, boolean]> = {
+  'Material requirement state changed. Reload first.': ['requirement_state_unchanged', 'The requirement is already in that state: an archived requirement cannot be archived or revised again, and only an archived one can be restored. Read it again; an archived requirement is already out of the current needs.', false],
+  'Stock item state changed. Reload first.': ['stock_state_unchanged', 'The stock item is already in that state: an archived item cannot be archived or revised again, and only an archived one can be restored. Read it again.', false],
+  'Material requirement unavailable': ['requirement_unavailable', 'No requirement with that ID exists in this project. Read the requirements again and use an ID from the result.', false],
+  'Stock item unavailable': ['stock_unavailable', 'No stock item with that ID exists in this project. Read stock again and use an ID from the result.', false],
+  'Material requirement changed. Reload before saving again.': ['requirement_changed', 'The requirement has a newer revision. Read it again and apply the change to the current revision.', true],
+  'Stock item changed. Reload before saving again.': ['stock_changed', 'The stock item has a newer revision. Read it again and apply the change to the current revision.', true],
+  'Material requirement changed. Reload before sending it to Shopping.': ['requirement_changed', 'The requirement has a newer revision. Read it again and publish the current revision.', true],
+  'Material requirement already exists. Reload before creating another.': ['requirement_exists', 'That requirement already exists. Read it and revise it instead.', true],
+  'Stock item already exists. Reload before creating another.': ['stock_exists', 'That stock item already exists. Read it and revise it instead.', true],
+  'Shopping publish does not accept client-authored fields.': ['publish_takes_no_fields', 'Publish takes data {} exactly; the server derives everything Shopping needs.', false],
+  'Restore the material requirement before sending it to Shopping.': ['requirement_archived', 'An archived requirement cannot go to Shopping. Restore it first, only if it is still needed.', false],
+  'Unsupported fields. Identity, solution lineage, actor and derived quantities cannot be rewritten.': ['requirement_fields_unsupported', 'A requirement create/revise takes only its documented fields; archive, restore and publish take data {}.', false],
+  'Unsupported fields. Identity and recorded history cannot be rewritten.': ['stock_fields_unsupported', 'A stock create/revise takes only its documented fields; archive and restore take data {}.', false],
+  'Invalid material quantity, unit, allowance or purchase increment': ['requirement_quantity_invalid', 'Use a positive decimal quantity, a supported unit, a waste percent of 0 or more and a positive purchase increment.', false],
+  'Invalid stock quantity, unit or status': ['stock_quantity_invalid', 'Use a decimal quantity of 0 or more, a supported unit and status available, inspect or unavailable.', false],
+  'Stock units cannot change. Create a new stock item for a different unit.': ['stock_unit_fixed', 'A stock item keeps its unit. Create a new stock item for a different unit.', false],
+  'Choose a project target before saving a material requirement.': ['requirement_target_required', 'The project has no selected target yet, so no requirement can be saved against it. Keep the need explicit in your report.', false],
+  'Stock quantity is already reserved by another active material requirement or cut plan': ['stock_reserved', 'That stock is already reserved elsewhere. Read stock and allocate only what is still free.', false],
+  'Stock quantity is already reserved by another active material requirement': ['stock_reserved', 'That stock is already reserved elsewhere. Read stock and allocate only what is still free.', false],
+}
 export function databaseRejectionReason(error: { code?: string | null; message?: string | null }): string | undefined {
   const named = /^([a-z][a-z0-9_]{2,39})(?::|$)/.exec((error.message ?? '').trim())?.[1]
   if (named) return named
@@ -384,6 +410,8 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       }
       if (payload.kind === 'catalog') return { status: 'invalid', message: 'The catalog rejected this definition. No change made. Read the exact part/material profile and pinned material revision. Put required part dimensions in properties using the profile field keys; compatible material properties are inherited server-side, and notes are not dimension fields. If the current definition already matches, reuse it instead of revising metadata.' }
       if (payload.kind === 'lifecycle' || payload.kind === 'bound_work' && (payload.data.domain as WritePayload)?.kind === 'lifecycle') return { status: 'invalid', message: 'No change made. ' + (LIFECYCLE_REASON.exec(error.message ?? '')?.[0] ?? 'The project rejected this change; read the current record and check its state.') }
+      const material = payload.kind === 'operational' ? MATERIAL_REFUSALS[(error.message ?? '').trim()] : undefined
+      if (material) return { status: material[2] ? 'conflict' : 'invalid', reason: material[0], message: 'No change made. ' + material[1] }
       if (payload.kind.startsWith('plan_')) return { status: 'invalid', message: 'The living plan rejected this command. No canonical plan was silently changed. Read the current plan, reuse only exact Step/Requirement IDs from it, keep completed history, and use current project evidence IDs/revisions.' }
       const reason = options.rejectionReasons ? databaseRejectionReason(error) : undefined
       return { status: 'invalid', message: 'The database rejected this command. No change made; check fields, source, current revision and record state.', ...(reason ? { reason } : {}) }
