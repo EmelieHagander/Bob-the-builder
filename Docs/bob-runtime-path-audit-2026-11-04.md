@@ -3201,3 +3201,65 @@ feeding journaled inputs in long steps, date checks across midnight, recorded
 failures losing their error class on replay; a commit retry under the same key
 meets the refusal guard; the `sketch_base_differs` message asks for a field the
 server owns.
+
+<a id="owner-runs-after-505-2026-11-08"></a>
+### Owner turns after #505 — 2026-11-08, 06:33–07:08 UTC
+
+Read back from `bob.execution_events`, `bob_private.bob_write_receipts`, the
+job journals while the jobs ran, the edge logs and `bob.bob_messages`. Nothing
+was changed.
+
+| | Entrén ("Testa igen") | Våningssäng 2 ("Kör") |
+|---|---|---|
+| Cost | 7.71 USD | 15.64 USD (Rita 5.14, Konrad 4.54, Mattias 4.48, Bob 1.39) |
+| Construction writes | 0 (7 refused `unavailable`) | 6 (revisions 21–26) |
+| Joint rules | none sent; 19 hand joints in the one prepared edit | 1–2 per edit; 80 joints written by code, 0 by hand |
+| Other saves | 2 Solution revisions (Bob) | 26 material rows |
+| Turn end | completed, honest answer | completed, honest answer |
+
+**Entrén.** Konrad's first sketch of the door beam came back `needs_data`
+(`form_instance_outside`): the beam (145 mm) did not fit the 36 mm between the
+door opening and the front's top plate. Bob chose Konrad's option 1 (only the
+front frame rises into the gable, `fH` 2285) and saved it in the Solution,
+labelled as Bob's construction choice with no owner decision changed. Every
+part edit after that came back `unavailable`, "Could not read the concept this
+construction is mapped to" (7 tries). Cause: the server moved the edit to the
+new target (35 → 37), but `leanEdit` read the concept at the construction's
+old pin; `read_design_readiness` answers `design_target_changed` with no
+concept for a moved target (checked against the live database: target 35
+conflict, 37 ready). Repinning alone (`change_construction_parameters`, no
+changes) is `needs_data`, as it should be: the taller front needs the part
+change in the same write. Bob told the owner it was a system fault and refused
+to rebuild the frame by hand. Konrad wrote this edit with structured `changes`
+and no rules (19 hand joints, 64 % of 7,854 characters).
+
+**Våningssäng 2.** Konrad sent rules in every part edit; all joints were
+written by code. The construction check passed each change. Two problems
+outside the construction:
+- Rita refused 5 times (`plan_required` ×3, `needs_data` ×2): the bed drawing
+  `a36eae3c` revision 5 is linked to two plan steps ("Granska modellen", "Stäm
+  av v7 mot sparad konstruktion"), and `resolveDrawingWork` stops with
+  `drawing_work_scope_ambiguous`; neither Rita nor Bob can choose. Root cause
+  under investigation.
+- Mattias: 11 `derive_cad_material_requirement` conflicts after the last
+  construction revision; Bob reports they collided with Mattias's own saves.
+  Root cause under investigation.
+
+Small waste in both turns: `workpad_note_bounds` ×4 (notes too long),
+`operation_reference_required` ×5 (reads without the reference).
+
+<a id="publication-506-2026-11-08"></a>
+**Hosted publication of #506 — 2026-11-08, 07:17–07:18 UTC.** Owner: "Publicera".
+Merged at `51cd223a9949e49d8e679c711a3e4e542f995719` (tree
+`48c2f510e866fcedef4de88c265f61e4df7f5826` equals the tested branch). Safety
+branch `save/bob-before-retarget-fix-2026-11-08` retains `c77837a`. Zero
+active jobs before. No migration.
+
+1. bob-worker v221 (ezbr
+   `fe35a90d560c1ecbbf8f457e65cf1cc0d7b4b57bbe9a8bed88b81c914b07d5c1`), ask-bob
+   v253 (`3af8b3dfb4ead1e6f6e5f84ea14f22f6a7c755513ec0abed606f40bafb9d2f7c`);
+   returned sources match main except the known `cad-intake.ts` erasure and
+   contain the bound-target concept reads and `construction_target_changed`.
+
+Next: the owner's next Entrén turn should save Konrad's prepared front change
+in one write.
