@@ -3293,3 +3293,43 @@ read-only.
 
 Tests: `tests/drawing-work.test.ts` and `tests/operational-revise-key.test.ts`
 fail without the change with the live reasons and pass with it.
+
+<a id="gpt-audit-review-2026-11-08"></a>
+### Review of the external action audit — 2026-11-08
+
+The owner asked to implement or challenge an external (GPT) action list for the
+Våningssäng 2 and Entrén turns, in one PR with #507. Each item was checked
+against the code on this branch. Built on the branch, not published.
+
+**Implemented**
+
+| Item | Finding in code | Change | Test |
+|---|---|---|---|
+| D plan gate | Only Konrad's persona asks for a plan first (`bob-tool-focus-v1`), but `planGate` was set for every worker with a workpad, so Rita and Mattias were refused (`plan_required`) for a plan nobody asked them for. | `planGate` only for `structure` (`project-answer.ts`). | `bob-build-workers`: Mattias saves without a plan; Konrad is still refused. Fails without the change. |
+| A material rows | Every construction revision makes every pinned material row a pending change item (`capture_construction_change`), geometry or not. The server recomputes a row from its recipe without AI (`continue_construction_change`, recalculate), but in worker jobs the binding sent `artifact_id/revision` to a tool that takes `record_id/expected_revision`: every call was refused (`$.artifact_id: remove unsupported field`). | Migration `20261108130000_bob_material_follow_catalog.sql`: the binding names the tool's fields; pin `material_follow_version 1`. After Konrad's job, code recalculates the pending material rows of each revision it saved, through his session (`construction-follow-up.ts`). Rows that need a model, allocation or commitment review, cutting plans and drawings stay pending and are listed in `follow_up`. Nothing is approved. | `construction-change-work`: the old binding refuses both rows; the new one recalculates both under the same IDs at revision 2; a second run does nothing. `bob-build-workers`: wiring on/off. |
+| C delivery | A report that ends in text is `status: ok` whether or not anything was saved. | Every hand-over result gets `outcome` from the save receipts: `saved`, `partial` (saved, ended at a limit), `blocked` (last write refused, with tool/status/reason) or `not_saved`. Calls keep the refusal reason. | `bob-worker-outcome`: Rita "klar" with no drawing is `not_saved`; a refused drawing is `blocked` with its reason. |
+| K metrics | Delivery was one turn status. | The hand-over's tool event records `worker_deliverable`, `worker_product`, `worker_saved_<product>` and `worker_blocker` (codes and counts only). | `bob-worker-outcome`. |
+| H workpad | Four notes refused for length alone. | Text over its bound is shortened at a word and named (`normalized.trimmed`); missing lists are saved empty. A wrong status, a missing goal or next step, an unknown field and too many items still refuse. | `bob-agent-workpad-note`. |
+| B/I references | An ambiguous material match returned a bare code; an unbound read with no reference was refused although only one construction could be meant. | `operation_scope_ambiguous` returns the candidate rows (ref, label, revision, definition, mode). A read with no reference uses Rita's bound construction, else the only one in scope; it never binds the job, an overview stays a list, writes still name their source. | `worker-operations`. |
+| J drawing | #507's redraw of a multi-step drawing could hide a moved construction. | Covered: the binding still stops on `construction_revision_changed`; K3 tests fence changes during render and review. | `drawing-work`. |
+
+**Challenged, not built**
+
+- *A as specified* (a `ConstructionImpact` diff that keeps rows "current" when
+  geometry is unchanged): a row is current only when it pins the head revision
+  (`bob.current_material_requirements`), and cutting plans and Shopping read
+  that. Changing it is a data-model change. Code recalculation gives the same
+  quantities at no model cost and keeps one rule.
+- *E shared context renewal*: Rita's and Mattias's long contexts came from the
+  loops #507 and D remove. Measure after a run first.
+- *F typed history projections*: 66 history reads do not show which were
+  unnecessary. Measure first.
+- *G blocker register*: identical refused calls are already not run again and
+  a third refusal for one reason is flagged (`createRefusalGuard`), across
+  hand-overs in a turn (the worker session is kept). A register keyed on
+  "relevant state" would block legitimate recovery without a definition of
+  that state.
+
+Known failures on `main`, unchanged here: `bob-final-answer` (spending-stop
+readback), `ai-catalog-fixture-replay` (fixture lacks the workpad
+publications), `worker-checkpoint-catalog` (expects an older publication name).

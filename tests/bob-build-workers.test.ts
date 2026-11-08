@@ -47,7 +47,7 @@ const pieceCatalog = () => catalogFixture(manifest => {
   toolbox.definition = { ...toolbox.definition, workpad_version: 1 }
 })
 
-async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>, readDraft?: (args: any) => unknown, piecePreflight?: Record<string, unknown>, editResult?: Record<string, unknown>, boundDrawing?:{binding:any;seen:any[]},operationTest?:{operations:WorkerOperations;seen:any[]}) {
+async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>, readDraft?: (args: any) => unknown, piecePreflight?: Record<string, unknown>, editResult?: Record<string, unknown>, boundDrawing?:{binding:any;seen:any[]},operationTest?:{operations:WorkerOperations;seen:any[]},extra:Record<string,unknown>={}) {
   const projectId = 'p', message = 'Rita lådan', hasAccess = async () => true
   const lookup = createProjectLookup(projectId, async (_project, input) => ({ data: { records: input.dataset === 'project' ? [{ id: projectId, name: 'Lådan', description: 'Saved project' }] : [], related: [], truncated: false }, error: null }) as any, undefined, undefined, undefined, { unlimitedWork: true })
   const writer = createProjectWriter(projectId, message, async () => { throw Error('No write requested') }, async () => ({ data: [], error: null }), async () => ({ data: [], error: null }))
@@ -107,7 +107,7 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
       },
       workpads: { load: async () => ({ status: 'ok' as const, revision: 0, note: null }),
         update: async () => ({ status: 'noted', revision: 1 }) } } : {}),
-    aiCatalog: catalog, corePreload: true, readToolPolicy, toolPicker: true, completeRequest: true, onTool: v => ran.push({ name: v.name, status: v.status, ...(v.rejection ? { rejection: v.rejection } : {}) }),
+    ...extra, aiCatalog: catalog, corePreload: true, readToolPolicy, toolPicker: true, completeRequest: true, onTool: v => ran.push({ name: v.name, status: v.status, ...(v.rejection ? { rejection: v.rejection } : {}) }),
     callModel: catalogCall(async options => {
       if (options.functionName === 'completion-gate') return { success: true, model: 'fixture', usage, data: JSON.stringify({ work_remaining: false, reason: '' }) }
       if (options.functionName === 'tool-picker') { pickerInputs.push(JSON.parse(String(options.messages![0].content))); return { success: true, model: 'fixture', usage, data: JSON.stringify({ tools: [], reason: '' }) } }
@@ -291,6 +291,37 @@ test('Mattias works the same way: a plain request and his project knowledge', as
   assert.equal(sent, request); assert.deepEqual(Object.keys(knowledge), ['materials', 'constructions', 'build_map'])
   assert.equal(catalog.definition('tools.ask_materials_worker', 'tool_contract').definition.envelope.schema_version, 2)
   assert.equal(toolOutput(bob[1]).status, 'ok')
+})
+
+// Våningssäng 2, 2026-11-08: only Konrad's persona asks for a plan before a
+// write (bob-tool-focus-v1), but the gate refused Rita and Mattias too.
+test('the plan gate holds Konrad only; Mattias writes without a plan note', async () => {
+  const catalog = pieceCatalog()
+  const workpads = { load: async () => ({ status: 'ok' as const, revision: 0, note: null }), update: async () => ({ status: 'noted', revision: 1 }) }
+  const cut = { record_ref: null, artifact_id: 'c1', revision: 3 }
+  const { ran } = await turn(catalog, [ask('ask_materials_worker', { request: 'Spara kapplanen.' }), ask('ask_structure_worker', { request: 'Flytta dörren.' })], {
+    'materials-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'm1', toolCalls: [call('m', 'save_construction_cut_plan', cut)] })],
+    'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 's1', toolCalls: [call('s', 'edit_construction_parts', { changes: [] })] })],
+  }, undefined, undefined, undefined, undefined, undefined, { workerPlan: true, workpads })
+  const mattias = ran.find(r => r.name === 'save_construction_cut_plan'), konrad = ran.find(r => r.name === 'edit_construction_parts')
+  assert.equal(mattias?.status, 'saved', JSON.stringify(mattias))
+  assert.equal((konrad?.rejection as { code?: string } | undefined)?.code, 'plan_required', JSON.stringify(konrad))
+})
+
+// Owner runs 2026-11-08: with material_follow_version 1, code reads the change
+// work of the construction Konrad saved and recalculates its material rows.
+test('after Konrad saves, code follows the saved revision\'s change work; without the pin it does not', async () => {
+  const konrad = { 'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'w1', toolCalls: [call('w1c', 'save_construction_draft', {})] })] }
+  const ask1 = ask('ask_structure_worker', { request: 'Konrad, sätt ihop lådan.' })
+  const off = await turn(catalogFixture(), [ask1], konrad)
+  assert(!off.constructionCalls.some(c => c.name === 'read_construction_changes')); assert.equal(toolOutput(off.bob[1]).follow_up, undefined)
+  const on = await turn(catalogFixture(), [ask1], konrad, undefined, undefined, undefined, undefined, undefined, { materialFollow: true })
+  const read = on.constructionCalls.find(c => c.name === 'read_construction_changes')
+  assert.deepEqual([read?.args.artifact_id, read?.args.revision, read?.args.after], ['c1', 3, null])
+  const report = toolOutput(on.bob[1])
+  assert.equal(report.follow_up.by, 'code'); assert.deepEqual(report.follow_up.constructions.map((c: any) => [c.artifact_id, c.revision]), [['c1', 3]])
+  assert.equal(report.follow_up.constructions[0].recalculated, 0); assert.match(report.follow_up.note, /could not be read; no material row was recalculated/, 'the note never claims work that did not happen')
+  assert.equal(report.outcome.deliverable, 'saved')
 })
 
 test('the workers come from the catalog; a tool belongs to one worker', () => {

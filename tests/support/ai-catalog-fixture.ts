@@ -810,6 +810,18 @@ for(const migration of migrations){
    publishAs(row,'bob-stored-joint-rules-v1');row.metadata={...row.metadata,joint_rule_store_version:1};versions.set(key,versions.get(key)!+1)
   }
  }
+ // Owner runs 2026-11-08: the recalculation is bound under its own fields; code follows Konrad's saves.
+ const materialFollow=source.match(/\$material_follow_binding\$([\s\S]+?)\$material_follow_binding\$/)
+ if(materialFollow){
+  const tagged=(tag:string)=>JSON.parse(source.match(new RegExp('\\$'+tag+'\\$([\\s\\S]+?)\\$'+tag+'\\$'))![1])
+  const box=seed.find(r=>r.key==='bob.tools')
+  if(box.metadata.publication!=='bob-lean-writes-v1'||JSON.stringify(sortKeys(box.definition.worker_operation_bindings?.continue_construction_change))!==JSON.stringify(sortKeys(tagged('material_follow_old_binding'))))throw new Error('material_follow_toolbox_unexpected')
+  box.definition={...box.definition,worker_operation_bindings:{...box.definition.worker_operation_bindings,continue_construction_change:JSON.parse(materialFollow[1])}}
+  publishAs(box,'bob-material-follow-v1');versions.set(box.key,versions.get(box.key)!+1)
+  const contract=seed.find(r=>r.key==='agent-contract.ask-bob')
+  if(contract.metadata.refusal_guard_version!==1||contract.metadata.material_follow_version!==undefined)throw new Error('material_follow_contract_unexpected')
+  publishAs(contract,'bob-material-follow-v1');contract.metadata={...contract.metadata,...tagged('material_follow_contract')};versions.set(contract.key,versions.get(contract.key)!+1)
+ }
  // Owner decision 2026-11-07: worker gates (chat answer is the review, gate facts in-job, identical-request refusal).
  const workerGates=source.match(/\$worker_gates_contract\$([\s\S]+?)\$worker_gates_contract\$/)
  if(workerGates){

@@ -1,3 +1,4 @@
+import { followConstructionChanges, savedConstructionTargets } from './construction-follow-up.ts'
 import {helperConversation} from './bob-helper-context.ts'
 import { withoutServerRevisions } from './server-revisions.ts'
 import type {WorkerOperations,OperationRole} from './worker-operations.ts'
@@ -46,6 +47,15 @@ import type { ProjectCalculator } from './project-calculator.ts'
 import { type ToolPolicyReader, type ToolboxEntry, type ToolInstructions, type ToolGate, checkedToolSnapshot } from './project-tools/session.ts'
 import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' }
 
+/** The change note of a material row code recalculated after a construction change. */
+const FOLLOW_UP_CHANGE_NOTE = 'Omräknad av koden från den sparade konstruktionens recept efter en konstruktionsändring.'
+/** What the code follow-up did, in words that match its counts. */
+function followUpNote(results: { status: string; recalculated: number; left: unknown[] }[]): string {
+  const done = results.reduce((n, r) => n + r.recalculated, 0), left = results.reduce((n, r) => n + r.left.length, 0)
+  if (results.some(r => r.status === 'unavailable') && !done) return 'The change work of the saved construction could not be read; no material row was recalculated.'
+  return (done ? `Code recalculated ${done} material row${done === 1 ? '' : 's'} of the saved construction from their recorded recipes, keeping each row.` : 'No material row needed recalculation.')
+    + (left ? ` ${left} row${left === 1 ? '' : 's'} in left still need a decision; ask Mattias for those.` : '')
+}
 /** Instruction content comes from the pinned database manifest; shelf state is data. */
 export function buildBobSystemMessage(aiCatalog: AiCatalogSession, tools: OpenAIServiceOptions['tools'] = [], toolbox: ToolboxEntry[] = [], completeRequest = false, toolSheets = false, promptTiers = false): string {
   const shelf = sortToolbox(toolbox, aiCatalog.definition('bob.tools', 'tool_contract').definition.shelves as { label: string; tools: string[] }[])
@@ -322,8 +332,11 @@ export type ProjectAnswerOptions = {
   /** Pinned per execution (workerFocusVersion): a worker with a catalog focus is
    * offered its core tools and the optional ones picked from Bob's request. */
   workerFocus?: boolean;
-  /** Pinned per execution (workerPlanVersion): a worker's construction write
-   * before a plan note in its workpad is refused with plan_required. */
+  /** Pinned per execution (materialFollowVersion 1): after Konrad's job, code
+   * recalculates the material rows of each construction revision it saved. */
+  materialFollow?: boolean;
+  /** Pinned per execution (workerPlanVersion): Konrad's construction write
+   * before a plan note in his workpad is refused with plan_required. */
   workerPlan?: boolean;
   /** Pinned per execution: which buildings this project links, read once at turn start. */
   buildingLinks?: BuildingLinks;
@@ -623,7 +636,27 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         ...(opts.workerStageContext ? { stageContext: true, registerContextSurface: opts.registerWorkerContextSurface } : {}),
         ...(workerPads ? { workpadEnabled: true, ...(workerWorkpad ? { workpad: workerWorkpad } : {}) } : {}),
         ...(opts.workerFocus && worker.focus && workerPads ? { focus: { pick: (candidates: string[]) => pickWorkerTools(opts, job.job, worker.focus!.core, candidates, deadline, worker.focus!.optional_limit) } } : {}),
-        ...(opts.workerPlan && workerPads ? { planGate: true } : {}),
+        // Konrad's gate only: his persona is the one told to plan first
+        // (bob-tool-focus-v1). Rita and Mattias were refused for a plan nobody
+        // asked them for (Våningssäng 2, 2026-11-08: plan_required in batches).
+        ...(opts.workerPlan && workerPads && key === 'structure' ? { planGate: true } : {}),
+        ...(opts.materialFollow && key === 'structure' && worker.tools.includes('continue_construction_change') ? { followUp: async (receipts: Record<string, unknown>[]) => {
+          const targets = savedConstructionTargets(receipts)
+          if (!targets.length) return null
+          const operations = opts.workerOperations && workpadAgent ? opts.workerOperations : null
+          // One call at a time, through Konrad's own session: the same fence, quote and writer as his calls.
+          const run = async (name: string, args: Record<string, unknown>) => {
+            const result = withoutDiagnostics(await session!.execute(name, operations ? operations.serverArgs(workpadAgent!, name, args) : args))
+            try { opts.onTool?.({ name, status: String(result?.status ?? 'returned'), step: currentStep + 1, index: 100 + workerToolEvents++, ms: 0 }) } catch { /* diagnostics only */ }
+            return result
+          }
+          const results = await followConstructionChanges({ targets, hasAccess: opts.hasAccess, deadline,
+            read: (target, after) => run('read_construction_changes', { artifact_id: target.artifact_id, revision: target.revision, after }),
+            recalculate: (target, item, rowKey) => run('continue_construction_change', { ...(operations ? { artifact_id: target.artifact_id, revision: target.revision }
+              : { record_id: target.artifact_id, expected_revision: target.revision }), key: rowKey, item_id: item.id, action: 'recalculate',
+              review_note: null, output_revision: null, change_note: FOLLOW_UP_CHANGE_NOTE }) })
+          return { by: 'code', constructions: results, note: followUpNote(results) }
+        } } : {}),
         ...(opts.openSketches && key === 'structure' ? { openSketches: opts.openSketches } : {}),
         ...(opts.stableTools ? { stableTools: true } : {}),
         ...(opts.refusalGuard ? { refusalGuard: true } : {}),
@@ -1059,7 +1092,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         const validationCode = completionV3 && rejection ? rejection.code
           : completionAware && typeof result?.validation?.code === 'string' ? result.validation.code : undefined
         try { opts.onTool?.({ name: toolName, status: String(result?.status ?? 'returned'), step: step + 1, index, ms: Date.now() - began,
-          ...(result?.diagnostics?{diagnostics:result.diagnostics}:{}),
+          ...(result?.diagnostics?{diagnostics:result.diagnostics}:workerHandOverNames.includes(toolName)&&result?.outcome&&typeof result.outcome==='object'
+            ?{diagnostics:{operation:'worker_outcome',deliverable:result.outcome.deliverable,product:result.outcome.product,saved:result.outcome.saved,
+              blocker:result.outcome.blocker?.reason??result.outcome.blocker?.status}}:{}),
           ...(validationCode !== undefined ? { validation_code: validationCode } : {}), ...(rejection ? { rejection } : {}),
           // A worker hand-over that stopped says why in the telemetry too (owner decision 2026-11-07):
           // 11 needs_verification since 2026-11-02 could not be told apart afterwards.

@@ -405,7 +405,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; toolSchemaDedupVersion?: 1; promptCachePointsVersion?: 1; workerFocusVersion?: 1; workerPlanVersion?: 1; workerGatesVersion?: 1; writeCheckVersion?: 1; constructionSketchVersion?: 1 | 2; stableToolsVersion?: 1; serverTargetVersion?: 1; serverRevisionsVersion?: 1; refusalGuardVersion?: 1; toolPickLimit?: number; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; toolSchemaDedupVersion?: 1; promptCachePointsVersion?: 1; workerFocusVersion?: 1; workerPlanVersion?: 1; workerGatesVersion?: 1; writeCheckVersion?: 1; constructionSketchVersion?: 1 | 2; stableToolsVersion?: 1; serverTargetVersion?: 1; serverRevisionsVersion?: 1; refusalGuardVersion?: 1; materialFollowVersion?: 1; toolPickLimit?: number; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -465,6 +465,8 @@ export async function answerWithOpenAi(opts: {
       ...(checkpoint && claimedServer && contract.server_revisions_version === 1 ? { serverRevisionsVersion: 1 as const } : {}),
       // Owner feedback 2026-11-07: a refused call does not run again unchanged; a third refusal for one reason asks for another approach.
       ...(checkpoint && claimedServer && contract.refusal_guard_version === 1 ? { refusalGuardVersion: 1 as const } : {}),
+      // Owner runs 2026-11-08: after Konrad's job, code recalculates the material rows of the construction he saved. New claimed jobs only.
+      ...(checkpoint && claimedServer && contract.material_follow_version === 1 ? { materialFollowVersion: 1 as const } : {}),
       ...(checkpoint && Number.isInteger(contract.tool_pick_limit) && Number(contract.tool_pick_limit) >= 1 && Number(contract.tool_pick_limit) <= 8 ? { toolPickLimit: Number(contract.tool_pick_limit) } : {}),
       ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_checkpoint_version === 1
         && contract.worker_verified_renewal_version === 1 ? { workerVerifiedRenewalVersion: 1 as const } : {}),
@@ -492,6 +494,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.serverTargetVersion !== undefined && execution.serverTargetVersion !== 1) throw new Error('server_target_version_invalid')
   if (execution.serverRevisionsVersion !== undefined && execution.serverRevisionsVersion !== 1) throw new Error('server_revisions_version_invalid')
   if (execution.refusalGuardVersion !== undefined && execution.refusalGuardVersion !== 1) throw new Error('refusal_guard_version_invalid')
+  if (execution.materialFollowVersion !== undefined && execution.materialFollowVersion !== 1) throw new Error('material_follow_version_invalid')
   if (execution.toolPickLimit !== undefined && !(Number.isInteger(execution.toolPickLimit) && execution.toolPickLimit >= 1 && execution.toolPickLimit <= 8)) throw new Error('tool_pick_limit_invalid')
   if (execution.workerVerifiedRenewalVersion !== undefined
     && (execution.workerVerifiedRenewalVersion !== 1 || execution.workpadVersion !== 1 || execution.workerCheckpointVersion !== 1))
@@ -1353,6 +1356,7 @@ export async function answerWithOpenAi(opts: {
     ...(execution.workerGatesVersion === 1 ? { workerGates: true } : {}),
     ...(execution.stableToolsVersion === 1 ? { stableTools: true } : {}),
     ...(execution.refusalGuardVersion === 1 ? { refusalGuard: true } : {}),
+    ...(execution.materialFollowVersion === 1 ? { materialFollow: true } : {}),
     // Owner decision 2026-11-07: the server's current revisions, read through this turn's journal.
     ...(execution.serverRevisionsVersion === 1 ? { serverRevisions: { readers: {
       catalog: async (id: string) => {

@@ -318,3 +318,47 @@ test('a linked need without a recorded model returns a review gap; an explicit c
  const back=(await r.changes(2)).items.find((i:any)=>i.id===item.id);assert.equal(back.state,'updated');assert.equal(back.completed_revision,2)
  assert.deepEqual((await f.pg.query('select * from bob.material_requirement_revisions where requirement_id=$1 and revision=1',[id])).rows,original)
 })
+
+// Owner runs 2026-11-08 (Våningssäng 2): every construction revision left each
+// material row pending, and Konrad's recalculation was refused in every worker
+// job (bound as artifact_id/revision; the tool takes record_id/expected_revision).
+// With material_follow_version 1 code runs the canonical recalculation after his
+// job, through the same fence, tool and writer (construction-follow-up.ts).
+test('code recalculates the pending material rows of a saved construction revision under their identities, through the worker fence',async t=>{
+ const {createWorkerOperations}=await import('../supabase/functions/_shared/worker-operations.ts')
+ const {followConstructionChanges}=await import('../supabase/functions/_shared/construction-follow-up.ts')
+ const {catalogFixture}=await import('./support/ai-catalog-fixture.ts')
+ const f=await cutPlanFixture(t),r=runtime(f);await r.write(f.payload)
+ const node=f.draft.parameters.bindings.find((b:any)=>b.path==='definitions/base/x_mm').node
+ const {construction,session}=r.tools();await session.prepare()
+ assert.equal((await session.execute('change_construction_parameters',{key:'width',record_id:f.construction.recordId,expected_revision:1,
+  changes:[{id:node,role:'decision',value:240,unit:'mm',reason:'Explicit synthetic wider base'}],change_note:'Widen the saved base'})).status,'saved',JSON.stringify(r.sqlErrors))
+ const id=f.construction.recordId,target={artifact_id:id,revision:2}
+ const fenced=(bindings:any)=>{
+  const operations=createWorkerOperations({version:2,bindings,projectId:f.project,hasAccess:async()=>true,stableRefs:true,
+   load:async()=>({status:'ready',source:target,entries:[{kind:'construction',id,revision:2,label:'Bracket'}]}),prepareDrawing:async()=>({status:'ready'}),drawingArguments:()=>null,drawingWork:()=>undefined})
+  const worker=createBobToolSession({projectId:f.project,message:f.message,writer:createProjectWriter(f.project,f.message,async p=>{try{return {data:await r.write(p),error:null}}catch(e:any){return {data:null,error:{code:e.code,message:e.message}}}},async()=>({data:[],error:null}),async()=>({data:[],error:null})),
+   constructionTools:construction,lookup:createProjectLookup(f.project,async()=>({data:{records:[],related:[],truncated:false},error:null})),readPolicy:seedToolPolicy,workerOperation:{role:'structure',operations}})
+  return {operations,worker}
+ }
+ const follow=async(bindings:any)=>{
+  const {operations,worker}=fenced(bindings);await operations.prepare('structure',[]);await worker.prepare()
+  const run=(name:string,args:Record<string,unknown>)=>worker.execute(name,operations.serverArgs('structure',name,args))
+  return followConstructionChanges({targets:[target],hasAccess:async()=>true,deadline:Date.now()+120_000,
+   read:(t,after)=>run('read_construction_changes',{...t,after}),
+   recalculate:(t,item,key)=>run('continue_construction_change',{...t,key,item_id:item.id,action:'recalculate',review_note:null,output_revision:null,change_note:'Omräknad av koden efter konstruktionsändringen.'})})
+ }
+ const bindings=(catalogFixture().definition('bob.tools','tool_contract').definition as any).worker_operation_bindings
+ // The binding before the fix: every row is refused for the field names.
+ const old={...bindings,continue_construction_change:{...bindings.continue_construction_change,source:{id:'artifact_id',revision:'revision',ref:'source_ref',readOnly:false},schema:[{path:[],hide:['artifact_id','revision'],refs:bindings.continue_construction_change.schema[0].refs}]}}
+ const [refused]=await follow(old)
+ assert.equal(refused.recalculated,0);assert.deepEqual(refused.left.map(row=>row.status),['invalid','invalid'])
+ const [done]=await follow(bindings)
+ assert.equal(done.status,'pending');assert.equal(done.recalculated,2,JSON.stringify([done,r.sqlErrors]));assert.deepEqual(done.left,[]);assert.deepEqual(done.other_pending,{cut_plan:1})
+ const work=await r.changes(2)
+ for(const item of work.items.filter((i:any)=>i.kind==='requirement')){assert.equal(item.state,'updated');assert.equal(item.completion_receipt.recordId,item.output_id);assert.equal(item.completed_revision,2)}
+ const rows=(await f.pg.query('select requirement_id,revision,artifact_revision from bob.material_requirement_revisions where project_id=$1 and revision=2 order by requirement_id',[f.project])).rows
+ assert.deepEqual(rows.map((x:any)=>[x.requirement_id,x.artifact_revision]),f.needs.map((n:any)=>[n.recordId,2]).sort((a:any,b:any)=>a[0]<b[0]?-1:1),'same rows, now from revision 2')
+ const [again]=await follow(bindings)
+ assert.equal(again.recalculated,0);assert.deepEqual(again.left,[]);assert.deepEqual(again.other_pending,{cut_plan:1},'nothing pending is recalculated twice; the cutting plan stays for its own decision')
+})

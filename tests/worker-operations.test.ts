@@ -202,3 +202,28 @@ test('owner decision 2026-11-08: with lean writing a save names its target; null
  const old=fixture(true,2,{stableRefs:true});await old.f.prepare('structure',[])
  assert.equal((await old.f.before('structure','save_construction_draft',{source_ref:null,title:'Ram'})).args?.record_id,A)
 })
+// Våningssäng 2, 2026-11-08: operation_scope_ambiguous ×2 named no rows, and
+// operation_reference_required ×5 refused reads of the one construction the job meant.
+test('an ambiguous material match returns its candidate rows; nothing is chosen for the model',async()=>{
+ const twin={...entries[7],id:'need-2',revision:2,label:'Rails, ladder side'}
+ const f=createWorkerOperations({version:2,projectId:'p',hasAccess:async()=>true,load:async()=>({status:'ready',source:{artifact_id:A,revision:3},entries:[...entries,twin]}),prepareDrawing:async()=>({status:'ready'}),drawingArguments:()=>null,drawingWork:()=>undefined})
+ await f.prepare('materials',[])
+ const refused=await f.before('materials','derive_cad_material_requirement',{record_ref:null,data:{definition_id:'rail',quantity_mode:'pieces'}}) as any
+ assert.equal(refused.reason,'operation_scope_ambiguous')
+ assert.deepEqual(refused.candidates.map((c:any)=>[c.label,c.revision,c.definition_id,c.quantity_mode]),[['Rails',6,'rail','pieces'],['Rails, ladder side',2,'rail','pieces']])
+ assert.equal(refused.args,undefined)
+ const chosen=await f.before('materials','derive_cad_material_requirement',{record_ref:refused.candidates[1].ref,data:{definition_id:'rail',quantity_mode:'pieces'}})
+ assert.equal(chosen.args?.record_id,'need-2');assert.equal(chosen.args?.expected_revision,2)
+})
+test('a read with no reference reads the only construction, or Rita\'s bound one; it never binds the job and two still need a reference',async()=>{
+ const make=(list:Omit<OperationEntry,'ref'>[],work?:{artifact_id:string;revision:number})=>createWorkerOperations({version:2,projectId:'p',hasAccess:async()=>true,load:async()=>({status:'ready',source:null,entries:list}),prepareDrawing:async()=>({status:'ready'}),drawingArguments:()=>null,drawingWork:()=>work?{construction:work,request_id:null}:undefined})
+ const one=make([entries[0]]);await one.prepare('materials',[])
+ assert.deepEqual((await one.before('materials','read_construction_draft',{source_ref:null,view:'parts'})).args,{view:'parts',artifact_id:A,revision:3})
+ assert.equal(one.describe('materials').source,null,'a read does not bind the job')
+ assert.equal((await one.before('materials','read_construction_draft',{source_ref:null,view:'overview'})).args?.artifact_id,null,'an overview stays a list')
+ assert.equal((await one.before('materials','derive_cad_material_requirement',{record_ref:null,data:{definition_id:'rail',quantity_mode:'pieces'}})).reason,'operation_reference_required','a write still names its source')
+ const two=make([entries[0],entries[1]]);await two.prepare('materials',[])
+ assert.equal((await two.before('materials','read_construction_draft',{source_ref:null,view:'parts'})).reason,'operation_reference_required')
+ const rita=make([entries[0],entries[1]],{artifact_id:B,revision:2});await rita.prepare('drawing',[])
+ assert.equal((await rita.before('drawing','read_construction_draft',{source_ref:null,view:'parts'})).args?.artifact_id,B)
+})

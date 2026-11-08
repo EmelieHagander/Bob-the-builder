@@ -53,3 +53,11 @@ test('a drawing that serves several plan steps is redrawn with no step, its link
  const one=await resolveDrawingWork('A',[source],undefined,ports({readDrawing:async()=>({...drawing,archived:false,current_step_ids:['one']})}))
  assert.equal(one.binding?.step_id,'one')
 })
+// GPT audit review 2026-11-08: the bed drawing may be redrawn although it serves
+// two plan steps, but never against a construction revision that has moved on.
+// (Changes during render and review are fenced by the K3 tests in checked-construction-drawing.)
+test('a drawing that serves several steps is still refused when its construction moved past the requested revision',async()=>{
+ const moved=ports({readDrawing:async()=>({...drawing,archived:false,current_step_ids:['one','two']}),
+  readConstruction:async(id:string|null)=>id?{status:'ok',projectId:'A',...source,revision:6,source_state:'current',archived:false}:{status:'ok',projectId:'A',items:[{id:c,revision:6}],next_cursor:null,truncated:false}})
+ assert.equal((await resolveDrawingWork('A',[source],undefined,moved)).reason,'construction_revision_changed')
+})

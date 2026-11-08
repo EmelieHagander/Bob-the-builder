@@ -14,8 +14,23 @@ export type ExecutionEvent = {
 export interface ExecutionMetricsState {
   version: 1; runId: string; turnId: string; startedAt: number; observation: TurnObservation | null;
 }
-export type WorkDiagnostics={operation?:string;reused?:boolean;revision?:number;new_revision?:number|null;source_changed?:boolean;coverage_complete?:boolean;outputs_requested?:number}
+export type WorkDiagnostics={operation?:string;reused?:boolean;revision?:number;new_revision?:number|null;source_changed?:boolean;coverage_complete?:boolean;outputs_requested?:number
+ /** operation worker_outcome: what a hand-over delivered, read from its save receipts by code. */
+ deliverable?:string;product?:string;saved?:Record<string,number>;blocker?:string}
+const DELIVERABLES=new Set(['saved','partial','blocked','not_saved'])
+const PRODUCTS=['construction','drawing','material','follow_up','catalog']
+/** Owner request 2026-11-08: delivery per work product (construction, drawing,
+ * material), so two runs can be compared on what they delivered, not only on
+ * what they cost. Codes and counts only. */
+function outcomeCounts(value:WorkDiagnostics):Record<string,number|string|null>{
+ const counts:Record<string,number|string|null>={work_operation:'worker_outcome',worker_deliverable:DELIVERABLES.has(value.deliverable??'')?value.deliverable!:'unknown'}
+ if(typeof value.product==='string'&&PRODUCTS.includes(value.product))counts.worker_product=value.product
+ for(const kind of PRODUCTS){const n=value.saved?.[kind];if(Number.isSafeInteger(n)&&Number(n)>0)counts['worker_saved_'+kind]=Number(n)}
+ if(typeof value.blocker==='string'&&/^[a-z][a-z0-9_]{0,63}$/.test(value.blocker))counts.worker_blocker=value.blocker
+ return counts
+}
 function workCounts(value:WorkDiagnostics|undefined):Record<string,number|boolean|string|null>{
+ if(value?.operation==='worker_outcome')return outcomeCounts(value)
  if(!value||!['work_read','work_change','work_check'].includes(value.operation??''))return {}
  const counts:Record<string,number|boolean|string|null>={work_operation:value.operation!}
  for(const key of ['reused','source_changed','coverage_complete'] as const)if(typeof value[key]==='boolean')counts['work_'+key]=value[key]!
