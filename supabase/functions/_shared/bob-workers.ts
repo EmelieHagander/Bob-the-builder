@@ -450,7 +450,10 @@ export async function runWorker(opts: {
       // it saved and Bob's turn goes on (deep audit 2026-11-08: the error
       // failed the whole turn). Decided before dispatch from the restored
       // state, so a replay ends the same way.
-      if (opts.stopAsResult && error instanceof Error && error.message === 'context_input_too_large') return finish({ status: 'context_limit', worker: roleKey, calls, note: LIMIT_NOTE })
+      // A first step already past the ceiling would hit it again on every new
+      // hand-over: that is a failed worker, not a hand-over to continue (review of #505).
+      if (opts.stopAsResult && error instanceof Error && error.message === 'context_input_too_large')
+        return finish(calls.length ? { status: 'context_limit', worker: roleKey, calls, note: CONTEXT_LIMIT_NOTE } : { status: 'unavailable', reason: 'context_limit', worker: roleKey, calls })
       throw error
     }
     if (!response.success) {
@@ -679,7 +682,7 @@ export async function runWorker(opts: {
       ? { version: 2 as const, step, previous: previous ?? null, messages, calls, receipts, order, renewal, ...(planned ? { planned } : {}) }
       // Without renewal the chain is never reset here, so previous is this step's response.
       : { version: 1 as const, step, previous: previous as string, messages, calls, receipts, order, ...(planned ? { planned } : {}) })))
-      return finish({ status: 'state_limit', worker: roleKey, calls, note: LIMIT_NOTE })
+      return finish({ status: 'state_limit', worker: roleKey, calls, note: STATE_LIMIT_NOTE })
     // Only continuing work yields. Review holds, conflicts and final reports
     // above must reach Bob before any later specialist step can be scheduled.
     if (step + 1 < opts.worker.max_steps) opts.progress?.afterStep?.()
@@ -688,7 +691,8 @@ export async function runWorker(opts: {
   } finally { unregister?.() }
 }
 
-const LIMIT_NOTE = 'This hand-over reached its context limit and ended; what it saved is listed. Give the remaining work as a new hand-over that names what is done.'
+const CONTEXT_LIMIT_NOTE = 'This hand-over reached its context limit and ended; what it saved is listed. Give the remaining work as a new hand-over that names what is done.'
+const STATE_LIMIT_NOTE = 'This hand-over ended because the turn\'s saved state reached its size limit; what it saved is listed. Give the remaining work as a new hand-over that names what is done.'
 const RECEIPT_KEYS = ['artifact_id', 'record_id', 'id', 'revision', 'construction_revision', 'request_id', 'step_id']
 const plain = (value: unknown) => typeof value === 'string' && value.length <= 200 || typeof value === 'number' && Number.isFinite(value)
 /** The ids and revisions a save returned, copied by code. Writer saves nest them

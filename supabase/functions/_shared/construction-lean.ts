@@ -50,7 +50,7 @@ export const LEAN_EDIT_NOTE = ' Lean writing: a number in an upserted definition
 const SAVE_RULES_OLD = 'joint_rules joins touching parts by definition pair; code writes those joints.'
 const SAVE_RULES_NEW = 'joint_rules joins touching parts by definition pair; code writes those joints and stores the rules with the construction.'
 const EDIT_RULES_OLD = 'In this edit, joint_rules applies to the parts it adds, changes or moves;'
-const EDIT_RULES_NEW = 'The construction\'s stored joint rules apply to the parts this edit adds, changes or moves, and joint_rules adds or replaces rules by id;'
+const EDIT_RULES_NEW = 'The construction\'s stored joint rules apply to the parts this edit adds, changes or moves, and joint_rules adds rules or replaces one with the same id or definition pair;'
 const swap = (text: string, from: string, to: string) => { if (text.split(from).length !== 2) throw new Error('lean_rules_text_unexpected'); return text.replace(from, () => to) }
 /** The lean notes as published: with stored joint rules one sentence each changes. */
 export const leanSaveNote = (storedRules: boolean) => storedRules ? swap(LEAN_SAVE_NOTE, SAVE_RULES_OLD, SAVE_RULES_NEW) : LEAN_SAVE_NOTE

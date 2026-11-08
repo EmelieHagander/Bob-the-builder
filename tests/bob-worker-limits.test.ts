@@ -29,13 +29,22 @@ test('the context ceiling ends the hand-over with its receipts; without the pin 
   const report = await run({ stopAsResult: true, second: ceiling }) as any
   assert.equal(report.status, 'context_limit')
   assert.deepEqual(report.receipts.map((r: any) => [r.record_id, r.revision]), [['c1', 4]])
-  assert.match(report.note, /new hand-over/)
+  assert.match(report.note, /context limit/)
   await assert.rejects(run({ stopAsResult: false, second: ceiling }), /context_input_too_large/)
 })
 
 test('a checkpoint too large ends the hand-over with its receipts', async () => {
   const report = await run({ stopAsResult: true, second: async () => saving, save: async () => { throw new Error('turn_checkpoint_too_large') } }) as any
-  assert.equal(report.status, 'state_limit')
+  assert.equal(report.status, 'state_limit');assert.match(report.note, /saved state/)
   assert.deepEqual(report.receipts.map((r: any) => r.revision), [4])
   await assert.rejects(run({ stopAsResult: false, second: async () => saving, save: async () => { throw new Error('turn_checkpoint_too_large') } }), /turn_checkpoint_too_large/)
+})
+
+test('a hand-over whose first step is already past the ceiling is a failed worker, not one to continue', async () => {
+  let n = 0
+  const report = await runWorker({ aiCatalog: catalog, worker: { role: 'role.structure-worker', tool: 'ask_structure_worker', tools: ['edit_construction_parts'], reads: [], max_steps: 6 } as any,
+    callModel: async () => { n++; throw new Error('context_input_too_large') }, userId: 'u', job: { job: 'Fortsätt.', findings: null }, history: [],
+    session: { prepare: async () => [tool('edit_construction_parts')], execute: async () => ({ status: 'ok' }) },
+    readCurrent: async () => null, readKnowledge: async () => ({}), hasAccess: async () => true, deadline: Infinity, stopAsResult: true } as any) as any
+  assert.deepEqual([report.status, report.reason, n], ['unavailable', 'context_limit', 1])
 })

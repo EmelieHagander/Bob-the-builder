@@ -3152,7 +3152,20 @@ the four fixes. `20261108090000_bob_lean_edit_text.sql` as ledger
   spending stop…" and `worker-checkpoint-catalog` fail the same before #504.
   An exact retry (same key) of a lean part edit that code extended is refused
   as `operation_reused` (nothing is written twice); the database compares the
-  stored whole change with the first, unextended prepare.
+  stored whole change with the first, unextended prepare. `konrad-lean-catalog`
+  "the model reads the schema…" (an edit `open_questions` difference) fails the
+  same on `main`.
+- **Review of #505 before publication** (one reviewer; migration security,
+  RLS, receipts, inheritance and the rule merge held): a new construction saved
+  in a bound job took the job over, so the handed-over construction became
+  unreachable (medium) — the job now stays on its construction; a sent rule
+  for a pair a stored rule covers made the pair ambiguous — it now replaces the
+  stored rule of that pair, and a set over 32 is named (`joint_rules_full`);
+  the explicit save target is pinned with the stored rules, not the earlier
+  lean pin; the renamed inner writer is no longer callable by `authenticated`;
+  a first step already past the ceiling is a failed worker (no hand-over loop)
+  and `state_limit` has its own note; a whole save names the stored rules it
+  leaves out; docs corrected.
 
 **Open, low (documented):** other nested journal steps (CAD guard reads,
 `cad:construction_check`), worker sessions reused within one claim, live reads

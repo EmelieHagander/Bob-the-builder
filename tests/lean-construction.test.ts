@@ -415,4 +415,10 @@ test('stored joint rules (owner decision 2026-11-08): a save stores its rules, r
  assert.equal(mid.status,'saved',JSON.stringify(mid))
  const r3=await read(id);assert.deepEqual(r3.joint_rules.map((r:any)=>r.reason),['Tvärslån limmas.'])
  assert.equal(r3.joints.find((j:any)=>j.id===ruleJointId('left','mid')).reason,'Tvärslån limmas.')
+ // A rule with a new id for the same definition pair replaces the stored one, not ambiguous.
+ const screwed={...rule,id:'skruv',reason:'Tvärslån skruvas.'}
+ const third=await t.execute('edit_construction_parts',{record_id:id,expected_revision:3,key:'tredje',change_note:'Tredje slå',request_quote:message,mode:'save',joint_rules:[screwed],form_assign:[],
+  changes:{nodes:{upsert:[decision('ty',100,'Tredje slån.')],remove:[]},instances:{upsert:[{id:'third',definition_id:'cross',placement:at('w','ty')}],remove:[]},roles:{upsert:[bare('third')],remove:[]}}})
+ assert.equal(third.status,'saved',JSON.stringify(third))
+ assert.deepEqual((await read(id)).joint_rules.map((r:any)=>r.id),['skruv'])
 })

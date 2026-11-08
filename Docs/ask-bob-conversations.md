@@ -148,7 +148,9 @@ Bob's own head and specialist chains with pending tool calls. A finished
 specialist chain, such as a CAD review with its preview pixels, is dropped.
 Above 500 000 characters the worker logs `[Checkpoint size]` with the largest
 keys (names and sizes only). Above `BOB_CHECKPOINT_MAX_CHARS` (2 000 000) it
-fails the job with `turn_checkpoint_too_large` instead of retrying the write.
+fails the job with `turn_checkpoint_too_large` instead of retrying the write;
+since 2026-11-08 a specialist hand-over that reaches it (with the final-answer
+pin) ends as `state_limit` with what it saved, and Bob's turn goes on.
 This fence exists because a 4.8 MB snapshot timed out on every save and starved
 the database on 2026-10-21.
 

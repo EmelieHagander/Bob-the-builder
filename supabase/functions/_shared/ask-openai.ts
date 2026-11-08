@@ -1199,8 +1199,9 @@ export async function answerWithOpenAi(opts: {
   const workerOperations=execution.operationPathsVersion!==undefined?createWorkerOperations({
     version:execution.operationPathsVersion,bindings:operationBindings,projectId:opts.projectId,hasAccess,
     ...(execution.stableToolsVersion===1?{stableRefs:true}:{}),
-    // Owner decision 2026-11-08: with lean writing a save names its target.
-    ...(aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.lean_construction_version===1)?{explicitSaveTarget:true}:{}),
+    // Owner decision 2026-11-08: a save names its target. Pinned with the stored
+    // joint rules, so jobs already running keep their tool surface.
+    ...(aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.joint_rule_store_version===1)?{explicitSaveTarget:true}:{}),
     load:async(role,sources,focus)=>{
       // Navigation is not an assignment. Multiple inspected constructions need
       // an explicit server-issued selection, never a last-row/focus guess.

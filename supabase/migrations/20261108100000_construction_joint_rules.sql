@@ -69,6 +69,8 @@ end $joint_rules_prepare$;
 -- rest of the payload takes the existing path. An exact retry reuses its
 -- receipt, a different rule set under the same key is refused.
 alter function bob_private.bob_project_write_v16(text,uuid,uuid,bigint,jsonb) rename to bob_project_write_before_joint_rules;
+-- Only the wrapper below calls it now (it runs as owner); a direct call would skip the rule store.
+revoke all on function bob_private.bob_project_write_before_joint_rules(text,uuid,uuid,bigint,jsonb) from public,anon,authenticated,service_role;
 create function bob_private.bob_project_write_v16(p_project text,p_thread uuid,p_turn uuid,p_generation bigint,p_payload jsonb)
 returns jsonb language plpgsql security definer set search_path='' as $$
 declare d jsonb:=p_payload->'data'; rules jsonb; op text; stored jsonb; existing bob_private.bob_write_receipts; result jsonb;

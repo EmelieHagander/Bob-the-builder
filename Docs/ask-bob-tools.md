@@ -205,7 +205,10 @@ himself. Manifests with `bob.tools` `build_workers_version` 1
   its steps in Bob's turn checkpoint (`worker` in the answer state: hand-over index, worker
   tool session, chain id, pending tool results, calls and receipts), so a resume continues
   the job instead of replaying it from the first step; the same job hit "CPU Time exceeded"
-  on every resume. A job the spending stop ends reports `paused_at_limit`
+  on every resume. A job the spending stop ends reports `paused_at_limit`,
+  one that reaches its context ceiling `context_limit`, and one whose turn
+  state reaches the checkpoint size limit `state_limit` (2026-11-08; a first
+  step already past the ceiling is a failed worker), each
   with the same receipts and readback when the job is pinned to the
   [final answer](ask-bob-conversations.md#final-answer-past-stop) (installed 2026-11-01).
 
@@ -334,8 +337,9 @@ Entry turn 2026-11-07: an 11-part wall was 26,590 characters Konrad typed in
   owner decision) the rules are **stored with the construction**
   (`bob.artifact_construction_joint_rules`, one set per revision, inherited
   by revisions written without one): a save states the whole set; a part edit
-  keeps the stored rules, adds or replaces those it sends by id, drops those of
-  a removed definition, and applies them to the parts it adds, changes or
+  keeps the stored rules, adds those it sends and replaces a stored rule with
+  the same id or definition pair (at most 32), drops those of a removed
+  definition, and applies them to the parts it adds, changes or
   moves without being sent again. Reads show them (overview and the joints
   view). Before, rules lasted only for the call they came with, and Konrad
   kept typing joints by hand.
@@ -375,12 +379,15 @@ Entry turn 2026-11-07: an 11-part wall was 26,590 characters Konrad typed in
   edit, or the edit is refused and names it (`parameter_unused_node`).
 - **Roles.** `quantity_policy` follows from the role and is not written; a
   repeat's copies take the role given for the repeat's id.
-- **A save names its target** (owner decision 2026-11-08, with the same pin):
+- **A save names its target** (owner decision 2026-11-08, pinned with the
+  stored joint rules):
   in Konrad's job `save_construction_draft` takes `source_ref` — the
   construction's reference revises it whole; `null` saves a new construction,
   also in a job bound to another. Before, a second "new" construction in one job
-  was committed over the first (deep audit). A sketch answer names it
-  (`revises`); a save's receipt says `created` or `updated`.
+  was committed over the first (deep audit). A job working on another
+  construction stays on it after saving a new one. A sketch answer names the
+  target (`revises`); a save's receipt says `created` or `updated`; a whole
+  save names the stored rules it leaves out (`joint_rules_dropped`).
 
 The cost ledger prices a Claude answer cut by our own deadline from its known
 input and the output that streamed, marked `cost_basis =
