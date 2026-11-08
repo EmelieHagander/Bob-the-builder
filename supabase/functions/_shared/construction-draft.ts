@@ -1269,7 +1269,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
      if(!checked.concept_ready)return {status:'needs_data',checked}
      const lists=constructionLists(draft,catalog,[])
      if(lists.status!=='derived')return lists
-     if(lists.bom.some((b:any)=>b.material_id&&catalog.get(`${b.material_id}@${b.material_revision}`)?.profile_code!=='sheet_stock'))return {status:'unsupported',message:'Saved sheet cutting requires sheet_stock manufacturing blanks.'}
+     if(lists.bom.some((b:any)=>b.material_id&&catalog.get(`${b.material_id}@${b.material_revision}`)?.profile_code!=='sheet_stock'))return {status:'unsupported',message:'Saved sheet cutting requires sheet_stock manufacturing blanks. Boards and other profile stock are counted by code in the project\'s shopping list (Boards and sheets), from each part\'s length and the raw length, kerf and margin the owner enters in the shop. A count made here would be a second, unchecked one.'}
      const fit=constructionCutFit(lists,prepared.domain.data.candidates,prepared.domain.data.blank_grain)
      if(fit.status!=='feasible')return {...fit,message:'The saved cutting inputs do not produce a new feasible layout. Revise the explicit candidate/grain choices with the ordinary cutting tool; existing purchases and reservations remain recorded.'}
      payload.data.computed=Object.fromEntries(['placements','cuts','offcuts','used_sheets'].map(k=>[k,(fit as any)[k]]))
@@ -1492,7 +1492,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if((name===CONSTRUCTION_CUT_FIT_TOOL.function.name||name===CONSTRUCTION_CUT_SAVE_TOOL.function.name)){
      const lists=constructionLists(draft,catalog,[])
      if(lists.status!=='derived')return await present('cut_fit',v.artifact_id,v.revision,{projectId:opts.projectId,...lists,checked},observedAt)
-     if(lists.bom.some((b:any)=>b.material_id&&catalog.get(`${b.material_id}@${b.material_revision}`)?.profile_code!=='sheet_stock'))return {status:'unsupported',message:'This cutting assessment supports sheet_stock manufacturing blanks only; profile/bar cutting needs a separate capability.'}
+     if(lists.bom.some((b:any)=>b.material_id&&catalog.get(`${b.material_id}@${b.material_revision}`)?.profile_code!=='sheet_stock'))return {status:'unsupported',message:'This cutting assessment supports sheet_stock manufacturing blanks only. Boards and other profile stock are counted by code in the project\'s shopping list (Boards and sheets), from each part\'s length and the raw length, kerf and margin the owner enters in the shop. A count made here would be a second, unchecked one.'}
      const fit=constructionCutFit(lists,v.candidates,v.blank_grain)
      if(name===CONSTRUCTION_CUT_FIT_TOOL.function.name)return await present('cut_fit',v.artifact_id,v.revision,{projectId:opts.projectId,...fit,checked},observedAt)
      if(!opts.writer)return {status:'denied'}
