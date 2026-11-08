@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { catalogFixture, catalogCall, preBuildWorkersCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { catalogCoreTools } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { runProjectAnswer, seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
-import { catalogWorkers, catalogRetiredTools, catalogCheckReads, saveReceipt, readbackReads, uncheckedConstructions } from '../supabase/functions/_shared/bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogPlanTools, saveReceipt, readbackReads, uncheckedConstructions } from '../supabase/functions/_shared/bob-workers.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createConstructionTools } from '../supabase/functions/_shared/construction-draft.ts'
@@ -167,6 +167,12 @@ test('Bob asks Konrad in plain words; Konrad has his own tools, the project in h
   for (const read of ['read_construction_draft', 'read_construction_delivery']) {
     assert(names(bob[0]).includes(read), read); assert(!pickerInputs[0].candidates.some((c: any) => c.name === read), read)
   }
+  // Owner decision 2026-11-08: Bob's own plan tools are on hand from his first step, never left to the picker.
+  const planTools = catalogPlanTools(catalog)
+  assert.deepEqual(planTools, ['compile_project_plan', 'edit_project_plan', 'save_compiled_project_plan', 'decide_project_plan', 'create_work_record', 'edit_work_record'])
+  for (const tool of planTools) assert(!pickerInputs[0].candidates.some((c: any) => c.name === tool), tool)
+  // This harness has no plan compiler or work records; the plan decision it has is listed.
+  assert(names(bob[0]).includes('decide_project_plan'))
   // The legacy box drawing skipped the construction and the review: retired for new jobs.
   assert(!names(bob[0]).includes('save_project_drawing') && !pickerInputs[0].candidates.some((c: any) => c.name === 'save_project_drawing'))
   assert.deepEqual([...catalogRetiredTools(catalog)], ['save_project_drawing'])

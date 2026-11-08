@@ -120,6 +120,18 @@ export function catalogCheckReads(catalog: AiCatalogSession): string[] {
     && catalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + name && row.definition_kind === 'tool_contract'))
 }
 
+/** Våningssäng 2 (2026-11-08): Bob owns the plan, but his plan tools reached
+ * him only if the turn's tool picker named them; it named reads, so he could
+ * not add the work steps and told the owner he would wait. With
+ * plan_tools_version 1 the catalog's plan_tools are loaded from his first step
+ * like the check reads. Manifests before keep the picker's choice. */
+export function catalogPlanTools(catalog: AiCatalogSession): string[] {
+  const box = catalog.definition('bob.tools', 'tool_contract').definition
+  if (box.build_workers_version !== 1 || box.plan_tools_version !== 1 || !Array.isArray(box.plan_tools)) return []
+  return (box.plan_tools as unknown[]).filter((name): name is string => typeof name === 'string' && NAME.test(name)
+    && catalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + name && row.definition_kind === 'tool_contract'))
+}
+
 /** plain: the worker reads its own project knowledge, so Bob sends only a request. */
 export function parseWorkerJob(value: unknown, plain = false): { job: string; findings: string | null } | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
