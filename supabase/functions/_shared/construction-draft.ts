@@ -732,12 +732,33 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   if(deferred)return {error:deferred}
   return {payload,domain,prepared,made:made.length?made:ruleOnly,cascaded,recomputed,codeRemoved}
  }
+ // The database refuses a concept mismatch without naming it; code names the
+ // component, the parts outside it and the numbers (deep audit 2026-11-08).
+ const conceptIssues=async(prepared:Record<string,any>,domain:WritePayload):Promise<Record<string,any>[]>=>{
+  try{
+   const draft=prepared.draft,data=domain.data as Record<string,any>,computed=data.computed as Record<string,any>|null
+   const refinement=data.form_refinement??draft?.form_refinement
+   if(!computed?.recipe||!refinement||!Number.isSafeInteger(draft?.target_revision)||!opts.readConstructionReadiness)return []
+   const read=parseDesignReadiness((await opts.readConstructionReadiness(draft.target_revision,draft.area_id??null,refinement) as Record<string,unknown>|null)?.design_readiness)
+   if(!await opts.hasAccess()||!read?.design_intent?.model)return []
+   const recipe=parseCadAssemblyRequest(structuredClone(computed.recipe))
+   if(!recipe)return []
+   const policy=constructionInstancePolicy(recipe,prepared.next?.instance_policy??null)
+   const references=new Set(policy.instances.filter(i=>i.role==='reference').map(i=>i.instance_id))
+   return constructionFormIssues(read.design_intent,recipe,references,refinement,true)
+    .filter(i=>['concept_geometry_changed','form_instance_unmapped','form_instance_missing','concept_mapping_unsupported'].includes(i.code)).slice(0,12)
+  }catch(error){rethrowContinuation(error);return []}
+ }
  const editParts=async(v:Record<string,any>):Promise<Record<string,any>>=>{
   const ready=await prepareParts(v)
   if('error' in ready)return ready.error
   if(!await opts.hasAccess())return {status:'denied'}
   const removed=ready.codeRemoved??[]
   const result=withRuleJoints(changed(await opts.writer!.commit(ready.payload),ready.prepared,v.expected_revision),ready.made??[],removed.length?undefined:v.joint_rules)
+  if(lean&&result.status==='invalid'&&typeof result.reason==='string'&&result.reason.startsWith('concept_')){
+   const issues=await conceptIssues(ready.prepared,ready.domain)
+   if(issues.length)return {...result,issues}
+  }
   if(result.status!=='saved')return result
   const gone=ready.cascaded&&Object.values(ready.cascaded).some(x=>x.length)?ready.cascaded:null
   // Code's joints this edit removed: parts that no longer touch, a reference part, a pair now in except (round 4).

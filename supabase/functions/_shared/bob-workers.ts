@@ -210,7 +210,7 @@ function verifiedConstructionSave(receipt: Record<string, unknown>, readback: un
   const artifact = typeof receipt.artifact_id === 'string' ? receipt.artifact_id : receipt.record_id
   const revision = receipt.revision
   if (typeof artifact !== 'string' || !Number.isSafeInteger(revision) || Number(revision) < 1
-    || !['save_construction_draft', 'edit_construction_parts', 'change_construction_parameters',
+    || !['save_construction_draft', 'edit_construction_parts', 'commit_construction_sketch', 'change_construction_parameters',
       'change_construction_roles', 'continue_construction_change', 'transition_legacy_drawing'].includes(String(receipt.tool))) return null
   const entry = (readback[0] as { construction?: Record<string, unknown> } | undefined)?.construction
   return entry?.status === 'ok' && entry.archived !== true && entry.artifact_id === artifact && entry.revision === revision
@@ -374,7 +374,8 @@ export async function runWorker(opts: {
       const open = await opts.openSketches()
       if (open === null) result = { ...result, open_sketches: { status: 'unavailable', note: 'Whether a construction sketch is still open could not be read.' } }
       else if (open.length) result = { ...result, open_sketches: { status: 'not_saved', sketches: open,
-        note: 'These sketched changes are not saved. Ask Konrad to commit or discard them in this request; they are dropped when it ends.' } }
+        note: 'These sketched changes are not saved. Ask Konrad to commit or discard them in this request; they are dropped when it ends.'
+          + (open.some(s => s.refused_try === true) ? ' A refused_try holds a write that was refused; discard it when a later save already made that change.' : '') } }
     }
     if (!opts.readKnowledge) { release(); return result }
     const targets = opts.autoCheck ? uncheckedConstructions(receipts) : []
@@ -690,7 +691,9 @@ export function saveReceipt(tool: string, result: unknown): Record<string, unkno
 /** Owner decision 2026-10-31: what Konrad and Rita saved comes back with their
  * report, read by code, so Bob checks the saved record instead of reading it
  * again. One read per saved construction or drawing (its latest revision). */
-const CONSTRUCTION_READBACK = new Set(['save_construction_draft', 'edit_construction_parts', 'change_construction_parameters', 'change_construction_roles', 'continue_construction_change', 'transition_legacy_drawing', 'check_construction_draft'])
+// A committed sketch is a saved revision like any other (deep audit 2026-11-08:
+// a commit was never read back or checked, so Bob saw the superseded revision).
+const CONSTRUCTION_READBACK = new Set(['save_construction_draft', 'edit_construction_parts', 'commit_construction_sketch', 'change_construction_parameters', 'change_construction_roles', 'continue_construction_change', 'transition_legacy_drawing', 'check_construction_draft'])
 const READBACK_LIMIT = 8
 export type ReadbackEntry = { label: string; tool: string; arguments: Record<string, unknown> } | { label: string; not_read: 'no_saved_revision' | 'limit' }
 /** Every saved or checked construction and every saved drawing, once, at its

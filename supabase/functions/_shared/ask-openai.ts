@@ -316,8 +316,11 @@ export async function answerWithOpenAi(opts: {
     contextContinuation ? contextContinuation.call(requested, beforeDispatch) : dispatchModel(requested, beforeDispatch)
   // Owner decision 2026-11-06: a listed image without a description gets one
   // short description from the smallest vision model, once per image version.
+  // Not wrapped in a journal step of its own: its open, model call and save are
+  // journaled each, and a recorded outer step would skip them on replay and
+  // leave their streams' positions behind (deep audit 2026-11-08).
   const describeListedImage = (listed: Item, open: (ref: string, signal: AbortSignal) => Promise<Opened>, signal: AbortSignal) =>
-    memo('media:auto-describe', { ref: listed.ref, updated_at: listed.updated_at ?? null }, async () => {
+    (async () => {
       const opened = await open(listed.ref, signal)
       const response = await dispatchModel({ app: 'bob', coworkerId: 'bob', functionName: 'image-describer', aiFunction: 'image-describer', module: 'global', userId: opts.userId,
         catalogRoleKey: 'image-describer', catalogSchemaKey: 'bob_image_description', schemaName: 'bob_image_description',
@@ -326,7 +329,7 @@ export async function answerWithOpenAi(opts: {
       const text = imageDescriptionText(response)
       if (text) await cacheImageDescription!(opened, text)
       return text
-    })
+    })()
   const mediaAdapter = () => {
     let wrappedOpen: ((ref: string, signal: AbortSignal) => Promise<Opened>) | undefined
     const autoDescribe = execution.imageDescriptionVersion === 1 && cacheImageDescription
@@ -1209,11 +1212,17 @@ export async function answerWithOpenAi(opts: {
       const source=data.source??null
       return {status:'ready',source,entries,area_id:data.area_id}
     },
+    // Journaled: a replayed step reuses the verdict its write was made under.
+    // Read live, a worker's own saved write made its source look changed on
+    // resume and was refused (deep audit 2026-11-08).
     validateMany:async entries=>{
       if(!entries.length)return true
-      const {data,error}=await client.rpc('check_worker_operation_refs',{p_project:opts.projectId,p_refs:entries.map(({kind,id,revision,parent})=>({kind,id,revision,...(parent?{parent}:{})}))}).abortSignal(AbortSignal.timeout(12000))
-      if(error){if(error.code==='42501')throw new Error('project_denied');throw new Error('operation_validation_unavailable')}
-      return data===true
+      const refs=entries.map(({kind,id,revision,parent})=>({kind,id,revision,...(parent?{parent}:{})}))
+      return await memo('operation:validate',{refs},async()=>{
+        const {data,error}=await client.rpc('check_worker_operation_refs',{p_project:opts.projectId,p_refs:refs}).abortSignal(AbortSignal.timeout(12000))
+        if(error){if(error.code==='42501')throw new Error('project_denied');throw new Error('operation_validation_unavailable')}
+        return data===true
+      })
     },
     prepareDrawing:(source,focus)=>cadAssistant.prepareDrawingWorker([source],focus),
     drawingArguments:args=>cadAssistant.boundArguments('design_project_cad',args),drawingWork:()=>cadAssistant.drawingWork,
@@ -1371,7 +1380,22 @@ export async function answerWithOpenAi(opts: {
     } } } : {}),
     ...(constructionSketches ? { openSketches: async () => {
       const listed = await constructionSketches.list(), added = constructionNewSketches ? await constructionNewSketches.list() : { status: 'ok' as const, sketches: [] }
-      return listed.status === 'ok' && added.status === 'ok' ? [...listed.sketches, ...added.sketches] as Record<string, unknown>[] : null } } : {}),
+      if (listed.status !== 'ok' || added.status !== 'ok') return null
+      // A sketch kept from a refused try says so, and which construction it
+      // revises, so Bob can tell it from real work (deep audit 2026-11-08: a
+      // refused save replaced by a later one was committed as a duplicate).
+      const edits = await Promise.all(listed.sketches.map(async row => {
+        const read = await constructionSketches.read(row.artifact_id)
+        return read.status === 'ok' && read.sketch && (read.sketch as { shadow?: unknown }).shadow === true ? { ...row, refused_try: true } : row
+      }))
+      const fresh = await Promise.all((added.sketches as Record<string, unknown>[]).map(async row => {
+        const read = constructionNewSketches && typeof row.new_key === 'string' ? await constructionNewSketches.read(row.new_key) : null
+        const sketch = read?.status === 'ok' ? read.sketch as { shadow?: unknown; save?: Record<string, unknown> } | null : null
+        if (!sketch) return row
+        return { ...row, ...(typeof sketch.save?.title === 'string' ? { title: sketch.save.title } : {}),
+          revises: typeof sketch.save?.record_id === 'string' ? sketch.save.record_id : null, ...(sketch.shadow === true ? { refused_try: true } : {}) }
+      }))
+      return [...edits, ...fresh] as Record<string, unknown>[] } } : {}),
     ...(execution.toolPickLimit !== undefined ? { toolPickLimit: execution.toolPickLimit } : {}),
     ...(execution.workerPieceProgressVersion === 3 || execution.workerPieceProgressVersion === 4 ? { workerDesignReview: true } : {}),
     ...(execution.workerPieceProgressVersion === 2 || execution.workerPieceProgressVersion === 3 || execution.workerPieceProgressVersion === 4 ? { workerFormPiece: {
