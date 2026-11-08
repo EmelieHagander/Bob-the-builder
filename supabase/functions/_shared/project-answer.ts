@@ -29,7 +29,7 @@ import { humanTextIssues } from './human-text.ts'
 import { answerTextFragments, type AnswerTextOutcome } from './answer-text.ts'
 import { toolRejection } from './tool-rejection.ts'
 import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
-import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogReportReadback, catalogConstructionAutoCheck, catalogHandoverReadiness, handoverReadinessBlock, readbackReads, workerOwnedTools, parseWorkerJob, runWorker, validWorkerProgress, type WorkerProgress, withOutputLimitNote } from './bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogPlanTools, catalogReportReadback, catalogConstructionAutoCheck, catalogHandoverReadiness, handoverReadinessBlock, readbackReads, workerOwnedTools, parseWorkerJob, runWorker, validWorkerProgress, type WorkerProgress, withOutputLimitNote } from './bob-workers.ts'
 import { focusedWorkerStep, savedFormPieceEvidence } from './worker-form-piece.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
@@ -486,7 +486,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     return { native: [...specs.filter(spec => coreTools!.includes(spec.function.name)), opts.aiCatalog.tool(USE_TOOL, { include_manual: true })],
       sheets: specs.map(spec => spec.function.name).filter(name => !coreTools!.includes(name)) }
   }
-  const turnPreload = (phase: string | null) => [...turnTools(phase), ...workerHandOverNames, ...checkReads, ...(workpads ? ['update_workpad'] : [])]
+  const turnPreload = (phase: string | null) => [...turnTools(phase), ...workerHandOverNames, ...checkReads, ...planTools, ...(workpads ? ['update_workpad'] : [])]
   const turnTools = (phase: string | null) => {
     if (!phaseTools) return preloadTools
     if (toolPick) return [...preloadTools, ...toolPick]
@@ -512,13 +512,15 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const workerHandOverNames = Object.values(workers ?? {}).map(worker => worker.tool)
   // The reads Bob checks a report with are loaded from the first step too.
   const checkReads = workers ? catalogCheckReads(opts.aiCatalog) : []
+  // Bob's own plan tools are on hand from his first step (plan_tools_version 1).
+  const planTools = workers ? catalogPlanTools(opts.aiCatalog) : []
   const reportReadback = !!workers && catalogReportReadback(opts.aiCatalog)
   const constructionAutoCheck = !!workers && catalogConstructionAutoCheck(opts.aiCatalog)
   const handoverReadiness = !!workers && catalogHandoverReadiness(opts.aiCatalog)
   // Retired tools are hidden from Bob the same way (new manifests only).
   const workerOwned = new Set([...workerOwnedTools(workers), ...catalogRetiredTools(opts.aiCatalog)])
   // Never picker candidates: the workers' own tools, and the hand-overs Bob always has.
-  const workerTools = new Set([...workerOwned, ...workerHandOverNames, ...checkReads])
+  const workerTools = new Set([...workerOwned, ...workerHandOverNames, ...checkReads, ...planTools])
   const bobPolicy: ToolPolicyReader = workerOwned.size ? async () => {
     const policy = await basePolicy()
     return { ...policy, tools: policy.tools.map(row => workerOwned.has(row.name) ? { ...row, active: false } : row) }
