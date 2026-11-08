@@ -78,3 +78,52 @@ export function countSheets(parts: SheetPart[], material: { id: string; revision
   }
   return { status: 'not_found', message: 'No layout was found within 16 sheets.' }
 }
+
+/** One material to buy, with every part cut from it. Sizes come from the saved
+ * catalog record; the sheet size only when the material states one. */
+export type StockGroup = {
+  key: string
+  materialId: string
+  materialRevision: number
+  name: string
+  profile: string
+  thickness: number | null
+  width: number | null
+  sheet: { length: number; width: number } | null
+  parts: SheetPart[]
+}
+
+type CatalogRecord = Record<string, any> | undefined
+type PreviewPart = { definitionId: string; materialId: string; materialRevision: number; materialName: string; quantity: number; dimensions: Dimensions }
+
+const sizeValue = (record: CatalogRecord, key: string) => {
+  const value = Number(record?.properties?.[key]?.value)
+  return Number.isFinite(value) && value > 0 ? value : null
+}
+
+/** The sheet size a saved sheet material states, from its length/width or its nominal size "15 × 1220 × 2440". */
+export function sheetSize(record: CatalogRecord, thickness: number | null) {
+  const length = sizeValue(record, 'length'), width = sizeValue(record, 'width')
+  if (length && width) return { length: Math.max(length, width), width: Math.min(length, width) }
+  const numbers = String(record?.properties?.nominal_size?.value ?? '').match(/\d+(?:[.,]\d+)?/g)?.map(n => Number(n.replace(',', '.'))) ?? []
+  const rest = numbers.length === 3 && thickness !== null && numbers.includes(thickness) ? numbers.filter((_, i) => i !== numbers.indexOf(thickness)) : []
+  return rest.length === 2 ? { length: Math.max(...rest), width: Math.min(...rest) } : null
+}
+
+const partName = (id: string) => id.replace(/^d_/, '').replace(/[_-]+/g, ' ')
+
+/** Groups preview parts by exact material version; `into` lets several constructions share one list. */
+export function stockGroups(parts: PreviewPart[], catalog: Map<string, CatalogRecord>, from: { id: string; title: string } | null = null, into = new Map<string, StockGroup>()) {
+  for (const part of parts) {
+    const key = part.materialId + '@' + part.materialRevision
+    const sheetPart: SheetPart = { definitionId: (from ? from.id + ':' : '') + part.definitionId,
+      label: (from ? from.title + ' · ' : '') + partName(part.definitionId), quantity: part.quantity, dimensions: part.dimensions }
+    const existing = into.get(key)
+    if (existing) { existing.parts.push(sheetPart); continue }
+    const record = catalog.get(key), thickness = sizeValue(record, 'thickness')
+    into.set(key, { key, materialId: part.materialId, materialRevision: part.materialRevision, name: part.materialName,
+      profile: String(record?.profile_code ?? ''), thickness, width: sizeValue(record, 'width'),
+      sheet: record?.profile_code === 'sheet_stock' ? sheetSize(record, thickness) : null, parts: [sheetPart] })
+  }
+  return into
+}

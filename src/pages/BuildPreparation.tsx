@@ -7,7 +7,8 @@ import { Icon, Loading, useAsync, useProjectVersion } from '../components/ui'
 import { inputStyle } from '../components/form'
 import { SavedCutPlan } from '../components/SavedCutPlan'
 import { Modal } from '../components/Modal'
-import { StockCountRow, type StockGroup } from '../components/StockCount'
+import { StockCountRow } from '../components/StockCount'
+import { stockGroups } from '../domain/stockCount'
 import { savedOutputPointer, savedOutputSourcePointer, savedOutputUrl } from '../lib/savedOutputNavigation'
 import '../components/StorageBoxDrawing.css'
 
@@ -19,24 +20,6 @@ const FASTENER_KINDS: Record<string, string> = { screw: 'Screw', nail: 'Nail', b
 const plural = (n: number, one: string, many: string) => n + ' ' + (n === 1 ? one : many)
 // Diameters read like the rule table (3.5, 4.0 … 6.0).
 const diameter = (value: number) => Number.isInteger(value * 10) ? value.toFixed(1) : String(value)
-
-const sizeValue = (record: Record<string, any> | undefined, key: string) => {
-  const value = Number(record?.properties?.[key]?.value)
-  return Number.isFinite(value) && value > 0 ? value : null
-}
-/** The sheet size a saved sheet material states, from its length/width or its nominal size "15 × 1220 × 2440". */
-function sheetSize(record: Record<string, any> | undefined, thickness: number | null) {
-  const length = sizeValue(record, 'length'), width = sizeValue(record, 'width')
-  if (length && width) return { length: Math.max(length, width), width: Math.min(length, width) }
-  const numbers = String(record?.properties?.nominal_size?.value ?? '').match(/\d+(?:[.,]\d+)?/g)?.map(n => Number(n.replace(',', '.'))) ?? []
-  const rest = numbers.length === 3 && thickness !== null && numbers.includes(thickness) ? numbers.filter((_, i) => i !== numbers.indexOf(thickness)) : []
-  return rest.length === 2 ? { length: Math.max(...rest), width: Math.min(...rest) } : null
-}
-function stockGroup(key: string, materialId: string, materialRevision: number, name: string, record: Record<string, any> | undefined, part: StockGroup['parts'][number]): StockGroup {
-  const thickness = sizeValue(record, 'thickness')
-  return { key, materialId, materialRevision, name, profile: String(record?.profile_code ?? ''), thickness, width: sizeValue(record, 'width'),
-    sheet: record?.profile_code === 'sheet_stock' ? sheetSize(record, thickness) : null, parts: [part] }
-}
 
 export function BuildPreparation() {
   const projectId = db.getActiveProjectId() ?? ''
@@ -85,16 +68,8 @@ export function BuildPreparation() {
   const linkedNeeds = (data?.needs.items ?? []).filter(item => chosen && item.artifactId === chosen.id
     && item.artifactRevision === chosen.revision && !item.artifactChanged && !item.targetChanged
     && !item.stockChanged && !item.componentChanged)
-  const provisionalMaterials = validPreview && source ? [...validPreview.parts.reduce((groups, part) => {
-    const key = part.materialId + '@' + part.materialRevision
-    const existing = groups.get(key)
-    const stockPart = { definitionId: part.definitionId, label: shortName(part.definitionId), quantity: part.quantity, dimensions: part.dimensions }
-    if (existing) { existing.blanks += part.quantity; existing.stock.parts.push(stockPart) }
-    else groups.set(key, { key, name: part.materialName, revision: part.materialRevision, blanks: part.quantity,
-      stock: stockGroup(key, part.materialId, part.materialRevision, part.materialName, source.catalog.get(key), stockPart) })
-    return groups
-  }, new Map<string, { key: string; name: string; revision: number; blanks: number; stock: StockGroup }>()).values()]
-    .sort((a, b) => a.name.localeCompare(b.name) || a.revision - b.revision) : []
+  const provisionalMaterials = validPreview && source ? [...stockGroups(validPreview.parts, source.catalog).values()]
+    .sort((a, b) => a.name.localeCompare(b.name) || a.materialRevision - b.materialRevision) : []
   const currentPlans = (data?.cutPlans.items ?? []).filter(item => chosen && item.artifact_id === chosen.id
     && item.artifact_revision === chosen.revision && item.source_state === 'current')
   const currentPlan = currentPlans[0]
@@ -215,13 +190,9 @@ export function BuildPreparation() {
         <p className="foundation-hint">Boards and sheets are counted from the parts and the raw size you enter, not by adding up lengths or areas.</p>
         {provisionalMaterials.length > 0 && <>
           <h3>Boards and sheets to buy</h3>
-          <p className="foundation-hint">An estimate from a common size until you enter the size you see in the shop. Then code counts the boards or sheets and which part comes from which.</p>
-          <ul className="stock-count-list" style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 'var(--space-3)' }}>
-            {provisionalMaterials.map(group => <li key={group.key} className="card" style={{ padding: 'var(--space-3)' }}>
-              <strong>{group.name}</strong> <span className="foundation-hint">· {plural(group.blanks, 'part', 'parts')}</span>
-              <StockCountRow group={group.stock} />
-            </li>)}
-          </ul>
+          <div className="stock-count-list">
+            {provisionalMaterials.map(group => <StockCountRow key={group.key} group={group} />)}
+          </div>
         </>}
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--layout-gap)' }}>
           <div>

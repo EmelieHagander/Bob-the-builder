@@ -1220,3 +1220,20 @@ select {
 }
 .current-plan-step > h2 { margin-bottom: 8px; }
 .guide-help { display: inline-flex; align-items: center; min-height: 44px; border: 0; padding: 0; color: var(--accent-2); background: none; text-decoration: underline; text-underline-offset: 3px; font: inherit; }
+
+/* Shopping state colours (owner design 2026-11-08): the row colour is the state, no legend. */
+.shop-state { border-radius: var(--r-sm); padding: 0 var(--space-2); margin-bottom: var(--space-1); }
+.shop-state[data-state="bought"] { background: var(--leaf-bg); }
+.shop-state[data-state="estimate"] { background: var(--honey-bg); }
+.shop-state[data-state="problem"] { background: var(--clay-bg); }
+.shop-state > details { font-size: 12px; padding-bottom: var(--space-1); }
+.stock-row { padding: var(--space-2); }
+.stock-row-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.stock-row-name { flex: 1 1 10em; min-width: 0; font-size: 14px; }
+.stock-row-count { font-weight: 700; white-space: nowrap; }
+.stock-row-size { display: inline-flex; align-items: center; gap: 4px; }
+.stock-row-alert { margin: var(--space-1) 0 0; font-size: 12.5px; color: var(--clay); }
+.stock-row-more { font-size: 12.5px; }
+.stock-row-more ol { margin: 0; padding-left: 20px; }
+.stock-row-fields { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.stock-row-fields label { display: inline-flex; align-items: center; gap: 6px; }

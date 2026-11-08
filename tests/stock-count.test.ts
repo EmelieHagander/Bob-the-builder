@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { countBoards, countSheets, profileLength } from '../src/domain/stockCount.ts'
+import { countBoards, countSheets, profileLength, stockGroups } from '../src/domain/stockCount.ts'
 
 // Owner design 2026-11-08: the size seen in the shop gives the count; code only counts.
 test('boards: longest first, kerf between parts and a margin at both ends', () => {
@@ -35,4 +35,15 @@ test('sheets: counts whole sheets with the guillotine check', () => {
   if (result.status === 'ok') { assert.equal(result.sheets, 1); assert.equal(result.placements.length, 2) }
   const three = countSheets([{ ...parts[0], quantity: 3, dimensions: { x: 2000, y: 1100, z: 15 } }], { id: 'm', revision: 1, thickness: 15 }, { length: 2440, width: 1220 }, 3, 10)
   assert.equal(three.status === 'ok' && three.sheets, 3)
+})
+
+test('several constructions share one row per exact material version', () => {
+  const catalog = new Map<string, Record<string, any>>([['m1@1', { profile_code: 'sheet_stock', properties: { thickness: { value: 15 }, nominal_size: { value: '15 × 1220 × 2440' } } }]])
+  const part = (id: string) => ({ definitionId: id, materialId: 'm1', materialRevision: 1, materialName: 'Plywood', quantity: 2, dimensions: { x: 400, y: 300, z: 15 } })
+  const groups = stockGroups([part('d_side')], catalog, { id: 'a1', title: 'Bed' })
+  stockGroups([part('d_side')], catalog, { id: 'a2', title: 'Shelf' }, groups)
+  assert.equal(groups.size, 1)
+  const group = groups.get('m1@1')!
+  assert.deepEqual(group.sheet, { length: 2440, width: 1220 })
+  assert.deepEqual(group.parts.map(p => [p.definitionId, p.label]), [['a1:d_side', 'Bed · side'], ['a2:d_side', 'Shelf · side']])
 })

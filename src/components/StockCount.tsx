@@ -1,30 +1,19 @@
 import { useState } from 'react'
-import { Modal } from './Modal'
 import { inputStyle } from './form'
-import { countBoards, countSheets, DEFAULT_KERF_MM, DEFAULT_MARGIN_MM, profileLength, type SheetPart } from '../domain/stockCount'
+import { countBoards, countSheets, DEFAULT_KERF_MM, DEFAULT_MARGIN_MM, profileLength, type StockGroup } from '../domain/stockCount'
 
-/** Owner design 2026-11-08: count boards or sheets in the shop from the raw size
- * the person sees there. Before that, an estimate from a common size, clearly
- * labelled. Nothing is saved to the project; the entered sizes are remembered
- * in this browser only. */
+/** Owner design 2026-11-08: count boards or sheets right in the list from the raw
+ * size seen in the shop. Only the count and the size show; kerf, margin and the
+ * cut list sit under expands. The card colour tells the state (estimate, exact,
+ * problem), with no legend. Nothing is saved to the project; the entered size is
+ * remembered in this browser only. */
+
+export type { StockGroup }
 
 /** A starting point for the estimate only, replaced by what the person enters. */
 const COMMON_BOARD_MM = 3600
 const UNITS = { mm: 1, cm: 10, m: 1000 } as const
 type Unit = keyof typeof UNITS
-
-export type StockGroup = {
-  key: string
-  materialId: string
-  materialRevision: number
-  name: string
-  profile: string
-  thickness: number | null
-  width: number | null
-  /** Sheet size from the saved material, when it states one. */
-  sheet: { length: number; width: number } | null
-  parts: SheetPart[]
-}
 
 type Entry = { raw: string; rawWidth: string; unit: Unit; kerf: string; margin: string }
 const storageKey = (group: StockGroup) => 'bob.stock-count.' + group.materialId
@@ -60,72 +49,47 @@ function defaults(group: StockGroup): Entry {
     unit: 'mm', kerf: String(DEFAULT_KERF_MM), margin: String(DEFAULT_MARGIN_MM) }
 }
 
-function summary(group: StockGroup, entry: Entry) {
-  const { kind, result } = compute(group, entry)
-  if (result.status !== 'ok') return null
-  return kind === 'sheet' ? plural((result as { sheets: number }).sheets, 'sheet', 'sheets') : plural((result as { boards: unknown[] }).boards.length, 'board', 'boards')
-}
+export type StockState = 'estimate' | 'exact' | 'problem'
 
 export function StockCountRow({ group }: { group: StockGroup }) {
-  const [open, setOpen] = useState(false)
-  const [saved, setSaved] = useState<Entry | null>(() => remembered(group))
-  const entry = saved ?? defaults(group)
-  const count = summary(group, entry)
-  const size = isSheet(group) ? `${entry.raw} × ${entry.rawWidth} ${entry.unit}` : `${entry.raw} ${entry.unit}`
-  return <>
-    <div className="foundation-actions" style={{ alignItems: 'center' }}>
-      <span>{count ? <><strong>{saved ? '' : '≈ '}{count}</strong> {saved ? `of ${size}` : `(estimate with ${size} ${isSheet(group) ? 'sheets' : 'boards'})`}</> : <span className="foundation-hint">Enter the raw size to count</span>}</span>
-      <button type="button" className="btn" onClick={() => setOpen(true)}>{saved ? 'Change size' : 'Count in the shop'}</button>
-    </div>
-    {open && <StockCountModal group={group} initial={entry} onClose={() => setOpen(false)} onUse={next => { remember(group, next); setSaved(next); setOpen(false) }} />}
-  </>
-}
-
-function StockCountModal({ group, initial, onClose, onUse }: { group: StockGroup; initial: Entry; onClose: () => void; onUse: (entry: Entry) => void }) {
-  const [entry, setEntry] = useState<Entry>(initial)
-  const set = (field: keyof Entry) => (event: { target: { value: string } }) => setEntry(value => ({ ...value, [field]: event.target.value }))
+  const [entered, setEntered] = useState(() => remembered(group) !== null)
+  const [entry, setEntry] = useState<Entry>(() => remembered(group) ?? defaults(group))
   const sheet = isSheet(group)
   const { kind, result } = compute(group, entry)
-  const field = { display: 'grid', gap: 4 } as const
-  return <Modal title={'Count ' + group.name} onClose={onClose}>
-    <p className="foundation-hint">Enter the size you see in the shop. Code counts how many to buy; nothing is saved to the project.</p>
-    <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: sheet ? '1fr 1fr auto' : '1fr auto', gap: 8, alignItems: 'end' }}>
-        <label style={field}><strong>{sheet ? 'Sheet length' : 'Raw board length'}</strong>
-          <input style={inputStyle} inputMode="decimal" value={entry.raw} onChange={set('raw')} /></label>
-        {sheet && <label style={field}><strong>Sheet width</strong>
-          <input style={inputStyle} inputMode="decimal" value={entry.rawWidth} onChange={set('rawWidth')} /></label>}
-        <label style={field}><strong>Unit</strong>
-          <select style={inputStyle} value={entry.unit} onChange={set('unit')}>{Object.keys(UNITS).map(unit => <option key={unit}>{unit}</option>)}</select></label>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <label style={field}><strong>Saw kerf (mm)</strong>
-          <input style={inputStyle} inputMode="decimal" value={entry.kerf} onChange={set('kerf')} /></label>
-        <label style={field}><strong>{sheet ? 'Edge margin (mm)' : 'End margin (mm)'}</strong>
-          <input style={inputStyle} inputMode="decimal" value={entry.margin} onChange={set('margin')} /></label>
-      </div>
-      <p className="foundation-hint" style={{ margin: 0 }}>{sheet ? 'The edge margin is trimmed off every side of each sheet.' : 'The end margin is cut off both ends of each board, for split or uneven ends.'} {DEFAULT_KERF_MM} mm kerf and {DEFAULT_MARGIN_MM} mm margin are common starting points; change them to suit your saw and the wood.</p>
+  const state: StockState = result.status !== 'ok' ? 'problem' : entered ? 'exact' : 'estimate'
+  const set = (field: keyof Entry) => (event: { target: { value: string } }) => {
+    const next = { ...entry, [field]: event.target.value }
+    setEntry(next); setEntered(true); remember(group, next)
+  }
+  const count = result.status === 'ok' ? ('sheets' in result ? plural(result.sheets, 'sheet', 'sheets') : 'boards' in result ? plural(result.boards.length, 'board', 'boards') : '') : null
+  const small = { ...inputStyle, width: '6.5em', minWidth: 0 }
+  return <div className="stock-row shop-state" data-state={state}>
+    <div className="stock-row-line">
+      <strong className="stock-row-name">{group.name}</strong>
+      <span className="stock-row-count">{count ? (state === 'estimate' ? '≈ ' : '') + count : '?'}</span>
+      <span className="stock-row-size">
+        <input style={small} inputMode="decimal" aria-label={sheet ? 'Sheet length' : 'Raw board length'} value={entry.raw} onChange={set('raw')} />
+        {sheet && <>×<input style={small} inputMode="decimal" aria-label="Sheet width" value={entry.rawWidth} onChange={set('rawWidth')} /></>}
+        <select style={{ ...inputStyle, width: 'auto' }} aria-label="Unit" value={entry.unit} onChange={set('unit')}>{Object.keys(UNITS).map(unit => <option key={unit}>{unit}</option>)}</select>
+      </span>
     </div>
-    <section aria-live="polite" style={{ marginTop: 'var(--space-3)' }}>
-      {result.status === 'ok' && kind === 'board' && 'boards' in result && <>
-        <h4 style={{ margin: '0 0 8px' }}>You need {plural(result.boards.length, 'board', 'boards')}</h4>
-        <ol style={{ margin: 0, paddingLeft: 20 }}>{result.boards.map((board, index) => <li key={index}>
-          {board.pieces.map(piece => `${piece.label} ${piece.length} mm`).join(' · ')} <span className="foundation-hint">· offcut {metres(board.offcut)}</span>
-        </li>)}</ol>
-      </>}
-      {result.status === 'ok' && kind === 'sheet' && 'sheets' in result && <>
-        <h4 style={{ margin: '0 0 8px' }}>You need {plural(result.sheets, 'sheet', 'sheets')}</h4>
-        <ol style={{ margin: 0, paddingLeft: 20 }}>{[...new Set(result.placements.map(p => p.sheet))].map(id => <li key={id}>
-          {result.placements.filter(p => p.sheet === id).map(p => `${p.label} ${p.length} × ${p.width} mm`).join(' · ')}
-        </li>)}</ol>
-      </>}
-      {result.status === 'too_long' && <p role="alert">These parts are longer than one board after the margins ({result.usable} mm): {result.labels.join(', ')}. Choose a longer board.</p>}
-      {result.status !== 'ok' && result.status !== 'too_long' && 'message' in result && <p role="alert">{result.message}</p>}
-      <p className="foundation-hint">A simple longest-first count, not an optimised layout. Check the wood for knots and cracks before cutting.</p>
-    </section>
-    <div className="foundation-actions">
-      <button type="button" className="btn btn-primary" disabled={result.status !== 'ok'} onClick={() => onUse(entry)}>Use this size</button>
-      <button type="button" className="btn" onClick={onClose}>Cancel</button>
-    </div>
-  </Modal>
+    {result.status === 'too_long' && <p role="alert" className="stock-row-alert">Longer than {result.usable} mm: {result.labels.join(', ')}</p>}
+    {result.status !== 'ok' && result.status !== 'too_long' && 'message' in result && <p role="alert" className="stock-row-alert">{result.message}</p>}
+    {result.status === 'ok' && <details className="ui-row-details stock-row-more">
+      <summary>Cut list</summary>
+      <ol>{kind === 'board' && 'boards' in result ? result.boards.map((board, index) => <li key={index}>
+        {board.pieces.map(piece => `${piece.label} ${piece.length}`).join(' · ')} <span className="foundation-hint">· offcut {metres(board.offcut)}</span>
+      </li>) : 'placements' in result ? [...new Set(result.placements.map(p => p.sheet))].map(id => <li key={id}>
+        {result.placements.filter(p => p.sheet === id).map(p => `${p.label} ${p.length}×${p.width}`).join(' · ')}
+      </li>) : null}</ol>
+      <p className="foundation-hint">mm · longest first, not an optimised layout.</p>
+    </details>}
+    <details className="ui-row-details stock-row-more">
+      <summary>Kerf and margin</summary>
+      <div className="stock-row-fields">
+        <label>Kerf (mm) <input style={small} inputMode="decimal" value={entry.kerf} onChange={set('kerf')} /></label>
+        <label>{sheet ? 'Edge' : 'End'} margin (mm) <input style={small} inputMode="decimal" value={entry.margin} onChange={set('margin')} /></label>
+      </div>
+    </details>
+  </div>
 }
