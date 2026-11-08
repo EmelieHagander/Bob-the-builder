@@ -3167,6 +3167,34 @@ the four fixes. `20261108090000_bob_lean_edit_text.sql` as ledger
   and `state_limit` has its own note; a whole save names the stored rules it
   leaves out; docs corrected.
 
+<a id="publication-505-2026-11-08"></a>
+**Hosted publication of #505 — 2026-11-08, 06:27–06:29 UTC.** Owner: "Absolut,
+publicera". Merged at `c77837ae3c59937d80ae6f087736adf10d4b04fb` (tree
+`d4988d1e839dd180dd87c35a087a316373cc0d7f` equals the tested branch). Safety
+branch `save/bob-before-stored-joint-rules-2026-11-08` retains `0feff88`. Zero
+active jobs before and after.
+
+1. `20261108100000_construction_joint_rules.sql` as ledger `20261108062754`:
+   `bob.artifact_construction_joint_rules` with RLS on and one read policy; the
+   wrappers `bob_private.bob_project_write_v16` (SECURITY DEFINER, empty
+   `search_path`) and `bob.read_construction_draft` (invoker); the renamed
+   inner writer has no `authenticated` grant; the inherit trigger and the
+   `prepare_construction_edit` patch are present.
+2. bob-worker v220 (ezbr
+   `d9db537c36ee61eaf53707c317fb348ad13b01ca2234ede6d65e788a4f997c4b`), ask-bob
+   v252 (`03da5a22bd8a220571cacc2499f27dc109b1d7251859f8563e386dee21066bae`);
+   returned sources match except the known `cad-intake.ts` erasure and contain
+   the explicit save target, stored rules, limit endings and dropped-rule notes.
+3. `20261108100100_bob_stored_joint_rules_catalog.sql` as ledger
+   `20261108062852`: `tools.save_construction_draft` v18 and
+   `tools.edit_construction_parts` v14, publication `bob-stored-joint-rules-v1`,
+   `joint_rule_store_version` 1; the live definitions equal the fixture replay
+   of the migrations.
+
+Next: the owner's Entrén and Våningssäng 2 turns, read back for joint rules
+sent and stored, joints written by rules versus by hand, characters per write,
+refusals, limit endings and cost.
+
 **Open, low (documented):** other nested journal steps (CAD guard reads,
 `cad:construction_check`), worker sessions reused within one claim, live reads
 feeding journaled inputs in long steps, date checks across midnight, recorded

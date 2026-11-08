@@ -44,7 +44,7 @@ async function setup(message:string,extra:Record<string,unknown>={}){
   readConstructionReadiness:(t,area,r)=>call(owner,'bob.read_construction_readiness',[project,area,t,r]),
   readCatalog:(id,revision)=>call(owner,'bob.catalog_read',[project,{action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}]),
   prepareEdit:async p=>{try{return await call(owner,'bob.prepare_construction_edit',[...binding,JSON.stringify(p)])}catch(e:any){return {status:e.code==='PT409'?'conflict':e.code==='42501'?'denied':'invalid',reason:e.message}}},...extra})
- return {project,tools,material:material.recordId as string,read:(id:string,revision:number|null=null)=>call(owner,'bob.read_construction_draft',[project,id,revision,null])}
+ return {project,solution,tools,material:material.recordId as string,read:(id:string,revision:number|null=null)=>call(owner,'bob.read_construction_draft',[project,id,revision,null])}
 }
 const decision=(id:string,value:number,reason:string)=>({id,role:'decision',value,unit:'mm',reason})
 const at=(x:unknown,y:unknown=0)=>({x,y,z:0,rx:0,ry:0,rz:0})
@@ -421,4 +421,25 @@ test('stored joint rules (owner decision 2026-11-08): a save stores its rules, r
   changes:{nodes:{upsert:[decision('ty',100,'Tredje slån.')],remove:[]},instances:{upsert:[{id:'third',definition_id:'cross',placement:at('w','ty')}],remove:[]},roles:{upsert:[bare('third')],remove:[]}}})
  assert.equal(third.status,'saved',JSON.stringify(third))
  assert.deepEqual((await read(id)).joint_rules.map((r:any)=>r.id),['skruv'])
+})
+
+test('Entrén 2026-11-08: after Bob changes the selected Solution, a part edit maps its parts in the new concept and moves the construction to it',async()=>{
+ const message='Bredda ramen till 620.',{tools,material,read,project,solution}=await setup(message,{coherentWork:true,constructionViews:true})
+ const id=(await tools.execute('save_construction_draft',frameSave(message,material))).receipt.recordId
+ const first=await read(id)
+ // Bob widens the frame in the Solution and selects that revision.
+ const {intent}=constructionFormFixture()
+ intent.model.nodes.find((n:any)=>n.id==='frame_s0')!.value=620
+ await call(owner,'bob.solution_command',[project,'revise',solution,1,{title:'Ram',description:'Syntetisk',assumptions:'Ej mätt',tradeoffs:'Ej godkänd',measurements:[],design_intent:intent,change_note:'Bredare ram'}])
+ const target=await call(owner,'bob.solution_command',[project,'select',solution,first.target_revision,{solution_revision:2,reason:'Bredare ram'}])
+ assert.equal((await read(id)).source_state,'changed')
+ // Live this came back as "Could not read the concept" seven times: the
+ // concept was read at the old pin, which the database refuses once moved.
+ const edit=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:1,key:'bredd',change_note:'Ramen följer den bredare lösningen',request_quote:message,mode:'save',joint_rules:[],form_assign:[],
+  changes:{nodes:{upsert:[decision('span',620,'Ramens bredd enligt den valda lösningen.')],remove:[]}}})
+ assert.equal(edit.status,'saved',JSON.stringify(edit))
+ const draft=await read(id)
+ assert.equal(draft.revision,2);assert.equal(draft.target_revision,target.revision);assert.equal(draft.source_state,'current')
+ assert.deepEqual(draft.recipe.instances.find((i:any)=>i.id==='right').placement.x,602)
+ assert.deepEqual(draft.form_refinement.mappings,[{component_id:'frame',instance_ids:['left','right','front']}])
 })
