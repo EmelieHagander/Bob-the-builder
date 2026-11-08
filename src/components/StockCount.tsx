@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { inputStyle } from './form'
+import { Icon } from './ui'
 import { countBoards, countSheets, DEFAULT_KERF_MM, DEFAULT_MARGIN_MM, profileLength, type StockGroup } from '../domain/stockCount'
 
 /** Owner design 2026-11-08: count boards or sheets right in the list from the raw
@@ -52,6 +53,7 @@ function defaults(group: StockGroup): Entry {
 export type StockState = 'estimate' | 'exact' | 'problem'
 
 export function StockCountRow({ group }: { group: StockGroup }) {
+  const [open, setOpen] = useState(false)
   const [entered, setEntered] = useState(() => remembered(group) !== null)
   const [entry, setEntry] = useState<Entry>(() => remembered(group) ?? defaults(group))
   const sheet = isSheet(group)
@@ -62,34 +64,31 @@ export function StockCountRow({ group }: { group: StockGroup }) {
     setEntry(next); setEntered(true); remember(group, next)
   }
   const count = result.status === 'ok' ? ('sheets' in result ? plural(result.sheets, 'sheet', 'sheets') : 'boards' in result ? plural(result.boards.length, 'board', 'boards') : '') : null
-  const small = { ...inputStyle, width: '6.5em', minWidth: 0 }
+  const small = { ...inputStyle, width: sheet ? 52 : 60, minWidth: 0, padding: '0 4px', flex: '0 0 auto' }
+  const why = result.status === 'too_long' ? `Longer than ${result.usable} mm: ${result.labels.join(', ')}` : result.status !== 'ok' && 'message' in result ? result.message : null
   return <div className="stock-row shop-state" data-state={state}>
     <div className="stock-row-line">
       <strong className="stock-row-name">{group.name}</strong>
-      <span className="stock-row-count">{count ? (state === 'estimate' ? '≈ ' : '') + count : '?'}</span>
-      <span className="stock-row-size">
-        <input style={small} inputMode="decimal" aria-label={sheet ? 'Sheet length' : 'Raw board length'} value={entry.raw} onChange={set('raw')} />
-        {sheet && <>×<input style={small} inputMode="decimal" aria-label="Sheet width" value={entry.rawWidth} onChange={set('rawWidth')} /></>}
-        <select style={{ ...inputStyle, width: 'auto' }} aria-label="Unit" value={entry.unit} onChange={set('unit')}>{Object.keys(UNITS).map(unit => <option key={unit}>{unit}</option>)}</select>
-      </span>
+      <input style={small} inputMode="decimal" aria-label={sheet ? 'Sheet length' : 'Raw board length'} value={entry.raw} onChange={set('raw')} />
+      {sheet && <input style={small} inputMode="decimal" aria-label="Sheet width" value={entry.rawWidth} onChange={set('rawWidth')} />}
+      <select style={{ ...inputStyle, width: 54, minWidth: 0, padding: '0 2px', flex: '0 0 auto' }} aria-label="Unit" value={entry.unit} onChange={set('unit')}>{Object.keys(UNITS).map(unit => <option key={unit}>{unit}</option>)}</select>
+      <span className="stock-row-count" title={count ?? undefined}>{count ? (state === 'estimate' ? '≈' : '') + count.split(' ')[0] : '?'}</span>
+      <button type="button" className="stock-row-toggle" aria-expanded={open} aria-label={open ? 'Hide details' : 'Show details'} onClick={() => setOpen(v => !v)}>
+        <Icon name={open ? 'caret-down' : 'caret-right'} size={16} />
+      </button>
     </div>
-    {result.status === 'too_long' && <p role="alert" className="stock-row-alert">Longer than {result.usable} mm: {result.labels.join(', ')}</p>}
-    {result.status !== 'ok' && result.status !== 'too_long' && 'message' in result && <p role="alert" className="stock-row-alert">{result.message}</p>}
-    {result.status === 'ok' && <details className="ui-row-details stock-row-more">
-      <summary>Cut list</summary>
-      <ol>{kind === 'board' && 'boards' in result ? result.boards.map((board, index) => <li key={index}>
+    {open && <div className="stock-row-more">
+      {why && <p role="alert" className="stock-row-alert">{why}</p>}
+      {result.status === 'ok' && <ol>{kind === 'board' && 'boards' in result ? result.boards.map((board, index) => <li key={index}>
         {board.pieces.map(piece => `${piece.label} ${piece.length}`).join(' · ')} <span className="foundation-hint">· offcut {metres(board.offcut)}</span>
       </li>) : 'placements' in result ? [...new Set(result.placements.map(p => p.sheet))].map(id => <li key={id}>
         {result.placements.filter(p => p.sheet === id).map(p => `${p.label} ${p.length}×${p.width}`).join(' · ')}
-      </li>) : null}</ol>
-      <p className="foundation-hint">mm · longest first, not an optimised layout.</p>
-    </details>}
-    <details className="ui-row-details stock-row-more">
-      <summary>Kerf and margin</summary>
+      </li>) : null}</ol>}
       <div className="stock-row-fields">
-        <label>Kerf (mm) <input style={small} inputMode="decimal" value={entry.kerf} onChange={set('kerf')} /></label>
-        <label>{sheet ? 'Edge' : 'End'} margin (mm) <input style={small} inputMode="decimal" value={entry.margin} onChange={set('margin')} /></label>
+        <label>Kerf <input style={small} inputMode="decimal" value={entry.kerf} onChange={set('kerf')} /></label>
+        <label>{sheet ? 'Edge' : 'End'} margin <input style={small} inputMode="decimal" value={entry.margin} onChange={set('margin')} /></label>
+        <span className="foundation-hint">mm</span>
       </div>
-    </details>
+    </div>}
   </div>
 }
