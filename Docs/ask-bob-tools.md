@@ -330,8 +330,15 @@ Entry turn 2026-11-07: an 11-part wall was 26,590 characters Konrad typed in
   change through its own tool leaves them until the next part edit; the check
   names a joint whose faces no longer meet. Rules that write nothing say so
   (`rule_note`; an edit with only such rules is refused as
-  `rules_wrote_nothing`). Rules last for the save or edit (and the sketch)
-  they come with.
+  `rules_wrote_nothing`). Since 2026-11-08 (`joint_rule_store_version` 1,
+  owner decision) the rules are **stored with the construction**
+  (`bob.artifact_construction_joint_rules`, one set per revision, inherited
+  by revisions written without one): a save states the whole set; a part edit
+  keeps the stored rules, adds or replaces those it sends by id, drops those of
+  a removed definition, and applies them to the parts it adds, changes or
+  moves without being sent again. Reads show them (overview and the joints
+  view). Before, rules lasted only for the call they came with, and Konrad
+  kept typing joints by hand.
   Source: `construction-joint-rules.ts`.
 - **FORM mapping kept by code.** A part no mapping names goes to the active
   concept component whose envelope holds it, only when exactly one does; a

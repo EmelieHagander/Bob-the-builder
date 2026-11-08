@@ -799,6 +799,17 @@ for(const migration of migrations){
   if(!row||row.metadata.publication!=='bob-lean-construction-v1'||row.metadata.lean_construction_version!==1||typeof extra!=='string'||extra.split(from).length!==2)throw new Error('lean_edit_text_unexpected')
   row.definition={...row.definition,additional_description:extra.replace(from,()=>to)};publishAs(row,'bob-lean-edit-text-v1');versions.set(row.key,versions.get(row.key)!+1)
  }
+ // Owner decision 2026-11-08: joint rules stored with the construction (two sentences, one pin).
+ if(source.includes('$bob_stored_joint_rules$')){
+  const tagged=(tag:string)=>source.match(new RegExp('\\$'+tag+'\\$([\\s\\S]+?)\\$'+tag+'\\$'))![1]
+  for(const [key,publication,from,to] of [['tools.save_construction_draft','bob-lean-construction-v1',tagged('save_old'),tagged('save_new')],['tools.edit_construction_parts','bob-lean-edit-text-v1',tagged('edit_old'),tagged('edit_new')]]){
+   const row=seed.find(r=>r.key===key),d=row?.definition
+   if(!row||row.metadata.publication!==publication||row.metadata.lean_construction_version!==1||row.metadata.joint_rule_store_version!==undefined
+    ||d.description.split(from).length!==2||d.parameters.properties.joint_rules.description!==tagged('rules_old'))throw new Error('stored_joint_rules_tool_unexpected: '+key)
+   row.definition={...d,description:d.description.replace(from,()=>to),parameters:{...d.parameters,properties:{...d.parameters.properties,joint_rules:{...d.parameters.properties.joint_rules,description:tagged('rules_new')}}}}
+   publishAs(row,'bob-stored-joint-rules-v1');row.metadata={...row.metadata,joint_rule_store_version:1};versions.set(key,versions.get(key)!+1)
+  }
+ }
  // Owner decision 2026-11-07: worker gates (chat answer is the review, gate facts in-job, identical-request refusal).
  const workerGates=source.match(/\$worker_gates_contract\$([\s\S]+?)\$worker_gates_contract\$/)
  if(workerGates){

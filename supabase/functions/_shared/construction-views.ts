@@ -62,7 +62,9 @@ export function constructionViewItems(draft:Row,view:string,ids:string[]):{items
   out=[...items('definitions',definitions.filter(d=>match(d.id)||definitionIds.has(d.id))),...items('instances',selectedInstances)]
  }else if(view==='parameters')out=[...items('nodes',nodes.filter(n=>match(n.id))),...items('frames',all?arr(graph.frames):[])]
  else if(view==='bindings')out=items('bindings',bindings.filter(b=>match(b.path)||wanted.has(b.node)),'path')
- else if(view==='joints')out=items('joints',joints.filter(j=>match(j.id)||wanted.has(j.first.instance_id)||wanted.has(j.second.instance_id)))
+ else if(view==='joints')out=[...items('joints',joints.filter(j=>match(j.id)||wanted.has(j.first.instance_id)||wanted.has(j.second.instance_id))),
+  // The stored joining decisions code applies to new and moved parts (owner decision 2026-11-08).
+  ...items('joint_rules',arr(draft.joint_rules))]
  else if(view==='materials')out=items('materials',materials.filter(m=>match(m.definition_id)),'definition_id')
  else if(view==='roles')out=items('roles',roles.filter(r=>match(r.instance_id)),'instance_id')
  else if(view==='notes')out=[{collection:'description',id:'description',value:draft.description??''},...items('open_questions',arr(draft.open_questions)),
@@ -309,8 +311,10 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
    const overview={...header,title:draft.title,area_id:draft.area_id,target_revision:draft.target_revision,construction_status:'draft',rendered:false,reviewed:false,
     ...(draft.form_refinement?{form:{verification:'unverified',solution_id:draft.solution_id,solution_revision:draft.solution_revision,mapped_components:arr(draft.form_scope?.component_ids).length,pending_components:arr(draft.form_scope?.pending_component_ids).length,pending_choices:arr(draft.form_scope?.pending_choice_ids).length,details_view:'notes'}}:{}),
     counts:{definitions:arr(draft.recipe?.definitions).length,instances:arr(draft.recipe?.instances).length,nodes:arr(draft.parameters?.nodes).length,
-     bindings:arr(draft.parameters?.bindings).length,joints:arr(draft.joints).length,materials:arr(draft.materials).length,
+     bindings:arr(draft.parameters?.bindings).length,joints:arr(draft.joints).length,...(Array.isArray(draft.joint_rules)?{joint_rules:draft.joint_rules.length}:{}),materials:arr(draft.materials).length,
      unknown_roles:draft.instance_policy==null?arr(draft.recipe?.instances).length:arr(draft.instance_policy.instances).filter(r=>r.role==='unknown').length,roles_recorded:draft.instance_policy!=null,open_questions:arr(draft.open_questions).length},
+    // Stored joint rules are few and decide how new parts are joined, so they show here whole.
+    ...(Array.isArray(draft.joint_rules)&&draft.joint_rules.length?{joint_rules:draft.joint_rules}:{}),
     previous_results:refs,views:views.filter(v=>!['overview','result'].includes(v)),details_omitted:true}
    if(table?.table!==true)return {...overview,next_read:{...query,revision:draft.revision,view:'notes'},message:'Description, questions, parts and dependencies are available in the named views. No current check is inferred from a saved draft or historical result.'}
    // The cursor also binds whether the server schedule was present: its rows differ.
