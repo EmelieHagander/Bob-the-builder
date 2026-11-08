@@ -96,3 +96,22 @@ test('a renewal that renews is saved with the step: the resumed job continues on
   assert.ok(JSON.stringify(saved!.progress.messages).includes('context_renewal'))
   assert.deepEqual((saved!.journal as any).positions, { 'workpad:load': 1 })
 })
+
+test('a committed sketch is a saved boundary: renewal can follow it (deep audit 2026-11-08)', async () => {
+  const stored: JournalEntry[] = []
+  const journal = createBobJournal({ entries: stored, save: async (e: JournalEntry) => { stored.push(e) } }, Infinity)
+  let saved: any
+  await assert.rejects(runWorker({
+    aiCatalog: catalog, worker: { role: 'role.structure-worker', tool: 'ask_structure_worker', tools: ['commit_construction_sketch'], reads: ['read_construction_draft'], max_steps: 6 } as any,
+    callModel: async () => ({ success: true, model: 'fixture', responseId: 'r1', data: null, outputPhase: 'tool_calls',
+      usage: { input_tokens: 110_000, output_tokens: 10, total_tokens: 110_010 }, toolCalls: [call('a', 'commit_construction_sketch'), call('b', 'update_workpad')] }) as OpenAIServiceResponse<any>,
+    userId: 'u', job: { job: 'Spara skissen.', findings: null }, history: [], workpadEnabled: true,
+    session: { prepare: async () => ['commit_construction_sketch', 'update_workpad', 'read_construction_draft'].map(tool),
+      execute: async (name: string) => name === 'commit_construction_sketch' ? { status: 'saved', receipt: { dataset: 'artifacts', recordId: 'c1', revision: 6, operation: 'updated' } } : { status: 'noted', revision: 5 } },
+    readCurrent: async () => null, readKnowledge: async () => ({}), hasAccess: async () => true, deadline: Infinity,
+    readback: async () => [{ construction: { status: 'ok', artifact_id: 'c1', revision: 6 } }], releaseChain: () => {},
+    verifiedRenewal: { loadWorkpad: (step: number) => journal.run('workpad:load', { location: 'renewal:' + step }, async () => ({ status: 'ok' as const, revision: 5, note: { status: 'working', next_step: 'Fortsätt.' } as any })) },
+    progress: { save: async (progress: WorkerProgress) => { saved = structuredClone(progress) }, afterStep: () => { throw new BobContinuation('yield', 'worker_step') } },
+  } as any), (e: unknown) => e instanceof BobContinuation && e.message === 'worker_step')
+  assert.equal(saved.renewal.resets, 1, 'renewed after the commit')
+})

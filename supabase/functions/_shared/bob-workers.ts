@@ -368,6 +368,16 @@ export async function runWorker(opts: {
   const receipts: Record<string, unknown>[] = structuredClone(restored?.receipts ?? [])
   // Last, after any server work that can yield: a resumed worker still finds its chain.
   const release = () => { if (previous) opts.releaseChain?.(previous) }
+  // The turn's saved state reached its size limit: the hand-over ends with what
+  // it saved rather than failing the turn (deep audit 2026-11-08). Its chain
+  // is released, so Bob's next save is smaller.
+  const saveProgress = async (progress: WorkerProgress): Promise<boolean> => {
+    try { await opts.progress!.save(progress); return true }
+    catch (error) {
+      if (opts.stopAsResult && error instanceof Error && error.message === 'turn_checkpoint_too_large') return false
+      throw error
+    }
+  }
   const finish = async (reported: Record<string, unknown>) => {
     let result = reported
     if (opts.openSketches) {
@@ -428,12 +438,21 @@ export async function runWorker(opts: {
     if (step) specs = await offer()
     if(opts.images?.validate&&!await opts.images.validate())return finish({status:'unavailable',worker:roleKey,reason:'visual_context_unavailable',calls})
     const images = opts.images?.carrier() ?? []
-    const response = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: roleKey, aiFunction: roleKey, module: 'global', userId: opts.userId,
+    let response: Awaited<ReturnType<typeof opts.callModel>>
+    try { response = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: roleKey, aiFunction: roleKey, module: 'global', userId: opts.userId,
       ...(opts.stageContext ? { responseItemsMode: 'preserve' as const } : {}),
       catalogRoleKey: roleKey, ...(opts.runtimeSurface?{catalogRuntimeSurface:opts.runtimeSurface()}:{}), ...(opts.boundDrawingWork?{catalogDrawingWork:true}:{}), ...(opts.variables ? { catalogVariables: opts.variables } : {}), messages: [...messages, ...images], tools: specs, catalogSchemaParameters: params, catalogToolParameters: toolParams(),
       ...(previous ? { previousResponseId: previous } : {}), maxOutputTokens: 8000,
       ...(cacheAfterTool(specs) ? { cacheAfterTool: cacheAfterTool(specs) } : {}),
-      timeoutMs: Math.max(1000, Math.min(opts.modelTimeoutMs ?? 45_000, opts.deadline - Date.now())) }, opts.stageContext ? validateStage : undefined)
+      timeoutMs: Math.max(1000, Math.min(opts.modelTimeoutMs ?? 45_000, opts.deadline - Date.now())) }, opts.stageContext ? validateStage : undefined) }
+    catch (error) {
+      // The worker's context reached its ceiling: the hand-over ends with what
+      // it saved and Bob's turn goes on (deep audit 2026-11-08: the error
+      // failed the whole turn). Decided before dispatch from the restored
+      // state, so a replay ends the same way.
+      if (opts.stopAsResult && error instanceof Error && error.message === 'context_input_too_large') return finish({ status: 'context_limit', worker: roleKey, calls, note: LIMIT_NOTE })
+      throw error
+    }
     if (!response.success) {
       if (response.error === 'turn_budget_exhausted' && opts.stopAsResult) return finish({ status: 'paused_at_limit', worker: roleKey, calls })
       if (response.error === 'turn_budget_exhausted') throw new Error('turn_budget_exhausted')
@@ -596,7 +615,7 @@ export async function runWorker(opts: {
         ? { status: 'awaiting_design_review', receiptIndex: receipts.indexOf(pieceReviewReceipt) } : null
     if (terminal) {
       release()
-      if (opts.progress) await opts.progress.save(structuredClone({ version: 3 as const, step, previous: null, messages: [], calls, receipts, order, terminal }))
+      if (opts.progress) await saveProgress(structuredClone({ version: 3 as const, step, previous: null, messages: [], calls, receipts, order, terminal }))
       previous = undefined
       return finish(terminalResult(terminal))
     }
@@ -656,10 +675,11 @@ export async function runWorker(opts: {
         opts.releaseChain(old)
       }
     }
-    if (opts.progress) await opts.progress.save(structuredClone(opts.verifiedRenewal
+    if (opts.progress && !await saveProgress(structuredClone(opts.verifiedRenewal
       ? { version: 2 as const, step, previous: previous ?? null, messages, calls, receipts, order, renewal, ...(planned ? { planned } : {}) }
       // Without renewal the chain is never reset here, so previous is this step's response.
-      : { version: 1 as const, step, previous: previous as string, messages, calls, receipts, order, ...(planned ? { planned } : {}) }))
+      : { version: 1 as const, step, previous: previous as string, messages, calls, receipts, order, ...(planned ? { planned } : {}) })))
+      return finish({ status: 'state_limit', worker: roleKey, calls, note: LIMIT_NOTE })
     // Only continuing work yields. Review holds, conflicts and final reports
     // above must reach Bob before any later specialist step can be scheduled.
     if (step + 1 < opts.worker.max_steps) opts.progress?.afterStep?.()
@@ -668,6 +688,7 @@ export async function runWorker(opts: {
   } finally { unregister?.() }
 }
 
+const LIMIT_NOTE = 'This hand-over reached its context limit and ended; what it saved is listed. Give the remaining work as a new hand-over that names what is done.'
 const RECEIPT_KEYS = ['artifact_id', 'record_id', 'id', 'revision', 'construction_revision', 'request_id', 'step_id']
 const plain = (value: unknown) => typeof value === 'string' && value.length <= 200 || typeof value === 'number' && Number.isFinite(value)
 /** The ids and revisions a save returned, copied by code. Writer saves nest them

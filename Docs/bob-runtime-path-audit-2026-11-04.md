@@ -3110,6 +3110,24 @@ so the door beam was never saved (about USD 0.79 of trial sketches).
    report; together roughly −55 % per step.
 5. Reads show the stored graph, not formulas, so Konrad copies `fx.` hashes.
 
+**Built after the audit (owner: "Gå med rek.", 2026-11-08):**
+
+- **A save names its target** (decision 1): with lean writing,
+  `save_construction_draft` takes `source_ref` in every structure job — the
+  construction's reference revises it whole, `null` saves a new construction,
+  also in a bound job; sketch answers name the target (`revises`).
+  `worker-operations`, `lean-worker-path` (real binding against the database).
+- **Limits end the hand-over, not the turn** (decision 3): with the
+  final-answer pin, Konrad's context ceiling (`context_limit`) and a checkpoint
+  over 2 MB (`state_limit`) end the hand-over with what it saved and a note to
+  hand over the rest; the turn goes on. Claude Opus 5.5 takes 1M tokens, so
+  Konrad's 200k ceiling (about 272k Claude tokens) stays below the provider's
+  limit and is not recounted. Renewal follows a committed sketch now that a
+  commit is a read-back saved revision. `bob-worker-limits`,
+  `bob-worker-renewal`.
+- Pre-existing, unchanged: `bob-final-answer` "a worker stopped by the
+  spending stop…" and `worker-checkpoint-catalog` fail the same before #504.
+
 **Open, low (documented):** other nested journal steps (CAD guard reads,
 `cad:construction_check`), worker sessions reused within one claim, live reads
 feeding journaled inputs in long steps, date checks across midnight, recorded
