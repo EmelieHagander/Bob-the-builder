@@ -62,27 +62,18 @@ function trimText(text: string, limit: number): string {
 }
 /** Owner runs 2026-11-08: four notes were refused for length alone
  * (workpad_note_bounds), each a paid retry that built nothing. The server
- * shapes what it safely can: a missing list is empty, and descriptive text
- * (goal, next step, steps) over its bound is shortened and named in the result.
- * Blockers and references are never shortened: a cut blocker or reference
- * could lose what is unresolved or where it is (review of #508). They, a wrong
- * status, a missing goal or next step, an unknown field and too many items
- * still refuse the note with what to fix. */
+ * shapes what it safely can: a missing list is empty, and a goal over its
+ * bound is shortened and named in the result (the goal restates Bob's request,
+ * which the worker still has). Text that says what to do next or what is open
+ * (next step, steps, blockers, references) is never shortened: a cut condition
+ * would change the instruction silently (reviews of #508). Over its bound, a
+ * wrong status, a missing goal or next step, an unknown field and too many
+ * items still refuse the note with what to fix. */
 function normalizeNote(raw: unknown): { note: unknown; trimmed: string[]; filled: string[] } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { note: raw, trimmed: [], filled: [] }
   const note: Record<string, unknown> = { ...(raw as Record<string, unknown>) }, trimmed: string[] = [], filled: string[] = []
-  for (const key of ['goal', 'next_step'] as const) {
-    const value = note[key]
-    if (typeof value === 'string' && value.length > TEXT_LIMIT[key]) { note[key] = trimText(value, TEXT_LIMIT[key]); trimmed.push(key) }
-  }
-  for (const [key] of LISTS) {
-    if (note[key] === undefined || note[key] === null) { note[key] = []; filled.push(key); continue }
-    if (!Array.isArray(note[key]) || key !== 'steps') continue
-    note[key] = (note[key] as unknown[]).map((item, i) => {
-      if (typeof item !== 'string' || item.length <= TEXT_LIMIT.item) return item
-      trimmed.push(key + '.' + i); return trimText(item, TEXT_LIMIT.item)
-    })
-  }
+  if (typeof note.goal === 'string' && note.goal.length > TEXT_LIMIT.goal) { note.goal = trimText(note.goal, TEXT_LIMIT.goal); trimmed.push('goal') }
+  for (const [key] of LISTS) if (note[key] === undefined || note[key] === null) { note[key] = []; filled.push(key) }
   return { note, trimmed, filled }
 }
 /** Which bounds a refused note broke, so the next note can be fixed. */
@@ -93,10 +84,11 @@ function noteIssues(raw: unknown): string[] {
   if (!['working', 'waiting', 'done'].includes(String(note.status))) issues.push('status is working, waiting or done')
   if (typeof note.goal !== 'string') issues.push('goal: text')
   if (typeof note.next_step !== 'string') issues.push('next_step: text')
+  else if (note.next_step.length > TEXT_LIMIT.next_step) issues.push(`next_step: at most ${TEXT_LIMIT.next_step} characters; shorten it yourself, nothing was cut`)
   for (const [key, count] of LISTS) {
     if (!Array.isArray(note[key]) || note[key].length > count || !note[key].every((s: unknown) => typeof s === 'string'))
       issues.push(`${key}: at most ${count} text items`)
-    else if (key !== 'steps' && note[key].some((s: string) => s.length > TEXT_LIMIT.item))
+    else if (note[key].some((s: string) => s.length > TEXT_LIMIT.item))
       issues.push(`${key}: each item at most ${TEXT_LIMIT.item} characters; split a long one, nothing was shortened`)
   }
   return issues
@@ -116,7 +108,7 @@ export function workpadTool(workpads: AgentWorkpads, agent: WorkpadAgent): ToolD
         message: 'Note not saved. Fix: ' + noteIssues(note).join('; ') + '.' }
       const saved = await workpads.update(agent, Number(value.expected_revision), note)
       return trimmed.length || filled.length ? { ...saved, normalized: { ...(trimmed.length ? { trimmed } : {}), ...(filled.length ? { filled_empty: filled } : {}),
-        note: 'Saved as shown: longer text was shortened at its bound and missing lists saved empty. Keep the note short.' } } : saved
+        note: 'Saved as shown: a long goal was shortened at its bound and missing lists saved empty. Keep the note short.' } } : saved
     } }
 }
 

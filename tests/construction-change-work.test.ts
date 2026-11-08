@@ -324,7 +324,7 @@ test('a linked need without a recorded model returns a review gap; an explicit c
 // job (bound as artifact_id/revision; the tool takes record_id/expected_revision).
 // With material_follow_version 1 code runs the canonical recalculation after his
 // job, through the same fence, tool and writer (construction-follow-up.ts).
-async function codeFollow(f:any,r:ReturnType<typeof runtime>,target:{artifact_id:string;revision:number},bindings?:any){
+async function codeFollow(f:any,r:ReturnType<typeof runtime>,target:{artifact_id:string;revision:number},bindings?:any,wrap?:(inner:(t:any,item:{id:string},key:string)=>Promise<any>)=>(t:any,item:{id:string},key:string)=>Promise<any>){
  const {createWorkerOperations}=await import('../supabase/functions/_shared/worker-operations.ts')
  const {followConstructionChanges}=await import('../supabase/functions/_shared/construction-follow-up.ts')
  const {catalogFixture}=await import('./support/ai-catalog-fixture.ts')
@@ -335,7 +335,7 @@ async function codeFollow(f:any,r:ReturnType<typeof runtime>,target:{artifact_id
  await operations.prepare('structure',[]);await worker.prepare()
  const run=(name:string,args:Record<string,unknown>)=>worker.execute(name,operations.serverArgs('structure',name,args))
  const recalculate=(t:typeof target,item:{id:string},key:string)=>run('continue_construction_change',{...t,key,item_id:item.id,action:'recalculate',review_note:null,output_revision:null,change_note:'Omräknad av koden efter konstruktionsändringen.'})
- return {recalculate,follow:()=>followConstructionChanges({targets:[target],hasAccess:async()=>true,deadline:Date.now()+120_000,read:(t,after)=>run('read_construction_changes',{...t,after}),recalculate})}
+ return {recalculate,follow:()=>followConstructionChanges({targets:[target],hasAccess:async()=>true,deadline:Date.now()+120_000,read:(t,after)=>run('read_construction_changes',{...t,after}),recalculate:wrap?wrap(recalculate):recalculate})}
 }
 const requirementRows=async(f:any)=>(await f.pg.query('select requirement_id,revision,artifact_revision,required_quantity::text q from bob.material_requirement_revisions where project_id=$1 order by requirement_id,revision',[f.project])).rows
 
@@ -379,7 +379,8 @@ test('unchanged geometry: same quantities and rows; interruption and a second ru
  assert.equal((await code.recalculate(target,derived[0],'follow_'+derived[0].id.replace(/-/g,''))).status,'saved',JSON.stringify(r.sqlErrors))
  const [resumed]=await code.follow()
  assert.equal(resumed.recalculated,derived.length-1,'only the rows still pending')
- assert.deepEqual(resumed.left.map(row=>[row.output_id,row.status]),[[manual,'needs_requirement_model']],'a row without a recorded model is left for a decision')
+ assert.deepEqual(resumed.left.map(row=>[row.output_id,row.status,row.next]),[[manual,'needs_requirement_model','needs_expert_decision']],'a row without a recorded model is left for a decision')
+ assert.deepEqual(resumed.remaining,{needs_calculation:0,needs_expert_decision:1,needs_review:0,unavailable:0});assert.equal(resumed.complete,true)
  const after=await requirementRows(f)
  for(const need of f.needs){
   const revisions=after.filter((x:any)=>x.requirement_id===need.recordId)
@@ -390,4 +391,29 @@ test('unchanged geometry: same quantities and rows; interruption and a second ru
  assert.equal((await r.changes(2)).items.find((i:any)=>i.output_id===manual).state,'pending')
  const [again]=await code.follow()
  assert.equal(again.recalculated,0);assert.deepEqual(await requirementRows(f),after,'a second run writes no revision')
+})
+
+// Review of #508: the job can stop in the middle of the follow-up (lease or
+// CPU), also after a write committed and before its answer came back. The
+// resumed job finishes the rest under the same keys: no row twice, none lost.
+test('a follow-up stopped after a committed write resumes without a second revision or a lost row',async t=>{
+ const {BobContinuation}=await import('../supabase/functions/_shared/bob-job-journal.ts')
+ const f=await cutPlanFixture(t),r=runtime(f)
+ assert.equal((await r.write({...f.base,kind:'construction',record_id:f.construction.recordId,expected_revision:1,request_quote:f.message,data:{...f.constructionData,key:'same-geometry',change_note:'Same parts, new note'}})).revision,2,JSON.stringify(r.sqlErrors))
+ const target={artifact_id:f.construction.recordId,revision:2}
+ let writes=0
+ // The first write commits; the job stops before its answer is recorded.
+ const stopped=await codeFollow(f,r,target,undefined,inner=>async(tg,item,key)=>{const out=await inner(tg,item,key);if(++writes===1)throw new BobContinuation('yield');return out})
+ await assert.rejects(stopped.follow(),(e:any)=>e instanceof BobContinuation)
+ const midway=await r.changes(2),first=midway.items.find((i:any)=>i.state==='updated')
+ assert.equal(midway.pending,f.needs.length-1,'one row committed before the stop')
+ const [resumed]=await (await codeFollow(f,r,target)).follow()
+ assert.equal(resumed.recalculated,f.needs.length-1);assert.deepEqual(resumed.left,[]);assert.equal(resumed.complete,true)
+ const done=await r.changes(2)
+ assert.equal(done.pending,0);assert.deepEqual(done.items.find((i:any)=>i.id===first.id).completion_receipt,first.completion_receipt,'the committed row keeps its receipt')
+ const rows=await requirementRows(f)
+ for(const need of f.needs)assert.deepEqual(rows.filter((x:any)=>x.requirement_id===need.recordId).map((x:any)=>x.revision),[1,2],'one new revision per row')
+ // The same key again (a lost answer re-sent) returns the committed receipt, not a new revision.
+ const again:any=await (await codeFollow(f,r,target)).recalculate(target,first,'follow_'+first.id.replace(/-/g,''))
+ assert.equal(again.status,'saved');assert.equal(again.receipt.revision,2);assert.deepEqual(await requirementRows(f),rows)
 })

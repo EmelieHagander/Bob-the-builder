@@ -3384,3 +3384,41 @@ recalculated by code, rows left), hand-over `outcome` per worker,
 `plan_required` (Konrad only), `workpad_note_bounds`,
 `operation_scope_ambiguous` with candidates, `operation_reference_required`,
 the drawing, and cost per delivered product.
+
+<a id="review-of-508-code-2026-11-08"></a>
+**Code review of #508 (owner forwarded GPT's review), after publication — 2026-11-08.**
+#508 was already live when the review arrived. Acted on, on the branch, not
+published:
+
+- *Outcome (P0-2).* A save followed by a refused write is `partial` with its
+  blocker kept; a refusal before the last save does not count. A receipt
+  proves a save, not a finished job. Test: `bob-worker-outcome`.
+- *Follow-up report (P1-4, P1-5).* Each left row says what it needs:
+  `needs_calculation` (not run in time; the same recalculation finishes it),
+  `needs_expert_decision` (no recorded model), `needs_review` (allocations,
+  commitments, outputs) or `unavailable`. `complete` says whether the whole
+  change list was read; `remaining` counts every row; at most twenty are
+  listed. The note never says nothing was needed while rows are unread, unrun
+  or failed. The change items in the database are where the next pass
+  continues: a Konrad hand-over that saves nothing now follows the
+  construction it is bound to. Tests: `construction-follow-up` (new),
+  `bob-build-workers`.
+- *Recovery (P1-3).* The job stops (continuation) right after a committed
+  write; the resumed follow-up finishes the rest, the committed row keeps its
+  receipt, every row has exactly one new revision, and the same key again
+  returns the committed receipt. Test: `construction-change-work`.
+- *Workpad (P2-6).* Only the goal is shortened. Next step and steps, like
+  blockers and references, are refused over their bound with what to shorten:
+  a cut condition would change the instruction silently.
+
+Not changed (P0-1): a row whose geometry and quantity did not change still
+gets a new revision. A row is current when it pins the head revision
+(`bob.current_material_requirements.artifact_changed`), read in 16 migration
+files (cutting plans, pack purchases, calculation sources, project work).
+Keeping a row untouched needs a second way to be current, which is the
+duplicate truth the contract forbids, or a change to all those readers. The
+model cost is gone either way; the cost left is one database revision per row.
+For Våningssäng 2's 25 → 26 this means: 0 rows kept without a revision, the
+derived rows recalculated by code (same blank quantities; fastener rows follow
+the joints), and the rows without a recorded model left for a decision. The
+live counts were not read: the read-only query was refused in this session.
