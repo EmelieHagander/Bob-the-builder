@@ -61,6 +61,17 @@ export function supplierArticleFields(action:string,d:Record<string,any>):{field
   if(c!==null&&f.content_unit==='pcs'&&!/^\d+(\.0+)?$/.test(c))return bad(['content_per_purchase_unit'],'Piece content must be whole pieces.')
   return{fields:Object.fromEntries(ARTICLE_KEYS.map(k=>[k,f[k]]))}
 }
+/** Våningssäng 2 (2026-11-08): two requirement archives carrying extra data
+ * reached the database and came back as an unexplained db_p0001. The fields
+ * each stock/requirement command accepts are the database's own lists
+ * (stock_command, material_requirement_command), so a wrong shape is refused
+ * here with the field named instead. */
+const REQUIREMENT_FIELDS=['name','category','area_id','task_id','unit','required_quantity','waste_percent','purchase_increment','basis','assumptions','artifact_id','artifact_revision','target_revision','stock_allocations','component_allocations','change_note']
+const STOCK_FIELDS=['name','specification','quantity','unit','status','area_id','notes','change_note','sheet_format','household_stock_id']
+export const MATERIAL_DATA_KEYS:Record<string,Record<string,string[]>>={
+  stock:{create:STOCK_FIELDS,revise:STOCK_FIELDS,archive:[],restore:[]},
+  requirement:{create:REQUIREMENT_FIELDS,revise:REQUIREMENT_FIELDS,archive:[],restore:[],publish:[]},
+}
 export function parseOperationalWrite(name:string,v:Record<string,any>,report?:(issue:WriteValidationIssue)=>void):WritePayload|null{
   if(!Number.isSafeInteger(v.expected_revision)||v.expected_revision<0||v.expected_revision>1e8)return null
   if(v.record_id!==null&&!text(v.record_id))return null
@@ -107,6 +118,9 @@ export function parseOperationalWrite(name:string,v:Record<string,any>,report?:(
       }
       if(!['stock','requirement'].includes(v.resource)||!['create','revise','archive','restore','publish'].includes(v.action)||v.resource==='stock'&&v.action==='publish')return null
       if(v.action==='create'?(v.record_id!==null||v.expected_revision!==0):(v.record_id===null||v.expected_revision<1))return null
+      const extra=Object.keys(v.data).filter(k=>!(MATERIAL_DATA_KEYS[v.resource]?.[v.action]??[]).includes(k))
+      if(extra.length){report?.({code:'domain_fields',fields:extra.map(k=>'data.'+k),message:v.action==='create'||v.action==='revise'
+        ?`${v.resource} ${v.action} does not take ${extra.join(', ')}.`:`${v.resource} ${v.action} takes data {} exactly; remove ${extra.join(', ')}.`});return null}
       base.data={resource:v.resource,action:v.action,fields:v.data}
     }else return null
   }
@@ -119,6 +133,24 @@ export function recordLabel(resource:string,r:Record<string,unknown>):string{
   return [r.name,r.title,r.task_name].find((x):x is string=>typeof x==='string'&&!!x.trim())??RECORD_LABELS[resource]??'Project record'
 }
 export type OperationalReaderState = { version: 1; projectId: string; used: number; partial: boolean; sources: ProjectSource[] }
+/** Våningssäng 2 (2026-11-08): one requirement page was ~49 kB, so Mattias
+ * paged through it with get_work_history (59 calls in one turn), and the
+ * archived rows sat among the current ones, so he tried to archive them again.
+ * A list page keeps each current row's own facts and drops repeated display
+ * names, actor fields and empty values; archived rows become a short list.
+ * An exact record_id read stays complete, archived or not. */
+const REQUIREMENT_LIST_DROP=['basis','assumptions','change_note','project_id','requirement_id','area_title','task_title','artifact_title','solution_title','actor_label','recorded_by','method_version','archived','recorded_at','solution_id','solution_revision','target_revision']
+const empty=(k:string,x:unknown)=>x===null||x===''||Array.isArray(x)&&x.length===0||k.endsWith('_changed')&&x===false
+export function compactRequirementPage(data:Record<string,any>):Record<string,unknown>{
+  const current:Record<string,unknown>[]=[],archived:Record<string,unknown>[]=[]
+  for(const r of data.records as Record<string,unknown>[]){
+    if(r.archived===true){archived.push({id:r.id,revision:r.revision,name:r.name});continue}
+    current.push(Object.fromEntries(Object.entries(r).filter(([k,x])=>!(REQUIREMENT_LIST_DROP.includes(k)&&(k!=='requirement_id'||x===r.id))&&!empty(k,x))))
+  }
+  return{status:current.length||archived.length?'ok':'empty',...data,records:current,
+    ...(archived.length?{archived,archived_note:'Already archived: not current needs and nothing to archive. Read one by record_id to restore it.'}:{}),
+    list_note:'A list row shows only what differs: a *_changed flag appears only when true. basis, assumptions, change_note and lineage are in an exact record_id read; read it before a revise.'}
+}
 export function createOperationalReader(projectId:string,read:(v:Record<string,unknown>)=>Promise<{data:any;error:any}>,hasAccess:()=>Promise<boolean>,sources:ProjectSource[],options:{unlimitedWork?:boolean}={}){
   let used=0,partial=false
   return{tools:[READ_OPERATIONS_TOOL],
@@ -141,6 +173,7 @@ export function createOperationalReader(projectId:string,read:(v:Record<string,u
       if(!await hasAccess())return{status:'denied'}
       for(const r of data.records)if(r.id&&!sources.some(s=>s.dataset===v.resource&&s.recordId===r.id))sources.push({projectId,dataset:v.resource,recordId:r.id,label:recordLabel(v.resource,r),updatedAt:r.updated_at??r.recorded_at??null,retrievedAt:new Date().toISOString(),truth:'unknown'})
       partial ||= !!data.truncated
+      if(v.resource==='requirement'&&v.record_id===null)return compactRequirementPage(data)
       return{status:data.records.length?'ok':'empty',...data}
     }catch(error){rethrowContinuation(error);partial=true;return{status:'unavailable'}}
   }}
