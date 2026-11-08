@@ -1025,7 +1025,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(!await opts.hasAccess())return {status:'denied'}
    const put=await opts.newSketches!.put(v.key,read.revision,kept as any)
    if(put.status!=='stored')return sketchRefusal(ready.error)
-   return {...ready.error,saved:false,sketched:true,new_key:v.key,sketch:{status:'kept_with_issues',new_key:v.key,part_count:kept.part_count},
+   return {...ready.error,saved:false,sketched:true,new_key:v.key,sketch:{status:'kept_with_issues',new_key:v.key,part_count:kept.part_count,revises:save.record_id??null},
     message:[typeof ready.error.message==='string'?ready.error.message:null,KEPT_NEW].filter(Boolean).join(' ')}
   }
   const check=await sketchCheck({projectId:opts.projectId,artifact_id:null,revision:0,current_revision:0,source_state:'current',archived:false,
@@ -1036,7 +1036,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   if(!await opts.hasAccess())return {status:'denied'}
   const put=await opts.newSketches!.put(v.key,read.revision,sketch as any)
   if(put.status!=='stored')return {status:put.status,saved:false,message:'The sketch was not stored; read it with commit_construction_sketch action read before continuing.'}
-  return withRuleJoints({status:'sketched',saved:false,new_key:v.key,part_count:sketch.part_count,sketch:newSummary(save),check,
+  // The construction a commit would revise, or null for a new one (owner decision 2026-11-08).
+  return withRuleJoints({status:'sketched',saved:false,new_key:v.key,part_count:sketch.part_count,...(lean?{revises:save.record_id??null}:{}),sketch:newSummary(save),check,
    ...(ready.pending.length?{pending:ready.pending.slice(0,24)}:{}),
    message:'Kept in your sketch and checked as a whole; nothing is saved yet. Send the next parts with the same key, then save it with commit_construction_sketch and this new_key.'
     +(ready.pending.length?' Pending lists what the concept still needs; it must be complete when you save.':'')},ready.made)

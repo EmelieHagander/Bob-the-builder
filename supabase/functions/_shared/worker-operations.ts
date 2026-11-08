@@ -9,7 +9,7 @@ export type OperationEntry={ref:string;kind:Kind;id:string;revision:number;label
  * has the same schema all job long; the server checks the value. Before, its
  * enum of current refs changed whenever a read or save added one, and every
  * such change made Claude read the whole input again uncached. */
-export type OperationSurface={version:1;role:OperationRole;source:boolean;flexible?:boolean;stable?:boolean;bindings?:OperationBindings;refs:Partial<Record<Kind,string[]>>}
+export type OperationSurface={version:1;role:OperationRole;source:boolean;flexible?:boolean;stable?:boolean;explicitSave?:boolean;bindings?:OperationBindings;refs:Partial<Record<Kind,string[]>>}
 export type OperationBindings=Record<string,{source?:{id:string;revision:string;ref:string;readOnly:boolean};schema:{path:string[];hide:string[];description?:string;refs:{field:string;kind:Kind;nullable:boolean;id?:string;revision?:string;when?:string;kinds?:Kind[]}[];role?:OperationRole}[]}>
 type Scope={role:OperationRole;source:ConstructionRef|null;entries:OperationEntry[];completed:{source:string;key?:string;result:Record<string,any>}[];active?:{source:string;key:string};area_id:string|null}
 export type WorkerOperationsState={version:1;projectId:string;scopes:Scope[]}
@@ -37,7 +37,21 @@ function pair(node:any,id:string,rev:string|undefined,ref:string,kind:Kind,s:Ope
 }
 /** Changing entity identity requires a returned server selection. The pinned
  * construction source is omitted completely for Konrad/Mattias. */
+/** Owner decision 2026-11-08 (with lean writing): a save names its target. The
+ * construction's reference revises it whole; null saves a new construction,
+ * also in a job bound to another (a second new construction once overwrote
+ * the first). One text for bound and unbound jobs keeps the schema stable. */
+export const EXPLICIT_SAVE_TARGET_TEXT='The construction this save revises whole: its reference from operation_context or operation_refs. null saves a new construction.'
 export function workerOperationSpec(spec:ToolSpec,s:OperationSurface):ToolSpec{
+ const out=operationSpec(spec,s)
+ if(s.explicitSave&&s.role==='structure'&&out.function.name==='save_construction_draft'){
+  const p=out.function.parameters as any
+  if(!Object.hasOwn(properties(p),'source_ref'))refField(p,'source_ref','construction',s,true)
+  properties(p).source_ref.description=EXPLICIT_SAVE_TARGET_TEXT
+ }
+ return out
+}
+function operationSpec(spec:ToolSpec,s:OperationSurface):ToolSpec{
  if(s.version!==1||!['structure','materials','drawing'].includes(s.role))throw Error('worker_operation_surface_invalid')
  const out=structuredClone(spec),p=out.function.parameters as any,n=out.function.name
  if(s.bindings){
@@ -110,6 +124,8 @@ export function workerOperationSpec(spec:ToolSpec,s:OperationSurface):ToolSpec{
 export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBindings;projectId:string;hasAccess:()=>Promise<boolean>;
  /** Pinned per job (stable_tools_version 1): reference fields keep one schema. */
  stableRefs?:boolean;
+ /** Pinned with lean_construction_version 1: a save names its target (see EXPLICIT_SAVE_TARGET_TEXT). */
+ explicitSaveTarget?:boolean;
  load:(role:OperationRole,sources:ConstructionRef[],focus?:ConstructionRef)=>Promise<{status:string;source:ConstructionRef|null;entries:Omit<OperationEntry,'ref'>[];area_id?:string|null;reason?:string}>;
  validateMany?:(entries:OperationEntry[])=>Promise<boolean>;
  prepareDrawing:(source:ConstructionRef,focus?:ConstructionRef)=>Promise<Record<string,any>>;
@@ -151,7 +167,7 @@ export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBin
   scopes.set(role,scope)
   return {status:'ready'}
  },
- surface(role:OperationRole):OperationSurface{const s=get(role);return {version:1,role,source:!!s.source,flexible:opts.version!==1,...(opts.version!==1&&opts.bindings?{bindings:opts.bindings}:{}),...(opts.stableRefs?{stable:true}:{}),refs:Object.fromEntries(kinds.map(kind=>[kind,s.entries.filter(e=>e.kind===kind).map(e=>e.ref)]))}},
+ surface(role:OperationRole):OperationSurface{const s=get(role);return {version:1,role,source:!!s.source,flexible:opts.version!==1,...(opts.version!==1&&opts.bindings?{bindings:opts.bindings}:{}),...(opts.stableRefs?{stable:true}:{}),...(opts.explicitSaveTarget?{explicitSave:true}:{}),refs:Object.fromEntries(kinds.map(kind=>[kind,s.entries.filter(e=>e.kind===kind).map(e=>e.ref)]))}},
  describe(role:OperationRole){const s=get(role);return {projectId:opts.projectId,source:s.source?{ref:s.entries.find(e=>e.kind==='construction'&&e.id===s.source!.artifact_id&&e.revision===s.source!.revision)?.ref}:null,
   selections:s.entries.map(({ref,kind,label})=>({ref,kind,label}))}},
  /** Initial catalog knowledge reads are server-originated; discard their old
@@ -203,12 +219,18 @@ export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBin
    }
    if(editTools.has(name)&&role==='structure'){
     if(Object.hasOwn(v,'record_id')||Object.hasOwn(v,'expected_revision'))throw Error('operation_identity_is_server_owned')
+    // An explicit null saves a new construction, even in a bound job; the
+    // job's construction is revised only when the save names it.
+    const fresh=opts.explicitSaveTarget&&name==='save_construction_draft'&&v.source_ref===null
+    if(fresh){delete v.source_ref;v.record_id=null;v.expected_revision=0}
+    else{
     if(!s.source&&v.source_ref!=null){const e=await check(source(s,v.source_ref));s.source={artifact_id:e.id,revision:e.revision}}
     else if(s.source&&v.source_ref!==undefined&&v.source_ref!==null&&source(s,v.source_ref)?.id!==s.source.artifact_id)throw Error('operation_scope_changed')
     delete v.source_ref
     if(s.source){const e=await check(s.entries.find(e=>e.kind==='construction'&&e.id===s.source!.artifact_id&&e.revision===s.source!.revision));v.record_id=e.id;v.expected_revision=e.revision}
     else if(name==='save_construction_draft'){v.record_id=null;v.expected_revision=0}
     else throw Error('operation_source_required')
+    }
    }
    // Owner decision 2026-11-07: saving a sketch names its construction by the
    // job's source like any part edit; null with no bound source is a new one.

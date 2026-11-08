@@ -368,6 +368,12 @@ Entry turn 2026-11-07: an 11-part wall was 26,590 characters Konrad typed in
   edit, or the edit is refused and names it (`parameter_unused_node`).
 - **Roles.** `quantity_policy` follows from the role and is not written; a
   repeat's copies take the role given for the repeat's id.
+- **A save names its target** (owner decision 2026-11-08, with the same pin):
+  in Konrad's job `save_construction_draft` takes `source_ref` — the
+  construction's reference revises it whole; `null` saves a new construction,
+  also in a job bound to another. Before, a second "new" construction in one job
+  was committed over the first (deep audit). A sketch answer names it
+  (`revises`); a save's receipt says `created` or `updated`.
 
 The cost ledger prices a Claude answer cut by our own deadline from its known
 input and the output that streamed, marked `cost_basis =
