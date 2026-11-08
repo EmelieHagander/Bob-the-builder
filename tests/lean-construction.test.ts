@@ -395,3 +395,30 @@ test('deep audit: an edit the database refuses for the concept names the compone
  assert.ok(issue&&issue.ids[0]==='frame'&&issue.ids.includes('right'),JSON.stringify(moved.issues))
  assert.match(issue.message,/x 0\.\.600/);assert.match(issue.message,/x 0\.\.610/)
 })
+
+test('stored joint rules (owner decision 2026-11-08): a save stores its rules, reads show them, a later part edit applies them without resending, a changed rule is stored',async()=>{
+ const message='Ram med sparade regler.',{tools:t,material,read}=await setup(message,{storedJointRules:true})
+ const saved=await t.execute('save_construction_draft',frameSave(message,material))
+ assert.equal(saved.status,'saved',JSON.stringify(saved))
+ const id=saved.receipt.recordId
+ assert.deepEqual((await read(id)).joint_rules.map((r:any)=>r.id),['horn'])
+ // A part added with no rule sent: the stored rule joins it.
+ const back=await t.execute('edit_construction_parts',{record_id:id,expected_revision:1,key:'bak',change_note:'Bakre slå',request_quote:message,mode:'save',joint_rules:[],form_assign:[],
+  changes:{nodes:{upsert:[decision('by',382,'Bakre slån.')],remove:[]},instances:{upsert:[{id:'back',definition_id:'cross',placement:at('w','by')}],remove:[]},roles:{upsert:[bare('back')],remove:[]}}})
+ assert.equal(back.status,'saved',JSON.stringify(back))
+ assert.deepEqual(back.rule_joints.map((j:any)=>j.id).sort(),[ruleJointId('back','left'),ruleJointId('back','right')].sort())
+ const r2=await read(id);assert.equal(r2.revision,2);assert.deepEqual(r2.joint_rules.map((r:any)=>r.reason),[rule.reason],'unchanged rules are inherited')
+ // A rule sent again with another reason replaces the stored one for the new revision.
+ const glued={...rule,reason:'Tvärslån limmas.'}
+ const mid=await t.execute('edit_construction_parts',{record_id:id,expected_revision:2,key:'mitt',change_note:'Mittslå',request_quote:message,mode:'save',joint_rules:[glued],form_assign:[],
+  changes:{nodes:{upsert:[decision('my',191,'Mittslån.')],remove:[]},instances:{upsert:[{id:'mid',definition_id:'cross',placement:at('w','my')}],remove:[]},roles:{upsert:[bare('mid')],remove:[]}}})
+ assert.equal(mid.status,'saved',JSON.stringify(mid))
+ const r3=await read(id);assert.deepEqual(r3.joint_rules.map((r:any)=>r.reason),['Tvärslån limmas.'])
+ assert.equal(r3.joints.find((j:any)=>j.id===ruleJointId('left','mid')).reason,'Tvärslån limmas.')
+ // A rule with a new id for the same definition pair replaces the stored one, not ambiguous.
+ const screwed={...rule,id:'skruv',reason:'Tvärslån skruvas.'}
+ const third=await t.execute('edit_construction_parts',{record_id:id,expected_revision:3,key:'tredje',change_note:'Tredje slå',request_quote:message,mode:'save',joint_rules:[screwed],form_assign:[],
+  changes:{nodes:{upsert:[decision('ty',100,'Tredje slån.')],remove:[]},instances:{upsert:[{id:'third',definition_id:'cross',placement:at('w','ty')}],remove:[]},roles:{upsert:[bare('third')],remove:[]}}})
+ assert.equal(third.status,'saved',JSON.stringify(third))
+ assert.deepEqual((await read(id)).joint_rules.map((r:any)=>r.id),['skruv'])
+})

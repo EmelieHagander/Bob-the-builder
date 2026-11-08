@@ -1,7 +1,7 @@
 import { FORMULA_STRING } from './cad-formulas.ts'
 import { ZERO_ARRAYS_TEXT } from './cad-parameters.ts'
 import { REPEAT_ARRAYS_TEXT } from './cad-arrays.ts'
-import { JOINT_RULES_SCHEMA } from './construction-joint-rules.ts'
+import { JOINT_RULES_SCHEMA, JOINT_RULES_STORED_SCHEMA } from './construction-joint-rules.ts'
 import { FORM_ASSIGN_SCHEMA } from './construction-form.ts'
 
 /** Owner decision 2026-11-07 (lean_construction_version 1, pinned per
@@ -46,6 +46,15 @@ function withArraySpacing(recipe: any): any {
 
 export const LEAN_SAVE_NOTE = ' Lean writing: a number in the recipe may be a formula over parameter node names, with + - * / and parentheses and spaces around a minus sign; a number inside a formula needs its own named node with a reason. Code adds the formula\'s nodes and bindings, so bind by hand only fields written as numbers other than 0. joint_rules joins touching parts by definition pair; code writes those joints. Code completes form_refinement: a part no mapping names goes to the concept component whose envelope holds it, when exactly one does. A role\'s quantity_policy follows from the role; a repeat\'s parts take the role given for the repeat\'s id. A save refused only for a text, a formula or a joint rule is kept as a sketch under its key when no sketch work is open under it: send the correction with mode sketch and the same key, with the current title, description, area, refinement and open questions; parts you do not send stay as they are.'
 export const LEAN_EDIT_NOTE = ' Lean writing: a number in an upserted definition or part may be a formula over parameter node names, with + - * / and parentheses and spaces around a minus sign; it replaces that field\'s binding. A number where code computes the field from a node is refused; write a formula or a node name to change it. The saved number sent again is computed anew, and the answer lists it. Removing a part removes what only served it: its role, its joints, its bindings and formula nodes, and the material of a removed definition; the answer lists the roles, joints and materials. Remove a node you wrote that only served it in the same edit; otherwise the edit is refused and names it. In this edit, joint_rules applies to the parts it adds, changes or moves; an edit with only joint_rules applies them to every touching pair and restates the joints code wrote for them. Code maps an added part to the concept component whose envelope holds it, when exactly one does; with a part change, form_assign names the component for a part several hold. Joints code wrote follow their parts when they move. A role\'s quantity_policy follows from the role. A change refused only for a text, a formula or a joint rule is kept in a sketch when none is open: send only the correction with mode sketch, then commit it.'
+// Pinned with joint_rule_store_version 1 (owner decision 2026-11-08).
+const SAVE_RULES_OLD = 'joint_rules joins touching parts by definition pair; code writes those joints.'
+const SAVE_RULES_NEW = 'joint_rules joins touching parts by definition pair; code writes those joints and stores the rules with the construction.'
+const EDIT_RULES_OLD = 'In this edit, joint_rules applies to the parts it adds, changes or moves;'
+const EDIT_RULES_NEW = 'The construction\'s stored joint rules apply to the parts this edit adds, changes or moves, and joint_rules adds rules or replaces one with the same id or definition pair;'
+const swap = (text: string, from: string, to: string) => { if (text.split(from).length !== 2) throw new Error('lean_rules_text_unexpected'); return text.replace(from, () => to) }
+/** The lean notes as published: with stored joint rules one sentence each changes. */
+export const leanSaveNote = (storedRules: boolean) => storedRules ? swap(LEAN_SAVE_NOTE, SAVE_RULES_OLD, SAVE_RULES_NEW) : LEAN_SAVE_NOTE
+export const leanEditNote = (storedRules: boolean) => storedRules ? swap(LEAN_EDIT_NOTE, EDIT_RULES_OLD, EDIT_RULES_NEW) : LEAN_EDIT_NOTE
 const MAPPING_OLD = 'Small edits inherit the saved mapping; use a complete save to change the mapping.'
 const MAPPING_NEW = 'Part edits keep the mapping in step with the parts.'
 const CASCADE_OLD = 'Explicitly remove or update dependent joints, bindings, nodes, materials and roles when removing parts; no silent cascade.'
@@ -69,7 +78,7 @@ function withoutQuantityPolicy<T>(schema: T): T {
 
 type Spec = { type: 'function'; function: { name: string; description: string; parameters: any } }
 /** save_construction_draft under lean_construction_version 1. */
-export function withLeanSave<T extends Spec>(spec: T): T {
+export function withLeanSave<T extends Spec>(spec: T, storedRules = false): T {
   const p = spec.function.parameters
   // A sketch call may carry only a correction, and formulas bring their own
   // bindings, so these lists may be empty; a save is still checked whole.
@@ -81,17 +90,19 @@ export function withLeanSave<T extends Spec>(spec: T): T {
   const policy = p.properties.instance_policy
   const instance_policy = Array.isArray(policy?.anyOf) ? { ...policy, anyOf: policy.anyOf.map((o: any) => o?.properties?.instances
     ? { ...o, properties: { ...o.properties, instances: empty(o.properties.instances) } } : o) } : policy
-  return { ...spec, function: { ...spec.function, description: spec.function.description.replace(MAPPING_OLD, MAPPING_NEW) + LEAN_SAVE_NOTE,
-    parameters: { ...p, required: [...p.required, 'joint_rules'], properties: { ...p.properties, recipe: withoutQuantityPolicy(recipe), parameter_plan, materials: empty(p.properties.materials), instance_policy: withoutQuantityPolicy(instance_policy), joint_rules: JOINT_RULES_SCHEMA } } } }
+  const note = leanSaveNote(storedRules)
+  return { ...spec, function: { ...spec.function, description: spec.function.description.replace(MAPPING_OLD, MAPPING_NEW) + note,
+    parameters: { ...p, required: [...p.required, 'joint_rules'], properties: { ...p.properties, recipe: withoutQuantityPolicy(recipe), parameter_plan, materials: empty(p.properties.materials), instance_policy: withoutQuantityPolicy(instance_policy), joint_rules: storedRules ? JOINT_RULES_STORED_SCHEMA : JOINT_RULES_SCHEMA } } } }
 }
 /** edit_construction_parts under lean_construction_version 1. */
-export function withLeanEdit<T extends Spec>(spec: T): T {
+export function withLeanEdit<T extends Spec>(spec: T, storedRules = false): T {
   const p = spec.function.parameters, c = p.properties.changes
   const changes = { ...c, properties: { ...c.properties,
     definitions: withFormulaNumbers(c.properties.definitions), instances: withFormulaNumbers(c.properties.instances),
     ...(c.properties.roles ? { roles: withoutQuantityPolicy(c.properties.roles) } : {}) } }
-  return { ...spec, function: { ...spec.function, description: spec.function.description.replace(CASCADE_OLD, CASCADE_NEW) + LEAN_EDIT_NOTE,
-    parameters: { ...p, required: [...p.required, 'joint_rules', 'form_assign'], properties: { ...p.properties, changes, joint_rules: JOINT_RULES_SCHEMA, form_assign: FORM_ASSIGN_SCHEMA } } } }
+  const note = leanEditNote(storedRules)
+  return { ...spec, function: { ...spec.function, description: spec.function.description.replace(CASCADE_OLD, CASCADE_NEW) + note,
+    parameters: { ...p, required: [...p.required, 'joint_rules', 'form_assign'], properties: { ...p.properties, changes, joint_rules: storedRules ? JOINT_RULES_STORED_SCHEMA : JOINT_RULES_SCHEMA, form_assign: FORM_ASSIGN_SCHEMA } } } }
 }
 
 const COMMIT_OLD = 'For a new construction new_key is the key its save_construction_draft sketch used; otherwise new_key is null.'

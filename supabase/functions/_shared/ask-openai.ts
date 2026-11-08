@@ -853,6 +853,8 @@ export async function answerWithOpenAi(opts: {
     chosenJointFasteners:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.joint_fastener_version===2),
     // Owner decision 2026-11-07 (lean_construction_version 1): formulas, joint rules, code-kept FORM mapping, kept refusals.
     leanConstruction:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.lean_construction_version===1),
+    // Owner decision 2026-11-08 (joint_rule_store_version 1): rules stored with the construction.
+    storedJointRules:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.joint_rule_store_version===1),
     // Owner decision 2026-11-02 (build_place_version 1): a save names its sub-build and code places it there.
     ...(aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.build_place_version===1)?{
       placeIn:(id:string,subBuild:string)=>buildTree.execute('place_build',{build_id:id,sub_build_id:subBuild,room_id:null})}:{}),
@@ -1197,6 +1199,9 @@ export async function answerWithOpenAi(opts: {
   const workerOperations=execution.operationPathsVersion!==undefined?createWorkerOperations({
     version:execution.operationPathsVersion,bindings:operationBindings,projectId:opts.projectId,hasAccess,
     ...(execution.stableToolsVersion===1?{stableRefs:true}:{}),
+    // Owner decision 2026-11-08: a save names its target. Pinned with the stored
+    // joint rules, so jobs already running keep their tool surface.
+    ...(aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.joint_rule_store_version===1)?{explicitSaveTarget:true}:{}),
     load:async(role,sources,focus)=>{
       // Navigation is not an assignment. Multiple inspected constructions need
       // an explicit server-issued selection, never a last-row/focus guess.

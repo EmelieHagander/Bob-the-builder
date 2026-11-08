@@ -3110,6 +3110,63 @@ so the door beam was never saved (about USD 0.79 of trial sketches).
    report; together roughly −55 % per step.
 5. Reads show the stored graph, not formulas, so Konrad copies `fx.` hashes.
 
+<a id="publication-504-2026-11-08"></a>
+**Hosted publication of #504 — 2026-11-08, 05:31–05:33 UTC.** Owner: "Gå med
+rek.". Merged at `0feff885b8c85232bea2f7e9193a767d4cc51ffb` (tree
+`3e012e8a30354d2019205725d64a8d5c2309e681` equals the tested branch). Safety
+branch `save/bob-before-deep-audit-fixes-2026-11-08` retains `ac6a0e4`. Zero
+active jobs before and after. bob-worker v219 (ezbr
+`3777a427966e36a426895563a6643c8252e6c92a82b4426c5834cb640e0d1e37`), ask-bob
+v251 (`1814d0e10074a7d72df406410489e2975b427833d3677999cb4458255de7a822`);
+returned sources match except the known `cad-intake.ts` erasure and contain
+the four fixes. `20261108090000_bob_lean_edit_text.sql` as ledger
+`20261108053347`: `tools.edit_construction_parts` v13, publication
+`bob-lean-edit-text-v1`, new sentence present, old one gone.
+
+**Built after the audit (owner: "Gå med rek.", 2026-11-08):**
+
+- **A save names its target** (decision 1): with lean writing,
+  `save_construction_draft` takes `source_ref` in every structure job — the
+  construction's reference revises it whole, `null` saves a new construction,
+  also in a bound job; sketch answers name the target (`revises`).
+  `worker-operations`, `lean-worker-path` (real binding against the database).
+- **Limits end the hand-over, not the turn** (decision 3): with the
+  final-answer pin, Konrad's context ceiling (`context_limit`) and a checkpoint
+  over 2 MB (`state_limit`) end the hand-over with what it saved and a note to
+  hand over the rest; the turn goes on. Claude Opus 5.5 takes 1M tokens, so
+  Konrad's 200k ceiling (about 272k Claude tokens) stays below the provider's
+  limit and is not recounted. Renewal follows a committed sketch now that a
+  commit is a read-back saved revision. `bob-worker-limits`,
+  `bob-worker-renewal`.
+- **Joint rules stored with the construction** (decision 2): migration
+  `20261108100000_construction_joint_rules.sql` (table per revision, RLS read
+  by project access, immutable, inherited by revisions without rules; the
+  edit prepare accepts `data.joint_rules`; the writer stores the set for the
+  new revision and keeps exact-retry receipts; reads return it) and catalog
+  `20261108100100_bob_stored_joint_rules_catalog.sql` (pin
+  `joint_rule_store_version` 1, publication `bob-stored-joint-rules-v1`,
+  generated from the code's texts). A part edit applies the stored rules to
+  the parts it adds or moves without resending them. `lean-construction`
+  stored-rules test against the database.
+- Pre-existing, unchanged: `bob-final-answer` "a worker stopped by the
+  spending stop…" and `worker-checkpoint-catalog` fail the same before #504.
+  An exact retry (same key) of a lean part edit that code extended is refused
+  as `operation_reused` (nothing is written twice); the database compares the
+  stored whole change with the first, unextended prepare. `konrad-lean-catalog`
+  "the model reads the schema…" (an edit `open_questions` difference) fails the
+  same on `main`.
+- **Review of #505 before publication** (one reviewer; migration security,
+  RLS, receipts, inheritance and the rule merge held): a new construction saved
+  in a bound job took the job over, so the handed-over construction became
+  unreachable (medium) — the job now stays on its construction; a sent rule
+  for a pair a stored rule covers made the pair ambiguous — it now replaces the
+  stored rule of that pair, and a set over 32 is named (`joint_rules_full`);
+  the explicit save target is pinned with the stored rules, not the earlier
+  lean pin; the renamed inner writer is no longer callable by `authenticated`;
+  a first step already past the ceiling is a failed worker (no hand-over loop)
+  and `state_limit` has its own note; a whole save names the stored rules it
+  leaves out; docs corrected.
+
 **Open, low (documented):** other nested journal steps (CAD guard reads,
 `cad:construction_check`), worker sessions reused within one claim, live reads
 feeding journaled inputs in long steps, date checks across midnight, recorded

@@ -266,6 +266,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   * both sketch stores): formulas in the recipe, joint rules, code-kept FORM
   * mapping, and refused construction writes kept in the sketch. */
  leanConstruction?:boolean;
+ /** Pinned per manifest (joint_rule_store_version 1, owner decision
+  * 2026-11-08; with lean writing): joint rules are stored with the
+  * construction and part edits apply them to the parts they add or move. */
+ storedJointRules?:boolean;
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
  const views=createConstructionViews(opts.projectId,opts.now,opts.fastPageFit)
@@ -281,8 +285,9 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  const placedSaveTool=(t=>opts.defaultZero&&opts.repeatStart?withRepeatStartSchema(t):t)(zeroText(opts.chosenJointFasteners?withChosenJointFasteners(formSaveTool):formSaveTool))
  const subBuildSaveTool=opts.placeIn?withSubBuild(placedSaveTool):placedSaveTool
  const lean=!!(opts.leanConstruction&&opts.defaultZero&&opts.chosenJointFasteners&&opts.formRefinement&&opts.sketches&&opts.newSketches)
+ const stored=lean&&!!opts.storedJointRules
  const sketchedSaveTool=targetless(opts.newSketches?withNewConstructionSketch(subBuildSaveTool):subBuildSaveTool)
- const saveTool=lean?withLeanSave(sketchedSaveTool):sketchedSaveTool
+ const saveTool=lean?withLeanSave(sketchedSaveTool,stored):sketchedSaveTool
  const joints=(value:unknown)=>opts.chosenJointFasteners?storedChosenJoints(value):storedJoints(value)
  const baseParameterTool=opts.constructionSourceRefresh?CONSTRUCTION_PARAMETER_REFRESH_TOOL:CONSTRUCTION_PARAMETER_TOOL
  const withText=(tool:typeof CONSTRUCTION_EDIT_TOOL)=>opts.constructionText?withConstructionText(tool,opts.constructionNotes):tool
@@ -290,7 +295,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  const workEditTool=opts.coherentWork?withText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL)):CONSTRUCTION_EDIT_TOOL
  const fastenedEditTool=zeroText(opts.chosenJointFasteners?withChosenJointFasteners(workEditTool):workEditTool)
  const sketchedEditTool=targetless(opts.sketches?withConstructionSketch(fastenedEditTool):fastenedEditTool)
- const editTool=lean?withLeanEdit(sketchedEditTool):sketchedEditTool
+ const editTool=lean?withLeanEdit(sketchedEditTool,stored):sketchedEditTool
  const commitTool=opts.newSketches?(lean?withLeanCommit(CONSTRUCTION_SKETCH_COMMIT_TOOL_V2):CONSTRUCTION_SKETCH_COMMIT_TOOL_V2):CONSTRUCTION_SKETCH_COMMIT_TOOL
  const sketchTools=opts.writer&&opts.sketches?[commitTool]:[]
  const prepareChange=async(v:Record<string,any>,domain:WritePayload,prepare:(p:WritePayload)=>Promise<Record<string,any>>)=>{
@@ -359,12 +364,12 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  // sketching: an unfinished construction may still miss concept components or
  // fill a component only partly; those come back as pending, not as refusals.
  const PENDING_CONCEPT=new Set(['concept_part_missing','form_envelope_incomplete'])
- const prepareSave=async(v:Record<string,any>,sketching=false):Promise<{error:Record<string,any>}|{commit:WritePayload;recipe:Record<string,any>;parameters:unknown;readiness:DesignReadiness;pending:Record<string,any>[];made:RuleJoint[]}>=>{
+ const prepareSave=async(v:Record<string,any>,sketching=false):Promise<{error:Record<string,any>}|{commit:WritePayload;recipe:Record<string,any>;parameters:unknown;readiness:DesignReadiness;pending:Record<string,any>[];made:RuleJoint[];droppedRules:string[]}>=>{
   if(!opts.message.includes(v.request_quote)||!v.request_quote.trim()||(v.record_id===null?v.expected_revision!==0:v.expected_revision<1))return {error:{status:'invalid',message:'Use the current request and exact expected revision.'}}
   const pending:Record<string,any>[]=[]
   // A rule refusal is kept in a sketch, so it is returned only once the
   // construction itself passes; a construction error is never kept (audit round 3).
-  let deferred:Record<string,any>|null=null
+  let deferred:Record<string,any>|null=null,droppedRules:string[]=[]
   // Lean writing: formulas become the same nodes and bindings a hand-written plan has.
   if(lean){
    // Measurements give formula fields their real values before the recipe is checked.
@@ -422,7 +427,9 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(typeof v.record_id==='string'){
     const saved=await opts.read(v.record_id,v.expected_revision,null) as Record<string,any>
     if(!await opts.hasAccess())return {error:{status:'denied'}}
-    if(saved?.projectId===opts.projectId&&saved.status==='ok'&&saved.artifact_id===v.record_id){const now=owners(recipe);gone=new Set([...owners(saved.recipe)].filter(x=>!now.has(x)))}
+    if(saved?.projectId===opts.projectId&&saved.status==='ok'&&saved.artifact_id===v.record_id){const now=owners(recipe);gone=new Set([...owners(saved.recipe)].filter(x=>!now.has(x)))
+     // A whole save states the rule set; stored rules it leaves out are named (review of #505).
+     if(stored&&Array.isArray(saved.joint_rules)){const sent=new Set((Array.isArray(v.joint_rules)?v.joint_rules:[]).map((r:any)=>r?.id));droppedRules=saved.joint_rules.map((r:any)=>r?.id).filter((id:unknown)=>typeof id==='string'&&!sent.has(id))}}
    }
    const bindings=parsedPlan.bindings.filter(b=>targets.has(b.path)||!gone.has(owner(b.path)))
    const unknown=bindings.filter(b=>!targets.has(b.path)).map(b=>b.path)
@@ -475,14 +482,16 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   if(deferred)return {error:deferred}
   if(!await opts.hasAccess())return {error:{status:'denied'}}
   const {record_id,expected_revision,request_quote,parameter_plan:_plan,sub_build_id:_subBuild,joint_rules:_rules,...data}=v
-  return {commit:{kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,joints:joints(saveJoints),recipe,parameters}} as WritePayload,recipe,parameters,readiness,pending,made}
+  // A save states the whole rule set, stored for the new revision.
+  return {commit:{kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,joints:joints(saveJoints),recipe,parameters,
+   ...(stored?{joint_rules:structuredClone(Array.isArray(v.joint_rules)?v.joint_rules:[])}:{})}} as WritePayload,recipe,parameters,readiness,pending,made,droppedRules}
  }
  const saveDraft=async(v:Record<string,any>):Promise<Record<string,any>>=>{
   const ready=await prepareSave(v)
   if('error' in ready)return ready.error
   if(!await opts.hasAccess())return {status:'denied'}
-  const result=await opts.writer!.commit(ready.commit)
-  return withRuleJoints(result,ready.made,v.joint_rules)
+  const result=withRuleJoints(await opts.writer!.commit(ready.commit),ready.made,v.joint_rules)
+  return result.status==='saved'&&ready.droppedRules.length?{...result,joint_rules_dropped:ready.droppedRules}:result
  }
  // The joints code wrote from joint rules, so Konrad and Bob see each one.
  // Rules sent that wrote nothing say so (audit round 3).
@@ -497,10 +506,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  // for touching pairs without one, and the FORM mapping follows the parts.
  type Cascade={roles:string[];materials:string[];joints:string[]}
  type Recomputed={path:string;written:number;computed:number}
- type LeanExtra={unused:string[];staleBindings:string[];joints:Record<string,any>[];stale:string[];made:RuleJoint[];formRefinement:FormRefinement|null;cascade:Cascade;recomputed:Recomputed[];deferred:Record<string,any>|null}
- const leanEdit=async(v:Record<string,any>,prepared:Record<string,any>,d:ReturnType<typeof zeroDefaults>,raw:Record<string,any>,scope:RuleScope={}):Promise<{error:Record<string,any>}|LeanExtra>=>{
+ type LeanExtra={unused:string[];staleBindings:string[];joints:Record<string,any>[];stale:string[];made:RuleJoint[];formRefinement:FormRefinement|null;cascade:Cascade;recomputed:Recomputed[];deferred:Record<string,any>|null;ruleSet:JointRule[]|null}
+ const leanEdit=async(v:Record<string,any>,prepared:Record<string,any>,d:ReturnType<typeof zeroDefaults>,raw:Record<string,any>,scope:RuleScope={},storedRules:JointRule[]|null=null):Promise<{error:Record<string,any>}|LeanExtra>=>{
   const next=prepared.next,draft=prepared.draft,planIn=parseParameterPlan(next.parameter_plan)
-  const none:LeanExtra={unused:[],staleBindings:[],joints:[],stale:[],made:[],formRefinement:null,cascade:{roles:[],materials:[],joints:[]},recomputed:[],deferred:null}
+  const none:LeanExtra={unused:[],staleBindings:[],joints:[],stale:[],made:[],formRefinement:null,cascade:{roles:[],materials:[],joints:[]},recomputed:[],deferred:null,ruleSet:null}
   const recipe=parseCadAssemblyRequest(structuredClone(next.recipe))
   if(!recipe)return none
   // What only served removed parts goes with them: their roles, the materials
@@ -560,8 +569,16 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   }
   const policy=constructionInstancePolicy(recipe,livePolicy)
   const roles=new Map(policy.instances.map(i=>[i.instance_id,i.role] as [string,string]))
-  const ruled=ruleJoints(recipe,liveJoints,(v.joint_rules??[]) as JointRule[],roles,scope)
+  // Stored rules apply too; a sent rule replaces a stored one by id, and a
+  // stored rule of a removed definition goes (owner decision 2026-11-08).
+  // A sent rule for a definition pair replaces the stored rule of that pair
+  // too, so a new id never makes the pair ambiguous (review of #505).
+  const sent=(v.joint_rules??[]) as JointRule[],sentIds=new Set(sent.map(r=>r.id)),pairOf=(r:JointRule)=>JSON.stringify([...(r.between??[])].sort())
+  const sentPairs=new Set(sent.map(pairOf))
+  const ruleSet=storedRules?[...storedRules.filter(r=>!sentIds.has(r.id)&&!sentPairs.has(pairOf(r))&&(r.between??[]).every(x=>defs.has(x))),...sent]:null
+  const ruled=ruleJoints(recipe,liveJoints,ruleSet??sent,roles,scope)
   if(ruled.issues.length)deferred??={status:'invalid',reason:'joint_rule_invalid',issues:ruled.issues,message:'No construction changed. Correct the named joint rules.'}
+  if(ruleSet&&ruleSet.length>32)deferred??={status:'invalid',reason:'joint_rules_full',message:'No construction changed. A construction holds at most 32 joint rules; replace one by its id or its definition pair.'}
   let formRefinement:FormRefinement|null=null
   if(draft?.form_refinement&&Number.isSafeInteger(draft.target_revision)&&opts.readConstructionReadiness){
    const read=parseDesignReadiness((await opts.readConstructionReadiness(draft.target_revision,draft.area_id??null,draft.form_refinement) as Record<string,unknown>|null)?.design_readiness)
@@ -583,7 +600,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    }
    if(ext.changed)formRefinement=ext.refinement
   }
-  return {unused,staleBindings,joints:ruled.joints,stale:ruled.stale,made:ruled.made,formRefinement,cascade,recomputed,deferred}
+  return {unused,staleBindings,joints:ruled.joints,stale:ruled.stale,made:ruled.made,formRefinement,cascade,recomputed,deferred,ruleSet}
  }
  // Lean writing: formulas in upserted definitions and parts become node and
  // binding upserts, against the saved revision this change applies to. A
@@ -598,11 +615,12 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  // The same path serves a direct save, a sketched change and a sketch commit.
  const prepareParts=async(v:Record<string,any>):Promise<{error:Record<string,any>}|{payload:WritePayload;domain:WritePayload;prepared:Record<string,any>;made?:RuleJoint[];cascaded?:{roles:string[];materials:string[];joints:string[]}|null;recomputed?:Recomputed[];codeRemoved?:string[]}>=>{
   if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {error:{status:'invalid',issues:[{code:'request_quote',path:'request_quote'}]}}
-  let made:RuleJoint[]=[],ruleOnly:RuleJoint[]=[],cascaded:{roles:string[];materials:string[];joints:string[]}|null=null,recomputed:Recomputed[]=[],deferred:Record<string,any>|null=null,codeRemoved:string[]=[]
+  let made:RuleJoint[]=[],ruleOnly:RuleJoint[]=[],cascaded:{roles:string[];materials:string[];joints:string[]}|null=null,recomputed:Recomputed[]=[],deferred:Record<string,any>|null=null,codeRemoved:string[]=[],baseRules:JointRule[]|null=null,ruleSet:JointRule[]|null=null
   const raw=v.changes
   if(lean){
    const base=await readBase(v)
    if('error' in base)return base
+   if(stored)baseRules=Array.isArray(base.draft.joint_rules)?base.draft.joint_rules as JointRule[]:[]
    // A measurement added in this change gives its formulas real values too.
    const added=(Array.isArray(v.changes?.nodes?.upsert)?v.changes.nodes.upsert:[]).filter((n:any)=>n?.role==='source'&&n.source&&typeof n.id==='string')
    let valueOf=(_id:string):number|undefined=>undefined
@@ -622,16 +640,16 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     const plan=parseParameterPlan({version:1,frames:(draft.parameters?.frames??[]).map(({source_version:_v,translation_mm:_t,rotation_degrees:_r,axes:_a,...f}:any)=>f),
      nodes:(draft.parameters?.nodes??[]).map(({normalized:_n,sources:_s,...n}:any)=>n),bindings:draft.parameters?.bindings??[]})
     const saved={draft,next:{recipe:draft.recipe,parameter_plan:plan,materials:draft.materials,joints:draft.joints,instance_policy:draft.instance_policy??null}}
-    const extra=recipe?await leanEdit(v,saved,zeroDefaults(recipe,plan),{},{rewrite:true}):null
+    const extra=recipe?await leanEdit(v,saved,zeroDefaults(recipe,plan),{},{rewrite:true},baseRules):null
     if(extra&&'error' in extra)return extra
     if(extra?.deferred)return {error:extra.deferred}
     if(extra&&(extra.joints.length||extra.stale.length)){v={...v,changes:{joints:{upsert:extra.joints,remove:extra.stale}}};ruleOnly=extra.made;codeRemoved=extra.stale}
-    else if(extra)return {error:{status:'invalid',reason:'rules_wrote_nothing',rule_joints:[],message:'No construction changed. '+RULE_NOTE}}
+    else if(extra)return {error:{status:'invalid',reason:'rules_wrote_nothing',rule_joints:[],message:'No construction changed. '+RULE_NOTE+(stored?' Rules are stored with the revision a change saves; rules that write no joint save nothing, so send a new rule with the parts it is for.':'')}}
    }
   }
- const editPayload=(changes:Record<string,any>,formRefinement:FormRefinement|null=null):WritePayload=>({kind:'construction_edit',record_id:v.record_id,expected_revision:v.expected_revision,expected_updated_at:null,request_quote:v.request_quote,
+ const editPayload=(changes:Record<string,any>,formRefinement:FormRefinement|null=null,rules:JointRule[]|null=null):WritePayload=>({kind:'construction_edit',record_id:v.record_id,expected_revision:v.expected_revision,expected_updated_at:null,request_quote:v.request_quote,
    data:{key:v.key,change_note:v.change_note,changes:changes?.joints?{...changes,joints:{...changes.joints,upsert:joints(changes.joints.upsert)}}:changes,computed:null,
-    ...(opts.coherentWork?{target_revision:v.target_revision}:{}),...(opts.constructionText&&v.text?{text:v.text}:{}),...(formRefinement?{form_refinement:formRefinement}:{})}})
+    ...(opts.coherentWork?{target_revision:v.target_revision}:{}),...(opts.constructionText&&v.text?{text:v.text}:{}),...(formRefinement?{form_refinement:formRefinement}:{}),...(rules?{joint_rules:rules}:{})}})
   let change=await prepareChange(v,editPayload(v.changes),opts.prepareEdit!)
   if(change.error)return {error:change.error}
   // The server merges the plan, so zero defaults are known only after a first
@@ -654,7 +672,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     // except from an earlier save still holds for the rest.
     // Code adds the parts whose computed place or size changed.
     const touched=new Set<string>([...(raw?.instances?.upsert??[]).map((x:any)=>x?.id),...(raw?.roles?.upsert??[]).map((x:any)=>x?.instance_id)])
-    const extra=await leanEdit(v,change.prepared,d,raw,{touched})
+    const extra=await leanEdit(v,change.prepared,d,raw,{touched},baseRules)
     if('error' in extra)return extra
     deferred=extra.deferred;recomputed=extra.recomputed
     // What only served removed parts goes with them.
@@ -680,10 +698,13 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(stale.length)list('joints').remove.push(...stale)
     codeRemoved=[...new Set([...codeRemoved,...stale])]
     formRefinement=extra.formRefinement;made=extra.made
-    added||=!!(extra.unused.length||extra.staleBindings.length||extra.joints.length||stale.length||formRefinement||Object.values(extra.cascade).some(x=>x.length))
+    // A changed rule set is stored with the new revision; an unchanged one is inherited.
+    const byId=(rules:JointRule[]|null)=>JSON.stringify([...(rules??[])].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0))
+    if(extra.ruleSet&&byId(extra.ruleSet)!==byId(baseRules))ruleSet=extra.ruleSet
+    added||=!!(extra.unused.length||extra.staleBindings.length||extra.joints.length||stale.length||formRefinement||ruleSet||Object.values(extra.cascade).some(x=>x.length))
    }
    if(added){
-    change=await prepareChange(v,editPayload(c,formRefinement),opts.prepareEdit!)
+    change=await prepareChange(v,editPayload(c,formRefinement,ruleSet),opts.prepareEdit!)
     if(change.error)return {error:change.error}
    }
   }
@@ -1025,7 +1046,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(!await opts.hasAccess())return {status:'denied'}
    const put=await opts.newSketches!.put(v.key,read.revision,kept as any)
    if(put.status!=='stored')return sketchRefusal(ready.error)
-   return {...ready.error,saved:false,sketched:true,new_key:v.key,sketch:{status:'kept_with_issues',new_key:v.key,part_count:kept.part_count},
+   return {...ready.error,saved:false,sketched:true,new_key:v.key,sketch:{status:'kept_with_issues',new_key:v.key,part_count:kept.part_count,revises:save.record_id??null},
     message:[typeof ready.error.message==='string'?ready.error.message:null,KEPT_NEW].filter(Boolean).join(' ')}
   }
   const check=await sketchCheck({projectId:opts.projectId,artifact_id:null,revision:0,current_revision:0,source_state:'current',archived:false,
@@ -1036,7 +1057,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   if(!await opts.hasAccess())return {status:'denied'}
   const put=await opts.newSketches!.put(v.key,read.revision,sketch as any)
   if(put.status!=='stored')return {status:put.status,saved:false,message:'The sketch was not stored; read it with commit_construction_sketch action read before continuing.'}
-  return withRuleJoints({status:'sketched',saved:false,new_key:v.key,part_count:sketch.part_count,sketch:newSummary(save),check,
+  // The construction a commit would revise, or null for a new one (owner decision 2026-11-08).
+  return withRuleJoints({status:'sketched',saved:false,new_key:v.key,part_count:sketch.part_count,...(lean?{revises:save.record_id??null}:{}),sketch:newSummary(save),check,
    ...(ready.pending.length?{pending:ready.pending.slice(0,24)}:{}),
    message:'Kept in your sketch and checked as a whole; nothing is saved yet. Send the next parts with the same key, then save it with commit_construction_sketch and this new_key.'
     +(ready.pending.length?' Pending lists what the concept still needs; it must be complete when you save.':'')},ready.made)

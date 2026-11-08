@@ -9,7 +9,7 @@ export type OperationEntry={ref:string;kind:Kind;id:string;revision:number;label
  * has the same schema all job long; the server checks the value. Before, its
  * enum of current refs changed whenever a read or save added one, and every
  * such change made Claude read the whole input again uncached. */
-export type OperationSurface={version:1;role:OperationRole;source:boolean;flexible?:boolean;stable?:boolean;bindings?:OperationBindings;refs:Partial<Record<Kind,string[]>>}
+export type OperationSurface={version:1;role:OperationRole;source:boolean;flexible?:boolean;stable?:boolean;explicitSave?:boolean;bindings?:OperationBindings;refs:Partial<Record<Kind,string[]>>}
 export type OperationBindings=Record<string,{source?:{id:string;revision:string;ref:string;readOnly:boolean};schema:{path:string[];hide:string[];description?:string;refs:{field:string;kind:Kind;nullable:boolean;id?:string;revision?:string;when?:string;kinds?:Kind[]}[];role?:OperationRole}[]}>
 type Scope={role:OperationRole;source:ConstructionRef|null;entries:OperationEntry[];completed:{source:string;key?:string;result:Record<string,any>}[];active?:{source:string;key:string};area_id:string|null}
 export type WorkerOperationsState={version:1;projectId:string;scopes:Scope[]}
@@ -37,7 +37,21 @@ function pair(node:any,id:string,rev:string|undefined,ref:string,kind:Kind,s:Ope
 }
 /** Changing entity identity requires a returned server selection. The pinned
  * construction source is omitted completely for Konrad/Mattias. */
+/** Owner decision 2026-11-08 (with lean writing): a save names its target. The
+ * construction's reference revises it whole; null saves a new construction,
+ * also in a job bound to another (a second new construction once overwrote
+ * the first). One text for bound and unbound jobs keeps the schema stable. */
+export const EXPLICIT_SAVE_TARGET_TEXT='The construction this save revises whole: its reference from operation_context or operation_refs. null saves a new construction; a job working on another construction stays on that one.'
 export function workerOperationSpec(spec:ToolSpec,s:OperationSurface):ToolSpec{
+ const out=operationSpec(spec,s)
+ if(s.explicitSave&&s.role==='structure'&&out.function.name==='save_construction_draft'){
+  const p=out.function.parameters as any
+  if(!Object.hasOwn(properties(p),'source_ref'))refField(p,'source_ref','construction',s,true)
+  properties(p).source_ref.description=EXPLICIT_SAVE_TARGET_TEXT
+ }
+ return out
+}
+function operationSpec(spec:ToolSpec,s:OperationSurface):ToolSpec{
  if(s.version!==1||!['structure','materials','drawing'].includes(s.role))throw Error('worker_operation_surface_invalid')
  const out=structuredClone(spec),p=out.function.parameters as any,n=out.function.name
  if(s.bindings){
@@ -110,6 +124,8 @@ export function workerOperationSpec(spec:ToolSpec,s:OperationSurface):ToolSpec{
 export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBindings;projectId:string;hasAccess:()=>Promise<boolean>;
  /** Pinned per job (stable_tools_version 1): reference fields keep one schema. */
  stableRefs?:boolean;
+ /** Pinned with joint_rule_store_version 1: a save names its target (see EXPLICIT_SAVE_TARGET_TEXT). */
+ explicitSaveTarget?:boolean;
  load:(role:OperationRole,sources:ConstructionRef[],focus?:ConstructionRef)=>Promise<{status:string;source:ConstructionRef|null;entries:Omit<OperationEntry,'ref'>[];area_id?:string|null;reason?:string}>;
  validateMany?:(entries:OperationEntry[])=>Promise<boolean>;
  prepareDrawing:(source:ConstructionRef,focus?:ConstructionRef)=>Promise<Record<string,any>>;
@@ -151,7 +167,7 @@ export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBin
   scopes.set(role,scope)
   return {status:'ready'}
  },
- surface(role:OperationRole):OperationSurface{const s=get(role);return {version:1,role,source:!!s.source,flexible:opts.version!==1,...(opts.version!==1&&opts.bindings?{bindings:opts.bindings}:{}),...(opts.stableRefs?{stable:true}:{}),refs:Object.fromEntries(kinds.map(kind=>[kind,s.entries.filter(e=>e.kind===kind).map(e=>e.ref)]))}},
+ surface(role:OperationRole):OperationSurface{const s=get(role);return {version:1,role,source:!!s.source,flexible:opts.version!==1,...(opts.version!==1&&opts.bindings?{bindings:opts.bindings}:{}),...(opts.stableRefs?{stable:true}:{}),...(opts.explicitSaveTarget?{explicitSave:true}:{}),refs:Object.fromEntries(kinds.map(kind=>[kind,s.entries.filter(e=>e.kind===kind).map(e=>e.ref)]))}},
  describe(role:OperationRole){const s=get(role);return {projectId:opts.projectId,source:s.source?{ref:s.entries.find(e=>e.kind==='construction'&&e.id===s.source!.artifact_id&&e.revision===s.source!.revision)?.ref}:null,
   selections:s.entries.map(({ref,kind,label})=>({ref,kind,label}))}},
  /** Initial catalog knowledge reads are server-originated; discard their old
@@ -203,12 +219,18 @@ export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBin
    }
    if(editTools.has(name)&&role==='structure'){
     if(Object.hasOwn(v,'record_id')||Object.hasOwn(v,'expected_revision'))throw Error('operation_identity_is_server_owned')
+    // An explicit null saves a new construction, even in a bound job; the
+    // job's construction is revised only when the save names it.
+    const fresh=opts.explicitSaveTarget&&name==='save_construction_draft'&&v.source_ref===null
+    if(fresh){delete v.source_ref;v.record_id=null;v.expected_revision=0}
+    else{
     if(!s.source&&v.source_ref!=null){const e=await check(source(s,v.source_ref));s.source={artifact_id:e.id,revision:e.revision}}
     else if(s.source&&v.source_ref!==undefined&&v.source_ref!==null&&source(s,v.source_ref)?.id!==s.source.artifact_id)throw Error('operation_scope_changed')
     delete v.source_ref
     if(s.source){const e=await check(s.entries.find(e=>e.kind==='construction'&&e.id===s.source!.artifact_id&&e.revision===s.source!.revision));v.record_id=e.id;v.expected_revision=e.revision}
     else if(name==='save_construction_draft'){v.record_id=null;v.expected_revision=0}
     else throw Error('operation_source_required')
+    }
    }
    // Owner decision 2026-11-07: saving a sketch names its construction by the
    // job's source like any part edit; null with no bound source is a new one.
@@ -325,7 +347,10 @@ export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBin
   if(receipt?.projectId===opts.projectId&&typeof receipt.recordId==='string'&&Number.isSafeInteger(receipt.revision)){
    const kind:Kind|undefined=editTools.has(name)||name==='transition_legacy_drawing'||name==='commit_construction_sketch'?'construction':name==='save_cad_design'?'drawing':name==='compose_cad_shell'?'shell':name==='save_construction_cut_plan'?'cut_plan':name==='derive_cad_material_requirement'?'requirement':name==='manage_project_material'?({stock:'stock',requirement:'requirement',cut_plan:'cut_plan',product:'product'} as Record<string,Kind>)[args.resource]:undefined
    if(kind){const e=await put(s,{kind,id:receipt.recordId,revision:receipt.revision,label:receipt.label??kind,...(kind==='requirement'?{parent:s.source?.artifact_id,definition_id:args.data?.definition_id,quantity_mode:args.data?.quantity_mode}:kind==='cut_plan'?{parent:s.source?.artifact_id}:kind==='drawing'?{parent:opts.drawingWork()?.construction.artifact_id}:kind==='shell'?{area_id:args.action==='create'?args.area_id:s.entries.find(e=>e.kind==='shell'&&e.id===receipt.recordId)?.area_id}:{}),...(kind==='construction'?{area_id:s.area_id,target_revision:receipt.record?.target_revision??args.target_revision??s.entries.find(x=>x.kind==='construction'&&x.id===s.source?.artifact_id)?.target_revision}: {})})
-    if(kind==='construction')s.source={artifact_id:e.id,revision:e.revision}
+    // A bound job stays on its own construction: a new one saved in it (an
+    // explicit null target) is listed but does not take the job over (review
+    // of #505: an edit meant for the handed-over construction landed on it).
+    if(kind==='construction'&&(!s.source||s.source.artifact_id===e.id))s.source={artifact_id:e.id,revision:e.revision}
     if(kind==='drawing'){const work=opts.drawingWork(),ref=s.entries.find(e=>e.kind==='construction'&&e.id===work?.construction.artifact_id&&e.revision===work?.construction.revision)?.ref
      if(ref)s.completed.push({source:ref,...(s.active?.source===ref?{key:s.active.key}:{}),result:{status:'already_saved',saved:true,receipt:structuredClone(Object.fromEntries(Object.entries(receipt).filter(([key])=>key!=='record')))}});delete s.active}
    }

@@ -21,6 +21,7 @@ function codeTools(session:ReturnType<typeof catalogFixture>){
   repeatStart:meta('tools.save_construction_draft').repeat_start_version===1,
   chosenJointFasteners:meta('tools.save_construction_draft').joint_fastener_version===2,
   leanConstruction:meta('tools.save_construction_draft').lean_construction_version===1,
+  storedJointRules:meta('tools.save_construction_draft').joint_rule_store_version===1,
   ...(meta('tools.save_construction_draft').build_place_version===1?{placeIn:async()=>({status:'saved'})}:{}),
   ...(meta('tools.edit_construction_parts').construction_sketch_version===1?{sketches:{} as any}:{}),
   ...(meta('tools.save_construction_draft').construction_sketch_version===2?{sketches:{} as any,newSketches:{} as any}:{}),

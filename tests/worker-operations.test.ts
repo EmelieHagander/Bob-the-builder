@@ -18,7 +18,7 @@ const entries:Omit<OperationEntry,'ref'>[]=[
  {kind:'request',id:'request',revision:3,label:'Frame drawing'},
  {kind:'gap',id:'gap',revision:0,label:'Gap',parent:'request'},
 ]
-function fixture(bound=false,version:1|2=2){let valid=true,access=true;const seen:any[]=[],f=createWorkerOperations({version,bindings:catalogFixture().definition('bob.tools','tool_contract').definition.worker_operation_bindings as any,projectId:'p',hasAccess:async()=>access,
+function fixture(bound=false,version:1|2=2,extra:Record<string,unknown>={}){let valid=true,access=true;const seen:any[]=[],f=createWorkerOperations({...extra,version,bindings:catalogFixture().definition('bob.tools','tool_contract').definition.worker_operation_bindings as any,projectId:'p',hasAccess:async()=>access,
  load:async()=>({status:'ready',source:bound?{artifact_id:A,revision:3}:null,entries}),
  validateMany:async refs=>{seen.push({validate:refs});return valid},
  prepareDrawing:async(source,focus)=>{seen.push({source,focus});return {status:'ready'}},drawingArguments:raw=>({...raw as any,artifact_id:A,construction_revision:3}),drawingWork:()=>({construction:{artifact_id:A,revision:3},request_id:'request'})})
@@ -176,4 +176,29 @@ test('material manuals and the final provider schema describe the executable ser
   assert.equal(ready.status,'ready');assert.equal(ready.args?.data.artifact_id,A);assert.equal(ready.args?.data.artifact_revision,3)
   for(const field of ['artifact_id','artifact_revision','target_revision'])assert.equal((await f.before('materials','derive_cad_material_requirement',{...args,data:{...args.data,[field]:1}})).reason,'operation_identity_is_server_owned')
  }
+})
+
+test('owner decision 2026-11-08: with lean writing a save names its target; null is a new construction even in a bound job',async()=>{
+ const {f}=fixture(true,2,{explicitSaveTarget:true,stableRefs:true});await f.prepare('structure',[])
+ const a=ref(f,'structure',A),b=ref(f,'structure',B)
+ // The job's construction by its reference: a whole revision of it.
+ assert.deepEqual((await f.before('structure','save_construction_draft',{source_ref:a,title:'Ram'})).args,{title:'Ram',record_id:A,expected_revision:3})
+ // null: a new construction, not a revision of the job's construction.
+ const fresh=await f.before('structure','save_construction_draft',{source_ref:null,title:'Ny ram'})
+ assert.deepEqual(fresh.args,{title:'Ny ram',record_id:null,expected_revision:0})
+ // Another construction is still refused in a bound job.
+ assert.equal((await f.before('structure','save_construction_draft',{source_ref:b})).reason,'operation_scope_changed')
+ // After the new construction is saved, the job stays on its own construction.
+ await f.observe('structure','save_construction_draft',fresh.args!,{status:'saved',receipt:{projectId:'p',recordId:'20000000-0000-4000-8000-000000000009',revision:1,label:'Ny ram'}})
+ assert.deepEqual((await f.before('structure','edit_construction_parts',{changes:{}})).args,{changes:{},record_id:A,expected_revision:3})
+ // The schema says so, the same text bound or not.
+ const spec=(bound:boolean)=>workerOperationSpec({type:'function',function:{name:'save_construction_draft',description:'x',parameters:{type:'object',properties:{record_id:{},expected_revision:{},title:{type:'string'}},required:['record_id','expected_revision','title']}}} as any,
+  {...f.surface('structure'),source:bound}) as any
+ for(const bound of [true,false]){
+  const p=spec(bound).function.parameters
+  assert.match(p.properties.source_ref.description,/null saves a new construction/);assert.ok(p.required.includes('source_ref'));assert.ok(!('record_id' in p.properties))
+ }
+ // Without the pin a bound job keeps the server's choice.
+ const old=fixture(true,2,{stableRefs:true});await old.f.prepare('structure',[])
+ assert.equal((await old.f.before('structure','save_construction_draft',{source_ref:null,title:'Ram'})).args?.record_id,A)
 })
