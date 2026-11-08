@@ -3052,3 +3052,67 @@ before and after. No migration.
 
 Returned sources match the merged checkout byte for byte except the known
 type-only `cad-intake.ts` erasure; both bundles contain the reordered renewal.
+
+<a id="deep-audit-2026-11-08"></a>
+### Deep audit after the Entrén incident — 2026-11-08
+
+Owner: "sen gör vi en djupare audit". Four read-only reviewers: the live turn
+(A), replay determinism (B), lean writing in Konrad's real job path (C),
+checkpoint and context growth (D). No model call; SELECT queries and logs only.
+
+**What #502 changed live (Entrén 13:40 before, 19:46 after; different work).**
+
+| | Before | After |
+|---|---:|---:|
+| Konrad answers cut by the 120 s window | 3 | 0 |
+| cache_control refusals | 4 | 0 |
+| Characters typed per saved part | 2,417 | 1,108 |
+| Konrad USD (turn) | 3.39 (lower bound) | 4.04 |
+| Cost per saved part (rough) | ≥ 0.38 | 0.23 |
+| Joint rules sent | — | 0 (104 joints typed by hand, 54 % of characters) |
+| Mapping completed by code | — | all 20 new parts |
+
+Konrad's cost moved from output to re-sent input (four cache fallbacks, about
+USD 0.61); about 45 % of his output was thinking. A wrong sentence in the edit
+tool's `additional_description` ("Resolve dependent bindings, nodes, joints,
+materials and roles explicitly") and reads that show hand joints but no rules
+kept him on hand joints. Three `concept_geometry_changed` refusals named no part,
+so the door beam was never saved (about USD 0.79 of trial sketches).
+
+**Fixed in this branch (tests in brackets):**
+
+| Found | Now |
+|---|---|
+| (B) A worker's reference check read the database outside the journal; a replayed step's own saved write was refused and its entry left behind | The check is journaled (`bob-operation-validate-replay`) |
+| (B) Listed images were described in parallel inside an outer journal step; positions followed network order and a resume stopped with `continuation_changed` | One after another, each call journaled once (`bob-media-describe-replay`, fails on the old code) |
+| (C) A committed sketch was never read back or checked; Bob saw the superseded revision and the next job was bound to it | Read back and checked like any save (`bob-worker-commit-readback`) |
+| (A) A concept refusal named nothing | The database refusal carries its reason; code names the component, the parts outside it and the numbers (`lean-construction` deep audit) |
+| (C) A refused try kept in a sketch looked like real work at job end and could be committed as a duplicate | Open sketches carry `refused_try`, title and the construction a keyed sketch revises |
+| (A) The edit tool told Konrad to write joints by hand under lean writing | One sentence changed, catalog `bob-lean-edit-text-v1` (`20261108090000_bob_lean_edit_text.sql`) |
+
+**Open, owner decisions:**
+
+1. A save or sketch in a job bound to a construction revises that construction;
+   a second "new" construction in the same job overwrites the first (C, high;
+   before lean a new-construction sketch there was refused). Proposal: offer
+   `source_ref` (the job's construction or null for new) so Konrad names the
+   target, and name it in every answer.
+2. Joint rules are not stored with the construction, so reads show only hand
+   joints. Proposal: store the rules on the construction (reads show them, part
+   edits apply them to added parts).
+3. Reaching Konrad's 200k-token ceiling or the 2 MB checkpoint kills the whole
+   turn; renewal never fires in a sketch-only hand-over (D). Proposal: end the
+   hand-over cleanly with its receipts, count ceilings in Claude tokens, allow
+   renewal after a committed sketch.
+4. State size (D): the continuation stores tool arguments about 3.6 times and
+   results twice; `answer.request`/`answer.tools` (117k) are kept after use;
+   `projectEdits` keeps every snapshot. Proposals ranked in the reviewer's
+   report; together roughly −55 % per step.
+5. Reads show the stored graph, not formulas, so Konrad copies `fx.` hashes.
+
+**Open, low (documented):** other nested journal steps (CAD guard reads,
+`cad:construction_check`), worker sessions reused within one claim, live reads
+feeding journaled inputs in long steps, date checks across midnight, recorded
+failures losing their error class on replay; a commit retry under the same key
+meets the refusal guard; the `sketch_base_differs` message asks for a field the
+server owns.

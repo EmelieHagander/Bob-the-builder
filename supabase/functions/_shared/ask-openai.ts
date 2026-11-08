@@ -316,8 +316,11 @@ export async function answerWithOpenAi(opts: {
     contextContinuation ? contextContinuation.call(requested, beforeDispatch) : dispatchModel(requested, beforeDispatch)
   // Owner decision 2026-11-06: a listed image without a description gets one
   // short description from the smallest vision model, once per image version.
+  // Not wrapped in a journal step of its own: its open, model call and save are
+  // journaled each, and a recorded outer step would skip them on replay and
+  // leave their streams' positions behind (deep audit 2026-11-08).
   const describeListedImage = (listed: Item, open: (ref: string, signal: AbortSignal) => Promise<Opened>, signal: AbortSignal) =>
-    memo('media:auto-describe', { ref: listed.ref, updated_at: listed.updated_at ?? null }, async () => {
+    (async () => {
       const opened = await open(listed.ref, signal)
       const response = await dispatchModel({ app: 'bob', coworkerId: 'bob', functionName: 'image-describer', aiFunction: 'image-describer', module: 'global', userId: opts.userId,
         catalogRoleKey: 'image-describer', catalogSchemaKey: 'bob_image_description', schemaName: 'bob_image_description',
@@ -326,7 +329,7 @@ export async function answerWithOpenAi(opts: {
       const text = imageDescriptionText(response)
       if (text) await cacheImageDescription!(opened, text)
       return text
-    })
+    })()
   const mediaAdapter = () => {
     let wrappedOpen: ((ref: string, signal: AbortSignal) => Promise<Opened>) | undefined
     const autoDescribe = execution.imageDescriptionVersion === 1 && cacheImageDescription
@@ -1209,11 +1212,17 @@ export async function answerWithOpenAi(opts: {
       const source=data.source??null
       return {status:'ready',source,entries,area_id:data.area_id}
     },
+    // Journaled: a replayed step reuses the verdict its write was made under.
+    // Read live, a worker's own saved write made its source look changed on
+    // resume and was refused (deep audit 2026-11-08).
     validateMany:async entries=>{
       if(!entries.length)return true
-      const {data,error}=await client.rpc('check_worker_operation_refs',{p_project:opts.projectId,p_refs:entries.map(({kind,id,revision,parent})=>({kind,id,revision,...(parent?{parent}:{})}))}).abortSignal(AbortSignal.timeout(12000))
-      if(error){if(error.code==='42501')throw new Error('project_denied');throw new Error('operation_validation_unavailable')}
-      return data===true
+      const refs=entries.map(({kind,id,revision,parent})=>({kind,id,revision,...(parent?{parent}:{})}))
+      return await memo('operation:validate',{refs},async()=>{
+        const {data,error}=await client.rpc('check_worker_operation_refs',{p_project:opts.projectId,p_refs:refs}).abortSignal(AbortSignal.timeout(12000))
+        if(error){if(error.code==='42501')throw new Error('project_denied');throw new Error('operation_validation_unavailable')}
+        return data===true
+      })
     },
     prepareDrawing:(source,focus)=>cadAssistant.prepareDrawingWorker([source],focus),
     drawingArguments:args=>cadAssistant.boundArguments('design_project_cad',args),drawingWork:()=>cadAssistant.drawingWork,

@@ -86,10 +86,14 @@ export function createMediaAdapter(projectId: string, transport: MediaTransport,
   return {
     ...(autoDescribe ? { async describeMissing(items: Item[], signal: AbortSignal): Promise<Item[]> {
       const missing = items.filter(i => i.description === undefined).slice(0, AUTO_DESCRIBE_BATCH)
-      const made = await Promise.all(missing.map(async i => {
-        try { return [i.ref, await autoDescribe(i, signal)] as const }
-        catch (error) { rethrowContinuation(error); return [i.ref, null] as const }
-      }))
+      // One after another: journaled calls take their positions in call order,
+      // so a replay meets each image's entries (deep audit 2026-11-08: in
+      // parallel they took positions in the order the network answered).
+      const made: (readonly [string, string | null])[] = []
+      for (const i of missing) {
+        try { made.push([i.ref, await autoDescribe(i, signal)] as const) }
+        catch (error) { rethrowContinuation(error); made.push([i.ref, null] as const) }
+      }
       const texts = new Map(made.filter((entry): entry is readonly [string, string] => typeof entry[1] === 'string' && !!entry[1]))
       return items.map(i => texts.has(i.ref) ? { ...i, description: described(texts.get(i.ref)!) } : i)
     } } : {}),
