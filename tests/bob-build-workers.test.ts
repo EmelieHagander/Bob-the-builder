@@ -320,8 +320,21 @@ test('after Konrad saves, code follows the saved revision\'s change work; withou
   assert.deepEqual([read?.args.artifact_id, read?.args.revision, read?.args.after], ['c1', 3, null])
   const report = toolOutput(on.bob[1])
   assert.equal(report.follow_up.by, 'code'); assert.deepEqual(report.follow_up.constructions.map((c: any) => [c.artifact_id, c.revision]), [['c1', 3]])
-  assert.equal(report.follow_up.constructions[0].recalculated, 0); assert.match(report.follow_up.note, /could not be read; no material row was recalculated/, 'the note never claims work that did not happen')
+  assert.equal(report.follow_up.constructions[0].recalculated, 0); assert.match(report.follow_up.note, /^Code recalculated no material row. The change work could not be read in full/, 'the note never claims work that did not happen')
   assert.equal(report.outcome.deliverable, 'saved')
+})
+
+// Review of #508: rows a former pass left (not run in time) are finished by the
+// next Konrad hand-over even when it saves nothing: it follows its bound construction.
+test('a Konrad hand-over that saves nothing still follows the construction it is bound to', async () => {
+  const operations = createWorkerOperations({ version: 2, bindings: catalogFixture().definition('bob.tools', 'tool_contract').definition.worker_operation_bindings as any, projectId: 'p', hasAccess: async () => true,
+    load: async () => ({ status: 'ready', source: { artifact_id: 'c1', revision: 3 }, entries: [{ kind: 'construction', id: 'c1', revision: 3, label: 'Lådan' }] }),
+    validateMany: async () => true, prepareDrawing: async () => ({ status: 'ready' }), drawingArguments: () => null, drawingWork: () => undefined })
+  const { bob, constructionCalls } = await turn(catalogFixture(), [ask('ask_structure_worker', { request: 'Konrad, fortsätt konstruktionsändringen.' })], {},
+    undefined, undefined, undefined, undefined, { operations, seen: [] }, { materialFollow: true })
+  const read = constructionCalls.find(c => c.name === 'read_construction_changes')
+  assert.deepEqual([read?.args.artifact_id, read?.args.revision], ['c1', 3])
+  assert.deepEqual(toolOutput(bob[1]).follow_up.constructions.map((c: any) => [c.artifact_id, c.revision]), [['c1', 3]])
 })
 
 test('the workers come from the catalog; a tool belongs to one worker', () => {

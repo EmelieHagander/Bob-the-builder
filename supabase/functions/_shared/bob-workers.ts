@@ -715,22 +715,28 @@ const OWN_PRODUCT: Record<string, 'construction' | 'drawing' | 'material'> = { '
 const ENDED_EARLY = new Set(['time_budget', 'step_budget', 'context_limit', 'state_limit', 'paused_at_limit', 'unavailable'])
 /** Owner runs 2026-11-08: Rita came back from hand-overs with no drawing, and
  * a report that ends in text was status ok all the same. What was delivered is
- * read from the save receipts by code; the worker's own words cannot set it.
- * saved: its own product was saved; partial: saved, but the job ended at a
- * limit; blocked: nothing of it saved and its last write was refused (the
- * blocker says which and why); not_saved: nothing of it saved and no write
- * was refused (also when nothing needed saving). */
+ * read from the save receipts and calls by code; the worker's own words cannot
+ * set it. A receipt proves a save, not that the whole job is done:
+ * saved: its own product was saved and no later write was refused;
+ * partial: saved, but a later write was refused (blocker kept) or the job
+ * ended at a limit; blocked: nothing of it saved and its last write was
+ * refused; not_saved: nothing of it saved and no write was refused (also when
+ * nothing needed saving). */
 export function workerOutcome(roleKey: string, status: string, calls: WorkerCall[], receipts: Record<string, unknown>[], writes: Set<string>): Record<string, unknown> {
   const saved: Record<string, number> = {}
   for (const r of receipts) { const kind = PRODUCT[String(r.tool)]; if (kind && r.status === undefined) saved[kind] = (saved[kind] ?? 0) + 1 }
   const own = OWN_PRODUCT[roleKey]
   const delivered = own ? (saved[own] ?? 0) > 0 : Object.keys(saved).length > 0
-  const lastWrite = calls.findLast(c => writes.has(c.tool))
-  const blocked = !delivered && !!lastWrite && BLOCKED.has(lastWrite.status)
-  const deliverable = delivered ? (ENDED_EARLY.has(status) ? 'partial' : 'saved') : blocked ? 'blocked' : 'not_saved'
+  // Review of #508: a save followed by a refused write is not a finished delivery.
+  const lastSave = calls.findLastIndex(c => c.status === 'saved' && (own ? PRODUCT[c.tool] === own : !!PRODUCT[c.tool]))
+  const lastRefused = calls.findLastIndex(c => writes.has(c.tool) && BLOCKED.has(c.status))
+  const refusedAfter = lastRefused >= 0 && lastRefused > lastSave
+  const blocker = refusedAfter ? calls[lastRefused] : null
+  const deliverable = delivered ? (ENDED_EARLY.has(status) || refusedAfter ? 'partial' : 'saved') : blocker ? 'blocked' : 'not_saved'
   return { deliverable, ...(own ? { product: own } : {}), saved,
-    ...(blocked ? { blocker: { tool: lastWrite!.tool, status: lastWrite!.status, ...(lastWrite!.reason ? { reason: lastWrite!.reason } : {}) } } : {}),
-    ...(!delivered && own ? { note: own === 'drawing' ? 'No drawing was saved in this hand-over.' : own === 'construction' ? 'No construction revision was saved in this hand-over.' : 'No material row was saved in this hand-over.' } : {}) }
+    ...(blocker ? { blocker: { tool: blocker.tool, status: blocker.status, ...(blocker.reason ? { reason: blocker.reason } : {}) } } : {}),
+    ...(!delivered && own ? { note: own === 'drawing' ? 'No drawing was saved in this hand-over.' : own === 'construction' ? 'No construction revision was saved in this hand-over.' : 'No material row was saved in this hand-over.' } : {}),
+    ...(delivered && refusedAfter ? { note: 'Something was saved, but a later write was refused; that part is not done.' } : {}) }
 }
 const CONTEXT_LIMIT_NOTE = 'This hand-over reached its context limit and ended; what it saved is listed. Give the remaining work as a new hand-over that names what is done.'
 const STATE_LIMIT_NOTE = 'This hand-over ended because the turn\'s saved state reached its size limit; what it saved is listed. Give the remaining work as a new hand-over that names what is done.'

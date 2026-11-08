@@ -76,3 +76,14 @@ test('a worker without the plan gate is still offered its working note and may s
   assert(offered.every(list => list.includes('update_workpad')))
   assert.equal((result.outcome as any).deliverable, 'saved')
 })
+
+// Review of #508: a receipt proves a save, not a finished job.
+test('a save followed by a refused write is partial and keeps its blocker; a refusal before the last save does not', () => {
+  const writes = new Set(['edit_construction_parts', 'save_construction_draft'])
+  const receipts = [{ tool: 'edit_construction_parts', record_id: 'c', revision: 26 }]
+  const later = workerOutcome('structure-worker', 'ok', [{ tool: 'edit_construction_parts', status: 'saved' }, { tool: 'edit_construction_parts', status: 'conflict', reason: 'form_instance_outside' }], receipts, writes)
+  assert.equal(later.deliverable, 'partial'); assert.deepEqual(later.blocker, { tool: 'edit_construction_parts', status: 'conflict', reason: 'form_instance_outside' })
+  assert.match(String(later.note), /later write was refused/)
+  const recovered = workerOutcome('structure-worker', 'ok', [{ tool: 'edit_construction_parts', status: 'invalid', reason: 'plan_required' }, { tool: 'edit_construction_parts', status: 'saved' }], receipts, writes)
+  assert.equal(recovered.deliverable, 'saved'); assert.equal(recovered.blocker, undefined)
+})

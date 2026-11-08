@@ -1,4 +1,4 @@
-import { followConstructionChanges, savedConstructionTargets } from './construction-follow-up.ts'
+import { followConstructionChanges, followUpNote, savedConstructionTargets } from './construction-follow-up.ts'
 import {helperConversation} from './bob-helper-context.ts'
 import { withoutServerRevisions } from './server-revisions.ts'
 import type {WorkerOperations,OperationRole} from './worker-operations.ts'
@@ -49,13 +49,6 @@ import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' 
 
 /** The change note of a material row code recalculated after a construction change. */
 const FOLLOW_UP_CHANGE_NOTE = 'Omräknad av koden från den sparade konstruktionens recept efter en konstruktionsändring.'
-/** What the code follow-up did, in words that match its counts. */
-function followUpNote(results: { status: string; recalculated: number; left: unknown[] }[]): string {
-  const done = results.reduce((n, r) => n + r.recalculated, 0), left = results.reduce((n, r) => n + r.left.length, 0)
-  if (results.some(r => r.status === 'unavailable') && !done) return 'The change work of the saved construction could not be read; no material row was recalculated.'
-  return (done ? `Code recalculated ${done} material row${done === 1 ? '' : 's'} of the saved construction from their recorded recipes, keeping each row.` : 'No material row needed recalculation.')
-    + (left ? ` ${left} row${left === 1 ? '' : 's'} in left still need a decision; ask Mattias for those.` : '')
-}
 /** Instruction content comes from the pinned database manifest; shelf state is data. */
 export function buildBobSystemMessage(aiCatalog: AiCatalogSession, tools: OpenAIServiceOptions['tools'] = [], toolbox: ToolboxEntry[] = [], completeRequest = false, toolSheets = false, promptTiers = false): string {
   const shelf = sortToolbox(toolbox, aiCatalog.definition('bob.tools', 'tool_contract').definition.shelves as { label: string; tools: string[] }[])
@@ -641,9 +634,13 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         // asked them for (Våningssäng 2, 2026-11-08: plan_required in batches).
         ...(opts.workerPlan && workerPads && key === 'structure' ? { planGate: true } : {}),
         ...(opts.materialFollow && key === 'structure' && worker.tools.includes('continue_construction_change') ? { followUp: async (receipts: Record<string, unknown>[]) => {
-          const targets = savedConstructionTargets(receipts)
-          if (!targets.length) return null
           const operations = opts.workerOperations && workpadAgent ? opts.workerOperations : null
+          // A job that saved nothing still finishes rows a former pass left
+          // (review of #508): it follows the construction it was bound to.
+          const bound = operations?.exportState().scopes.find(scope => scope.role === workpadAgent)?.source
+          const targets = savedConstructionTargets(receipts)
+          if (!targets.length && bound) targets.push({ artifact_id: bound.artifact_id, revision: bound.revision })
+          if (!targets.length) return null
           // One call at a time, through Konrad's own session: the same fence, quote and writer as his calls.
           const run = async (name: string, args: Record<string, unknown>) => {
             const result = withoutDiagnostics(await session!.execute(name, operations ? operations.serverArgs(workpadAgent!, name, args) : args))
