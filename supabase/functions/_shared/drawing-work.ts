@@ -82,8 +82,11 @@ export async function resolveDrawingWork(projectId:string,sources:ConstructionRe
  const destination=focusedDrawing??drawings[0]??null
  const detail=destination?await ports.readDrawing(destination.artifact_id,null):null
  if(destination&&(!detail||detail.revision!==destination.revision||detail.archived))return stop('drawing_revision_changed')
+ // A drawing linked to several plan steps keeps its links: a save with no
+ // step changes none (the earlier path does the same). Refusing it left the
+ // bed drawing that serves two steps impossible to redraw (Våningssäng 2,
+ // 2026-11-08: every redraw stopped here, no drawing).
  const steps=detail?.current_step_ids
- if(Array.isArray(steps)&&steps.length>1)return stop('drawing_work_scope_ambiguous')
  const artifactId=destination?.artifact_id??selected.artifact_id
  const pending=await ports.requests()
  // The store's current list is bounded at twelve. Never infer absence from an
@@ -101,7 +104,7 @@ export async function resolveDrawingWork(projectId:string,sources:ConstructionRe
  }
  const binding:DrawingWork={projectId,construction:selected,drawing:destination,request_id:requestId,
   area_id:detail?.area_id??current.area_id??null,component_id:detail?.component_id??null,
-  step_id:Array.isArray(steps)?steps[0]??null:detail?.step_id??null}
+  step_id:Array.isArray(steps)?steps.length===1?steps[0]:null:detail?.step_id??null}
  if(!validDrawingWork(binding,projectId))return stop('drawing_binding_unavailable')
  return {status:'ready',binding}
 }

@@ -161,7 +161,7 @@ export function buildWorkerMessages(aiCatalog: AiCatalogSession, opts: {
  * worker's place after each finished step, and a resume continues from there. */
 interface WorkerProgressBase {
   step: number; messages: Messages
-  calls: { tool: string; status: string }[]; receipts: Record<string, unknown>[]; order: string[]
+  calls: WorkerCall[]; receipts: Record<string, unknown>[]; order: string[]
   /** Plan gate: a plan note was saved in this job, so writes are open. */
   planned?: true
 }
@@ -286,6 +286,10 @@ export async function runWorker(opts: {
   images?: { validate?:()=>Promise<boolean>; carrier: () => Messages; confirmDelivery: () => void }
   /** Reads what the worker saved, by code, after the job (see readbackReads). */
   readback?: (receipts: Record<string, unknown>[]) => Promise<unknown[]>
+  /** Pinned per job (material_follow_version 1), Konrad only: after the job, code
+   * recalculates the material rows of each construction revision it saved
+   * (see construction-follow-up.ts). Its summary goes to Bob as follow_up. */
+  followUp?: (receipts: Record<string, unknown>[]) => Promise<unknown>
   /** Checks, by code, each saved construction revision the job left unchecked; returns the check results. */
   autoCheck?: (targets: { artifact_id: string; revision: number; component_ids?: string[] }[]) => Promise<Record<string, unknown>[]>
   onTool?: (value: { name: string; status: string; ms: number; rejection?: ToolRejection }) => void
@@ -362,7 +366,7 @@ export async function runWorker(opts: {
   // The worker sees full manuals: it has few tools and they are fixed for the job.
   const params = { server_quote: true, include_manual: true }
   const toolParams = () => Object.fromEntries(specs.map(spec => [spec.function.name, { card: false, include_manual: true, ...(spec.function.name==='list_project_category'?{categories:(spec.function.parameters as any).properties.category.enum}:{}) }]))
-  const calls: { tool: string; status: string }[] = structuredClone(restored?.calls ?? [])
+  const calls: WorkerCall[] = structuredClone(restored?.calls ?? [])
   // Workers with knowledge: what they saved travels to Bob as receipts, in code (no AI restates ids),
   // and with the readback switch the saved records themselves, read after the job.
   const receipts: Record<string, unknown>[] = structuredClone(restored?.receipts ?? [])
@@ -380,6 +384,7 @@ export async function runWorker(opts: {
   }
   const finish = async (reported: Record<string, unknown>) => {
     let result = reported
+    const withOutcome = () => { result = { ...result, outcome: workerOutcome(roleKey, String(reported.status ?? 'returned'), calls, receipts, writes) } }
     if (opts.openSketches) {
       const open = await opts.openSketches()
       if (open === null) result = { ...result, open_sketches: { status: 'unavailable', note: 'Whether a construction sketch is still open could not be read.' } }
@@ -387,12 +392,14 @@ export async function runWorker(opts: {
         note: 'These sketched changes are not saved. Ask Konrad to commit or discard them in this request; they are dropped when it ends.'
           + (open.some(s => s.refused_try === true) ? ' A refused_try holds a write that was refused; discard it when a later save already made that change.' : '') } }
     }
-    if (!opts.readKnowledge) { release(); return result }
+    if (!opts.readKnowledge) { release(); withOutcome(); return result }
     const targets = opts.autoCheck ? uncheckedConstructions(receipts) : []
     if (targets.length) for (const checked of await opts.autoCheck!(targets))
       receipts.push({ ...saveReceipt('check_construction_draft', checked), status: String(checked.status ?? 'returned'), by: 'code' })
+    if (opts.followUp) { const follow = await opts.followUp(receipts); if (follow) result = { ...result, follow_up: follow } }
     const readback = opts.readback && receipts.length ? await opts.readback(receipts) : undefined
     release()
+    withOutcome()
     return { ...result, receipts, ...(readback?.length ? { readback } : {}) }
   }
   const terminalResult = (terminal: WorkerTerminal): Record<string, unknown> => ({
@@ -503,7 +510,8 @@ export async function runWorker(opts: {
       // Older worker contracts without a bounded review stay unchanged.
       if (opts.pieceProgress?.readBoundedReview && !opts.pieceProgress.gatesAsFacts && pieceWrite(name, args) && status === 'conflict')
         rejectedBoundedPiece = name
-      calls.push({ tool: NAME.test(name) ? name : 'invalid_name', status })
+      const reason = typeof result?.reason === 'string' ? result.reason : result?.validation?.code
+      calls.push({ tool: NAME.test(name) ? name : 'invalid_name', status, ...(BLOCKED.has(status) && typeof reason === 'string' && NAME.test(reason) ? { reason } : {}) })
       // A check stores its result too, so it is reported (and read back) like a save.
       if (status === 'saved' || status === 'checked') {
         receipts.push(saveReceipt(name, result))
@@ -691,6 +699,39 @@ export async function runWorker(opts: {
   } finally { unregister?.() }
 }
 
+export type WorkerCall = { tool: string; status: string; reason?: string }
+/** A write that came back with one of these did not save. */
+const BLOCKED = new Set(['invalid', 'conflict', 'needs_data', 'unavailable', 'needs_verification', 'not_available'])
+/** What each save makes. A hand-over delivers when it saved its worker's own product. */
+const PRODUCT: Record<string, 'construction' | 'drawing' | 'material' | 'follow_up' | 'catalog'> = {
+  save_construction_draft: 'construction', edit_construction_parts: 'construction', change_construction_parameters: 'construction',
+  change_construction_roles: 'construction', commit_construction_sketch: 'construction', transition_legacy_drawing: 'construction',
+  continue_construction_change: 'follow_up', derive_construction_lists: 'follow_up',
+  save_cad_design: 'drawing', compose_cad_shell: 'drawing',
+  derive_cad_material_requirement: 'material', manage_project_material: 'material', save_construction_cut_plan: 'material', delete_shopping_item: 'material',
+  save_catalog_definition: 'catalog', add_catalog_fastener: 'catalog',
+}
+const OWN_PRODUCT: Record<string, 'construction' | 'drawing' | 'material'> = { 'structure-worker': 'construction', 'drawing-worker': 'drawing', 'materials-worker': 'material' }
+const ENDED_EARLY = new Set(['time_budget', 'step_budget', 'context_limit', 'state_limit', 'paused_at_limit', 'unavailable'])
+/** Owner runs 2026-11-08: Rita came back from hand-overs with no drawing, and
+ * a report that ends in text was status ok all the same. What was delivered is
+ * read from the save receipts by code; the worker's own words cannot set it.
+ * saved: its own product was saved; partial: saved, but the job ended at a
+ * limit; blocked: nothing of it saved and its last write was refused (the
+ * blocker says which and why); not_saved: nothing of it saved and no write
+ * was refused (also when nothing needed saving). */
+export function workerOutcome(roleKey: string, status: string, calls: WorkerCall[], receipts: Record<string, unknown>[], writes: Set<string>): Record<string, unknown> {
+  const saved: Record<string, number> = {}
+  for (const r of receipts) { const kind = PRODUCT[String(r.tool)]; if (kind && r.status === undefined) saved[kind] = (saved[kind] ?? 0) + 1 }
+  const own = OWN_PRODUCT[roleKey]
+  const delivered = own ? (saved[own] ?? 0) > 0 : Object.keys(saved).length > 0
+  const lastWrite = calls.findLast(c => writes.has(c.tool))
+  const blocked = !delivered && !!lastWrite && BLOCKED.has(lastWrite.status)
+  const deliverable = delivered ? (ENDED_EARLY.has(status) ? 'partial' : 'saved') : blocked ? 'blocked' : 'not_saved'
+  return { deliverable, ...(own ? { product: own } : {}), saved,
+    ...(blocked ? { blocker: { tool: lastWrite!.tool, status: lastWrite!.status, ...(lastWrite!.reason ? { reason: lastWrite!.reason } : {}) } } : {}),
+    ...(!delivered && own ? { note: own === 'drawing' ? 'No drawing was saved in this hand-over.' : own === 'construction' ? 'No construction revision was saved in this hand-over.' : 'No material row was saved in this hand-over.' } : {}) }
+}
 const CONTEXT_LIMIT_NOTE = 'This hand-over reached its context limit and ended; what it saved is listed. Give the remaining work as a new hand-over that names what is done.'
 const STATE_LIMIT_NOTE = 'This hand-over ended because the turn\'s saved state reached its size limit; what it saved is listed. Give the remaining work as a new hand-over that names what is done.'
 const RECEIPT_KEYS = ['artifact_id', 'record_id', 'id', 'revision', 'construction_revision', 'request_id', 'step_id']

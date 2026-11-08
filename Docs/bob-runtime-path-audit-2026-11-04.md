@@ -3201,3 +3201,154 @@ feeding journaled inputs in long steps, date checks across midnight, recorded
 failures losing their error class on replay; a commit retry under the same key
 meets the refusal guard; the `sketch_base_differs` message asks for a field the
 server owns.
+
+<a id="owner-runs-after-505-2026-11-08"></a>
+### Owner turns after #505 — 2026-11-08, 06:33–07:08 UTC
+
+Read back from `bob.execution_events`, `bob_private.bob_write_receipts`, the
+job journals while the jobs ran, the edge logs and `bob.bob_messages`. Nothing
+was changed.
+
+| | Entrén ("Testa igen") | Våningssäng 2 ("Kör") |
+|---|---|---|
+| Cost | 7.71 USD | 15.64 USD (Rita 5.14, Konrad 4.54, Mattias 4.48, Bob 1.39) |
+| Construction writes | 0 (7 refused `unavailable`) | 6 (revisions 21–26) |
+| Joint rules | none sent; 19 hand joints in the one prepared edit | 1–2 per edit; 80 joints written by code, 0 by hand |
+| Other saves | 2 Solution revisions (Bob) | 26 material rows |
+| Turn end | completed, honest answer | completed, honest answer |
+
+**Entrén.** Konrad's first sketch of the door beam came back `needs_data`
+(`form_instance_outside`): the beam (145 mm) did not fit the 36 mm between the
+door opening and the front's top plate. Bob chose Konrad's option 1 (only the
+front frame rises into the gable, `fH` 2285) and saved it in the Solution,
+labelled as Bob's construction choice with no owner decision changed. Every
+part edit after that came back `unavailable`, "Could not read the concept this
+construction is mapped to" (7 tries). Cause: the server moved the edit to the
+new target (35 → 37), but `leanEdit` read the concept at the construction's
+old pin; `read_design_readiness` answers `design_target_changed` with no
+concept for a moved target (checked against the live database: target 35
+conflict, 37 ready). Repinning alone (`change_construction_parameters`, no
+changes) is `needs_data`, as it should be: the taller front needs the part
+change in the same write. Bob told the owner it was a system fault and refused
+to rebuild the frame by hand. Konrad wrote this edit with structured `changes`
+and no rules (19 hand joints, 64 % of 7,854 characters).
+
+**Våningssäng 2.** Konrad sent rules in every part edit; all joints were
+written by code. The construction check passed each change. Two problems
+outside the construction:
+- Rita refused 5 times (`plan_required` ×3, her own missing plan;
+  `needs_data` ×2): the bed drawing `a36eae3c` revision 5 is linked to two
+  plan steps ("Granska modellen", "Stäm av v7 mot sparad konstruktion"), and
+  `resolveDrawingWork` (run again by `design_project_cad`) stopped with
+  `drawing_work_scope_ambiguous`. Neither Rita nor Bob can unlink a step, so
+  the drawing could never be redrawn. Root cause below.
+- Mattias: 11 `derive_cad_material_requirement` conflicts after the last
+  construction revision; Bob reports they collided with Mattias's own saves.
+  Root cause below.
+
+Small waste in both turns: `workpad_note_bounds` ×4 (notes too long),
+`operation_reference_required` ×5 (reads without the reference).
+
+<a id="publication-506-2026-11-08"></a>
+**Hosted publication of #506 — 2026-11-08, 07:17–07:18 UTC.** Owner: "Publicera".
+Merged at `51cd223a9949e49d8e679c711a3e4e542f995719` (tree
+`48c2f510e866fcedef4de88c265f61e4df7f5826` equals the tested branch). Safety
+branch `save/bob-before-retarget-fix-2026-11-08` retains `c77837a`. Zero
+active jobs before. No migration.
+
+1. bob-worker v221 (ezbr
+   `fe35a90d560c1ecbbf8f457e65cf1cc0d7b4b57bbe9a8bed88b81c914b07d5c1`), ask-bob
+   v253 (`3af8b3dfb4ead1e6f6e5f84ea14f22f6a7c755513ec0abed606f40bafb9d2f7c`);
+   returned sources match main except the known `cad-intake.ts` erasure and
+   contain the bound-target concept reads and `construction_target_changed`.
+
+Next: the owner's next Entrén turn should save Konrad's prepared front change
+in one write.
+
+<a id="root-causes-vs2-2026-11-08"></a>
+**Root causes of the Våningssäng 2 blocks — 2026-11-08** (owner: "lets
+grundorsak"). Both were checked against the live database as the owner,
+read-only.
+
+1. **Drawing.** Plan-step links belong to the drawing, not to a revision
+   (`bob.artifact_step_links`); a drawing save with `step_id` adds that link
+   and a save without one changes none. The earlier drawing path already
+   redraws a drawing with several links with no step. The code-owned binding
+   from 2026-11-04 instead stopped with `drawing_work_scope_ambiguous`, which
+   protected nothing and locked the drawing. Fix: the binding takes the single
+   step when there is one and no step when there are several; the links stay.
+   A drawing that serves any step is still reviewed against the plan.
+2. **Material rows.** The live writer (`bob_private.bob_project_write_v12`)
+   keyed an operational write as `operational:<resource>:<action>:<task>:<record>`.
+   A revise of an existing record therefore had one key per turn. Mattias
+   revised his rows at 06:46–06:52 (construction revision 25); after Konrad's
+   revision 26 his second revise of the same rows had new numbers, and the
+   writer answered `operation_reused` (PT409; edge log 07:07:20–21). The row
+   that saved (`ed55de66`) had been created, not revised, earlier in the turn.
+   Fix (`20261108120000_operational_revise_key.sql`): the key of a write to an
+   existing record names the revision it starts from. An exact retry still
+   reuses its receipt; a different payload from the same revision is still
+   refused; creates keep their key. The migration patches the live definition
+   and refuses to run if the key line or its order has changed.
+
+Tests: `tests/drawing-work.test.ts` and `tests/operational-revise-key.test.ts`
+fail without the change with the live reasons and pass with it.
+
+<a id="gpt-audit-review-2026-11-08"></a>
+### Review of the external action audit — 2026-11-08
+
+The owner asked to implement or challenge an external (GPT) action list for the
+Våningssäng 2 and Entrén turns, in one PR with #507. Each item was checked
+against the code on this branch. Built on the branch, not published.
+
+**Implemented**
+
+| Item | Finding in code | Change | Test |
+|---|---|---|---|
+| D plan gate | Only Konrad's persona asks for a plan first (`bob-tool-focus-v1`), but `planGate` was set for every worker with a workpad, so Rita and Mattias were refused (`plan_required`) for a plan nobody asked them for. | `planGate` only for `structure` (`project-answer.ts`). | `bob-build-workers`: Mattias saves without a plan; Konrad is still refused. Fails without the change. |
+| A material rows | Every construction revision makes every pinned material row a pending change item (`capture_construction_change`), geometry or not. The server recomputes a row from its recipe without AI (`continue_construction_change`, recalculate), but in worker jobs the binding sent `artifact_id/revision` to a tool that takes `record_id/expected_revision`: every call was refused (`$.artifact_id: remove unsupported field`). | Migration `20261108130000_bob_material_follow_catalog.sql`: the binding names the tool's fields; pin `material_follow_version 1`. After Konrad's job, code recalculates the pending material rows of each revision it saved, through his session (`construction-follow-up.ts`). Rows that need a model, allocation or commitment review, cutting plans and drawings stay pending and are listed in `follow_up`. Nothing is approved. | `construction-change-work`: the old binding refuses both rows; the new one recalculates both under the same IDs at revision 2; a second run does nothing. `bob-build-workers`: wiring on/off. |
+| C delivery | A report that ends in text is `status: ok` whether or not anything was saved. | Every hand-over result gets `outcome` from the save receipts: `saved`, `partial` (saved, ended at a limit), `blocked` (last write refused, with tool/status/reason) or `not_saved`. Calls keep the refusal reason. | `bob-worker-outcome`: Rita "klar" with no drawing is `not_saved`; a refused drawing is `blocked` with its reason. |
+| K metrics | Delivery was one turn status. | The hand-over's tool event records `worker_deliverable`, `worker_product`, `worker_saved_<product>` and `worker_blocker` (codes and counts only). | `bob-worker-outcome`. |
+| H workpad | Four notes refused for length alone. | Descriptive text (goal, next step, steps) over its bound is shortened at a word and named (`normalized.trimmed`); missing lists are saved empty. Blockers and references are never shortened: over their bound the note is refused with what to split. A wrong status, a missing goal or next step, an unknown field and too many items still refuse. | `bob-agent-workpad-note`: a long note keeps its blocker and reference exactly. |
+| B/I references | An ambiguous material match returned a bare code; an unbound read with no reference was refused although only one construction could be meant. | `operation_scope_ambiguous` returns the candidate rows (ref, label, revision, definition, mode). A read with no reference uses Rita's bound construction, else the only one in scope; it never binds the job, an overview stays a list, writes still name their source. | `worker-operations`. |
+| J drawing | #507's redraw of a multi-step drawing could hide a moved construction. | Covered: the binding still stops on `construction_revision_changed`; K3 tests fence changes during render and review. | `drawing-work`. |
+
+**Challenged, not built**
+
+- *A as specified* (a `ConstructionImpact` diff that keeps rows "current" when
+  geometry is unchanged): a row is current only when it pins the head revision
+  (`bob.current_material_requirements`), and cutting plans and Shopping read
+  that. Changing it is a data-model change. Code recalculation gives the same
+  quantities at no model cost and keeps one rule.
+- *E shared context renewal*: Rita's and Mattias's long contexts came from the
+  loops #507 and D remove. Measure after a run first.
+- *F typed history projections*: 66 history reads do not show which were
+  unnecessary. Measure first.
+- *G blocker register*: identical refused calls are already not run again and
+  a third refusal for one reason is flagged (`createRefusalGuard`), across
+  hand-overs in a turn (the worker session is kept). A register keyed on
+  "relevant state" would block legitimate recovery without a definition of
+  that state.
+
+**Second review (owner forwarded GPT's audit of #508), same day.** Acted on:
+blockers and references are no longer shortened (above); the material test
+now covers unchanged geometry (same quantities and rows, `geometry_changed`
+false), an interrupted run (only the rest is recalculated, one new revision
+per row), a second run (no revision written) and a row without a recorded
+model (left pending as `needs_requirement_model`, untouched); a catalog test
+checks that every operation binding names fields its tool has (this class of
+fault would have failed it); Rita and Mattias keep their working note without
+the gate (`bob-worker-outcome`). `check:edge` passed for all seven entry
+points with Deno 2.9.6 from npm; esm.sh is blocked here, so its one import
+(`openai-service.ts`) was mapped to the same package from npm (2.110.2 for
+2.49.8): an approximation, not the CI check.
+Not changed: a row whose geometry did not change still gets a new revision
+with the same quantity. Currency is pinning the head revision; without the new
+revision the row stays out of date and Mattias is asked again.
+E, F and G stay open findings: G when Rita or Mattias gets a second hand-over
+for the same unresolved blocker in one turn, E and F when a run after this
+release still shows long specialist contexts or many history reads.
+
+Known failures on `main`, unchanged here: `bob-final-answer` (spending-stop
+readback), `ai-catalog-fixture-replay` (fixture lacks the workpad
+publications), `worker-checkpoint-catalog` (expects an older publication name).

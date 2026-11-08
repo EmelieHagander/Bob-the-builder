@@ -26,7 +26,6 @@ test('wrong project, stale source, ambiguous identities or incomplete requests s
   [ports({linkedDrawings:async()=>[drawing,{artifact_id:q,revision:1}]}),'drawing_selection_ambiguous'],
   [ports({readDrawing:async()=>({...drawing,revision:3})}),'drawing_revision_changed'],
   [ports({requests:async()=>Array(12).fill({})}),'drawing_requests_incomplete'],
-  [ports({readDrawing:async()=>({...drawing,current_step_ids:['one','two']})}),'drawing_work_scope_ambiguous'],
  ] as const
  for(const [p,reason]of cases)assert.equal((await resolveDrawingWork('A',[source],undefined,p)).reason,reason)
  assert.equal((await resolveDrawingWork('A',[source,{artifact_id:q,revision:1}],undefined,ports())).reason,'construction_selection_ambiguous')
@@ -47,4 +46,18 @@ test('Rita cannot supply source, destination, work or request IDs, including for
  assert.equal(boundDrawingArguments('design_project_cad',{handoff:'invented'}, {...work,request_id:q})?.handoff,null,'resume preserves server-stored requirements')
  assert.deepEqual(boundDrawingArguments('read_construction_draft',{view:'parts'},work),{view:'parts',...source})
  assert(validDrawingWork(work,'A'));assert(!validDrawingWork(work,'B'));assert(!validDrawingWork({...work,construction:{...source,revision:0}},'A'))
+})
+test('a drawing that serves several plan steps is redrawn with no step, its links kept; one step binds that step (Våningssäng 2, 2026-11-08)',async()=>{
+ const two=await resolveDrawingWork('A',[source],undefined,ports({readDrawing:async()=>({...drawing,archived:false,current_step_ids:['one','two']})}))
+ assert.deepEqual(two,{status:'ready',binding:work})
+ const one=await resolveDrawingWork('A',[source],undefined,ports({readDrawing:async()=>({...drawing,archived:false,current_step_ids:['one']})}))
+ assert.equal(one.binding?.step_id,'one')
+})
+// GPT audit review 2026-11-08: the bed drawing may be redrawn although it serves
+// two plan steps, but never against a construction revision that has moved on.
+// (Changes during render and review are fenced by the K3 tests in checked-construction-drawing.)
+test('a drawing that serves several steps is still refused when its construction moved past the requested revision',async()=>{
+ const moved=ports({readDrawing:async()=>({...drawing,archived:false,current_step_ids:['one','two']}),
+  readConstruction:async(id:string|null)=>id?{status:'ok',projectId:'A',...source,revision:6,source_state:'current',archived:false}:{status:'ok',projectId:'A',items:[{id:c,revision:6}],next_cursor:null,truncated:false}})
+ assert.equal((await resolveDrawingWork('A',[source],undefined,moved)).reason,'construction_revision_changed')
 })

@@ -195,6 +195,10 @@ export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBin
   if(!object(raw))return {status:'invalid',reason:'operation_arguments_invalid'}
   if(!await opts.hasAccess())throw Error('project_denied')
   const s=get(role),priorSource=s.source?{...s.source}:null,v=structuredClone(raw),used:OperationEntry[]=[]
+  // The rows an ambiguous match found; they go back with the refusal (Våningssäng 2,
+  // 2026-11-08: two refusals named no rows, so Mattias searched for them again).
+  let candidates:OperationEntry[]=[]
+  const ambiguous=(matches:OperationEntry[])=>{candidates=matches;return Error('operation_scope_ambiguous')}
   const check=async(e:OperationEntry|undefined)=>{if(!e)throw Error('operation_reference_required');used.push(e);return e}
   const validate=async()=>{if(opts.validateMany&&!await opts.validateMany([...new Map(used.map(e=>[e.ref,e])).values()]))throw Error('operation_reference_changed')}
   const bind=async(id:string,rev:string|undefined,ref:string,kind:Kind,nullable=false)=>{
@@ -212,7 +216,18 @@ export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBin
     const explicit=v[field]!==undefined&&v[field]!==null?source(s,v[field]):undefined
     if(v[field]!=null&&!explicit)throw Error('operation_reference_required')
     if(!readOnly&&s.source&&explicit&&explicit.id!==s.source.artifact_id)throw Error('operation_scope_changed')
-    const e=readOnly&&explicit?explicit:s.source?s.entries.find(e=>e.kind==='construction'&&e.id===s.source!.artifact_id&&e.revision===s.source!.revision):explicit
+    // A read with no reference in an unbound job reads the construction the
+    // job can only mean: Rita's drawing work, else the only one in scope (owner
+    // runs 2026-11-08: five reads refused for a reference the server knew).
+    // A read never binds the job; an overview stays a list.
+    const implicit=()=>{
+     if(!readOnly||name==='read_construction_draft'&&['overview','work'].includes(v.view))return undefined
+     const work=role==='drawing'?opts.drawingWork():undefined
+     const bound=work&&s.entries.find(e=>e.kind==='construction'&&e.id===work.construction.artifact_id&&e.revision===work.construction.revision)
+     if(bound)return bound
+     const all=s.entries.filter(e=>e.kind==='construction');return all.length===1?all[0]:undefined
+    }
+    const e=readOnly&&explicit?explicit:s.source?s.entries.find(e=>e.kind==='construction'&&e.id===s.source!.artifact_id&&e.revision===s.source!.revision):explicit??implicit()
     delete v[field]
     if(!e&&name==='read_construction_draft'&&['overview','work'].includes(v.view)){v[id]=null;v[rev]=null}
     else{const selected=await check(e);v[id]=selected.id;v[rev]=selected.revision;if(!readOnly&&role!=='drawing'&&!s.source)s.source={artifact_id:selected.id,revision:selected.revision}}
@@ -251,7 +266,7 @@ export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBin
     delete v.source_ref
     if(v.record_ref===null&&object(v.data)){
      const matches=s.entries.filter(e=>e.kind==='requirement'&&e.parent===s.source?.artifact_id&&e.definition_id===v.data.definition_id&&e.quantity_mode===v.data.quantity_mode)
-     if(matches.length>1)throw Error('operation_scope_ambiguous');if(matches[0])v.record_ref=matches[0].ref
+     if(matches.length>1)throw ambiguous(matches);if(matches[0])v.record_ref=matches[0].ref
     }
     const output=await bind('record_id','expected_revision','record_ref','requirement',true)
     if(output?.parent&&output.parent!==s.source?.artifact_id)throw Error('operation_scope_changed')
@@ -261,7 +276,7 @@ export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBin
     v.data={...v.data,artifact_id:e.id,artifact_revision:e.revision,target_revision:e.target_revision}
    }
    if(name==='save_construction_cut_plan'){
-    if(v.record_ref===null){const matches=s.entries.filter(e=>e.kind==='cut_plan'&&e.parent===s.source?.artifact_id);if(matches.length>1)throw Error('operation_scope_ambiguous');if(matches[0])v.record_ref=matches[0].ref}
+    if(v.record_ref===null){const matches=s.entries.filter(e=>e.kind==='cut_plan'&&e.parent===s.source?.artifact_id);if(matches.length>1)throw ambiguous(matches);if(matches[0])v.record_ref=matches[0].ref}
     const output=await bind('record_id','expected_revision','record_ref','cut_plan',true)
     if(output?.parent&&output.parent!==v.artifact_id)throw Error('operation_scope_changed')
     for(const p of Array.isArray(v.requirements)?v.requirements:[]){
@@ -337,7 +352,10 @@ export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBin
   }catch(error){s.source=priorSource;rethrowContinuation(error);if(error instanceof Error&&error.message==='project_denied')throw error
    const reason=error instanceof Error?error.message:'operation_reference_invalid'
    return {status:error instanceof Error&&error.message.endsWith('_unavailable')?'unavailable':'invalid',reason,
-    ...(opts.stableRefs&&reason==='operation_reference_required'?{available_refs:s.entries.slice(-20).map(({ref,kind,label})=>({ref,kind,label}))}:{})}}
+    ...(opts.stableRefs&&reason==='operation_reference_required'?{available_refs:s.entries.slice(-20).map(({ref,kind,label})=>({ref,kind,label}))}:{}),
+    ...(reason==='operation_scope_ambiguous'&&candidates.length?{candidates:candidates.slice(0,12).map(({ref,kind,label,revision,definition_id,quantity_mode})=>({ref,kind,label,revision,
+     ...(definition_id!==undefined?{definition_id}:{}),...(quantity_mode!==undefined?{quantity_mode}:{})})),
+     message:'More than one row matches. Send record_ref with the reference of the row this change is for.'}:{})}}
  },
  async observe(role:OperationRole,name:string,args:Record<string,any>,result:any){
   const s=get(role),before=new Set(s.entries.map(e=>e.ref))

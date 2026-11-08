@@ -33,15 +33,18 @@ export const UPDATE_WORKPAD_TOOL: ToolSpec = { type: 'function', function: {
   }, required: ['expected_revision', 'note'] },
 } }
 
+const KEYS = ['blockers', 'goal', 'next_step', 'references', 'status', 'steps']
+const LISTS = [['steps', 6], ['blockers', 6], ['references', 12]] as const
+const TEXT_LIMIT = { goal: 500, next_step: 250, item: 180 }
 function validNote(raw: unknown): raw is WorkpadNote {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false
   const note = raw as Record<string, unknown>
-  if (Object.keys(note).sort().join(',') !== 'blockers,goal,next_step,references,status,steps'
+  if (Object.keys(note).sort().join(',') !== KEYS.join(',')
     || !['working', 'waiting', 'done'].includes(String(note.status))
-    || typeof note.goal !== 'string' || note.goal.length > 500
-    || typeof note.next_step !== 'string' || note.next_step.length > 250) return false
-  return ([['steps', 6], ['blockers', 6], ['references', 12]] as const).every(([key, count]) =>
-    Array.isArray(note[key]) && note[key].length <= count && note[key].every((s: unknown) => typeof s === 'string' && s.length <= 180))
+    || typeof note.goal !== 'string' || note.goal.length > TEXT_LIMIT.goal
+    || typeof note.next_step !== 'string' || note.next_step.length > TEXT_LIMIT.next_step) return false
+  return LISTS.every(([key, count]) =>
+    Array.isArray(note[key]) && note[key].length <= count && note[key].every((s: unknown) => typeof s === 'string' && s.length <= TEXT_LIMIT.item))
 }
 
 /** The note as an object. Claude may send the nested note as JSON text; the
@@ -51,17 +54,51 @@ function noteValue(raw: unknown): unknown {
   if (typeof raw !== 'string') return raw
   try { const parsed = JSON.parse(raw); return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : raw } catch { return raw }
 }
+/** Text over its bound is cut at a word near the end and marked with an ellipsis. */
+function trimText(text: string, limit: number): string {
+  if (text.length <= limit) return text
+  const cut = text.slice(0, limit - 1), space = cut.lastIndexOf(' ')
+  return (space >= limit - 40 ? cut.slice(0, space) : cut).trimEnd() + '…'
+}
+/** Owner runs 2026-11-08: four notes were refused for length alone
+ * (workpad_note_bounds), each a paid retry that built nothing. The server
+ * shapes what it safely can: a missing list is empty, and descriptive text
+ * (goal, next step, steps) over its bound is shortened and named in the result.
+ * Blockers and references are never shortened: a cut blocker or reference
+ * could lose what is unresolved or where it is (review of #508). They, a wrong
+ * status, a missing goal or next step, an unknown field and too many items
+ * still refuse the note with what to fix. */
+function normalizeNote(raw: unknown): { note: unknown; trimmed: string[]; filled: string[] } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { note: raw, trimmed: [], filled: [] }
+  const note: Record<string, unknown> = { ...(raw as Record<string, unknown>) }, trimmed: string[] = [], filled: string[] = []
+  for (const key of ['goal', 'next_step'] as const) {
+    const value = note[key]
+    if (typeof value === 'string' && value.length > TEXT_LIMIT[key]) { note[key] = trimText(value, TEXT_LIMIT[key]); trimmed.push(key) }
+  }
+  for (const [key] of LISTS) {
+    if (note[key] === undefined || note[key] === null) { note[key] = []; filled.push(key); continue }
+    if (!Array.isArray(note[key]) || key !== 'steps') continue
+    note[key] = (note[key] as unknown[]).map((item, i) => {
+      if (typeof item !== 'string' || item.length <= TEXT_LIMIT.item) return item
+      trimmed.push(key + '.' + i); return trimText(item, TEXT_LIMIT.item)
+    })
+  }
+  return { note, trimmed, filled }
+}
 /** Which bounds a refused note broke, so the next note can be fixed. */
 function noteIssues(raw: unknown): string[] {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return ['note must be an object']
   const note = raw as Record<string, unknown>, issues: string[] = []
-  if (Object.keys(note).sort().join(',') !== 'blockers,goal,next_step,references,status,steps') issues.push('note has exactly status, goal, next_step, steps, blockers, references')
+  if (Object.keys(note).sort().join(',') !== KEYS.join(',')) issues.push('note has exactly status, goal, next_step, steps, blockers, references')
   if (!['working', 'waiting', 'done'].includes(String(note.status))) issues.push('status is working, waiting or done')
-  if (typeof note.goal !== 'string' || note.goal.length > 500) issues.push('goal: text, at most 500 characters')
-  if (typeof note.next_step !== 'string' || note.next_step.length > 250) issues.push('next_step: text, at most 250 characters')
-  for (const [key, count] of [['steps', 6], ['blockers', 6], ['references', 12]] as const)
-    if (!Array.isArray(note[key]) || note[key].length > count || !note[key].every((s: unknown) => typeof s === 'string' && s.length <= 180))
-      issues.push(`${key}: at most ${count} items of at most 180 characters`)
+  if (typeof note.goal !== 'string') issues.push('goal: text')
+  if (typeof note.next_step !== 'string') issues.push('next_step: text')
+  for (const [key, count] of LISTS) {
+    if (!Array.isArray(note[key]) || note[key].length > count || !note[key].every((s: unknown) => typeof s === 'string'))
+      issues.push(`${key}: at most ${count} text items`)
+    else if (key !== 'steps' && note[key].some((s: string) => s.length > TEXT_LIMIT.item))
+      issues.push(`${key}: each item at most ${TEXT_LIMIT.item} characters; split a long one, nothing was shortened`)
+  }
   return issues
 }
 /** Agent identity is server-bound to a tool session, never supplied by a model.
@@ -74,10 +111,12 @@ export function workpadTool(workpads: AgentWorkpads, agent: WorkpadAgent): ToolD
         || Object.keys(value).sort().join(',') !== 'expected_revision,note'
         || !Number.isSafeInteger(value.expected_revision) || Number(value.expected_revision) < 0 || Number(value.expected_revision) > 2147483645)
         return { status: 'invalid', message: 'Replace the bounded note with the revision you were shown.' }
-      const note = noteValue(value.note)
+      const { note, trimmed, filled } = normalizeNote(noteValue(value.note))
       if (!validNote(note)) return { status: 'invalid', validation: { code: 'workpad_note_bounds', fields: noteIssues(note) },
         message: 'Note not saved. Fix: ' + noteIssues(note).join('; ') + '.' }
-      return workpads.update(agent, Number(value.expected_revision), note)
+      const saved = await workpads.update(agent, Number(value.expected_revision), note)
+      return trimmed.length || filled.length ? { ...saved, normalized: { ...(trimmed.length ? { trimmed } : {}), ...(filled.length ? { filled_empty: filled } : {}),
+        note: 'Saved as shown: longer text was shortened at its bound and missing lists saved empty. Keep the note short.' } } : saved
     } }
 }
 

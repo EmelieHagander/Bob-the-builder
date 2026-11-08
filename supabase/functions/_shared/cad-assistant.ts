@@ -361,8 +361,12 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
   let construction:Record<string,any>|null=null
   let legacyTransition:Record<string,any>|null=null
   let drawingArtifactId=raw.artifact_id
+  // A drawing that serves plan steps is reviewed against the plan, also when
+  // it serves several and is saved with no single step.
+  let servesSteps=false
   if(raw.artifact_id){
    const old=await readArtifact(raw.artifact_id,null);if(!old)return {status:'unavailable',stage:'source'}
+   servesSteps=Array.isArray(old.current_step_ids)&&old.current_step_ids.length>0
    if(old.source_kind==='construction'){
     construction=raw.construction_revision!=null&&raw.construction_revision!==old.revision?await readArtifact(raw.artifact_id,raw.construction_revision):old
     drawingArtifactId=null
@@ -552,7 +556,7 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
      const pinned=await candidateFingerprint(candidate)
      const reviewLookup=makeLookup()
      let independentEvidence
-     try{independentEvidence=await collectDrawingReviewEvidence(reviewLookup,!!raw.step_id,[...physicalLineageSources(candidate.packet.manifest.bob_lineage),...cadParameterSources(candidate.packet.manifest.bob_parameters).filter(s=>s.kind==='space_measurement')].length>0,{unlimitedWork:opts.unlimitedWork})}
+     try{independentEvidence=await collectDrawingReviewEvidence(reviewLookup,!!raw.step_id||servesSteps,[...physicalLineageSources(candidate.packet.manifest.bob_lineage),...cadParameterSources(candidate.packet.manifest.bob_parameters).filter(s=>s.kind==='space_measurement')].length>0,{unlimitedWork:opts.unlimitedWork})}
      finally{sources.push(...reviewLookup.sources)}
      if(!await checkAuthority())throw new Error('project_denied')
      // Required review reads are a server prerequisite, not advice that a
