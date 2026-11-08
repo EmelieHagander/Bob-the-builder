@@ -829,6 +829,13 @@ for(const migration of migrations){
   if(contract.metadata.refusal_guard_version!==1||contract.metadata.material_follow_version!==undefined)throw new Error('material_follow_contract_unexpected')
   publishAs(contract,'bob-material-follow-v1');contract.metadata={...contract.metadata,...tagged('material_follow_contract')};versions.set(contract.key,versions.get(contract.key)!+1)
  }
+ // Owner run 2026-11-08 16:06: code also follows pending rows before Mattias's job.
+ const materialFollow2=source.match(/\$material_follow_2_contract\$([\s\S]+?)\$material_follow_2_contract\$/)
+ if(materialFollow2){
+  const contract=seed.find(r=>r.key==='agent-contract.ask-bob')
+  if(contract.metadata.material_follow_version!==1)throw new Error('material_follow_2_contract_unexpected')
+  publishAs(contract,'bob-material-follow-v2');contract.metadata={...contract.metadata,...JSON.parse(materialFollow2[1])};versions.set(contract.key,versions.get(contract.key)!+1)
+ }
  // Owner decision 2026-11-07: worker gates (chat answer is the review, gate facts in-job, identical-request refusal).
  const workerGates=source.match(/\$worker_gates_contract\$([\s\S]+?)\$worker_gates_contract\$/)
  if(workerGates){

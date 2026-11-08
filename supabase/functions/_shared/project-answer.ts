@@ -328,6 +328,11 @@ export type ProjectAnswerOptions = {
   /** Pinned per execution (materialFollowVersion 1): after Konrad's job, code
    * recalculates the material rows of each construction revision it saved. */
   materialFollow?: boolean;
+  /** Pinned per execution (materialFollowVersion 2): before Mattias's job, code
+   * also recalculates the material rows still pending on the bound construction,
+   * whoever changed it (Våningssäng 2, 2026-11-08: rows left from an earlier
+   * turn were redone by hand, 25 rows, USD 6.91). */
+  materialFollowBeforeMaterials?: boolean;
   /** Pinned per execution (workerPlanVersion): Konrad's construction write
    * before a plan note in his workpad is refused with plan_required. */
   workerPlan?: boolean;
@@ -543,6 +548,44 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     const name = found?.records?.[0]?.name
     return projectName = typeof name === 'string' && name.trim() ? name.trim() : 'utan namn'
   }
+  type CatalogWorker = NonNullable<typeof workers>[string]
+  const openWorkerSession = (key: string, worker: CatalogWorker, workpadAgent: WorkpadAgent | null) => {
+    const workerPads = workpadAgent ? workpads : undefined
+    return createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}),
+      drawingWorker: key==='drawing'&&opts.boundDrawingWork,
+      ...(opts.workerOperations&&workpadAgent?{workerOperation:{role:workpadAgent,operations:opts.workerOperations},
+        runtimeSurface:()=>({version:1 as const,buildGuides:!!opts.buildGuideTools,operation:opts.workerOperations!.surface(workpadAgent)})}:{}),
+      preloadTools: () => [...worker.tools, ...worker.reads, ...(workerPads ? ['update_workpad'] : [])], offerWaiting: true, readPolicy: basePolicy,
+      ...(workerPads ? { extraTools: [workpadTool(workerPads, workpadAgent!)] } : {}) })
+  }
+  /** Before Mattias's job (materialFollowVersion 2): the server recalculation of
+   * pending material rows runs through Konrad's tool path, which owns
+   * continue_construction_change, for the construction Konrad's scope binds.
+   * No model is called. Returns what was done and what is left, or null when
+   * there is no bound construction. */
+  const followBeforeMaterials = async (): Promise<Record<string, unknown> | null> => {
+    const structure = workers?.structure
+    if (!opts.materialFollowBeforeMaterials || !opts.workerOperations || !structure?.tools.includes('continue_construction_change')) return null
+    const drawing = opts.currentView?.status === 'ok' ? opts.currentView.focus.drawing : undefined
+    const prepared = await opts.workerOperations.prepare('structure', drawingSources, drawing ? { artifact_id: drawing.id, revision: drawing.revision } : undefined)
+    if (prepared.status !== 'ready') return null
+    const bound = opts.workerOperations.exportState().scopes.find(scope => scope.role === 'structure')?.source
+    if (!bound) return null
+    let session = workerSessions.get('structure')
+    if (!session) { session = openWorkerSession('structure', structure, 'structure'); workerSessions.set('structure', session) }
+    // The step's offered set is the fence execute checks; prepare it like a worker step.
+    await session.prepare()
+    const run = async (name: string, args: Record<string, unknown>) => {
+      const result = withoutDiagnostics(await session!.execute(name, opts.workerOperations!.serverArgs('structure', name, args)))
+      try { opts.onTool?.({ name, status: String(result?.status ?? 'returned'), step: currentStep + 1, index: 100 + workerToolEvents++, ms: 0 }) } catch { /* diagnostics only */ }
+      return result
+    }
+    const results = await followConstructionChanges({ targets: [{ artifact_id: bound.artifact_id, revision: bound.revision }], hasAccess: opts.hasAccess, deadline,
+      read: (target, after) => run('read_construction_changes', { artifact_id: target.artifact_id, revision: target.revision, after }),
+      recalculate: (target, item, rowKey) => run('continue_construction_change', { artifact_id: target.artifact_id, revision: target.revision,
+        key: rowKey, item_id: item.id, action: 'recalculate', review_note: null, output_revision: null, change_note: FOLLOW_UP_CHANGE_NOTE }) })
+    return { by: 'code', constructions: results, note: followUpNote(results) }
+  }
   const workerHandOvers = Object.entries(workers ?? {}).map(([key, worker]) => ({ spec: opts.aiCatalog.tool(worker.tool),
     // The hand-over's schema version is the pinned catalog's (Mattias's request-only hand-over is v2).
     version: Number((opts.aiCatalog.definition('tools.' + worker.tool, 'tool_contract').definition.envelope as { schema_version?: unknown } | undefined)?.schema_version ?? 1),
@@ -602,15 +645,13 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       }
       let session = workerSessions.get(key)
       if (!session || resume) {
-        session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}),
-          drawingWorker: key==='drawing'&&opts.boundDrawingWork,
-          ...(opts.workerOperations&&workpadAgent?{workerOperation:{role:workpadAgent,operations:opts.workerOperations},
-            runtimeSurface:()=>({version:1 as const,buildGuides:!!opts.buildGuideTools,operation:opts.workerOperations!.surface(workpadAgent)})}:{}),
-          preloadTools: () => [...worker.tools, ...worker.reads, ...(workerPads ? ['update_workpad'] : [])], offerWaiting: true, readPolicy: basePolicy,
-          ...(workerPads ? { extraTools: [workpadTool(workerPads, workpadAgent!)] } : {}) })
+        session = openWorkerSession(key, worker, workpadAgent)
         if (resume) session.restoreState(structuredClone(resume.session) as Parameters<typeof session.restoreState>[0])
         workerSessions.set(key, session)
       }
+      // materialFollowVersion 2: rows still pending on the bound construction are
+      // recalculated by code before Mattias starts; he is told what is left.
+      const materialFollowUp = key === 'materials' && !resume ? await followBeforeMaterials() : null
       if (resume?.projectName !== undefined) projectName = resume.projectName
       if (!resume && handoverReadiness && worker.tools.includes('save_construction_draft')) {
         const blocked = await handoverReadinessBlock(opts.workerOperations&&workpadAgent?{prepare:()=>session!.prepare(),execute:(name,args)=>session!.execute(name,opts.workerOperations!.serverArgs(workpadAgent,name,args as Record<string,unknown>))}:session)
@@ -735,6 +776,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           if(opts.workerOperations&&workpadAgent)knowledge.operation_context=opts.workerOperations.describe(workpadAgent)
           if(key==='drawing'&&opts.boundDrawingWork)knowledge.drawing_work=opts.cadAssistant?.drawingWork
           if (constructionPiece) knowledge.construction_piece_boundary = constructionPiece
+          // Read by code before this job: rows already recalculated, and what is left for Mattias.
+          if (materialFollowUp) knowledge.material_follow_up = materialFollowUp
           return knowledge
         } } : {}),
         onTool: ({ name, status, ms, rejection }) => {
@@ -749,6 +792,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       // twice more in one turn (three paid chains, no new revision). Use the
       // existing persisted per-turn failed-worker marker for this v4 boundary.
       if (report.status === 'unavailable') failedWorkers.add(failedKey(key))
+      if (materialFollowUp) report.material_follow_up = materialFollowUp
       if (opts.workerFormPiece && key === 'structure' && report.status === 'needs_verification'
         && report.reason === 'construction_piece_write_conflict') failedWorkers.add(failedKey('structure_piece'))
       return report
