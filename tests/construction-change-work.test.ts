@@ -324,41 +324,70 @@ test('a linked need without a recorded model returns a review gap; an explicit c
 // job (bound as artifact_id/revision; the tool takes record_id/expected_revision).
 // With material_follow_version 1 code runs the canonical recalculation after his
 // job, through the same fence, tool and writer (construction-follow-up.ts).
-test('code recalculates the pending material rows of a saved construction revision under their identities, through the worker fence',async t=>{
+async function codeFollow(f:any,r:ReturnType<typeof runtime>,target:{artifact_id:string;revision:number},bindings?:any){
  const {createWorkerOperations}=await import('../supabase/functions/_shared/worker-operations.ts')
  const {followConstructionChanges}=await import('../supabase/functions/_shared/construction-follow-up.ts')
  const {catalogFixture}=await import('./support/ai-catalog-fixture.ts')
+ const operations=createWorkerOperations({version:2,bindings:bindings??(catalogFixture().definition('bob.tools','tool_contract').definition as any).worker_operation_bindings,projectId:f.project,hasAccess:async()=>true,stableRefs:true,
+  load:async()=>({status:'ready',source:target,entries:[{kind:'construction',id:target.artifact_id,revision:target.revision,label:'Bracket'}]}),prepareDrawing:async()=>({status:'ready'}),drawingArguments:()=>null,drawingWork:()=>undefined})
+ const worker=createBobToolSession({projectId:f.project,message:f.message,writer:createProjectWriter(f.project,f.message,async p=>{try{return {data:await r.write(p),error:null}}catch(e:any){return {data:null,error:{code:e.code,message:e.message}}}},async()=>({data:[],error:null}),async()=>({data:[],error:null})),
+  constructionTools:r.tools().construction,lookup:createProjectLookup(f.project,async()=>({data:{records:[],related:[],truncated:false},error:null})),readPolicy:seedToolPolicy,workerOperation:{role:'structure',operations}})
+ await operations.prepare('structure',[]);await worker.prepare()
+ const run=(name:string,args:Record<string,unknown>)=>worker.execute(name,operations.serverArgs('structure',name,args))
+ const recalculate=(t:typeof target,item:{id:string},key:string)=>run('continue_construction_change',{...t,key,item_id:item.id,action:'recalculate',review_note:null,output_revision:null,change_note:'Omräknad av koden efter konstruktionsändringen.'})
+ return {recalculate,follow:()=>followConstructionChanges({targets:[target],hasAccess:async()=>true,deadline:Date.now()+120_000,read:(t,after)=>run('read_construction_changes',{...t,after}),recalculate})}
+}
+const requirementRows=async(f:any)=>(await f.pg.query('select requirement_id,revision,artifact_revision,required_quantity::text q from bob.material_requirement_revisions where project_id=$1 order by requirement_id,revision',[f.project])).rows
+
+test('code recalculates the pending material rows of a saved construction revision under their identities, through the worker fence',async t=>{
+ const {catalogFixture}=await import('./support/ai-catalog-fixture.ts')
  const f=await cutPlanFixture(t),r=runtime(f);await r.write(f.payload)
  const node=f.draft.parameters.bindings.find((b:any)=>b.path==='definitions/base/x_mm').node
- const {construction,session}=r.tools();await session.prepare()
+ const {session}=r.tools();await session.prepare()
  assert.equal((await session.execute('change_construction_parameters',{key:'width',record_id:f.construction.recordId,expected_revision:1,
   changes:[{id:node,role:'decision',value:240,unit:'mm',reason:'Explicit synthetic wider base'}],change_note:'Widen the saved base'})).status,'saved',JSON.stringify(r.sqlErrors))
- const id=f.construction.recordId,target={artifact_id:id,revision:2}
- const fenced=(bindings:any)=>{
-  const operations=createWorkerOperations({version:2,bindings,projectId:f.project,hasAccess:async()=>true,stableRefs:true,
-   load:async()=>({status:'ready',source:target,entries:[{kind:'construction',id,revision:2,label:'Bracket'}]}),prepareDrawing:async()=>({status:'ready'}),drawingArguments:()=>null,drawingWork:()=>undefined})
-  const worker=createBobToolSession({projectId:f.project,message:f.message,writer:createProjectWriter(f.project,f.message,async p=>{try{return {data:await r.write(p),error:null}}catch(e:any){return {data:null,error:{code:e.code,message:e.message}}}},async()=>({data:[],error:null}),async()=>({data:[],error:null})),
-   constructionTools:construction,lookup:createProjectLookup(f.project,async()=>({data:{records:[],related:[],truncated:false},error:null})),readPolicy:seedToolPolicy,workerOperation:{role:'structure',operations}})
-  return {operations,worker}
- }
- const follow=async(bindings:any)=>{
-  const {operations,worker}=fenced(bindings);await operations.prepare('structure',[]);await worker.prepare()
-  const run=(name:string,args:Record<string,unknown>)=>worker.execute(name,operations.serverArgs('structure',name,args))
-  return followConstructionChanges({targets:[target],hasAccess:async()=>true,deadline:Date.now()+120_000,
-   read:(t,after)=>run('read_construction_changes',{...t,after}),
-   recalculate:(t,item,key)=>run('continue_construction_change',{...t,key,item_id:item.id,action:'recalculate',review_note:null,output_revision:null,change_note:'Omräknad av koden efter konstruktionsändringen.'})})
- }
+ const target={artifact_id:f.construction.recordId,revision:2}
  const bindings=(catalogFixture().definition('bob.tools','tool_contract').definition as any).worker_operation_bindings
  // The binding before the fix: every row is refused for the field names.
  const old={...bindings,continue_construction_change:{...bindings.continue_construction_change,source:{id:'artifact_id',revision:'revision',ref:'source_ref',readOnly:false},schema:[{path:[],hide:['artifact_id','revision'],refs:bindings.continue_construction_change.schema[0].refs}]}}
- const [refused]=await follow(old)
+ const [refused]=await (await codeFollow(f,r,target,old)).follow()
  assert.equal(refused.recalculated,0);assert.deepEqual(refused.left.map(row=>row.status),['invalid','invalid'])
- const [done]=await follow(bindings)
+ const [done]=await (await codeFollow(f,r,target)).follow()
  assert.equal(done.status,'pending');assert.equal(done.recalculated,2,JSON.stringify([done,r.sqlErrors]));assert.deepEqual(done.left,[]);assert.deepEqual(done.other_pending,{cut_plan:1})
  const work=await r.changes(2)
  for(const item of work.items.filter((i:any)=>i.kind==='requirement')){assert.equal(item.state,'updated');assert.equal(item.completion_receipt.recordId,item.output_id);assert.equal(item.completed_revision,2)}
- const rows=(await f.pg.query('select requirement_id,revision,artifact_revision from bob.material_requirement_revisions where project_id=$1 and revision=2 order by requirement_id',[f.project])).rows
+ const rows=(await requirementRows(f)).filter((x:any)=>x.revision===2)
  assert.deepEqual(rows.map((x:any)=>[x.requirement_id,x.artifact_revision]),f.needs.map((n:any)=>[n.recordId,2]).sort((a:any,b:any)=>a[0]<b[0]?-1:1),'same rows, now from revision 2')
- const [again]=await follow(bindings)
+ const [again]=await (await codeFollow(f,r,target)).follow()
  assert.equal(again.recalculated,0);assert.deepEqual(again.left,[]);assert.deepEqual(again.other_pending,{cut_plan:1},'nothing pending is recalculated twice; the cutting plan stays for its own decision')
+})
+
+// Review of #508 (the bed's revision 25 → 26 kept its geometry and changed joints):
+// unchanged geometry keeps every quantity, one row stays one row, an interrupted
+// run and a second run add nothing, and a row that needs a decision stays pending.
+test('unchanged geometry: same quantities and rows; interruption and a second run add no revision; a row without a model stays pending',async t=>{
+ const f=await cutPlanFixture(t),r=runtime(f),manual=randomUUID()
+ await f.rpc('bob.material_requirement_command',[f.project,'create',manual,0,JSON.stringify({name:'Legacy allowance',category:'Timber',area_id:null,task_id:null,unit:'pcs',required_quantity:'99',waste_percent:'0',purchase_increment:'1',basis:'Explicit manual allowance, model absent',assumptions:'Fixture',artifact_id:f.construction.recordId,artifact_revision:1,target_revision:1,stock_allocations:[],component_allocations:[],change_note:'Initial'})])
+ const same=await r.write({...f.base,kind:'construction',record_id:f.construction.recordId,expected_revision:1,request_quote:f.message,data:{...f.constructionData,key:'same-geometry',change_note:'Same parts, new note'}})
+ assert.equal(same.revision,2,JSON.stringify(r.sqlErrors))
+ const work=await r.changes(2);assert.equal(work.cause.geometry_changed,false)
+ const before=await requirementRows(f),target={artifact_id:f.construction.recordId,revision:2}
+ const derived=work.items.filter((i:any)=>i.kind==='requirement'&&i.output_id!==manual)
+ assert.equal(derived.length,f.needs.length)
+ // Interrupted: the first row was recalculated, then the run stopped.
+ const code=await codeFollow(f,r,target)
+ assert.equal((await code.recalculate(target,derived[0],'follow_'+derived[0].id.replace(/-/g,''))).status,'saved',JSON.stringify(r.sqlErrors))
+ const [resumed]=await code.follow()
+ assert.equal(resumed.recalculated,derived.length-1,'only the rows still pending')
+ assert.deepEqual(resumed.left.map(row=>[row.output_id,row.status]),[[manual,'needs_requirement_model']],'a row without a recorded model is left for a decision')
+ const after=await requirementRows(f)
+ for(const need of f.needs){
+  const revisions=after.filter((x:any)=>x.requirement_id===need.recordId)
+  assert.deepEqual(revisions.map((x:any)=>[x.revision,x.artifact_revision]),[[1,1],[2,2]],'one new revision per row, no duplicate')
+  assert.equal(revisions[1].q,revisions[0].q,'unchanged geometry keeps the quantity')
+ }
+ assert.deepEqual(after.filter((x:any)=>x.requirement_id===manual),before.filter((x:any)=>x.requirement_id===manual),'the manual row is not touched')
+ assert.equal((await r.changes(2)).items.find((i:any)=>i.output_id===manual).state,'pending')
+ const [again]=await code.follow()
+ assert.equal(again.recalculated,0);assert.deepEqual(await requirementRows(f),after,'a second run writes no revision')
 })

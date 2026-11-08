@@ -39,3 +39,20 @@ test('long text is shortened and named; missing lists are saved empty; a wrong s
     assert.equal((await tool.execute({ expected_revision: 2, note: bad })).status, 'invalid', JSON.stringify(bad))
   assert.equal(saved.length, 2)
 })
+
+// Review of #508: a long explanation may be shortened, an unresolved problem may not.
+test('a long note keeps its blocker and references whole; a blocker over its bound refuses the note instead of being cut', async () => {
+  const { tool, saved } = store()
+  const blocker = 'Ritningen är kopplad till två plansteg och kan inte ritas om'
+  const reference = 'Våningssäng 2, konstruktion revision 26'
+  const explanation = 'Gaveln flyttas, stegen byter sida och alla förband mot sidostyckena kontrolleras igen innan något sparas. '.repeat(10)
+  const kept = await tool.execute({ expected_revision: 0, note: { status: 'waiting', goal: explanation, next_step: 'Fråga Bob', steps: [explanation], blockers: [blocker], references: [reference] } })
+  assert.equal(kept.status, 'noted'); assert.deepEqual(kept.normalized.trimmed, ['goal', 'steps.0'])
+  assert.deepEqual([saved[0].blockers, saved[0].references], [[blocker], [reference]], 'the blocker and the reference are saved exactly')
+  const longBlocker = 'Mattias kan inte räkna om reglarna eftersom två rader har samma definition och olika användning; '.repeat(3)
+  const refused = await tool.execute({ expected_revision: 1, note: { status: 'waiting', goal: 'Material', next_step: 'Vänta', steps: ['Läs'], blockers: [longBlocker], references: [] } })
+  assert.equal(refused.status, 'invalid'); assert.equal(saved.length, 1)
+  assert.deepEqual(refused.validation.fields, ['blockers: each item at most 180 characters; split a long one, nothing was shortened'])
+  const longReference = 'x'.repeat(181)
+  assert.equal((await tool.execute({ expected_revision: 1, note: { ...note, references: [longReference] } })).status, 'invalid')
+})

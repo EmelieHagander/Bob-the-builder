@@ -3309,7 +3309,7 @@ against the code on this branch. Built on the branch, not published.
 | A material rows | Every construction revision makes every pinned material row a pending change item (`capture_construction_change`), geometry or not. The server recomputes a row from its recipe without AI (`continue_construction_change`, recalculate), but in worker jobs the binding sent `artifact_id/revision` to a tool that takes `record_id/expected_revision`: every call was refused (`$.artifact_id: remove unsupported field`). | Migration `20261108130000_bob_material_follow_catalog.sql`: the binding names the tool's fields; pin `material_follow_version 1`. After Konrad's job, code recalculates the pending material rows of each revision it saved, through his session (`construction-follow-up.ts`). Rows that need a model, allocation or commitment review, cutting plans and drawings stay pending and are listed in `follow_up`. Nothing is approved. | `construction-change-work`: the old binding refuses both rows; the new one recalculates both under the same IDs at revision 2; a second run does nothing. `bob-build-workers`: wiring on/off. |
 | C delivery | A report that ends in text is `status: ok` whether or not anything was saved. | Every hand-over result gets `outcome` from the save receipts: `saved`, `partial` (saved, ended at a limit), `blocked` (last write refused, with tool/status/reason) or `not_saved`. Calls keep the refusal reason. | `bob-worker-outcome`: Rita "klar" with no drawing is `not_saved`; a refused drawing is `blocked` with its reason. |
 | K metrics | Delivery was one turn status. | The hand-over's tool event records `worker_deliverable`, `worker_product`, `worker_saved_<product>` and `worker_blocker` (codes and counts only). | `bob-worker-outcome`. |
-| H workpad | Four notes refused for length alone. | Text over its bound is shortened at a word and named (`normalized.trimmed`); missing lists are saved empty. A wrong status, a missing goal or next step, an unknown field and too many items still refuse. | `bob-agent-workpad-note`. |
+| H workpad | Four notes refused for length alone. | Descriptive text (goal, next step, steps) over its bound is shortened at a word and named (`normalized.trimmed`); missing lists are saved empty. Blockers and references are never shortened: over their bound the note is refused with what to split. A wrong status, a missing goal or next step, an unknown field and too many items still refuse. | `bob-agent-workpad-note`: a long note keeps its blocker and reference exactly. |
 | B/I references | An ambiguous material match returned a bare code; an unbound read with no reference was refused although only one construction could be meant. | `operation_scope_ambiguous` returns the candidate rows (ref, label, revision, definition, mode). A read with no reference uses Rita's bound construction, else the only one in scope; it never binds the job, an overview stays a list, writes still name their source. | `worker-operations`. |
 | J drawing | #507's redraw of a multi-step drawing could hide a moved construction. | Covered: the binding still stops on `construction_revision_changed`; K3 tests fence changes during render and review. | `drawing-work`. |
 
@@ -3329,6 +3329,25 @@ against the code on this branch. Built on the branch, not published.
   hand-overs in a turn (the worker session is kept). A register keyed on
   "relevant state" would block legitimate recovery without a definition of
   that state.
+
+**Second review (owner forwarded GPT's audit of #508), same day.** Acted on:
+blockers and references are no longer shortened (above); the material test
+now covers unchanged geometry (same quantities and rows, `geometry_changed`
+false), an interrupted run (only the rest is recalculated, one new revision
+per row), a second run (no revision written) and a row without a recorded
+model (left pending as `needs_requirement_model`, untouched); a catalog test
+checks that every operation binding names fields its tool has (this class of
+fault would have failed it); Rita and Mattias keep their working note without
+the gate (`bob-worker-outcome`). `check:edge` passed for all seven entry
+points with Deno 2.9.6 from npm; esm.sh is blocked here, so its one import
+(`openai-service.ts`) was mapped to the same package from npm (2.110.2 for
+2.49.8): an approximation, not the CI check.
+Not changed: a row whose geometry did not change still gets a new revision
+with the same quantity. Currency is pinning the head revision; without the new
+revision the row stays out of date and Mattias is asked again.
+E, F and G stay open findings: G when Rita or Mattias gets a second hand-over
+for the same unresolved blocker in one turn, E and F when a run after this
+release still shows long specialist contexts or many history reads.
 
 Known failures on `main`, unchanged here: `bob-final-answer` (spending-stop
 readback), `ai-catalog-fixture-replay` (fixture lacks the workpad

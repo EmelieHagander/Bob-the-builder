@@ -227,3 +227,17 @@ test('a read with no reference reads the only construction, or Rita\'s bound one
  const rita=make([entries[0],entries[1]],{artifact_id:B,revision:2});await rita.prepare('drawing',[])
  assert.equal((await rita.before('drawing','read_construction_draft',{source_ref:null,view:'parts'})).args?.artifact_id,B)
 })
+// Review of #508: continue_construction_change was bound under artifact_id/revision
+// while the tool takes record_id/expected_revision, so every call was refused.
+// Every binding must name fields its tool has.
+test('every catalog operation binding names source and hidden fields its own tool schema has',()=>{
+ const catalog=catalogFixture(),bindings=catalog.definition('bob.tools','tool_contract').definition.worker_operation_bindings as Record<string,any>
+ const wrong:string[]=[]
+ for(const [name,binding] of Object.entries(bindings)){
+  const props=(catalog.definition('tools.'+name,'tool_contract').definition as any).parameters.properties
+  for(const field of [...(binding.source?[binding.source.id,binding.source.revision]:[]),...binding.schema.flatMap((op:any)=>op.path.length?[]:op.hide)])
+   if(!Object.hasOwn(props,field))wrong.push(name+'.'+field)
+ }
+ assert.deepEqual(wrong,[])
+ assert.deepEqual(bindings.continue_construction_change.source,{id:'record_id',revision:'expected_revision',ref:'source_ref',readOnly:false})
+})

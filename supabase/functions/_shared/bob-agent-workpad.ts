@@ -62,10 +62,12 @@ function trimText(text: string, limit: number): string {
 }
 /** Owner runs 2026-11-08: four notes were refused for length alone
  * (workpad_note_bounds), each a paid retry that built nothing. The server
- * shapes what it safely can: a missing list is empty, and text over its bound
- * is shortened and named in the result. A wrong status, a missing goal or next
- * step, an unknown field and too many items still refuse the note, so no step
- * or decision is dropped silently. */
+ * shapes what it safely can: a missing list is empty, and descriptive text
+ * (goal, next step, steps) over its bound is shortened and named in the result.
+ * Blockers and references are never shortened: a cut blocker or reference
+ * could lose what is unresolved or where it is (review of #508). They, a wrong
+ * status, a missing goal or next step, an unknown field and too many items
+ * still refuse the note with what to fix. */
 function normalizeNote(raw: unknown): { note: unknown; trimmed: string[]; filled: string[] } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { note: raw, trimmed: [], filled: [] }
   const note: Record<string, unknown> = { ...(raw as Record<string, unknown>) }, trimmed: string[] = [], filled: string[] = []
@@ -75,7 +77,7 @@ function normalizeNote(raw: unknown): { note: unknown; trimmed: string[]; filled
   }
   for (const [key] of LISTS) {
     if (note[key] === undefined || note[key] === null) { note[key] = []; filled.push(key); continue }
-    if (!Array.isArray(note[key])) continue
+    if (!Array.isArray(note[key]) || key !== 'steps') continue
     note[key] = (note[key] as unknown[]).map((item, i) => {
       if (typeof item !== 'string' || item.length <= TEXT_LIMIT.item) return item
       trimmed.push(key + '.' + i); return trimText(item, TEXT_LIMIT.item)
@@ -91,9 +93,12 @@ function noteIssues(raw: unknown): string[] {
   if (!['working', 'waiting', 'done'].includes(String(note.status))) issues.push('status is working, waiting or done')
   if (typeof note.goal !== 'string') issues.push('goal: text')
   if (typeof note.next_step !== 'string') issues.push('next_step: text')
-  for (const [key, count] of LISTS)
+  for (const [key, count] of LISTS) {
     if (!Array.isArray(note[key]) || note[key].length > count || !note[key].every((s: unknown) => typeof s === 'string'))
       issues.push(`${key}: at most ${count} text items`)
+    else if (key !== 'steps' && note[key].some((s: string) => s.length > TEXT_LIMIT.item))
+      issues.push(`${key}: each item at most ${TEXT_LIMIT.item} characters; split a long one, nothing was shortened`)
+  }
   return issues
 }
 /** Agent identity is server-bound to a tool session, never supplied by a model.

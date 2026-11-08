@@ -61,3 +61,18 @@ test('the hand-over\'s tool event counts what was delivered, per product, as cod
   assert.deepEqual(events[0].counts, { tool: 'ask_drawing_worker', step: 2, work_operation: 'worker_outcome', worker_deliverable: 'blocked', worker_product: 'drawing', worker_saved_material: 3, worker_blocker: 'drawing_work_scope_ambiguous' })
   assert.deepEqual(events[1].counts, { tool: 'ask_materials_worker', step: 3, work_operation: 'worker_outcome', worker_deliverable: 'unknown' })
 })
+
+// Review of #508: without the gate Rita and Mattias keep their working note; only the refusal is gone.
+test('a worker without the plan gate is still offered its working note and may save before writing one', async () => {
+  const offered: string[][] = []
+  let n = 0
+  const steps = [reply('r1', [call('a', 'design_project_cad'), call('b', 'save_cad_design')])]
+  const result = await runWorker({ aiCatalog: catalog, worker: rita, userId: 'owner', job: { job: 'Rita sängen.', findings: null }, history: [],
+    callModel: async (o: OpenAIServiceOptions) => { offered.push((o.tools ?? []).map(t => t.function.name)); return steps[n++] ?? { success: true, data: 'Klar.', model: 'fixture', responseId: 'end', usage } },
+    readCurrent: async () => null, hasAccess: async () => true, deadline: Date.now() + 60_000, readKnowledge: async () => ({}),
+    workpadEnabled: true, workpad: { status: 'ok', revision: 0, note: null },
+    session: { prepare: async () => [...rita.tools, ...rita.reads, 'update_workpad'].map(spec),
+      execute: async name => name === 'save_cad_design' ? { status: 'saved', receipt: { projectId: 'p', recordId: 'd1', revision: 6 } } : { status: 'ready' } } })
+  assert(offered.every(list => list.includes('update_workpad')))
+  assert.equal((result.outcome as any).deliverable, 'saved')
+})
