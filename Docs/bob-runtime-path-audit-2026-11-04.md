@@ -3236,14 +3236,15 @@ and no rules (19 hand joints, 64 % of 7,854 characters).
 **Våningssäng 2.** Konrad sent rules in every part edit; all joints were
 written by code. The construction check passed each change. Two problems
 outside the construction:
-- Rita refused 5 times (`plan_required` ×3, `needs_data` ×2): the bed drawing
-  `a36eae3c` revision 5 is linked to two plan steps ("Granska modellen", "Stäm
-  av v7 mot sparad konstruktion"), and `resolveDrawingWork` stops with
-  `drawing_work_scope_ambiguous`; neither Rita nor Bob can choose. Root cause
-  under investigation.
+- Rita refused 5 times (`plan_required` ×3, her own missing plan;
+  `needs_data` ×2): the bed drawing `a36eae3c` revision 5 is linked to two
+  plan steps ("Granska modellen", "Stäm av v7 mot sparad konstruktion"), and
+  `resolveDrawingWork` (run again by `design_project_cad`) stopped with
+  `drawing_work_scope_ambiguous`. Neither Rita nor Bob can unlink a step, so
+  the drawing could never be redrawn. Root cause below.
 - Mattias: 11 `derive_cad_material_requirement` conflicts after the last
   construction revision; Bob reports they collided with Mattias's own saves.
-  Root cause under investigation.
+  Root cause below.
 
 Small waste in both turns: `workpad_note_bounds` ×4 (notes too long),
 `operation_reference_required` ×5 (reads without the reference).
@@ -3263,3 +3264,32 @@ active jobs before. No migration.
 
 Next: the owner's next Entrén turn should save Konrad's prepared front change
 in one write.
+
+<a id="root-causes-vs2-2026-11-08"></a>
+**Root causes of the Våningssäng 2 blocks — 2026-11-08** (owner: "lets
+grundorsak"). Both were checked against the live database as the owner,
+read-only.
+
+1. **Drawing.** Plan-step links belong to the drawing, not to a revision
+   (`bob.artifact_step_links`); a drawing save with `step_id` adds that link
+   and a save without one changes none. The earlier drawing path already
+   redraws a drawing with several links with no step. The code-owned binding
+   from 2026-11-04 instead stopped with `drawing_work_scope_ambiguous`, which
+   protected nothing and locked the drawing. Fix: the binding takes the single
+   step when there is one and no step when there are several; the links stay.
+   A drawing that serves any step is still reviewed against the plan.
+2. **Material rows.** The live writer (`bob_private.bob_project_write_v12`)
+   keyed an operational write as `operational:<resource>:<action>:<task>:<record>`.
+   A revise of an existing record therefore had one key per turn. Mattias
+   revised his rows at 06:46–06:52 (construction revision 25); after Konrad's
+   revision 26 his second revise of the same rows had new numbers, and the
+   writer answered `operation_reused` (PT409; edge log 07:07:20–21). The row
+   that saved (`ed55de66`) had been created, not revised, earlier in the turn.
+   Fix (`20261108120000_operational_revise_key.sql`): the key of a write to an
+   existing record names the revision it starts from. An exact retry still
+   reuses its receipt; a different payload from the same revision is still
+   refused; creates keep their key. The migration patches the live definition
+   and refuses to run if the key line or its order has changed.
+
+Tests: `tests/drawing-work.test.ts` and `tests/operational-revise-key.test.ts`
+fail without the change with the live reasons and pass with it.
