@@ -1229,6 +1229,8 @@ select {
 .shop-state > details { font-size: 12px; padding-bottom: var(--space-1); }
 .stock-row { padding: 0 var(--space-2); }
 .stock-row-line { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: 44px; padding: var(--space-2) 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.stock-row-head { display: flex; align-items: center; gap: var(--space-2); }
+.stock-row-check { width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--accent-2); }
 .stock-row-text { flex: 1; min-width: 0; display: grid; }
 .stock-row-name { font-size: 14px; font-weight: 600; color: var(--ink); }
 .stock-row-sub { font-size: 12px; color: var(--ink-soft); }

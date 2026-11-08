@@ -52,13 +52,14 @@ function defaults(group: StockGroup): Entry {
 
 export type StockState = 'estimate' | 'exact' | 'problem'
 
-export function StockCountRow({ group }: { group: StockGroup }) {
+/** `bought` ties the row to a real shopping-list row: ticking saves it there with the current count. */
+export function StockCountRow({ group, bought }: { group: StockGroup; bought?: { checked: boolean; onToggle: (qty: string) => void } }) {
   const [open, setOpen] = useState(false)
   const [entered, setEntered] = useState(() => remembered(group) !== null)
   const [entry, setEntry] = useState<Entry>(() => remembered(group) ?? defaults(group))
   const sheet = isSheet(group)
   const { kind, result } = compute(group, entry)
-  const state: StockState = result.status !== 'ok' ? 'problem' : entered ? 'exact' : 'estimate'
+  const state: StockState | 'bought' = bought?.checked ? 'bought' : result.status !== 'ok' ? 'problem' : entered ? 'exact' : 'estimate'
   const set = (field: keyof Entry) => (event: { target: { value: string } }) => {
     const next = { ...entry, [field]: event.target.value }
     setEntry(next); setEntered(true); remember(group, next)
@@ -68,14 +69,18 @@ export function StockCountRow({ group }: { group: StockGroup }) {
   const size = sheet ? `${entry.raw} × ${entry.rawWidth}` : entry.raw
   const why = result.status === 'too_long' ? `Longer than ${result.usable} mm: ${result.labels.join(', ')}` : result.status !== 'ok' && 'message' in result ? result.message : null
   return <div className="stock-row shop-state" data-state={state}>
+    <div className="stock-row-head">
+    {bought && <input type="checkbox" className="stock-row-check" aria-label={'Bought ' + group.name} checked={bought.checked}
+      onChange={() => bought.onToggle([count ?? '?', sheet ? `${size} ${entry.unit}` : `${entry.raw} ${entry.unit}`].join(' · '))} />}
     <button type="button" className="stock-row-line" aria-expanded={open} onClick={() => setOpen(v => !v)}>
       <span className="stock-row-text">
-        <span className="stock-row-name">{group.name}</span>
+        <span className="stock-row-name" style={bought?.checked ? { color: 'var(--ink-faint)', textDecoration: 'line-through' } : undefined}>{group.name}</span>
         <span className="stock-row-sub">{size} {entry.unit}{sheet ? ' sheets' : ' boards'} · {plural(group.parts.reduce((n, p) => n + p.quantity, 0), 'part', 'parts')}</span>
       </span>
-      <span className="stock-row-count">{count ? (state === 'estimate' ? '≈ ' : '') + count : '?'}</span>
+      <span className="stock-row-count">{count ? (result.status === 'ok' && !entered ? '≈ ' : '') + count : '?'}</span>
       <Icon name={open ? 'caret-down' : 'caret-right'} size={14} />
     </button>
+    </div>
     {open && <div className="stock-row-more">
       <div className="stock-row-fields">
         <input style={small} inputMode="decimal" aria-label={sheet ? 'Sheet length' : 'Raw board length'} value={entry.raw} onChange={set('raw')} />

@@ -12,6 +12,8 @@ import { StockCountRow } from '../components/StockCount'
 
 /** Boards and sheets for every current construction, counted per exact material version.
  * A construction that cannot be read or is not ready is counted as skipped, never guessed. */
+const STOCK_CATEGORY = 'Boards and sheets'
+
 async function constructionStock(projectId: string) {
   const heads = await db.getBuildConstructions(projectId)
   const groups = new Map<string, StockGroup>()
@@ -46,6 +48,7 @@ export function Shopping() {
   const { data: cutPlanSources, error: cutPlanSourceError } = useAsync(() => db.getCutPlanShoppingSources(projectId), [projectId, version])
   const { data: stock, error: stockError } = useAsync(() => constructionStock(projectId), [projectId, version])
   const [adding, setAdding] = useState(false)
+  const [stockSaveFailed, setStockSaveFailed] = useState(false)
   const [bought, setBought] = useState<Record<string, boolean>>({})
 
   // Treat already-delivered materials as ticked off.
@@ -67,7 +70,10 @@ export function Shopping() {
   }
 
   // Categories may be people's own words or saved codes; group under one human label.
-  const shownGroups = (groups ?? []).reduce<{ label: string; icon: string; items: Material[] }[]>((list, group) => {
+  // Ticked boards and sheets show on their own card, not twice.
+  const stockNames = new Set((stock?.groups ?? []).map(group => group.name))
+  const shownGroups = (groups ?? []).map(group => ({ ...group, items: group.items.filter(m => !(m.category === STOCK_CATEGORY && stockNames.has(m.name))) }))
+    .filter(group => group.items.length).reduce<{ label: string; icon: string; items: Material[] }[]>((list, group) => {
     const label = categoryLabel(group.category)
     const existing = list.find(item => item.label === label)
     if (existing) existing.items.push(...group.items)
@@ -116,13 +122,31 @@ export function Shopping() {
     )
   }
 
+  // A ticked board or sheet is a real shopping row (one shared truth), found again by its material name.
+  const stockRowFor = (group: StockGroup) => (materials ?? []).find(m => m.category === STOCK_CATEGORY && m.name === group.name)
+  const toggleStock = async (group: StockGroup, qty: string) => {
+    const linked = stockRowFor(group)
+    try {
+      if (linked) {
+        const next = !bought[linked.id]
+        setBought(b => ({ ...b, [linked.id]: next }))
+        if (next && linked.qty !== qty) await db.updateMaterial(linked.id, { name: linked.name, qty, area: linked.area, supplier: linked.supplier, cost: linked.cost, category: linked.category })
+        await db.setMaterialStatus(linked.id, next ? 'delivered' : 'needed')
+      } else {
+        await db.createMaterial({ name: group.name, qty, area: '', supplier: '', cost: '', category: STOCK_CATEGORY, status: 'delivered' })
+      }
+    } catch { setStockSaveFailed(true) }
+    setVersion(v => v + 1)
+  }
   const stockCard = stock && (stock.groups.length > 0 || stock.skipped > 0) && <div className="card" style={{ padding: 'var(--panel-padding)' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', marginBottom: 8 }}>
       <Icon name="ruler" weight="fill" size={18} color="var(--accent-2)" />
       <span style={{ fontSize: 14.5, fontWeight: 700 }}>Boards and sheets</span>
       <Link to="/build-lists" style={{ fontSize: 12, marginLeft: 'auto' }}>{stock.skipped ? `${stock.skipped} not counted` : 'Parts'}</Link>
     </div>
-    {stock.groups.map(group => <StockCountRow key={group.key} group={group} />)}
+    {stockSaveFailed && <p role="alert" className="stock-row-alert">Could not save. Try again.</p>}
+    {stock.groups.map(group => { const linked = stockRowFor(group)
+      return <StockCountRow key={group.key} group={group} bought={{ checked: !!(linked && bought[linked.id]), onToggle: qty => { setStockSaveFailed(false); void toggleStock(group, qty) } }} /> })}
   </div>
 
   return (
