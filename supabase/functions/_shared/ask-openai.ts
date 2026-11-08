@@ -1,3 +1,9 @@
+import {createConceptViewAdapter,resolveConceptViewImage} from './project-context/concepts.ts'
+import {createConceptViewTransport} from './project-context/concept-transport.ts'
+import {createDrawingViewAdapter,resolveDrawingViewImage} from './project-context/drawings.ts'
+import {createDrawingViewTransport} from './project-context/drawing-transport.ts'
+import {createWorkerOperations} from './worker-operations.ts'
+import { resolveDrawingWork } from './drawing-work.ts'
 import { drawingErrorCode } from './drawing-errors.ts'
 import { createPlanLinks } from './project-plan-links.ts'
 import { buildingLinkFact, createBuildingScope } from './project-building-scope.ts'
@@ -11,11 +17,13 @@ import { createConstructionViews } from './construction-views.ts'
 import {createProjectCalculator,hasCalculatorContract} from './project-calculator.ts'
 import { readPhysicalCadSources } from './cad-physical-lineage.ts'
 import { parameterSourcePins } from './cad-parameters.ts'
-import { bobCompleteRequestVersions } from './bob-complete-request.ts'
-import { createConstructionTools, checkedConstructionForDrawing, constructionCurrentReader, constructionChangeReaders } from './construction-draft.ts'
+import { bobCompleteRequestVersions, type BobImageInputCounts } from './bob-complete-request.ts'
+import { bobStageContextVersion, stageImageRef } from './bob-stage-context.ts'
+import { createConstructionTools, checkedConstructionForDrawing, constructionCurrentReader, constructionChangeReaders, constructionPreparationFailure } from './construction-draft.ts'
+import { createConstructionSketchStore } from './construction-sketch.ts'
 import {parseDesignReadiness,type DesignPurpose,type DesignReadiness} from './project-design-intent.ts'
 import { readBudgetStop } from './bob-budget-stop.ts'
-import {drawingResumeReply,confirmedDrawingReceipt} from './drawing-resume-reply.ts'
+import {drawingResumeReply,drawingResumeDelivery,confirmedDrawingReceipt} from './drawing-resume-reply.ts'
 import {drawingRuntimeVersion} from './drawing-runtime.ts'
 import { hydrateCurrentView, createCurrentViewReader, type CurrentViewClient } from './current-view.ts'
 import { createCurrentViewGuard } from './current-view-guard.ts'
@@ -26,6 +34,7 @@ import { createBobModelBudget, bobFinalAnswerVersion, isDrawingModelCall, type D
 import { createExecutionMetrics } from './execution-metrics.ts'
 import { AIBackgroundPending } from './ai-background.ts'
 import { pinBobModelDeadline } from './bob-model-deadline.ts'
+import { CLAUDE_BACKGROUND_TIMEOUT_MS, claudeDispatchWindow, claudeJournalReserveMs } from './bob-model-timing.ts'
 import { hasImageContent } from './openai-content.ts'
 import { fingerprint, rethrowContinuation } from './bob-job-journal.ts'
 import { createKnowledgeReader } from './building-knowledge.ts'
@@ -41,8 +50,8 @@ import { createCadGuideTransport, createCadTransport } from './cad-transport.ts'
 import { createMaterialCatalogReader, materialFindResult, parseMaterialShortlist, shortlistLine, shortlistRef } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
-import { createProjectContext, type Opened } from './project-context/dispatcher.ts'
-import { createMediaAdapter, resolveMediaImage, resolveMediaImageFile, type ProviderImageFiles } from './project-context/media.ts'
+import { createProjectContext, type Item, type Opened } from './project-context/dispatcher.ts'
+import { createMediaAdapter, imageDescriptionText, resolveMediaImage, resolveMediaImageFile, type ProviderImageFiles } from './project-context/media.ts'
 import { prepareChatImages } from './project-context/chat-images.ts'
 import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
@@ -65,6 +74,7 @@ import { prepareMemoryStair, journalStairStore } from './bob-memory-stair.ts'
 import { runClaimedProjectTurn } from './project-turn.ts'
 import { weighProjectDescription, DESCRIPTION_WEIGHER_ROLE } from './description-weigher.ts'
 import { createAiCatalogSession, applyCatalogModelOptions, type AiCatalogSession } from './ai-catalog.ts'
+import type { AgentWorkpads, WorkpadSnapshot } from './bob-agent-workpad.ts'
 
 /** Project reads and writes use the caller JWT. Service access is restricted to shared AI
  * config/accounting, content-free execution diagnostics, Bob's private transcript/provider-state
@@ -168,10 +178,14 @@ export async function answerWithOpenAi(opts: {
   }
   let metrics:ReturnType<typeof createExecutionMetrics>|undefined
   const mediaTransport = createMediaTransport(client, { ...opts, url, key })
+  const conceptViewTransport=createConceptViewTransport(client,{...opts,url,key})
+  const drawingViewTransport=createDrawingViewTransport(client,{...opts,url,key})
   const imageRefs = new Map<string, Opened>()
   const resolveImage = async (ref: string) => {
     const record = imageRefs.get(ref)
     if (!record) throw new Error('image_not_opened')
+    if(record.item.ref.startsWith('concept:'))return resolveConceptViewImage(opts.projectId,conceptViewTransport,record,AbortSignal.timeout(30000))
+    if(record.item.ref.startsWith('drawing:'))return resolveDrawingViewImage(opts.projectId,drawingViewTransport,record,AbortSignal.timeout(30000))
     // Claimed server turns reuse one stored provider file per image revision
     // instead of re-sending pixels; the image itself stays in bob storage.
     if (claimedServer) return resolveMediaImageFile(opts.projectId, mediaTransport, record, ref, imageFiles, AbortSignal.timeout(30000))
@@ -181,6 +195,8 @@ export async function answerWithOpenAi(opts: {
   const resolveImageInline = async (ref: string) => {
     const record = imageRefs.get(ref)
     if (!record) throw new Error('image_not_opened')
+    if(record.item.ref.startsWith('concept:'))return resolveConceptViewImage(opts.projectId,conceptViewTransport,record,AbortSignal.timeout(30000))
+    if(record.item.ref.startsWith('drawing:'))return resolveDrawingViewImage(opts.projectId,drawingViewTransport,record,AbortSignal.timeout(30000))
     return resolveMediaImage(opts.projectId, mediaTransport, record, AbortSignal.timeout(12000))
   }
   const imageFiles: ProviderImageFiles = {
@@ -197,10 +213,9 @@ export async function answerWithOpenAi(opts: {
       if (error) throw new Error('unavailable')
     },
   }
-  // Background workers live ~150 s. Reserve a realistic duration per role, not the
-  // full timeout, so several calls share one segment; a call cut off at the segment
-  // wall yields into a fresh segment, consuming the same bounded retry budget
-  // as other dispatched failures. Durable AI waiting does not consume retries.
+  // Background workers have a 140 s segment. Claude streams synchronously and
+  // needs a longer reservation than OpenAI's durable background-job handoff.
+  // A pre-dispatch yield does not count as a provider attempt.
   const WORKER_ROLES = new Set(['materials-worker', 'structure-worker', 'drawing-worker'])
   // 'bob-ask-<32 hex>' becomes 'bob-<role>-<32 hex>': one route per worker and project.
   const workerCacheKey = (key: string, role: string) => 'bob-' + role + '-' + key.slice('bob-ask-'.length)
@@ -212,8 +227,9 @@ export async function answerWithOpenAi(opts: {
   let promptCacheKey: string | undefined
   // Construction reads in the model step being executed (page budget share).
   let constructionReadsInStep = 1
-  const dispatchModel = async (requested: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>) => {
-   const options = applyCatalogModelOptions(aiCatalog, requested)
+  const dispatchModel = async (requested: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>, imageInputs?:BobImageInputCounts) => {
+   const options = { ...applyCatalogModelOptions(aiCatalog, execution.serverRevisionsVersion === 1 ? { ...requested, catalogServerRevisions: true } : requested), ...(execution.toolSchemaDedupVersion === 1 ? { toolSchemaDedup: 1 as const } : {}),
+     ...(execution.promptCachePointsVersion === 1 ? { promptCachePoints: 1 as const } : {}) }
    const drawingAuthority:DrawingBudgetAuthority|undefined=drawingRequestId&&drawingBudget
     ?{requestId:drawingRequestId,options}:undefined
    const boundDrawing=isDrawingModelCall(drawingAuthority,options.aiFunction)
@@ -221,6 +237,7 @@ export async function answerWithOpenAi(opts: {
    return modelBudget.run(async () => {
    const timeout = options.timeoutMs ?? 120000
    const asyncModels = !!(opts.background?.asyncModels && opts.background.jobId)
+   const synchronousClaude = options.aiDefinition?.providerAdapter === 'anthropic-messages-v1'
    // Localisation has its own journal stream. Existing jobs may contain the old
    // free-form drawing answer at work-router's next position; do not replay it
    // as a phrasebook or collide with its fingerprint during a release.
@@ -233,11 +250,19 @@ export async function answerWithOpenAi(opts: {
     const modelExpiresAt = asyncModels && identity && execution.modelDeadlineVersion === 1
       ? await pinBobModelDeadline(memo, identity, expiresAt) : expiresAt
     const started = performance.now()
+    // Do not spend money on a Claude request whose stream cannot finish before
+    // the next worker segment. Check again *after* contextual pre-dispatch work.
+    const window = synchronousClaude && journal ? claudeDispatchWindow(timeout, journal.remaining()) : null
+    if (window && !window.ready) throw new BobContinuation('yield')
     const wall = journal ? journal.remaining() + 8000 : Infinity
-    const allowed = Math.max(1000, Math.min(timeout, wall))
-    let result
+    const allowed = window ? window.timeoutMs : Math.max(1000, Math.min(timeout, wall))
+    let result,usageEventId:string|null=null
     try {
-      const invoke=(recovery?:{key?:string;context?:Record<string,unknown>;expiresAt?:string;fingerprint?:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage, resolveImageInline,
+      // Out-of-band: never part of provider/journal/job fingerprints or saved
+      // context. Completed journal replays skip this factory. Pending async
+      // recovery can enter again, so these are attempts, not billable-call counts.
+      if(imageInputs)console.log('[Bob image input attempt]',JSON.stringify(imageInputs))
+      const invoke=(recovery?:{key?:string;context?:Record<string,unknown>;expiresAt?:string;fingerprint?:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage, resolveImageInline, onUsageLogged:(id:string)=>{usageEventId=id},
         // Routing hint only, added after the journal, job and drawing-budget
         // fingerprints so recorded steps of in-flight jobs still match.
         ...(promptCacheKey && (options.catalogRoleKey ?? options.functionName) === 'ask-bob' ? { promptCacheKey } : {}),
@@ -257,7 +282,7 @@ export async function answerWithOpenAi(opts: {
       if (error instanceof AIBackgroundPending) throw new BobContinuation('yield', 'ai_wait', { id: error.jobId, accepted: error.accepted, role: options.aiFunction })
       throw error
     }
-    await metrics?.model({...options,timeoutMs:allowed},result,performance.now()-started,{step:identity?.key??null,attempt:identity?.attempt??0})
+    await metrics?.model({...options,timeoutMs:allowed},result,performance.now()-started,{step:identity?.key??null,attempt:identity?.attempt??0,usageEventId})
     console.log('[Bob model]', JSON.stringify({ role:options.aiFunction, success:result.success, elapsed_ms:Math.round(performance.now()-started), input_tokens:result.usage.input_tokens, output_tokens:result.usage.output_tokens }))
     if (journal && !result.success && allowed < timeout && performance.now() - started >= allowed - 1500) throw new BobContinuation('yield', 'segment_wall')
     // A definite provider rejection produced no billable output; a lost
@@ -265,7 +290,7 @@ export async function answerWithOpenAi(opts: {
     if (journal && !result.success && /OpenAI API error: (429|5[0-9]{2})/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_retry')
     if (journal && !result.success && /Network error/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_uncertain')
     return result
-   }, asyncModels ? (options.images?.length || hasImageContent(options.messages) ? 45000 : 25000)
+   }, synchronousClaude ? claudeJournalReserveMs(timeout) : asyncModels ? (options.images?.length || hasImageContent(options.messages) ? 45000 : 25000)
      : Math.min(timeout, RESERVE_MS[options.aiFunction] ?? 45000))}catch(error){
     if(error instanceof Error&&error.message==='provider_retry_exhausted')return {success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'provider_retry_exhausted'}
     throw error
@@ -290,20 +315,51 @@ export async function answerWithOpenAi(opts: {
   let mainContextEpoch = 0
   const callModel = (requested: OpenAIServiceOptions, beforeDispatch?: () => Promise<void>) =>
     contextContinuation ? contextContinuation.call(requested, beforeDispatch) : dispatchModel(requested, beforeDispatch)
+  // Owner decision 2026-11-06: a listed image without a description gets one
+  // short description from the smallest vision model, once per image version.
+  // Not wrapped in a journal step of its own: its open, model call and save are
+  // journaled each, and a recorded outer step would skip them on replay and
+  // leave their streams' positions behind (deep audit 2026-11-08).
+  const describeListedImage = (listed: Item, open: (ref: string, signal: AbortSignal) => Promise<Opened>, signal: AbortSignal) =>
+    (async () => {
+      const opened = await open(listed.ref, signal)
+      const response = await dispatchModel({ app: 'bob', coworkerId: 'bob', functionName: 'image-describer', aiFunction: 'image-describer', module: 'global', userId: opts.userId,
+        catalogRoleKey: 'image-describer', catalogSchemaKey: 'bob_image_description', schemaName: 'bob_image_description',
+        messages: [{ role: 'user', content: [{ type: 'text', text: JSON.stringify({ title: opened.item.title, purpose: opened.item.purpose ?? null, source_kind: opened.item.source_kind ?? null }) }, opened.image] }],
+        maxOutputTokens: 300, timeoutMs: 30000 })
+      const text = imageDescriptionText(response)
+      if (text) await cacheImageDescription!(opened, text)
+      return text
+    })()
   const mediaAdapter = () => {
-    const adapter = createMediaAdapter(opts.projectId, mediaTransport, true)
+    let wrappedOpen: ((ref: string, signal: AbortSignal) => Promise<Opened>) | undefined
+    const autoDescribe = execution.imageDescriptionVersion === 1 && cacheImageDescription
+      ? (listed: Item, signal: AbortSignal) => describeListedImage(listed, wrappedOpen!, signal) : undefined
+    const adapter = createMediaAdapter(opts.projectId, mediaTransport, true, autoDescribe)
+    const open = async (...args: Parameters<typeof adapter.open>) => {
+      const opened = await memo('media:open', args[0], () => adapter.open(...args),0,args[1])
+      // Rebuild the resolver registry from compact checkpoints on every resume.
+      if (opened.image.image_url.startsWith('private-image:')) imageRefs.set(opened.image.image_url, opened)
+      return opened
+    }
+    wrappedOpen = open
     return { ...adapter,checkpointed:!!journal,
       count: (signal: AbortSignal) => memo('media:count', {}, () => adapter.count(signal),0,signal),
       list: (...args: Parameters<typeof adapter.list>) => memo('media:list', args[0], () => adapter.list(...args),0,args[1]),
-      open: async (...args: Parameters<typeof adapter.open>) => {
-        const opened = await memo('media:open', args[0], () => adapter.open(...args),0,args[1])
-        // Rebuild the resolver registry from compact checkpoints on every resume.
-        if (opened.image.image_url.startsWith('private-image:')) imageRefs.set(opened.image.image_url, opened)
-        return opened
-      },
+      open,
       // current() remains live, including for already-replayed image evidence;
       // a replay re-checks every opened image per step within milliseconds.
       current: checkpoint ? adapter.current : reuseFresh(adapter.current, unchanged => unchanged, (ref, expected) => ref + '\u0000' + expected),
+    }
+  }
+  const drawingAdapter=(concept=false)=>{
+    const adapter=concept?createConceptViewAdapter(opts.projectId,conceptViewTransport,execution.continuedWorkVersion===1):createDrawingViewAdapter(opts.projectId,drawingViewTransport,execution.continuedWorkVersion===1)
+    const namespace=concept?'concept-view:':'drawing-view:'
+    return{...adapter,checkpointed:!!journal,
+      count:(signal:AbortSignal)=>memo(namespace+'count',{},()=>adapter.count(signal),0,signal),
+      list:(...args:Parameters<typeof adapter.list>)=>memo(namespace+'list',args[0],()=>adapter.list(...args),0,args[1]),
+      open:async(...args:Parameters<typeof adapter.open>)=>{const opened=await memo(namespace+'open',args[0],()=>adapter.open(...args),0,args[1]);imageRefs.set(opened.image.image_url,opened);return opened},
+      current:adapter.current,
     }
   }
   // Jobs pinned with roomDimensionsVersion read v9 (adds room_dimensions); other journals keep v8.
@@ -350,11 +406,13 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; toolSchemaDedupVersion?: 1; promptCachePointsVersion?: 1; workerFocusVersion?: 1; workerPlanVersion?: 1; workerGatesVersion?: 1; writeCheckVersion?: 1; constructionSketchVersion?: 1 | 2; stableToolsVersion?: 1; serverTargetVersion?: 1; serverRevisionsVersion?: 1; refusalGuardVersion?: 1; materialFollowVersion?: 1; toolPickLimit?: number; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
-      constructionPageVersion: 1 as const,
+      constructionPageVersion: 1 as const, workingStateVersion: 1 as const, drawingBindingVersion:1 as const, operationPathsVersion:2 as const,
+      ...(aiCatalog.definition('bob.tools','tool_contract').definition.continued_work_version===1?{continuedWorkVersion:1 as const}:{}),
+      ...(aiCatalog.definition('bob.tools','tool_contract').definition.solution_work_version===1?{solutionWorkVersion:1 as const}:{}),
       // Core reading tools loaded from the first step. Jobs without this pin keep on-demand loading.
       corePreloadVersion: 1 as const,
       // Building links read once at turn start. Jobs without this pin read nothing extra.
@@ -369,6 +427,15 @@ export async function answerWithOpenAi(opts: {
       lookupReuseVersion: 1 as const,
       ...(checkpoint ? { groundingReadOrderVersion: 1 as const, modelDeadlineVersion: 1 as const } : {}),
       ...bobCompleteRequestVersions(!!checkpoint, contract),
+      ...bobStageContextVersion(!!checkpoint, contract),
+      // Opened pixels leave after use (owner decision 2026-11-06). Jobs without this pin keep every opened image.
+      ...(bobStageContextVersion(!!checkpoint, contract).stageContextVersion === 1 ? { imageReleaseVersion: 1 as const } : {}),
+      // Tool schemas sent with shared $defs (owner decision 2026-11-06). Jobs without this pin send inline schemas.
+      ...(checkpoint ? { toolSchemaDedupVersion: 1 as const } : {}),
+      // Fixed Claude cache points after the system prompt, the job start and the settled compaction (owner decision 2026-11-06). Jobs without this pin keep the automatic point only.
+      ...(checkpoint ? { promptCachePointsVersion: 1 as const } : {}),
+      // Listed images get one short description (owner decision 2026-11-06). Jobs without this pin describe nothing.
+      ...(checkpoint && aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.image-describer') ? { imageDescriptionVersion: 1 as const } : {}),
       // Window 2 (2026-10-29): superseded repeat reads leave first; the latest result per record stays whole.
       ...(checkpoint && contract.result_reference_version === 1 ? { resultWindowVersion: contract.result_window_version === 2 ? 2 as const : 1 as const } : {}),
       // Owner-set spending stop, pinned when the job starts (2026-10-20).
@@ -376,9 +443,38 @@ export async function answerWithOpenAi(opts: {
       // Bob's one final answer past that stop (2026-11-01). Jobs without this pin end at the stop.
       ...bobFinalAnswerVersion(contract),
       // Specialists refresh later than Bob (2026-11-01). Jobs without this pin use Bob's limit for every role.
-      ...(Number.isInteger(contract.specialist_continuation_tokens) && contract.specialist_continuation_tokens >= 1000 ? { specialistContinuationTokens: contract.specialist_continuation_tokens } : {}),
+      ...(typeof contract.specialist_continuation_tokens === 'number' && Number.isInteger(contract.specialist_continuation_tokens) && contract.specialist_continuation_tokens >= 1000
+        ? { specialistContinuationTokens: contract.specialist_continuation_tokens } : {}),
       // A worker's place is saved after each of its steps (2026-11-01). Jobs without this pin replay the whole worker job on resume.
       ...(checkpoint && contract.worker_checkpoint_version === 1 ? { workerCheckpointVersion: 1 as const } : {}),
+      // Only new claimed turns with the published contract may read and replace private working notes.
+      ...(claimedServer && contract.workpad_version === 1 ? { workpadVersion: 1 as const } : {}),
+      // Owner decision 2026-11-06 (B): a worker's focused tool list, Konrad's plan before a write, and Bob's picker up to eight. New claimed jobs only.
+      ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_focus_version === 1 ? { workerFocusVersion: 1 as const } : {}),
+      ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_plan_version === 1 ? { workerPlanVersion: 1 as const } : {}),
+      // Owner decision 2026-11-07: the chat answer is the review, open piece checks are facts for Konrad, and only an identical failed request is refused again. New claimed jobs only.
+      ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_gates_version === 1 ? { workerGatesVersion: 1 as const } : {}),
+      // Owner decision 2026-11-07 (sketchbook): writes can be checked by the database first, and Konrad's part edits collect in a sketch committed once. New claimed jobs only.
+      ...(checkpoint && claimedServer && contract.write_check_version === 1 ? { writeCheckVersion: 1 as const } : {}),
+      ...(checkpoint && claimedServer && contract.write_check_version === 1 && (contract.construction_sketch_version === 1 || contract.construction_sketch_version === 2)
+        ? { constructionSketchVersion: contract.construction_sketch_version as 1 | 2 } : {}),
+      // Owner decision 2026-11-07 (after the bed and entry turns): tool schemas that stay the same all job long and from job to job,
+      // and the server, not the model, binding a construction to the current selected target. New claimed jobs only.
+      ...(checkpoint && claimedServer && contract.stable_tools_version === 1 ? { stableToolsVersion: 1 as const } : {}),
+      ...(checkpoint && claimedServer && contract.server_target_version === 1 ? { serverTargetVersion: 1 as const } : {}),
+      // Owner decision 2026-11-07: no model types a revision; the server fills each one. New claimed jobs only.
+      ...(checkpoint && claimedServer && contract.server_revisions_version === 1 ? { serverRevisionsVersion: 1 as const } : {}),
+      // Owner feedback 2026-11-07: a refused call does not run again unchanged; a third refusal for one reason asks for another approach.
+      ...(checkpoint && claimedServer && contract.refusal_guard_version === 1 ? { refusalGuardVersion: 1 as const } : {}),
+      // Owner runs 2026-11-08: after Konrad's job, code recalculates the material rows of the construction he saved. New claimed jobs only.
+      ...(checkpoint && claimedServer && contract.material_follow_version === 1 ? { materialFollowVersion: 1 as const } : {}),
+      ...(checkpoint && Number.isInteger(contract.tool_pick_limit) && Number(contract.tool_pick_limit) >= 1 && Number(contract.tool_pick_limit) <= 8 ? { toolPickLimit: Number(contract.tool_pick_limit) } : {}),
+      ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_checkpoint_version === 1
+        && contract.worker_verified_renewal_version === 1 ? { workerVerifiedRenewalVersion: 1 as const } : {}),
+      ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_checkpoint_version === 1
+        && (contract.worker_piece_progress_version === 1 || contract.worker_piece_progress_version === 2
+          || contract.worker_piece_progress_version === 3 || contract.worker_piece_progress_version === 4)
+        ? { workerPieceProgressVersion: contract.worker_piece_progress_version as 1 | 2 | 3 | 4 } : {}),
       memoryManagementVersion: contract.context_strategy_version === 1 ? 2 as const : 1 as const,
       ...(contract.context_strategy_version === 1 ? { contextStrategyVersion: 1 as const } : {}),
       // Owner decision 2026-10-30: the memory stair and the prompt ordered by how often its parts change.
@@ -389,6 +485,24 @@ export async function answerWithOpenAi(opts: {
   if (execution.finalAnswerVersion !== undefined && execution.finalAnswerVersion !== 1) throw new Error('final_answer_version_invalid')
   if (execution.specialistContinuationTokens !== undefined && !(Number.isInteger(execution.specialistContinuationTokens) && execution.specialistContinuationTokens >= 1000)) throw new Error('specialist_continuation_invalid')
   if (execution.workerCheckpointVersion !== undefined && execution.workerCheckpointVersion !== 1) throw new Error('worker_checkpoint_version_invalid')
+  if (execution.workpadVersion !== undefined && execution.workpadVersion !== 1) throw new Error('workpad_version_invalid')
+  if (execution.workerFocusVersion !== undefined && (execution.workerFocusVersion !== 1 || execution.workpadVersion !== 1)) throw new Error('worker_focus_version_invalid')
+  if (execution.workerPlanVersion !== undefined && (execution.workerPlanVersion !== 1 || execution.workpadVersion !== 1)) throw new Error('worker_plan_version_invalid')
+  if (execution.workerGatesVersion !== undefined && (execution.workerGatesVersion !== 1 || execution.workpadVersion !== 1)) throw new Error('worker_gates_version_invalid')
+  if (execution.writeCheckVersion !== undefined && execution.writeCheckVersion !== 1) throw new Error('write_check_version_invalid')
+  if (execution.constructionSketchVersion !== undefined && (![1, 2].includes(execution.constructionSketchVersion) || execution.writeCheckVersion !== 1)) throw new Error('construction_sketch_version_invalid')
+  if (execution.stableToolsVersion !== undefined && execution.stableToolsVersion !== 1) throw new Error('stable_tools_version_invalid')
+  if (execution.serverTargetVersion !== undefined && execution.serverTargetVersion !== 1) throw new Error('server_target_version_invalid')
+  if (execution.serverRevisionsVersion !== undefined && execution.serverRevisionsVersion !== 1) throw new Error('server_revisions_version_invalid')
+  if (execution.refusalGuardVersion !== undefined && execution.refusalGuardVersion !== 1) throw new Error('refusal_guard_version_invalid')
+  if (execution.materialFollowVersion !== undefined && execution.materialFollowVersion !== 1) throw new Error('material_follow_version_invalid')
+  if (execution.toolPickLimit !== undefined && !(Number.isInteger(execution.toolPickLimit) && execution.toolPickLimit >= 1 && execution.toolPickLimit <= 8)) throw new Error('tool_pick_limit_invalid')
+  if (execution.workerVerifiedRenewalVersion !== undefined
+    && (execution.workerVerifiedRenewalVersion !== 1 || execution.workpadVersion !== 1 || execution.workerCheckpointVersion !== 1))
+    throw new Error('worker_verified_renewal_version_invalid')
+  if (execution.workerPieceProgressVersion !== undefined
+    && (![1, 2, 3, 4].includes(execution.workerPieceProgressVersion) || execution.workpadVersion !== 1 || execution.workerCheckpointVersion !== 1))
+    throw new Error('worker_piece_progress_version_invalid')
   const finalAnswer = execution.finalAnswerVersion === 1 && unlimitedWork && execution.turnUsdStop !== undefined
   modelBudget = createBobModelBudget(undefined, undefined, undefined, { unlimitedWork, ...(execution.turnUsdStop !== undefined ? { usdStop: execution.turnUsdStop } : {}), ...(finalAnswer ? { finalAnswer: true } : {}) })
   if (execution.lookupObservationVersion !== undefined && execution.lookupObservationVersion !== 1) throw new Error('lookup_observation_version_invalid')
@@ -398,8 +512,18 @@ export async function answerWithOpenAi(opts: {
   if (execution.completeRequestVersion !== undefined && execution.completeRequestVersion !== 1) throw new Error('complete_request_version_invalid')
   if (execution.resultReferenceVersion !== undefined && (execution.resultReferenceVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('result_reference_version_invalid')
   if (execution.resultWindowVersion !== undefined && (![1, 2].includes(execution.resultWindowVersion) || execution.resultReferenceVersion !== 1)) throw new Error('result_window_version_invalid')
+  if (execution.imageInputDedupVersion !== undefined && (execution.imageInputDedupVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('image_input_dedup_version_invalid')
+  if (execution.stageContextVersion !== undefined && (execution.stageContextVersion !== 1 || execution.imageInputDedupVersion !== 1 || execution.resultReferenceVersion !== 1)) throw new Error('stage_context_version_invalid')
+  if (execution.workerStageContextVersion !== undefined && (execution.workerStageContextVersion !== 1 || execution.stageContextVersion !== 1)) throw new Error('worker_stage_context_version_invalid')
+  if (execution.imageReleaseVersion !== undefined && (execution.imageReleaseVersion !== 1 || execution.stageContextVersion !== 1)) throw new Error('image_release_version_invalid')
+  if(execution.continuedWorkVersion!==undefined&&execution.continuedWorkVersion!==1)throw Error('continued_work_version_invalid')
+  if(execution.solutionWorkVersion!==undefined&&execution.solutionWorkVersion!==1)throw new Error('solution_work_version_invalid')
+  if(execution.operationPathsVersion!==undefined&&![1,2].includes(execution.operationPathsVersion))throw new Error('operation_paths_version_invalid')
+  if(execution.drawingBindingVersion!==undefined&&execution.drawingBindingVersion!==1)throw new Error('drawing_binding_version_invalid')
+  if (execution.workingStateVersion !== undefined && execution.workingStateVersion !== 1) throw new Error('working_state_version_invalid')
   if (execution.constructionPageVersion !== undefined && execution.constructionPageVersion !== 1) throw new Error('construction_page_version_invalid')
   if (execution.corePreloadVersion !== undefined && execution.corePreloadVersion !== 1) throw new Error('core_preload_version_invalid')
+  if (execution.promptCachePointsVersion !== undefined && execution.promptCachePointsVersion !== 1) throw new Error('prompt_cache_points_version_invalid')
   if (execution.memoryStairVersion !== undefined && (execution.memoryStairVersion !== 1 || execution.promptTiersVersion !== 1 || execution.contextStrategyVersion !== 1)) throw new Error('memory_stair_version_invalid')
   if (execution.buildingLinkVersion !== undefined && execution.buildingLinkVersion !== 1) throw new Error('building_link_version_invalid')
   if (execution.roomDimensionsVersion !== undefined && execution.roomDimensionsVersion !== 1) throw new Error('room_dimensions_version_invalid')
@@ -422,8 +546,13 @@ export async function answerWithOpenAi(opts: {
     return result
   } }
   const contextStrategy = execution.contextStrategyVersion === 1 && contract.context_strategy_version === 1
-  if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel,
+  if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel,onInternalTool:value=>metrics?.internalTool(value)??Promise.resolve(),
     ...(execution.resultReferenceVersion === 1 ? { mainResultReferences: 1 } : {}),
+    ...(execution.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
+    ...(execution.workerStageContextVersion === 1 ? { workerStageContextVersion: 1 as const } : {}),
+    ...(execution.stageContextVersion === 1 ? { stageContextVersion: 1 as const, imageSource: (url: string) => imageRefs.has(url) ? stageImageRef(url) : undefined } : {}),
+    ...(execution.imageReleaseVersion === 1 ? { imageReleaseVersion: 1 as const } : {}),
+    ...(execution.promptCachePointsVersion === 1 ? { promptCachePointsVersion: 1 as const } : {}),
     ...(execution.resultWindowVersion === 1 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS } : {}),
     ...(execution.resultWindowVersion === 2 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS, resultWindowVersion: 2 as const } : {}),
     ...(execution.constructionPageVersion === 1 ? { literalResultTokens: { [CONSTRUCTION_VIEW_TOOL.function.name]: BOB_CONSTRUCTION_RESULT_TOKENS } } : {}),
@@ -458,6 +587,32 @@ export async function answerWithOpenAi(opts: {
   // Prompt tiers (2026-10-30): one key per project, so every thread of the project shares the fixed start and the locked snapshot.
   promptCacheKey = 'bob-ask-' + (await fingerprint(execution.promptTiersVersion === 1 ? { v: 2, project: opts.projectId } : { v: 1, scope: threadId ?? execution.id })).slice(0, 32)
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
+  const cacheImageDescription = claimedServer ? (record: Opened, description: string) => memo('media:describe', { ref: record.item.ref, version: record.version, description }, async () => {
+    const { error } = await internal.rpc('bob_describe_image', { ...binding, p_user: opts.userId,
+      p_media: record.source.recordId, p_version: record.version, p_updated_at: record.source.updatedAt, p_description: description,
+    }).abortSignal(AbortSignal.timeout(10000))
+    if (error) throw new Error('description_unavailable')
+    return true
+  }) : undefined
+  const workpads: AgentWorkpads | undefined = execution.workpadVersion === 1 && claimedServer ? {
+    load: async (agent, location): Promise<WorkpadSnapshot> => {
+      const current = contract.workpad_freshness_version === 1
+      const { data, error } = await memo('workpad:load', { agent, location }, async () => internal.rpc(current ? 'bob_agent_workpad_current' : 'bob_agent_workpad', {
+        ...binding, p_user: opts.userId, p_agent: agent, p_expected_revision: null, p_note: null,
+      }).abortSignal(AbortSignal.timeout(12000)))
+      if (error || !data || typeof data !== 'object' || (data as { status?: unknown }).status !== 'ok')
+        return { status: 'unavailable', revision: 0, note: null }
+      const result = data as WorkpadSnapshot
+      return { status: 'ok', revision: result.revision, note: result.note, ...(current ? { freshness: result.freshness } : {}) }
+    },
+    update: async (agent, expectedRevision, note) => {
+      const { data, error } = await memo('workpad:update', { agent, expectedRevision, note }, async () => internal.rpc(contract.workpad_freshness_version === 1 ? 'bob_agent_workpad_current' : 'bob_agent_workpad', {
+        ...binding, p_user: opts.userId, p_agent: agent, p_expected_revision: expectedRevision, p_note: note,
+      }).abortSignal(AbortSignal.timeout(12000)))
+      if (error || !data || typeof data !== 'object') return { status: 'unavailable', message: 'Private working note was not recorded.' }
+      return data as Record<string, unknown>
+    },
+  } : undefined
   let currentView: CurrentView | undefined
   let validateCurrentView: (() => Promise<boolean>) | undefined
   let getCurrentViewEvidence: (() => CurrentView) | undefined
@@ -478,7 +633,7 @@ export async function answerWithOpenAi(opts: {
         currentView = await memo('context:current_view', screen, read)
         const guard = currentViewGuard = createCurrentViewGuard({ initial: currentView, read, hasAccess,
           receipts: () => writer?.receipts ?? [] })
-        validateCurrentView = guard.validate
+        validateCurrentView = async()=>{const valid=await guard.validate();if(!valid)console.warn('[Bob current view]',JSON.stringify({status:'unavailable',surface:currentView?.surface??null}));return valid}
         getCurrentViewEvidence = guard.evidence
         lookup.sources.push(...currentView.sources)
       }
@@ -491,13 +646,19 @@ export async function answerWithOpenAi(opts: {
     }
   }
   // Route new bound actions separately; pinned older journals retain their RPC names.
+  const writeFunction = (kind: string) => kind === 'construction_work' ? 'commit_construction_work' : kind === 'form_feedback' ? 'record_model_feedback' : kind === 'bound_building_scope' ? 'bob_project_write_v21' : kind === 'bound_plan_link' ? 'bob_project_write_v20' : kind === 'bound_work' ? 'bob_project_write_v19' : ['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'].includes(kind) ? 'bob_project_write_v18' : ['bound_project', 'bound_solution'].includes(kind) ? 'bob_project_write_v17' : 'bob_project_write_v16'
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => writeRpc(payload.kind === 'construction_work' ? 'commit_construction_work' : payload.kind === 'form_feedback' ? 'record_model_feedback' : payload.kind === 'bound_building_scope' ? 'bob_project_write_v21' : payload.kind === 'bound_plan_link' ? 'bob_project_write_v20' : payload.kind === 'bound_work' ? 'bob_project_write_v19' : ['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'].includes(payload.kind) ? 'bob_project_write_v18' : ['bound_project', 'bound_solution'].includes(payload.kind) ? 'bob_project_write_v17' : 'bob_project_write_v16', { ...binding, p_payload: payload }),
+    payload => writeRpc(writeFunction(payload.kind), { ...binding, p_payload: payload }),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
     { unlimitedWork, taskWorkDiagnostics: [1, 2, 3].includes(contract.work_completion_version as number),
       // Catalog switch (2026-11-01): the database's coded reason on the catch-all rejection.
-      ...(aiCatalog.definition('bob.tools', 'tool_contract').definition.rejection_reason_version === 1 ? { rejectionReasons: true } : {}) },
+      ...(aiCatalog.definition('bob.tools', 'tool_contract').definition.rejection_reason_version === 1 ? { rejectionReasons: true } : {}),
+      // Owner decision 2026-11-07: a write checked by the database and rolled back (feedback has no check path).
+      ...(execution.writeCheckVersion === 1 ? { checkTransport: (payload: import('./project-write.ts').WritePayload) => payload.kind === 'form_feedback'
+        ? Promise.resolve({ data: { status: 'refused', code: '22023', message: 'write_check_unsupported' }, error: null })
+        : memo('rpc:check', { kind: payload.kind, payload }, async () => { const { data, error } = await client.rpc('bob_project_write_check', { p_function: writeFunction(payload.kind), ...binding, p_payload: payload })
+          .abortSignal(AbortSignal.timeout(26000)); return { data: data as unknown, error: error ? { code: error.code, message: error.message } : null } }) } : {}) },
   ) : undefined
   const planLinks = createPlanLinks({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
     read: input => rpc('read_bob_plan_link_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
@@ -527,23 +688,18 @@ export async function answerWithOpenAi(opts: {
     ...(claimedServer ? { modelFeedback: { message: opts.message, read: before => rpc('read_model_feedback', { ...binding, p_before: before }, AbortSignal.timeout(12000)) } } : {}),
     read: input => rpc('read_bob_solution_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
   })
-  const projectEdits = createProjectEdits({ unlimitedWork, projectId: opts.projectId, writer, hasAccess, sources: lookup.sources,
+  const projectEdits = createProjectEdits({ descriptionWeigher: aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.' + DESCRIPTION_WEIGHER_ROLE), coherent:execution.solutionWorkVersion===1,unlimitedWork, projectId: opts.projectId, writer, hasAccess, sources: lookup.sources,
     ...(writeState ? { writeState: { readiness: constructionReadinessReader } } : {}),
+    ...(execution.writeCheckVersion === 1 ? { writeCheck: true } : {}),
     read: input => rpc('read_bob_edit_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
     readSelected: areaId => rpc('read_bob_selected_edit_context', { p_project: opts.projectId, p_area: areaId }, AbortSignal.timeout(12000)),
   })
-  const projectContext = createProjectContext({ unlimitedWork,
+  const projectContext = createProjectContext({ unlimitedWork, chatPreviews: execution.stageContextVersion === 1,
     reviewInstruction: aiCatalog.text('drawing-review.instruction'),
     imageEvidenceInstruction: aiCatalog.text('images.evidence-intro'), reviewLabel: aiCatalog.text('images.review-label'),
-    adapters: [mediaAdapter()],
+    adapters: [mediaAdapter(),...(execution.operationPathsVersion===2?[drawingAdapter()]:[]),...(execution.solutionWorkVersion===1?[drawingAdapter(true)]:[])],
     hasAccess, sources: lookup.sources,
-    ...(claimedServer ? { describe: (record: Opened, description: string) => memo('media:describe', { ref: record.item.ref, version: record.version, description }, async () => {
-      const { error } = await internal.rpc('bob_describe_image', { ...binding, p_user: opts.userId,
-        p_media: record.source.recordId, p_version: record.version, p_updated_at: record.source.updatedAt, p_description: description,
-      }).abortSignal(AbortSignal.timeout(10000))
-      if (error) throw new Error('description_unavailable')
-      return true
-    }) } : {}),
+    ...(cacheImageDescription ? { describe: cacheImageDescription } : {}),
   })
   let attachedImageIds:string[]=[]
   if (!opts.background?.drawingRequestId) {
@@ -599,7 +755,18 @@ export async function answerWithOpenAi(opts: {
     if(!result||result.project_id!==opts.projectId||result.area_id!==areaId)throw new Error('design_readiness_unavailable')
     return result
   }
+  // Owner decision 2026-11-07 (sketchbook B): the job's private construction
+  // sketches, through the claimed caller of this turn; never project truth.
+  const constructionSketches = execution.constructionSketchVersion !== undefined ? createConstructionSketchStore(async (action, artifact, expected, sketch) =>
+    await rpc('construction_sketch', { ...binding, p_action: action, p_artifact: artifact, p_expected_revision: expected, p_sketch: sketch }, AbortSignal.timeout(12000)) as { data: any; error: { code?: string } | null }) : undefined
+  // Version 2: a new construction sketched in parts under one key.
+  const constructionNewSketches = execution.constructionSketchVersion === 2 ? createConstructionSketchStore(async (action, key, expected, sketch) =>
+    await rpc('construction_new_sketch', { ...binding, p_action: action, p_key: key, p_expected_revision: expected, p_sketch: sketch }, AbortSignal.timeout(12000)) as { data: any; error: { code?: string } | null }) : undefined
   const constructionOptions = {unlimitedWork,projectId:opts.projectId,message:opts.message,writer,hasAccess,
+    ...(execution.workingStateVersion === 1 ? { fastPageFit: true, readSummary: async (id:string,revision:number) => {
+      const {data,error}=await readRpc('read_construction_summary',{p_project:opts.projectId,p_artifact:id,p_revision:revision})
+      if(error)throw new Error('construction_read_unavailable');return data
+    } } : {}),
     ...(execution.constructionPageVersion === 1 ? { viewPageTokens: () => constructionViewBudget(constructionReadsInStep) } : {}),
     ...(execution.projectFactsVersion === 1 ? { constructionTable: true } : {}),
     readDesignReadiness,
@@ -610,6 +777,7 @@ export async function answerWithOpenAi(opts: {
     creationPreparation:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_draft'&&row.metadata?.creation_preparation_version===1),
     writeState,
     // Owner decision 2026-10-29: changes carry corrected title/description; stale stated sizes are rejected.
+    constructionNotes:execution.continuedWorkVersion===1,
     constructionText:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.change_construction_parameters'&&row.metadata?.construction_text_version===1),
     prepareSolutionEdit:projectEdits.prepare,
     prepareWork:async(payload:import('./project-write.ts').WritePayload)=>{
@@ -687,18 +855,30 @@ export async function answerWithOpenAi(opts: {
     decimalRounding:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.decimal_rounding_version===1),
     repeatStart:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.repeat_start_version===1),
     chosenJointFasteners:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.joint_fastener_version===2),
+    // Owner decision 2026-11-07 (lean_construction_version 1): formulas, joint rules, code-kept FORM mapping, kept refusals.
+    leanConstruction:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.lean_construction_version===1),
+    // Owner decision 2026-11-08 (joint_rule_store_version 1): rules stored with the construction.
+    storedJointRules:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.joint_rule_store_version===1),
     // Owner decision 2026-11-02 (build_place_version 1): a save names its sub-build and code places it there.
     ...(aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.build_place_version===1)?{
       placeIn:(id:string,subBuild:string)=>buildTree.execute('place_build',{build_id:id,sub_build_id:subBuild,room_id:null})}:{}),
     observationTime:(input:unknown)=>memo('construction:observation',input,async()=>new Date().toISOString()),
+    ...(constructionSketches?{sketches:constructionSketches}:{}),
+    ...(constructionNewSketches?{newSketches:constructionNewSketches}:{}),
+    // Owner decision 2026-11-07: the server, not Konrad, keeps a construction on the current selected target.
+    ...(execution.serverTargetVersion===1?{serverTarget:true,readCurrentTarget:async(areaId:string|null)=>{
+      const {data,error}=await rpc('read_design_readiness',{p_project:opts.projectId,p_area:areaId,p_target_revision:null,p_purpose:'construction'},AbortSignal.timeout(12000))
+      if(error||data?.project_id!==opts.projectId)throw new Error('design_readiness_unavailable')
+      return Number.isSafeInteger(data.target_revision)&&data.target_revision>0?data.target_revision as number:null
+    }}:{}),
     prepareEdit:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_edit',{...binding,p_payload:payload},AbortSignal.timeout(12000))
-      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_edit_preparation_failed'}
+      if(error)return constructionPreparationFailure(error,'construction_edit_preparation_failed')
       return data
     },
     prepareParameterChange:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_parameter_change',{...binding,p_payload:payload},AbortSignal.timeout(12000))
-      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_change_preparation_failed'}
+      if(error)return constructionPreparationFailure(error,'construction_change_preparation_failed')
       return data
     },
     // Each new check observes current sources once. Resuming reconstructs that
@@ -812,13 +992,36 @@ export async function answerWithOpenAi(opts: {
   let buildGuideSwitch:Promise<boolean>|null=null
   const buildGuideOn=()=>buildGuideSwitch??=buildGuideOffered?memo('cad:build_guide_switch',{},async()=>{
    const {data,error}=await internal.schema('shared').from('ai_settings').select('is_enabled').eq('app','bob').eq('coworker_id','bob')
-    .eq('function_name','cad-build-guide').eq('module_id','cad').maybeSingle().abortSignal(AbortSignal.timeout(10000))
+    .eq('function_name','cad-build-guide').eq('module_id','cad').abortSignal(AbortSignal.timeout(10000)).maybeSingle()
    return !error&&data?.is_enabled===true
   }):Promise.resolve(false)
+  const readBoundDrawing=async(id:string,revision:number|null)=>{
+    const {data,error}=await rpc(execution.operationPathsVersion!==undefined?'read_drawing_identity':'read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000))
+    if(error)throw new Error('drawing_binding_unavailable')
+    if(!data)return null
+    const links=await client.from('current_drawing_steps').select('step_id').eq('project_id',opts.projectId).eq('artifact_id',id).abortSignal(AbortSignal.timeout(10000))
+    if(links.error)throw new Error('drawing_links_unavailable')
+    return {...data,current_step_ids:links.data.map(row=>row.step_id)}
+  }
   const cadAssistant = createCadAssistant({ unlimitedWork,
+    ...(execution.drawingBindingVersion===1&&requestStore?{resolveDrawingWork:async(sources,focus)=>resolveDrawingWork(opts.projectId,sources,focus,{
+      readConstruction:(id,revision)=>constructionOptions.read(id,revision,null),readDrawing:readBoundDrawing,
+      linkedDrawings:async sourceId=>{
+        // Read current heads first. Historic drawing revisions must not grow
+        // this identity lookup or eventually exhaust its bounded page.
+        const heads=await client.from('current_artifacts').select('id,revision').eq('project_id',opts.projectId).eq('archived',false).limit(201).abortSignal(AbortSignal.timeout(10000))
+        if(heads.error||heads.data.length>=201)throw new Error('drawing_binding_unavailable')
+        if(!heads.data.length)return []
+        const pairs=heads.data.map(head=>`and(drawing_artifact_id.eq.${head.id},drawing_revision.eq.${head.revision})`).join(',')
+        const {data,error}=await client.from('artifact_construction_drawings').select('drawing_artifact_id,drawing_revision').eq('project_id',opts.projectId).eq('construction_artifact_id',sourceId).or(pairs).limit(201).abortSignal(AbortSignal.timeout(10000))
+        if(error||data.length>=201)throw new Error('drawing_binding_unavailable')
+        return data.map(row=>({artifact_id:row.drawing_artifact_id,revision:row.drawing_revision}))
+      },requests:()=>requestStore.list(),loadRequest:id=>requestStore.load(id),
+    })}:{}),
     // Same fixed grounding read order as Bob's own call: parallel reads can swap journal positions on resume.
     groundingReadOrder: execution.groundingReadOrderVersion === 1 ? 'serial' : 'parallel',
     allowSourceRenewal:execution.constructionReplayVersion===2,
+    resumeStoredPieces:execution.operationPathsVersion!==undefined,
     aiCatalog,calculator,
     ...(contextStrategy ? { registerContextSurface: registerSpecialistContextSurface } : {}),
     runtimeVersion:()=>memo('cad:runtime',{},()=>drawingRuntimeVersion(internal,{model:!!Deno.env.get('OPENAI_API_KEY'),cad:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN')},aiCatalog)),
@@ -908,7 +1111,7 @@ export async function answerWithOpenAi(opts: {
       return {...data,current_step_ids:links}
     },
     catalog:createMaterialCatalogReader(opts.projectId,checkpointed((input:Record<string,unknown>,signal:AbortSignal)=>rpc('catalog_read',{p_project:opts.projectId,p_input:input},signal)),hasAccess,lookup.sources,undefined,{unlimitedWork}),
-    context:createProjectContext({ unlimitedWork,adapters:[mediaAdapter()],hasAccess,sources:lookup.sources,reviewInstruction:aiCatalog.text('drawing-review.instruction'),imageEvidenceInstruction:aiCatalog.text('images.evidence-intro'),reviewLabel:aiCatalog.text('images.review-label')}),
+    context:createProjectContext({ unlimitedWork,imageContextRefs:execution.workerStageContextVersion===1,adapters:[mediaAdapter(),...(execution.operationPathsVersion===2?[drawingAdapter()]:[]),...(execution.solutionWorkVersion===1?[drawingAdapter(true)]:[])],hasAccess,sources:lookup.sources,reviewInstruction:aiCatalog.text('drawing-review.instruction'),imageEvidenceInstruction:aiCatalog.text('images.evidence-intro'),reviewLabel:aiCatalog.text('images.review-label')}),
     referenceImageRefs:()=>projectContext.openedImageRefs(),
   })
   if(opts.background?.drawingRequestId){
@@ -934,11 +1137,25 @@ export async function answerWithOpenAi(opts: {
     }
     journal?.check()
     const saved=!!drawingReceipt
-    const answer=await drawingResumeReply({projectId:opts.projectId,message:opts.message,userId:opts.userId,outcome,drawingReceipt,receipts:writer?.receipts,hasAccess,callModel})
+    const {answer,notice}=await drawingResumeDelivery({projectId:opts.projectId,message:opts.message,userId:opts.userId,outcome,drawingReceipt,receipts:writer?.receipts,hasAccess,callModel})
     await metrics.finish({ok:true,partial:!saved,writes:writer?.receipts.length??0,cad:cadAssistant.metrics})
-    return {ok:true,projectId:opts.projectId,answer,evidence:{kind:'ai_assessment',references:[],sources:cadAssistant.sources,partial:!saved,writes:writer?.receipts??[]}}
+    return {ok:true,projectId:opts.projectId,answer,evidence:{kind:'ai_assessment',references:[],sources:cadAssistant.sources,partial:!saved,writes:writer?.receipts??[],...(notice?{notices:[notice]}:{})}}
   }
-  const imageTools=writer?createProjectImageTools({ unlimitedWork,projectId:opts.projectId,message:opts.message,writer,hasAccess,deadline,defaultImageIds:attachedImageIds,
+  const imageTools=writer?createProjectImageTools({ unlimitedWork,
+    ...(execution.operationPathsVersion!==undefined?{delivery:{
+      validateTarget:async(kind:string,id:string)=>{
+        const {data,error}=await client.rpc('read_image_target',{p_project:opts.projectId,p_kind:kind,p_target:id}).abortSignal(AbortSignal.timeout(10000))
+        if(error){if(error.code==='42501')throw new Error('project_denied');throw new Error('image_target_unavailable')}
+        return data?.projectId===opts.projectId&&data.target_kind===kind&&data.target_id===id?data:{status:data?.status==='not_found'?'not_found':'unavailable'}
+      },
+      generationKey:async(prompt:string,referenceIds:string[])=>{
+        if(!await hasAccess())throw new Error('project_denied')
+        const role=aiCatalog.role('project-image')
+        const refs=await Promise.all(referenceIds.map(id=>mediaAdapter().open('image:'+id,AbortSignal.timeout(12000))))
+        if(!await projectContext.validate())throw new Error('context_changed')
+        return fingerprint({prompt,references:refs.map(r=>({id:r.source.recordId,version:r.version})),manifestId:role.manifestId,roleVersionId:role.roleVersionId})
+      },
+    }}:{}),projectId:opts.projectId,message:opts.message,writer,hasAccess,deadline,defaultImageIds:attachedImageIds,
     newId: () => memo('image:id', {}, async () => crypto.randomUUID()),
     generate: async (prompt,referenceIds) => {
       const role = aiCatalog.role('project-image')
@@ -981,6 +1198,44 @@ export async function answerWithOpenAi(opts: {
       return true
     })},
   }):undefined
+  const operationBindings=aiCatalog.definition('bob.tools','tool_contract').definition.worker_operation_bindings as any
+  if(execution.operationPathsVersion===2&&(!operationBindings||typeof operationBindings!=='object'||!operationBindings.design_project_cad))throw new Error('ai_contract_missing: worker_operation_bindings')
+  const workerOperations=execution.operationPathsVersion!==undefined?createWorkerOperations({
+    version:execution.operationPathsVersion,bindings:operationBindings,projectId:opts.projectId,hasAccess,
+    ...(execution.stableToolsVersion===1?{stableRefs:true}:{}),
+    // Owner decision 2026-11-08: a save names its target. Pinned with the stored
+    // joint rules, so jobs already running keep their tool surface.
+    ...(aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.joint_rule_store_version===1)?{explicitSaveTarget:true}:{}),
+    load:async(role,sources,focus)=>{
+      // Navigation is not an assignment. Multiple inspected constructions need
+      // an explicit server-issued selection, never a last-row/focus guess.
+      const selected=role!=='drawing'&&sources.length===1?sources[0]:undefined
+      const {data,error}=await rpc('read_worker_operation_scope',{p_project:opts.projectId,p_source:selected?.artifact_id??null,p_revision:selected?.revision??null},AbortSignal.timeout(12000))
+      if(error||!data||data.projectId!==opts.projectId||!Array.isArray(data.entries))return {status:'unavailable',source:null,entries:[],reason:'operation_scope_unavailable'}
+      if(data.status!=='ready')return {...data,source:null,entries:[]}
+      const entries=[...data.entries]
+      if(role==='drawing'&&requestStore?.read){
+        const requests=await requestStore.read(null) as {requests?:{project_id:string;id:string;revision:number;status:string}[]}|null
+        for(const row of requests?.requests??[])if(row.project_id===opts.projectId)entries.push({kind:'request',id:row.id,revision:row.revision,label:'Drawing request · '+row.status})
+      }
+      const source=data.source??null
+      return {status:'ready',source,entries,area_id:data.area_id}
+    },
+    // Journaled: a replayed step reuses the verdict its write was made under.
+    // Read live, a worker's own saved write made its source look changed on
+    // resume and was refused (deep audit 2026-11-08).
+    validateMany:async entries=>{
+      if(!entries.length)return true
+      const refs=entries.map(({kind,id,revision,parent})=>({kind,id,revision,...(parent?{parent}:{})}))
+      return await memo('operation:validate',{refs},async()=>{
+        const {data,error}=await client.rpc('check_worker_operation_refs',{p_project:opts.projectId,p_refs:refs}).abortSignal(AbortSignal.timeout(12000))
+        if(error){if(error.code==='42501')throw new Error('project_denied');throw new Error('operation_validation_unavailable')}
+        return data===true
+      })
+    },
+    prepareDrawing:(source,focus)=>cadAssistant.prepareDrawingWorker([source],focus),
+    drawingArguments:args=>cadAssistant.boundArguments('design_project_cad',args),drawingWork:()=>cadAssistant.drawingWork,
+  }):undefined
   const recordReader=createRecordDetailReader(async(dataset,id,revision)=>{
     if(dataset==='drawing') {
       const {data,error}=await client.from('current_drawing_overview')
@@ -992,13 +1247,16 @@ export async function answerWithOpenAi(opts: {
       ?await rpc('project_plan_read',{p_project:opts.projectId,p_revision:Number(id)},AbortSignal.timeout(10000))
       :await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000));
     if(error)throw new Error('record_unavailable');return dataset==='plan'?data?.record:data
-  },hasAccess,{unlimitedWork})
+  },hasAccess,{unlimitedWork,...(execution.operationPathsVersion!==undefined?{projectId:opts.projectId,readSection:async(id:string,revision:number,path:string[])=>{
+    const {data,error}=await rpc('read_cad_section',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_path:path},AbortSignal.timeout(10000))
+    if(error)throw new Error(error.code==='42501'?'project_denied':'record_unavailable');return data
+  }}:{})})
   // Only the active operation replays. These components own the exact refs,
   // receipts, candidates and evidence that completed operations already made.
   const components: Record<string, { exportState(): unknown; restoreState(state: any): void } | undefined> = {
     projectLookup, groundingLookup, writer, projectContext, currentViewGuard, knowledgeReader, operationalReader,
     catalogReader, constructionTools, calculator, planAssistant, cadAssistant, imageTools, recordReader,
-    planLinks, buildingScope, workRecords, solutionActions, projectEdits, requestStore, modelBudget, contextContinuation, metrics, sourceReader,
+    planLinks, buildingScope, workRecords, solutionActions, projectEdits, requestStore, workerOperations, modelBudget, contextContinuation, metrics, sourceReader,
   }
   // Added after earlier checkpoints were written: absent state restores as an
   // unused component, and unused state is not saved.
@@ -1031,6 +1289,10 @@ export async function answerWithOpenAi(opts: {
   }
   const answerCheckpoint = checkpoint ? {
     state: restart?.state.answer as BobAnswerState | undefined,
+    // One continuing specialist step per Edge invocation. Its saved state and
+    // journal resume the same job without replaying paid calls. The worker
+    // invokes this only after conflict/review/renewal decisions have settled.
+    afterWorkerStep: () => { throw new BobContinuation('yield', 'worker_step') },
     save: async (answer: BobAnswerState) => {
       await checkpoint.commit({ version: 1, answer,
         components: Object.fromEntries(Object.entries(components).filter((entry): entry is [string, NonNullable<typeof entry[1]>] => !!entry[1])
@@ -1075,16 +1337,24 @@ export async function answerWithOpenAi(opts: {
       }),
     }).then(outcome => console.log('[Bob description]', JSON.stringify({ outcome })))
     : undefined
+  let turnFailure: import('./bob-turn-failure.ts').BobTurnFailure | undefined
   try {
   const result=await runClaimedProjectTurn({
     aiCatalog,
+    onFailure: failure => {
+      turnFailure ??= failure
+      console.warn('[Bob turn failure]', JSON.stringify({ turn_id: opts.clientTurnId, ...failure }))
+    },
     observe:value=>metrics!.observe(value), onTool:value=>metrics!.tool(value), onProgress:opts.background?.progress,
     onToolBatch:names=>{ constructionReadsInStep = names.filter(name => name === CONSTRUCTION_VIEW_TOOL.function.name).length },
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
-    ...opts, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, ...(weighDescription ? { weighDescription } : {}), beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
+    ...opts, continuedWork:execution.continuedWorkVersion===1, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, ...(weighDescription ? { weighDescription } : {}), beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? CLAUDE_BACKGROUND_TIMEOUT_MS : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
     readToolPolicy,
+    boundDrawingWork:execution.drawingBindingVersion===1&&execution.operationPathsVersion===undefined,
+    ...(workerOperations?{workerOperations}:{}),
+    compactToolState: execution.workingStateVersion === 1,
     checkpoint: answerCheckpoint,
     // Older in-flight journals keep their recorded post-rollover requests.
     carryLoadedTools: execution.toolCarryVersion === 1,
@@ -1097,6 +1367,84 @@ export async function answerWithOpenAi(opts: {
     ...(execution.resultReferenceVersion === 1 ? { resultReferences: true } : {}),
     ...(finalAnswer ? { finalAnswer: true } : {}),
     ...(execution.workerCheckpointVersion === 1 ? { workerCheckpoint: true } : {}),
+    ...(execution.workerVerifiedRenewalVersion === 1 ? { workerVerifiedRenewal: true } : {}),
+    ...(execution.workerPieceProgressVersion !== undefined ? { workerPieceProgress: true } : {}),
+    ...(execution.workerFocusVersion === 1 ? { workerFocus: true } : {}),
+    ...(execution.workerPlanVersion === 1 ? { workerPlan: true } : {}),
+    ...(execution.workerGatesVersion === 1 ? { workerGates: true } : {}),
+    ...(execution.stableToolsVersion === 1 ? { stableTools: true } : {}),
+    ...(execution.refusalGuardVersion === 1 ? { refusalGuard: true } : {}),
+    ...(execution.materialFollowVersion === 1 ? { materialFollow: true } : {}),
+    // Owner decision 2026-11-07: the server's current revisions, read through this turn's journal.
+    ...(execution.serverRevisionsVersion === 1 ? { serverRevisions: { readers: {
+      catalog: async (id: string) => {
+        const { data, error } = await readRpc('catalog_read', { p_project: opts.projectId, p_input: { action: 'read', id, revision: null, kind: null, query: null, after: null, profile_code: null, categories: [], properties: {} } })
+        return !error && data?.status === 'ok' && data.record?.id === id && Number.isSafeInteger(data.record.revision) ? data.record.revision as number : null
+      },
+      measurement: (id: string) => memo('revision:measurement', { id }, async () => {
+        const { data, error } = await client.from('current_measurements').select('id,revision').eq('project_id', opts.projectId).eq('id', id).abortSignal(AbortSignal.timeout(10000)).maybeSingle()
+        if (error) throw new Error('revision_unavailable')
+        return data && Number.isSafeInteger(data.revision) ? data.revision as number : null
+      }),
+      spaceMeasurement: async (id: string) => {
+        const read = await lookup.search({ dataset: 'physical_space_measurements', record_id: id, query: null, status: null, area_id: null, after_id: null })
+        const row = read.status === 'ok' ? read.records.find(r => r.id === id) : undefined
+        return row && Number.isSafeInteger(row.revision) ? row.revision as number : null
+      },
+      construction: (id: string) => memo('revision:construction', { id }, async () => {
+        const { data, error } = await client.from('artifacts').select('id,current_revision').eq('project_id', opts.projectId).eq('id', id).abortSignal(AbortSignal.timeout(10000)).maybeSingle()
+        if (error) throw new Error('revision_unavailable')
+        return data && Number.isSafeInteger(data.current_revision) ? data.current_revision as number : null
+      }),
+      plan: async () => {
+        const { data, error } = await readRpc('project_plan_read', { p_project: opts.projectId, p_revision: null })
+        return !error && data?.status === 'ok' && Number.isSafeInteger(data.record?.revision) ? data.record.revision as number : null
+      },
+      target: async (areaId: string | null) => {
+        const { data, error } = await readRpc('read_design_readiness', { p_project: opts.projectId, p_area: areaId, p_target_revision: null, p_purpose: null })
+        return !error && data?.project_id === opts.projectId && Number.isSafeInteger(data.target_revision) && data.target_revision > 0 ? data.target_revision as number : null
+      },
+    } } } : {}),
+    ...(constructionSketches ? { openSketches: async () => {
+      const listed = await constructionSketches.list(), added = constructionNewSketches ? await constructionNewSketches.list() : { status: 'ok' as const, sketches: [] }
+      if (listed.status !== 'ok' || added.status !== 'ok') return null
+      // A sketch kept from a refused try says so, and which construction it
+      // revises, so Bob can tell it from real work (deep audit 2026-11-08: a
+      // refused save replaced by a later one was committed as a duplicate).
+      const edits = await Promise.all(listed.sketches.map(async row => {
+        const read = await constructionSketches.read(row.artifact_id)
+        return read.status === 'ok' && read.sketch && (read.sketch as { shadow?: unknown }).shadow === true ? { ...row, refused_try: true } : row
+      }))
+      const fresh = await Promise.all((added.sketches as Record<string, unknown>[]).map(async row => {
+        const read = constructionNewSketches && typeof row.new_key === 'string' ? await constructionNewSketches.read(row.new_key) : null
+        const sketch = read?.status === 'ok' ? read.sketch as { shadow?: unknown; save?: Record<string, unknown> } | null : null
+        if (!sketch) return row
+        return { ...row, ...(typeof sketch.save?.title === 'string' ? { title: sketch.save.title } : {}),
+          revises: typeof sketch.save?.record_id === 'string' ? sketch.save.record_id : null, ...(sketch.shadow === true ? { refused_try: true } : {}) }
+      }))
+      return [...edits, ...fresh] as Record<string, unknown>[] } } : {}),
+    ...(execution.toolPickLimit !== undefined ? { toolPickLimit: execution.toolPickLimit } : {}),
+    ...(execution.workerPieceProgressVersion === 3 || execution.workerPieceProgressVersion === 4 ? { workerDesignReview: true } : {}),
+    ...(execution.workerPieceProgressVersion === 2 || execution.workerPieceProgressVersion === 3 || execution.workerPieceProgressVersion === 4 ? { workerFormPiece: {
+      readPlan: async () => {
+        const { data, error } = await rpc('project_plan_read', { p_project: opts.projectId, p_revision: null }, AbortSignal.timeout(12000))
+        if (error) throw new Error(error.code === '42501' ? 'project_denied' : 'project_plan_unavailable')
+        return data
+      },
+      readConstruction: async (id: string, revision: number) => {
+        const { data, error } = await readRpc('read_construction_draft', { p_project: opts.projectId,
+          p_artifact: id, p_revision: revision, p_after: null })
+        if (error) throw new Error(error.code === '42501' ? 'project_denied' : 'construction_read_unavailable')
+        return data
+      },
+      ...(execution.workerPieceProgressVersion === 4 ? { readPiece: async () => {
+        const { data, error } = await readRpc('read_construction_piece_progress', { p_project: opts.projectId, p_artifact: null })
+        if (error) throw new Error(error.code === '42501' ? 'project_denied' : 'construction_piece_read_unavailable')
+        return data
+      } } : {}),
+    } } : {}),
+    ...(workpads ? { workpads } : {}),
+    ...(execution.workerStageContextVersion === 1 ? { workerStageContext: true, registerWorkerContextSurface: registerSpecialistContextSurface } : {}),
     ...(contextContinuation ? { releaseContext: (id: string) => contextContinuation!.release(id) } : {}),
     ...(contextStrategy ? { contextEpoch: () => mainContextEpoch,
       registerContextSurface: (refresh: () => Promise<ContextSurface>) => { refreshMainContextSurface = refresh },
@@ -1168,7 +1516,7 @@ export async function answerWithOpenAi(opts: {
         providerResponseId: result.providerResponseId ?? null, generation })
     } } : {}),
   })
-  await metrics.finish({ok:result.ok,error:result.ok?undefined:result.error,partial:result.ok&&result.evidence.partial,uncertain:writer?.uncertain,
+  await metrics.finish({ok:result.ok,error:result.ok?undefined:result.error,failure:turnFailure,partial:result.ok&&result.evidence.partial,uncertain:writer?.uncertain,
     recovered:result.ok&&!result.providerResponseId,writes:writer?.receipts.length??0,cad:cadAssistant.metrics,uncertainResends:journal?.uncertainResends()??0,reusedModelCalls:journal?.reusedModelCalls()??0})
   return result.ok ? { ...result, answer: withResendNotice(result.answer) } : result
   }catch(error){

@@ -50,6 +50,7 @@ test('failed drawing publishes one honest private answer and status; preserves d
   assert.equal(packet.payload.execution_failure.receipt_missing, true)
   const reply = await one("select text,evidence from bob.bob_messages where thread_id=$1 and turn_id=$2 and role='assistant'", [f.thread, f.job])
   assert.match(reply.text, /inget kvitto/); assert(reply.evidence.partial); assert.deepEqual(reply.evidence.writes, [])
+  assert.deepEqual(reply.evidence.notices, [{ kind: 'failed', code: 'background_expired', text: reply.text }], 'the chat shows one short line; the full notice stays stored')
   assert.equal((await one("select text from bob.bob_messages where thread_id=$1 and turn_id=$2 and role='assistant'", [f.thread, f.turn])).text, 'Original answer')
   assert.equal((await one("select delivery_state from bob.bob_messages where thread_id=$1 and turn_id=$2 and role='user'", [f.thread, f.turn])).delivery_state, 'completed')
   assert((await invoke('bob.bob_chat_inbox', [f.project], 'authenticated', f.owner)).unread)

@@ -195,6 +195,7 @@ export const volunteers = createVolunteers(db, volunteerClient, captureAccountCo
   SUPABASE_URL && SUPABASE_ANON_KEY ? createVolunteerMediaTransport(SUPABASE_URL, SUPABASE_ANON_KEY) : undefined)
 export const getSolutions = solutions.list
 export const getSolutionVersion = solutions.version
+export const getSolutionChatPreview = solutions.chatPreview
 export const recordSolutionPresentation = solutions.present
 export const recordConstructionPresentation = solutions.presentConstruction
 export const readSolutionPresentation = solutions.presentation
@@ -204,6 +205,7 @@ export const getTargetHistory = solutions.decisions
 export const editSolution = solutions.edit
 export const selectTarget = solutions.choose
 export const getProjectArtifacts = artifacts.list
+export const getProjectDrawingPreview = artifacts.chatPreview
 export const getProjectArtifactVersion = artifacts.version
 export const getProjectArtifactHistory = artifacts.history
 export const editProjectArtifact = artifacts.edit
@@ -2188,21 +2190,71 @@ export async function getProjectWork(projectId:string):Promise<import('./project
  return result.data as import('./projectWork').ProjectWork
 }
 
-export async function getProjectStepWorkspace(projectId:string):Promise<import('./projectWork').ProjectStepWorkspace|null>{
- const guard=captureFileContext(projectId);guard()
- const work=await getProjectWork(projectId)
- if(!work||!db)return null
- const drawings=await db.from('current_drawing_steps').select('artifact_id,artifact_revision,step_id,title,status,area_id,source_state,source_reasons').eq('project_id',projectId)
- guard();if(drawings.error)throw new UserError('Project step drawings could not be loaded.')
- return {...work,drawings:drawings.data??[]}
+// Construction source and rendered drawing have independent revision sequences.
+async function constructionVersions(projectId: string, versions: { id: string; revision: number }[]) {
+  const found = new Set<string>()
+  if (!db) return found
+  for (let offset = 0; offset < versions.length; offset += 24) {
+    const filter = versions.slice(offset, offset + 24).map(row =>
+      `and(artifact_id.eq.${row.id},artifact_revision.eq.${row.revision})`).join(',')
+    const rows = unwrap<{ artifact_id: string; artifact_revision: number }[]>(await db.from('artifact_construction_revisions')
+      .select('artifact_id,artifact_revision').eq('project_id', projectId).or(filter))
+    rows.forEach(row => found.add(row.artifact_id + ':' + row.artifact_revision))
+  }
+  return found
+}
+
+export async function getStepDrawings(projectId: string, stepId: string): Promise<import('./projectWork').StepDrawing[]> {
+  const guard = captureFileContext(projectId)
+  guard()
+  if (!db) return []
+  const rows = unwrap<Omit<import('./projectWork').StepDrawing, 'isConstruction'>[]>(await db.from('current_drawing_steps')
+    .select('artifact_id,artifact_revision,step_id,title,status,area_id,source_state,source_reasons')
+    .eq('project_id', projectId).eq('step_id', stepId).order('title').order('artifact_id'))
+  guard()
+  const linked = rows.filter(row => row.step_id === stepId)
+  const models = await constructionVersions(projectId, linked.map(row => ({ id: row.artifact_id, revision: row.artifact_revision })))
+  guard()
+  return linked.map(row => ({ ...row, isConstruction: models.has(row.artifact_id + ':' + row.artifact_revision) }))
+}
+
+// Only needed when the approved plan has no work. Do not restart a project
+// that already has a proposal, a design, physical evidence or saved documents.
+export async function getProjectStartingPoint(projectId: string) {
+  const guard = captureFileContext(projectId)
+  guard()
+  if (!db) throw new UserError('Open a connected project.')
+  const [proposal, ...sources] = await Promise.all([
+    db.from('project_plan_revisions').select('summary').eq('project_id', projectId).eq('status','proposed').limit(1),
+    ...['current_artifacts', 'current_solutions', 'current_measurements', 'current_components'].map(table =>
+      db!.from(table).select('id').eq('project_id', projectId).eq('archived', false).limit(1)),
+    db.from('media_assets').select('id').eq('project_id', projectId).eq('state','ready').limit(1),
+  ])
+  guard()
+  const pending = unwrap<{summary: string}[]>(proposal)[0]
+  const hasSources = sources.map(result => unwrap<unknown[]>(result)).some(rows => rows.length > 0)
+  return { pending, hasSources }
 }
 
 export interface ProjectDrawingCard extends DrawingSourceStatus {
- id:string; project_id:string; revision:number; title:string; status:'concept'|'measured'|'build_ready';
+ isConstruction:boolean; modelSource: {id:string; revision:number} | null; id:string; project_id:string; revision:number; title:string; status:'concept'|'measured'|'build_ready';
  area_id:string|null; steps:{id:string;title:string}[];
  // Read with the card: the source check is the expensive part, so run it once.
  preview_svg:string|null; parametric_recipe:unknown; source_media_id:string|null;
 }
+export async function getStepDrawingPreview(projectId: string, id: string, revision: number) {
+  const guard = captureFileContext(projectId)
+  guard()
+  if (!db) return null
+  const result = await db.from('current_drawing_overview')
+    .select('id,project_id,revision,title,status,source_state,preview_svg,parametric_recipe,source_media_id')
+    .eq('project_id', projectId).eq('id', id).eq('revision', revision).maybeSingle()
+  guard()
+  if (result.error) throw toDataError(result.error)
+  const row = result.data
+  return row?.project_id === projectId && row.id === id && row.revision === revision ? row : null
+}
+
 export async function getProjectDrawingCards(projectId:string):Promise<ProjectDrawingCard[]> {
  const guard=captureFileContext(projectId);guard()
  if(!db)return []
@@ -2210,7 +2262,22 @@ export async function getProjectDrawingCards(projectId:string):Promise<ProjectDr
   .select('id,project_id,revision,title,status,area_id,steps,source_state,source_reasons,preview_svg,parametric_recipe,source_media_id').eq('project_id',projectId)
   .order('recorded_at',{ascending:false}).order('id').limit(4)
  guard();if(result.error)throw new UserError('Project drawings could not be loaded.')
- return result.data??[]
+ const rows = result.data ?? []
+ if (!rows.length) return []
+ const [models, links] = await Promise.all([
+   constructionVersions(projectId, rows),
+   db.from('artifact_construction_drawings').select('drawing_artifact_id,drawing_revision,construction_artifact_id,construction_revision')
+     .eq('project_id', projectId).in('drawing_artifact_id', rows.map(row => row.id))
+     .or(rows.map(row => `and(drawing_artifact_id.eq.${row.id},drawing_revision.eq.${row.revision})`).join(',')),
+ ])
+ guard()
+ const origins = unwrap<{ drawing_artifact_id: string; drawing_revision: number; construction_artifact_id: string; construction_revision: number }[]>(links)
+ return rows.map(row => {
+   const origin = origins.find(link => link.drawing_artifact_id === row.id && link.drawing_revision === row.revision)
+   return { ...row, isConstruction: models.has(row.id + ':' + row.revision),
+     modelSource: origin ? { id: origin.construction_artifact_id, revision: origin.construction_revision } : null }
+ })
+
 }
 export interface DrawingRequestWork {
  request:{id:string;revision:number;status:string;reason:string|null;artifact_id:string|null;artifact_revision:number|null;scope:{step_id:string|null}}
@@ -2219,12 +2286,55 @@ export interface DrawingRequestWork {
  can_manage:boolean;resume_state:string
  budget:{unpriced?:boolean;unlimited_work?:boolean;legacy_untracked?:boolean;revision:number;calls:number;call_limit:number;spent_usd:number;usd_limit:number;outcome_unknown:boolean}|null
 }
-export async function getDrawingRequests(projectId:string,after:string|null=null,task:string|null=null):Promise<{items:DrawingRequestWork[];next_cursor:string|null}>{
- const guard=captureFileContext(projectId);guard()
- if(!db)return {items:[],next_cursor:null}
- const {data,error}=await db.rpc('drawing_work_list',{p_project:projectId,p_after:after,p_task:task})
- guard();if(error)throw new UserError('Drawing requests could not be loaded.')
- return data
+export function isClosedDrawingRequest(status: string) {
+  return status === 'saved' || status === 'cancelled'
+}
+
+export async function getDrawingRequestWork(projectId: string, id: string): Promise<DrawingRequestWork> {
+  const guard = captureFileContext(projectId)
+  guard()
+  if (!db) throw new UserError('Open a connected project.')
+  const row = unwrap<DrawingRequestWork>(await db.rpc('drawing_request_work', { p_project: projectId, p_id: id }))
+  guard()
+  return row
+}
+
+type DrawingPage = {next_cursor: string | null} & ({items: DrawingRequestWork[]} | {requests: DrawingRequestWork['request'][]})
+
+async function drawingPage(projectId: string, after: string | null, taskId?: string): Promise<DrawingPage> {
+  if (!db) throw new UserError('Open a connected project.')
+  if (taskId || !after) return unwrap<{items: DrawingRequestWork[]; next_cursor: string | null}>(
+    await db.rpc('drawing_work_list', {p_project: projectId, p_after: after, p_task: taskId ?? null}))
+  return unwrap<{requests: DrawingRequestWork['request'][]; next_cursor: string | null}>(
+    await db.rpc('project_drawing_requests', {p_project: projectId, p_after: after}))
+}
+
+export async function getDrawingRequests(projectId: string, taskId?: string) {
+  const guard = captureFileContext(projectId)
+  guard()
+  const active: DrawingRequestWork[] = []
+  const closed: DrawingRequestWork['request'][] = []
+  if (!db) return { active, closed }
+  const seen = new Set<string>()
+  let after: string | null = null
+  do {
+    // One bounded read serves ordinary projects. If history spills onto another
+    // page, use the light index and hydrate only open work. Task pages retain
+    // the server's task/gap filter throughout.
+    const page: DrawingPage = await drawingPage(projectId, after, taskId)
+    guard()
+    const rows = 'items' in page ? page.items : await Promise.all(page.requests.map(async request =>
+      isClosedDrawingRequest(request.status) ? { request } : getDrawingRequestWork(projectId, request.id)))
+    for (const row of rows) {
+      if (isClosedDrawingRequest(row.request.status)) closed.push(row.request)
+      else if ('gaps' in row) active.push(row)
+    }
+    after = page.next_cursor
+    if (after && seen.has(after)) throw new UserError('Drawing request pagination could not be completed.')
+    if (after) seen.add(after)
+  } while (after)
+  guard()
+  return { active, closed }
 }
 export async function cancelDrawingRequest(projectId:string,id:string,revision:number){
  const guard=captureFileContext(projectId);guard()

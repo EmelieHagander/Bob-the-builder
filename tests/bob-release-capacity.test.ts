@@ -12,7 +12,7 @@ test('complete requests activate only when both immutable catalog contracts opt 
  const enabled=catalogFixture().definition('agent-contract.ask-bob').metadata
  const {complete_request_version:_c,result_reference_version:_r,...metadata}=enabled
  assert.deepEqual(bobCompleteRequestVersions(true,metadata),{})
- assert.deepEqual(bobCompleteRequestVersions(true,enabled),{completeRequestVersion:1,resultReferenceVersion:1})
+ assert.deepEqual(bobCompleteRequestVersions(true,enabled),{completeRequestVersion:1,resultReferenceVersion:1,imageInputDedupVersion:1})
  assert.deepEqual(bobCompleteRequestVersions(false,enabled),{})
  for(const invalid of [{...enabled,result_reference_version:undefined},{...enabled,complete_request_version:2},{...enabled,context_strategy_version:undefined}])assert.throws(()=>bobCompleteRequestVersions(true,invalid),/contract_invalid/)
 })

@@ -11,7 +11,7 @@ const tool = (name: string) => ({ type: 'function' as const, function: { name, d
 const catalog = {
   definition: () => ({ metadata: { continuation_input_tokens: 1000, context_input_ceiling_tokens: 96000,
     continuation_summary_tokens: 1600, retained_tool_exchanges: 1, continuation_retention_version: 2 } }),
-  role: () => ({ systemMessage: 'Read the selected design; ask the owner before changing it.' }),
+  role: () => ({ systemMessage: 'Read the selected design; ask the owner before changing it.', providerAdapter: 'openai-responses-v1' }),
   schema: (name: string) => ({ name, schema: { type: 'object' } }), tool,
 } as unknown as AiCatalogSession
 const seed: OpenAIServiceOptions = { app: 'bob', module: 'global', functionName: 'ask-bob', aiFunction: 'ask-bob',

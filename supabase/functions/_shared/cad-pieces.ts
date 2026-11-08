@@ -1,6 +1,6 @@
 import { HANDOFF_INPUT_SCHEMA, prepareDesignHandoff } from './cad-handoff.ts'
 import type { DesignHandoff } from './cad-review.ts'
-import { rethrowContinuation } from './bob-job-journal.ts'
+import { rethrowContinuation,stableJsonValue } from './bob-job-journal.ts'
 import type { DrawingRequestStore } from './cad-intake.ts'
 import type { AiCatalogSession } from './ai-catalog.ts'
 
@@ -24,7 +24,7 @@ export const PLAN_CAD_PIECES_TOOL={type:'function' as const,function:{name:'plan
    construction_revision:{type:'integer',minimum:1,maximum:999999999,description:'Exact saved/read construction revision; every piece requires a source.'}}}}}}}}
 
 export interface CadPiecesState { version:1; used:number }
-export function createCadPieces(opts:{unlimitedWork?:boolean;requestStore?:DrawingRequestStore;projectId:string;ownerRequest:string|null;hasAccess:()=>Promise<boolean>;aiCatalog:AiCatalogSession;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>}){
+export function createCadPieces(opts:{resumeStoredPieces?:boolean;unlimitedWork?:boolean;requestStore?:DrawingRequestStore;projectId:string;ownerRequest:string|null;hasAccess:()=>Promise<boolean>;aiCatalog:AiCatalogSession;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>}){
  let used=0
  return {
  exportState():CadPiecesState{return {version:1,used}},
@@ -73,7 +73,12 @@ export function createCadPieces(opts:{unlimitedWork?:boolean;requestStore?:Drawi
    }catch(error){
     rethrowContinuation(error)
     if(error instanceof Error&&error.message==='project_denied')throw error
-    if(error instanceof Error&&error.message.startsWith('drawing_request_reuse:'))pieces.push({piece_key:p.piece_key,request_id:error.message.split(':')[1],status:'existing_request'})
+    if(error instanceof Error&&error.message.startsWith('drawing_request_reuse:')){
+     const id=error.message.split(':')[1],existing=opts.resumeStoredPieces?await store.load(id):null
+     const recover=existing&&existing.id===id&&existing.status==='collecting'&&!existing.continuation_required
+      &&existing.payload?.owner_request===opts.ownerRequest&&JSON.stringify(stableJsonValue(existing.payload?.brief))===JSON.stringify(stableJsonValue(brief))
+     pieces.push({piece_key:p.piece_key,request_id:id,status:recover?'queued':'existing_request'})
+    }
     else pieces.push({piece_key:p.piece_key,request_id:null,status:'not_stored'})
    }
   }

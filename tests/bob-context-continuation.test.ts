@@ -5,12 +5,13 @@ import { createBobJournal, fingerprint, type JournalEntry } from '../supabase/fu
 import { countContextTokens } from '../supabase/functions/_shared/bob-token-budget.ts'
 import type { AiCatalogSession } from '../supabase/functions/_shared/ai-catalog.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from '../supabase/functions/_shared/openai-service.ts'
+import { anthropicRequestBody } from '../supabase/functions/_shared/anthropic-service.ts'
 
 const tool = (name: string) => ({ type: 'function' as const, function: { name, description: name, parameters: { type: 'object' } } })
 const catalog = {
   definition: () => ({ metadata: { continuation_input_tokens: 1000, context_input_ceiling_tokens: 96000, continuation_summary_tokens: 1600, retained_tool_exchanges: 1,
     continuation_retention_version: 2 } }),
-  role: () => ({ systemMessage: 'Catalog-owned role instructions.' }),
+  role: () => ({ systemMessage: 'Catalog-owned role instructions.', providerAdapter: 'openai-responses-v1' }),
   schema: (name: string) => ({ name, schema: { type: 'object', properties: { result: { type: 'string' } } } }),
   tool,
 } as unknown as AiCatalogSession
@@ -22,6 +23,35 @@ const seed: OpenAIServiceOptions = { app: 'bob', module: 'global', functionName:
   catalogRoleKey: 'ask-bob', systemMessage: 'Exact current role. No phase-wide mandate.',
   messages: [{ role: 'user', content: 'Maybe 90 cm wide, but I must measure first. Finish the delegated drawing.' }], tools: [tool('save_record')] }
 const output = (id: string, value: unknown = { status: 'saved', saved: true, record_id: id, revision: 7 }) => ({ role: 'tool' as const, tool_call_id: id, content: JSON.stringify(value) })
+
+test('native image continuation survives a durable restore and reaches Claude with paired tool results and pixels', async () => {
+  const imageRef = 'private-image:saved-image/1'
+  const policy = { ...catalog, role: () => ({ systemMessage: 'Inspect the saved image.', providerAdapter: 'anthropic-messages-v1' }) } as unknown as AiCatalogSession
+  let dispatched = 0
+  const make = () => createBobContextContinuation({ version: 1, mainResultReferences: 1, aiCatalog: policy, callModel: async options => {
+    assert.equal(options.previousResponseId, undefined)
+    const body: any = await anthropicRequestBody(options, { apiKey: 'unused', model: { model_name: 'fixture', input_cost_per_1m_tokens: 0,
+      output_cost_per_1m_tokens: 0, cached_input_cost_per_1m_tokens: 0 }, systemMessage: 'Inspect the saved image.', maxOutputTokens: 1000,
+      effort: null, timeoutMs: 1000, log: async () => {}, resolveImage: async ref => { assert.equal(ref, imageRef); return 'data:image/png;base64,AAAA' } })
+    if (++dispatched === 1) return { ...response('r-open', [call('open-image', 'open_project_item')]),
+      outputItems: [{ type: 'function_call', call_id: 'open-image', name: 'open_project_item', arguments: '{"refs":["image:saved-image"]}' }] }
+    const blocks = body.messages.at(-1).content
+    assert(blocks.some((b: any) => b.type === 'tool_result' && b.tool_use_id === 'open-image'))
+    assert(blocks.some((b: any) => b.type === 'image' && b.source.data === 'AAAA'))
+    return { ...response('r-final', []), data: 'I have inspected the image.', outputPhase: 'final_answer' as const,
+      outputItems: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'I have inspected the image.' }] }] }
+  } })
+  const first = make()
+  const options = { ...seed, responseItemsMode: 'preserve' as const }
+  await first.call(options)
+  const resumed = make()
+  resumed.restoreState(first.exportState())
+  const result = await resumed.call({ ...options, previousResponseId: 'r-open', messages: [output('open-image', { status: 'opened' }),
+    { role: 'user', content: [{ type: 'image_url', image_url: imageRef }] }] })
+  assert.equal(result.data, 'I have inspected the image.')
+  assert.equal(dispatched, 2)
+  assert(!JSON.stringify(resumed.exportState()).includes('base64'), 'hydrated bytes never enter the durable continuation')
+})
 const handoff = (options: OpenAIServiceOptions) => {
   const source = JSON.parse(String(options.messages![0].content))
   return { success: true, model: 'mini-fixture', data: { summary: '90 cm remains an unconfirmed suggestion. Saved revision 7 exists.',
@@ -229,9 +259,10 @@ test('incomplete parallel native results keep their provider chain instead of be
 
 test('specialists can read history internally and mixed batches retain every native output', async () => {
   const sent: OpenAIServiceOptions[] = []
+  const internal:any[]=[]
   let main = 0
   const read = (id: string) => ({ id, type: 'function' as const, function: { name: 'get_work_history', arguments: JSON.stringify({ call_id: 'r1', after: null }) } })
-  const adapter = createBobContextContinuation({ version: 1, aiCatalog: catalog, callModel: async options => {
+  const adapter = createBobContextContinuation({ version: 1, aiCatalog: catalog, onInternalTool:async e=>{internal.push(e)}, callModel: async options => {
     sent.push(structuredClone(options))
     if (options.catalogRoleKey === 'context-compactor') return handoff(options)
     main++
@@ -243,6 +274,7 @@ test('specialists can read history internally and mixed batches retain every nat
   await adapter.call(specialist)
   await adapter.call({ ...specialist, previousResponseId: 'r1', messages: [output('r1')] })
   const mixed = await adapter.call({ ...specialist, previousResponseId: 'r2', messages: [output('r2')] })
+  assert.deepEqual(internal.map(e=>[e.name,e.callId,e.role]),[['get_work_history','read1','plan-reviewer'],['get_work_history','read2','plan-reviewer']])
   assert.deepEqual(mixed.toolCalls?.map(value => value.id), ['external'])
   const historyOnly = sent.find(value => value.messages?.some(message => message.tool_call_id === 'read1'))!
   assert(historyOnly.messages?.some(value => value.tool_call_id === 'read1'))
@@ -406,7 +438,7 @@ test('rollover atomically refreshes the tool surface and retains it through inte
   let main = 0, refreshed = 0
   const adapter = createBobContextContinuation({ version: 1, aiCatalog: surfaceCatalog,
     refreshSurface: async () => { refreshed++; return { systemMessage: 'Fresh compact role and directory.', tools: [tool('describe_tool')],
-      catalogSchemaParameters: { include_manual: false }, catalogToolParameters: undefined } },
+      catalogSchemaParameters: { include_manual: false }, catalogToolParameters: undefined, catalogRuntimeSurface:{version:1,buildGuides:false} } },
     callModel: async options => {
       sent.push(structuredClone(options))
       if (options.catalogRoleKey === 'context-compactor') return handoff(options)
@@ -425,6 +457,7 @@ test('rollover atomically refreshes the tool surface and retains it through inte
     assert.equal(request.systemMessage, 'Fresh compact role and directory.')
     assert.deepEqual(request.tools?.map(value => value.function.name), ['describe_tool', 'get_work_history'])
     assert.deepEqual(request.catalogSchemaParameters, { include_manual: false })
+    assert.deepEqual(request.catalogRuntimeSurface,{version:1,buildGuides:false})
   }
 })
 
@@ -523,7 +556,7 @@ test('a worker refreshes at the pinned specialist limit while Bob keeps his own'
 
 test('a stateless (Claude) role is sent the full local chain with its native items instead of a response pointer', async () => {
   const sent: OpenAIServiceOptions[] = []
-  const claude = { ...catalog, role: () => ({ systemMessage: 'Catalog-owned role instructions.', model: { provider: 'anthropic' } }) } as unknown as AiCatalogSession
+  const claude = { ...catalog, role: () => ({ systemMessage: 'Catalog-owned role instructions.', model: { provider: 'anthropic' }, providerAdapter: 'anthropic-messages-v1' }) } as unknown as AiCatalogSession
   const thinking = { type: 'reasoning', provider: 'anthropic', encrypted_content: JSON.stringify({ type: 'thinking', thinking: 'plan', signature: 'sig' }) }
   let main = 0
   const adapter = createBobContextContinuation({ version: 1, aiCatalog: claude, callModel: async options => {

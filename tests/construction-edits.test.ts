@@ -13,7 +13,9 @@ import {CAD_ARRAYS_SCHEMA} from '../supabase/functions/_shared/cad-arrays.ts'
 import {withChosenJointFasteners} from '../supabase/functions/_shared/construction-fasteners.ts'
 import {withConstructionWorkWrite} from '../supabase/functions/_shared/construction-work.ts'
 import {withConstructionText} from '../supabase/functions/_shared/construction-text.ts'
-import {createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
+import {createConstructionTools,withoutTargetRevision} from '../supabase/functions/_shared/construction-draft.ts'
+import {withConstructionSketch} from '../supabase/functions/_shared/construction-sketch.ts'
+import {withLeanEdit} from '../supabase/functions/_shared/construction-lean.ts'
 import {createProjectWriter} from '../supabase/functions/_shared/project-write.ts'
 import {createBobToolSession} from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
@@ -98,7 +100,12 @@ test('bounded construction edits preserve canonical data, receipts and authority
   // Typed solution_edit items arrived later (bob-typed-design-items-v1, bob-typed-concept-items-v1).
   const untyped=(parameters:any)=>{const p=structuredClone(parameters),edit=p.properties.solution_edit.anyOf[0];edit.properties.changes.items=edit.properties.changes.items.anyOf[0];return p}
   assert.deepEqual(preKonradLeanCatalogFixture().tool('edit_construction_parts').function.parameters,untyped(textEdit))
-  assert.deepEqual(current.tool('edit_construction_parts').function.parameters,withDefaultZeroText(withChosenJointFasteners(textEdit),former))
+  // Open questions with the text (construction_notes), and mode sketch|save (bob-construction-sketch-v1, 2026-11-07).
+  const latest=withDefaultZeroText(withChosenJointFasteners(withConstructionText(withConstructionWorkWrite(CONSTRUCTION_EDIT_TOOL),true).function.parameters),former)
+  // bob-lean-writes-v1: the server binds the target, so target_revision is not an input.
+  // bob-lean-construction-v1 (later the same day): formulas, joint rules and form_assign;
+  // bob-stored-joint-rules-v1 (2026-11-08): the rules are stored with the construction.
+  assert.deepEqual(current.tool('edit_construction_parts').function.parameters,withLeanEdit(withoutTargetRevision(withConstructionSketch({type:'function',function:{name:'edit_construction_parts',description:'',parameters:latest}})),true).function.parameters)
   const options={message,writer:writer(),constructionTools:tools(),lookup:createProjectLookup(project,async()=>({data:[],error:null}),async()=>({data:[],error:null})),readPolicy:seedToolPolicy}
   const old=createBobToolSession({...options,aiCatalog:preConstructionEditsCatalogFixture()})
   assert(!(await old.prepare()).some(t=>t.function.name==='edit_construction_parts'))

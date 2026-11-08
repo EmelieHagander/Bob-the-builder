@@ -23,6 +23,13 @@ is published and activated: editable token-bounded memory, exact/private
 hybrid recall, concise [tool and colleague cards](../Docs/ask-bob-tools.md#tool-and-colleague-cards--2026-10-18)
 and same-job context checkpoints. It preserves canonical project records, current
 authorization and old pinned execution contracts.
+The [private workpads](../Docs/ask-bob-conversations.md#what-memory-keeps) are
+deployed for Bob, Konrad, Rita and Mattias, together with the separately gated,
+verified Konrad context renewal. Neither is a substitute for the project writer,
+exact saved-record checks or the existing 150k specialist compaction policy.
+[Technical release record](../Docs/bob-workpad-release-2026-11-03.md) owns the
+installed schema/catalog versions, `ask-bob` v218, `bob-worker` v186 and pending
+ordinary-owner/model acceptance.
 [Release evidence](../Docs/foundation-verification.md#bob-context-strategy-release--2026-10-18)
 records both installed dependency closures, Deno configuration and exact catalog
 activation; [State](../Docs/bob-delivery-flow.md#state) owns remaining ordinary owner
@@ -56,6 +63,7 @@ The semantic owner is [domain-dictionary.md](../Docs/domain-dictionary.md), incl
 | --- | --- |
 | `bob-worker/index.ts`, `_shared/bob-background.ts` | Private-capability background worker; see [durable turns](../Docs/ask-bob-conversations.md#durable-background-turns). |
 | `ask-bob/index.ts`, `_shared/serve-bob.ts` | Bob's OpenAI endpoint; validate Supabase Auth user. |
+| `drawing-preview/index.ts`, `_shared/saved-drawing-raster.ts`, `_shared/project-context/drawings.ts` | Caller-JWT saved SVG sheet → bounded model PNG, exact revision/hash/source checks; [implementation and rollout evidence](../Docs/bob-runtime-path-audit-2026-11-04.md#saved-visual-access-2026-11-05). No CAD regeneration. |
 | `cad-viewer/index.ts`, `_shared/cad-viewer-request.ts` | Authenticated saved-version CAD edge derivative, service-only lease cache and fresh caller/source checks; [mobile CAD contract](../Docs/cad-adapter.md#mobile-cad-viewer--2026-10-10). |
 | `ask-launchpad/index.ts` | Retired URL: HTTP 410, no calls or automatic forwarding. |
 | `_shared/bob-request.ts` | HTTP validation; reject unscoped/async actions and browser-supplied history or response ids. |
@@ -100,6 +108,27 @@ the worker), no `previous_response_id`, forced `tool_choice` falls back to
 `auto` unless the model row declares `forced_tool_choice`, and history
 compaction that drops older thinking blocks may be refused by preserved-thinking
 enforcement on newer accounts.
+
+**Provider-neutral tool continuation is handled before the provider adapter.**
+For jobs pinned with `context_strategy_version=1`, `ask-openai.ts` routes Bob
+and his colleagues through `createBobContextContinuation`. The response ID held
+by `project-answer.ts` or `bob-workers.ts` is a **server-local chain key**, not
+an Anthropic API parameter. For message-replay adapters (currently Claude), the
+continuation layer rebuilds the whole provider input and removes that key before dispatch: main Bob's
+`complete_request_version=1` path uses `buildBobRequest`, while colleagues use
+the message-replay path. Both preserve Claude's native assistant tool uses,
+signed thinking and matching tool results, including across saved checkpoints.
+`textContinuationMode` in `ai-catalog.ts` maps the validated protocol adapter
+to a continuation contract: OpenAI Responses uses its provider cursor;
+Anthropic Messages uses complete message replay. New text adapters must
+declare this contract explicitly rather than relying on the model vendor name.
+The shared service only reads `OPENAI_API_KEY` on the OpenAI route; a Claude
+request needs its own `ANTHROPIC_API_KEY` but not an unrelated vendor secret.
+Calling `anthropic-service.ts` directly with `previousResponseId` correctly
+fails closed; that rejection is not evidence that Bob's live tool loop sends
+the pointer to Claude. Local no-provider regression coverage is in
+`tests/bob-claude-continuation-wire.test.ts`. This is a technical protocol
+check, **not** a successful paid Ladan/Konrad model run.
 
 Catalog-backed Bob calls use the resolved `aiDefinition`; settings prompt text
 cannot replace their catalog prompts. The shared provider service exposes this
@@ -1037,3 +1066,17 @@ compatible runtime/policy for jobs already pinned to it; preserve saved outputs.
 The [Artifact owner](../Docs/artifacts.md#construction-delivery-discovery) owns
 scope; [local evidence](../Docs/foundation-verification.md#form-delivery-readback-2026-10-27)
 distinguishes fixture recovery from real model/CAD and browser acceptance.
+
+
+### Runtime operation paths — 2026-11-04
+
+Apply `bob_runtime_operation_paths` before installing the new `ask-bob` and
+`bob-worker` bundles. It adds five authenticated, invoker read/validation RPCs
+with explicit project checks and publishes immutable catalog versions that let
+Mattias use the existing `read_project_work` reader. No project content or model
+settings are changed. Check the exact project URL, old bundles, catalog, migration
+history and absence of queued/running jobs immediately before installation;
+verify both complete deployed bundles and RPC ACLs afterwards. New jobs pin
+`operationPathsVersion:1`; existing checkpoints retain old behavior. Retain the
+read RPCs and old manifest versions for pinned jobs during any rollback.
+[Release evidence](../Docs/bob-runtime-path-audit-2026-11-04.md#corrections).

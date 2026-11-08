@@ -1,85 +1,145 @@
-import { useBobSurface } from '../lib/bobSurface'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
-import type { ProjectStepWorkspace as Workspace, WorkStep, WorkTask } from '../data/projectWork'
+import type { ProjectWork, WorkStep, WorkTask } from '../data/projectWork'
+import { openBobForCurrentSurface, openBobWithDraft, useBobSurface } from '../lib/bobSurface'
 import { useAsync, useProjectVersion } from './ui'
-import { ProjectImages } from './ProjectImages'
 import { PhasePill } from './PhaseUI'
+import { ProjectImages } from './ProjectImages'
+import { ProjectStart } from './ProjectStart'
 import { TaskModal } from './editors'
-import { StepDrawings } from './StepDrawings'
+import { GuideVisuals } from './GuideVisuals'
+import { GuidePager } from './GuidePager'
+import { DrawingRequests } from './DrawingRequests'
 
-const taskState={todo:'To do',doing:'In progress',blocked:'Blocked',done:'Done'}
-const stepState={planned:'Planned',active:'In progress',blocked:'Blocked',completed:'Complete'}
-function TaskLinks({tasks,people}:{tasks:WorkTask[];people:Map<string,string>}){
- return <ul className="work-task-list">{tasks.map(task=><li key={task.id}>
-  <Link to={`/tasks/${encodeURIComponent(task.id)}`}>{task.name}</Link>
-  <span className="foundation-hint">{taskState[task.status]}{task.assignee_ids?.length?` · ${task.assignee_ids.map(id=>people.get(id)??'Assigned participant').join(', ')}`:''}</span>
- </li>)}</ul>
+const taskState = { todo: 'To do', doing: 'In progress', blocked: 'Blocked', done: 'Done' }
+const stepState = { planned: 'Planned', active: 'In progress', blocked: 'Blocked', completed: 'Complete' }
+
+function TaskLinks({ tasks, people }: { tasks: WorkTask[]; people: Map<string, string> }) {
+  return <ul className="work-task-list">{tasks.map(task => <li key={task.id}>
+    <Link to={`/tasks/${encodeURIComponent(task.id)}`}>{task.name}</Link>
+    <span className="foundation-hint">{taskState[task.status]}{task.assignee_ids?.length ? ' · ' + task.assignee_ids.map(id => people.get(id) ?? 'Assigned participant').join(', ') : ''}</span>
+  </li>)}</ul>
 }
-function StepCard({step,work,selected,people,onAdd}:{step:WorkStep;work:Workspace;selected:string|null;people:Map<string,string>;onAdd?:(step:WorkStep)=>void}){
- const [open,setOpen]=useState(selected===step.id||step.state==='active')
- useEffect(()=>{
-  if(selected!==step.id)return
-  setOpen(true)
-  const frame=requestAnimationFrame(()=>document.getElementById(`step-${step.id}`)?.scrollIntoView({block:'start'}))
-  return()=>cancelAnimationFrame(frame)
- },[selected,step.id])
- const drawings=work.drawings.filter(d=>d.step_id===step.id)
- return <details className="work-step" id={`step-${step.id}`} open={open} onToggle={e=>setOpen(e.currentTarget.open)}>
-  <summary><strong>{step.title}</strong><span className="foundation-hint">{stepState[step.state]} · {step.tasks.length} tasks{drawings.length ? ` · ${drawings.length} ${drawings.length===1?'drawing':'drawings'}` : ''}</span></summary>
-  {open&&<div className="work-step-body">
-   <p>{step.goal}</p>
-   <div className="foundation-actions"><PhasePill phase={step.phase} />
-    {step.id===work.focus_step_id&&<span className="foundation-hint">Bob’s focus</span>}
-    <span className="foundation-hint">Responsible: {step.responsible_kind==='bob'?'Bob':step.responsible_kind==='person'?people.get(step.responsible_person_id??'')??'Assigned participant':'Unassigned'}</span>
-   </div>
-   {!!drawings.length&&<StepDrawings projectId={work.project_id} drawings={drawings} returnLabel={step.title} returnKey={`step:${step.id}`} />}
-   {!!step.tasks.length&&<TaskLinks tasks={step.tasks} people={people}/>}
-   {!step.tasks.length&&<p className="foundation-hint">No tasks organised in this step yet.</p>}
-   {onAdd&&<button className="btn" onClick={()=>onAdd(step)}>Add task</button>}
-   {!!step.requirements.length&&<details id={`criteria-${step.id}`} className="work-criteria"><summary>Finish criteria · {step.requirements.length}</summary>
-    <ul>{step.requirements.map(r=><li key={r.id}>{r.title} <span className="foundation-hint">· {r.status.state.replace(/_/g,' ')}</span></li>)}</ul>
-   </details>}
-   {!!step.related_tasks.length&&<details id={`related-${step.id}`}><summary>Related work</summary><TaskLinks tasks={step.related_tasks} people={people}/></details>}
-   {db.authEnabled()&&<ProjectImages projectId={work.project_id} target={{kind:'plan_step',id:step.id}} title="Step images" />}
-  </div>}
- </details>
+
+function responsible(kind: WorkStep['responsible_kind'], id: string | null | undefined, people: Map<string, string>) {
+  if (kind === 'bob') return 'Bob'
+  if (kind === 'person') return people.get(id ?? '') ?? 'Assigned participant'
+  return 'Unassigned'
 }
-/** Shared rendering of the canonical projection; references never become duplicate Tasks. */
-export function ProjectPlanContent({work,selected=null,people=new Map(),onAdd}:{work:Workspace;selected?:string|null;people?:Map<string,string>;onAdd?:(step:WorkStep)=>void}){
- const renderStep=(step:WorkStep)=><StepCard key={step.id} step={step} work={work} selected={selected} people={people} onAdd={work.areas.find(area=>area.id===step.area_id)?.archived_at ? undefined : onAdd}/>
- const unorganised=(tasks:WorkTask[])=>tasks.length?<details className="work-unorganised"><summary>Tasks to organise · {tasks.length}</summary>
-  <p className="foundation-hint">These saved tasks do not yet have a primary step.</p><TaskLinks tasks={tasks} people={people}/></details>:null
- const renderArea=(area:Workspace['areas'][number])=><section className="work-area" key={area.id} aria-label={area.name}>
-   <div className="foundation-heading"><h3><Link to={`/areas/${area.slug}`}>{area.name}</Link></h3><PhasePill phase={area.phase}/></div>
-   {work.steps.filter(s=>s.area_id===area.id).map(renderStep)}
-   {unorganised(work.unorganised_tasks.filter(t=>t.area_id===area.id))}
-   {!work.steps.some(s=>s.area_id===area.id)&&!work.unorganised_tasks.some(t=>t.area_id===area.id)&&<p className="foundation-hint">No work organised here yet.</p>}
-  </section>
- const archived=work.areas.filter(area=>area.archived_at)
- return <section className="card foundation-section" id="project-plan" tabIndex={-1} aria-label="Project plan">
-  <div className="foundation-heading"><h2>Plan</h2><Link to="/areas">Manage areas</Link></div>
-  {!work.steps.length&&<p className="foundation-hint">No current plan yet. Bob can organise the project’s work into steps.</p>}
-  {work.steps.filter(s=>!s.area_id).map(renderStep)}
-  {unorganised(work.unorganised_tasks.filter(t=>!t.area_id))}
-  {work.areas.filter(area=>!area.archived_at).map(renderArea)}
-  {!!archived.length&&<details id="archived-work-areas" open={!!selected&&work.steps.some(step=>step.id===selected&&archived.some(area=>area.id===step.area_id))}>
-   <summary>Archived Areas · {archived.length}</summary>{archived.map(renderArea)}
-  </details>}
- </section>
+
+function CurrentStep({ work, step, people, onAdd }: {
+  work: ProjectWork; step: WorkStep; people: Map<string, string>; onAdd: () => void
+}) {
+  const [imagesOpen, setImagesOpen] = useState(false)
+  const area = work.areas.find(item => item.id === step.area_id)
+  const isFocus = step.id === work.focus_step_id
+  const archivedAreas = new Set(work.areas.filter(a => a.archived_at).map(a => a.id))
+  const sequence = work.steps.filter(s => area?.archived_at ? s.area_id === area.id : !s.area_id || !archivedAreas.has(s.area_id))
+  const index = sequence.findIndex(s => s.id === step.id)
+  const page = (s?: WorkStep) => s ? `/project?step=${encodeURIComponent(s.id)}` : undefined
+  const nextTask = step.tasks.find(t => t.status === 'doing') ?? step.tasks.find(t => t.status === 'todo')
+  const pending = step.requirements.filter(r => !['satisfied','waived','not_applicable'].includes(r.status.state))
+  const need = pending.find(r => r.responsible_kind === 'person') ?? (step.state === 'blocked' ? pending[0] : undefined)
+  return <article id={`step-${step.id}`} className="current-plan-step">
+    <GuidePager label="Browse plan steps" previous={page(sequence[index-1])} next={page(sequence[index+1])}><strong>Step {index+1} of {sequence.length}</strong>
+      <span className="step-responsibility" aria-label={`Responsible: ${responsible(step.responsible_kind, step.responsible_person_id, people)}`}>
+        {step.responsible_kind === 'bob' ? 'Bob’s step' : responsible(step.responsible_kind, step.responsible_person_id, people)}</span>
+    </GuidePager>
+    <h2>{step.title}</h2>
+    {step.state === 'blocked' && <p className="guide-caution" role="status">Blocked{need && ` · ${need.title}`}</p>}
+    {step.state === 'completed' && <p className="foundation-hint">Completed</p>}
+    {need && step.state !== 'blocked' && <p className="guide-need">{need.title}</p>}
+    <GuideVisuals key={step.id} projectId={work.project_id} planStepId={step.id} target={{kind:'plan_step',id:step.id}} returnLabel={step.title} returnKey={`step:${step.id}`} />
+    {nextTask && !area?.archived_at && step.state !== 'completed' && <Link className="guide-task" to={`/tasks/${encodeURIComponent(nextTask.id)}`}>
+      <span><small>{nextTask.status === 'doing' ? 'In progress' : 'Task'}</small>{nextTask.name}</span><span aria-hidden="true">→</span>
+    </Link>}
+    {!nextTask && !need && !area?.archived_at && step.state !== 'completed' && <button className="guide-help" onClick={() => openBobWithDraft('Explain this step in plain words. What, if anything, do you need from me?')}>Explain this step</button>}
+    {!isFocus && work.focus_step_id && <Link className="guide-return" to="/project">Back to Bob’s focus</Link>}
+    <details id={`work-details-${step.id}`} className="step-support">
+      <summary>Step details</summary>
+      {step.goal && <p>{step.goal}</p>}
+      <p className="foundation-hint">{stepState[step.state]}{isFocus && ' · Bob’s focus'}</p>
+      <button className="btn" onClick={openBobForCurrentSurface}>Ask Bob about this step</button>
+      {area && <p className="foundation-hint"><Link to={`/areas/${area.slug}`}>{area.name}</Link>{area.archived_at && ' · Archived area'}</p>}
+      {!!step.tasks.length && <TaskLinks tasks={step.tasks} people={people} />}
+      {!area?.archived_at && <button className="btn" onClick={onAdd}>Add task</button>}
+      {!!step.requirements.length && <details id={`criteria-${step.id}`} className="work-criteria"><summary>Finish criteria · {step.requirements.length}</summary>
+        <ul>{step.requirements.map(r => <li key={r.id}>{r.title} · {r.status.state.replace(/_/g, ' ')}</li>)}</ul>
+      </details>}
+      {!!step.related_tasks.length && <details id={`related-${step.id}`}><summary>Related work</summary><TaskLinks tasks={step.related_tasks} people={people} /></details>}
+      <details id={`work-images-${step.id}`} className="step-support" onToggle={event => setImagesOpen(event.currentTarget.open)}>
+        <summary>Step images</summary>
+        {imagesOpen && <ProjectImages projectId={work.project_id} target={{kind:'plan_step',id:step.id}} title="Step images" />}
+      </details>
+    </details>
+  </article>
 }
-export function ProjectStepWorkspace({projectId}:{projectId:string}){
- const version=useProjectVersion(),[local,setLocal]=useState(0),[selected]=useSearchParams()
- const [adding,setAdding]=useState<WorkStep|null>(null)
- const {data,error,loading}=useAsync(()=>db.getProjectStepWorkspace(projectId),[projectId,version,local])
- const {data:crew}=useAsync(()=>db.getPeople(),[projectId,version])
- const focused = !loading && !error ? data?.steps.find(step=>step.id===selected.get('step')) : undefined
- useBobSurface(projectId, focused ? {surface:'project',planStepId:focused.id} : null, focused ? `Plan Step · ${focused.title}` : 'Project', 2)
- if(loading&&!data)return <p role="status">Loading project plan…</p>
- if(error)return <p role="alert">Project plan could not be loaded. <button className="btn" onClick={()=>setLocal(v=>v+1)}>Try again</button></p>
- if(!data)return null
- return <><ProjectPlanContent work={data} selected={selected.get('step')} people={new Map(crew?.map(p=>[p.id,p.name])??[])} onAdd={setAdding}/>
-  {adding&&<TaskModal areas={data.areas.filter(area=>!area.archived_at)} areaId={adding.area_id??undefined} stepId={adding.id} onClose={()=>setAdding(null)} onDone={()=>{setAdding(null);setLocal(v=>v+1)}}/>}
- </>
+
+function PlanList({ work, viewed, people }: { work: ProjectWork; viewed?: string; people: Map<string,string> }) {
+  const archived = work.areas.filter(a => a.archived_at)
+  function rows(areaId: string | null) {
+    const tasks = work.unorganised_tasks.filter(t => (t.area_id ?? null) === areaId)
+    return <>
+      {work.steps.filter(s => s.area_id === areaId).map(step => <Link className="plan-step-link" key={step.id}
+        to={`/project?step=${encodeURIComponent(step.id)}`} aria-current={viewed === step.id ? 'step' : undefined}>
+        <span>{step.position}. {step.title}</span><small>{step.id === work.focus_step_id ? 'Bob’s focus · ' : ''}{stepState[step.state]}</small>
+      </Link>)}
+      {!!tasks.length && <details className="work-unorganised"><summary>Tasks to organise · {tasks.length}</summary><TaskLinks tasks={tasks} people={people} /></details>}
+    </>
+  }
+  function areaRow(area: ProjectWork['areas'][number]) {
+    return <section className="work-area" key={area.id} aria-label={area.name}><div className="foundation-heading"><h3><Link to={`/areas/${area.slug}`}>{area.name}</Link></h3><PhasePill phase={area.phase}/></div>{rows(area.id)}</section>
+  }
+  return <details id="full-project-plan" className="full-project-plan" open={!viewed || undefined} key={viewed ? 'selected' : 'unselected'}>
+    <summary>Full plan · {work.steps.length} steps</summary>
+    {rows(null)}{work.areas.filter(a => !a.archived_at).map(areaRow)}
+    {!!archived.length && <details id="archived-work-areas"><summary>Archived Areas · {archived.length}</summary>{archived.map(areaRow)}</details>}
+    <Link className="btn" to="/areas">Manage areas</Link>
+  </details>
+}
+
+function StartOrResume({ projectId, hasWork }: { projectId: string; hasWork: boolean }) {
+  const [retry, setRetry] = useState(0)
+  const { data, error, loading } = useAsync(() => db.getProjectStartingPoint(projectId), [projectId, retry])
+  if (loading) return <p role="status">Checking saved project work…</p>
+  if (error || !data) return <p role="alert">Saved project work could not be checked. <button className="btn" onClick={() => setRetry(n => n + 1)}>Retry</button></p>
+  if (!hasWork && !data.pending && !data.hasSources) return <ProjectStart photoUrl="/project?media=photos" />
+  return <div className="current-plan-step"><h2>{data.pending ? 'Plan proposal' : 'Continue planning'}</h2>
+    <p>{data.pending?.summary || 'Use the existing project records to prepare the plan.'}</p>
+    <button className="btn" onClick={() => openBobWithDraft(data.pending ? 'Show me the pending plan proposal.' : 'Help me plan the next step using the saved project records.')}>Discuss with Bob</button>
+  </div>
+}
+
+export function ProjectStepWorkspace({ projectId, building }: { projectId: string; building: boolean }) {
+  const version = useProjectVersion(), [local, setLocal] = useState(0), [params] = useSearchParams()
+  const [adding, setAdding] = useState<WorkStep | null>(null)
+  const { data: work, error, loading } = useAsync(() => db.getProjectWork(projectId), [projectId, version, local])
+  const { data: crew } = useAsync(() => db.getPeople(), [projectId, version])
+  const people = new Map(crew?.map(person => [person.id, person.name]) ?? [])
+  const requested = params.get('step')
+  const step = work?.steps.find(s => s.id === (requested ?? work.focus_step_id))
+  useBobSurface(projectId, step ? { surface:'project', planStepId:step.id } : null, step ? `Plan Step · ${step.title}` : 'Project', 2)
+  useEffect(() => {
+    if (requested && step?.id === requested) document.getElementById('project-plan')?.scrollIntoView({ block: 'start' })
+  }, [requested, step?.id])
+  if (error || (!work && !loading)) return <div role="alert">Project plan could not be loaded. <button className="btn" onClick={() => setLocal(v => v+1)}>Try again</button></div>
+  if (!work) return <p role="status">Loading project plan…</p>
+  const unplanned = !building && work.status === 'not_initialized' && !work.revision && !work.steps.length
+  const hasWork = work.areas.length > 0 || work.unorganised_tasks.length > 0
+  return <>
+    <section className="card project-plan-panel" id="project-plan" tabIndex={-1} aria-label="Project plan">
+      {requested && !step && <p role="status">This step is unavailable in the current plan. <Link to="/project">Return to project focus</Link></p>}
+      {step ? <CurrentStep key={step.id} work={work} step={step} people={people} onAdd={() => setAdding(step)} />
+        : unplanned ? <StartOrResume projectId={projectId} hasWork={hasWork} />
+        : <div className="current-plan-step"><h2>{work.steps.length ? 'Project plan' : 'No approved steps yet'}</h2>
+          <p>{work.steps.length ? 'Choose a step to see its work and sources.' : 'Discuss the next step with Bob using your saved project work.'}</p>
+          {!work.steps.length && <button className="btn" onClick={openBobForCurrentSurface}>Ask Bob about the plan</button>}
+        </div>}
+      {(!unplanned || hasWork) && <PlanList work={work} viewed={step?.id} people={people} />}
+    </section>
+    <DrawingRequests key={projectId} projectId={projectId} stepId={step?.id} />
+    {adding && <TaskModal areas={work.areas.filter(a => !a.archived_at)} areaId={adding.area_id ?? undefined} stepId={adding.id}
+      onClose={() => setAdding(null)} onDone={() => {setAdding(null); setLocal(v => v+1)}} />}
+  </>
 }

@@ -5,9 +5,9 @@ import type { DesignIntent } from '../../supabase/functions/_shared/project-desi
 import './StorageBoxDrawing.css'
 
 /** The data layer has already validated this exact immutable Solution revision. */
-export function SolutionConcept({ intent, revision, projectId, solutionId, contextActive, areaId }: { intent: DesignIntent; revision: number; projectId: string; solutionId: string; contextActive: boolean; areaId: string | null }) {
+export function SolutionConcept({ intent, revision, projectId, solutionId, contextActive, areaId, readOnly = false, initialView = null }: { intent: DesignIntent; revision: number; projectId: string; solutionId: string; contextActive: boolean; areaId: string | null; readOnly?: boolean; initialView?: string | null }) {
   const viewport = useRef<HTMLDivElement>(null)
-  const [selected, setSelected] = useState<string | null>(null), [zoom, setZoom] = useState(1)
+  const [selected, setSelected] = useState<string | null>(initialView), [zoom, setZoom] = useState(1)
   if (!intent.model) return null
   const viewId = intent.model.views.some(v => v.id === selected) ? selected! : intent.model.views[0].id
   const result = conceptView(intent, viewId), svg = conceptSvg(intent, viewId)
@@ -25,7 +25,7 @@ export function SolutionConcept({ intent, revision, projectId, solutionId, conte
       <button className="btn" onClick={() => setZoom(1)}>Fit concept</button>
     </div>
     <div ref={viewport} className="box-drawing-viewport" tabIndex={0} aria-label="Concept drawing viewport"><div className="box-drawing-sheet" style={{ width: `${zoom * 100}%` }} dangerouslySetInnerHTML={{ __html: svg }} /></div>
-    {!!result.shapes.length && <ModelFeedbackContext projectId={projectId} solutionId={solutionId} revision={revision} viewId={viewId} areaId={areaId} viewport={viewport} enabled={contextActive} />}
+    {!readOnly && !!result.shapes.length && <ModelFeedbackContext projectId={projectId} solutionId={solutionId} revision={revision} viewId={viewId} areaId={areaId} viewport={viewport} enabled={contextActive} />}
     {!result.shapes.length && <p className="solution-attention">No components can be shown in this view. Check unknown dimensions and the section position.</p>}
     <div className="box-parts" tabIndex={0} aria-label="Concept dimensions"><table>
       <caption>Visible components · concept dimensions in mm</caption>

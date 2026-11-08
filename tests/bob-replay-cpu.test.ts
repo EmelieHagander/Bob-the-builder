@@ -20,7 +20,7 @@ test('a token prefix is whole characters, fits, and makes real progress', () => 
 test('summarized history pages reconstruct the exact source without re-encoding all of it per page', async () => {
   const tool = (name: string) => ({ type: 'function' as const, function: { name, description: name, parameters: { type: 'object' } } })
   const catalog = { definition: () => ({ metadata: { continuation_input_tokens: 20000, context_input_ceiling_tokens: 400000, continuation_summary_tokens: 1600,
-    retained_tool_exchanges: 1, continuation_retention_version: 2 } }), role: () => ({ systemMessage: 'Role.' }), tool } as unknown as AiCatalogSession
+    retained_tool_exchanges: 1, continuation_retention_version: 2 } }), role: () => ({ systemMessage: 'Role.', providerAdapter: 'openai-responses-v1' }), tool } as unknown as AiCatalogSession
   const big = (i: number) => JSON.stringify({ status: 'ok', rows: Array.from({ length: 900 }, (_, k) => ({ id: `part-${i}-${k}`, name: 'Gavel stolpe ' + k, l_mm: 1800 + k })) })
   const segments: { after: number; text: string; has_more: boolean }[][] = []
   let n = 0
@@ -63,7 +63,7 @@ test('replaying a long journal stays linear: retry markers are looked up, not sc
 test('a resumed job reads recorded summary page boundaries instead of re-tokenizing each batch', async () => {
   const tool = (name: string) => ({ type: 'function' as const, function: { name, description: name, parameters: { type: 'object' } } })
   const catalog = { definition: () => ({ metadata: { continuation_input_tokens: 20000, context_input_ceiling_tokens: 400000, continuation_summary_tokens: 1600,
-    retained_tool_exchanges: 1, continuation_retention_version: 2 } }), role: () => ({ systemMessage: 'Role.' }), tool } as unknown as AiCatalogSession
+    retained_tool_exchanges: 1, continuation_retention_version: 2 } }), role: () => ({ systemMessage: 'Role.', providerAdapter: 'openai-responses-v1' }), tool } as unknown as AiCatalogSession
   const big = (i: number) => JSON.stringify({ status: 'ok', rows: Array.from({ length: 900 }, (_, k) => ({ id: `part-${i}-${k}`, name: 'Gavel stolpe ' + k, l_mm: 1800 + k })) })
   const run = async (pageBoundaries: (source: string, compute: () => Promise<(number | null)[]>) => Promise<unknown>) => {
     const inputs: string[] = []

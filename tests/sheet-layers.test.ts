@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from './support/pglite.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
+import { isSyntheticSchemaMigration } from './support/project-schema.ts'
 import { readSheetLayer, sheetLayerForm, sheetLayerInput, sheetPurchaseCount, SHEET_LAYER_METHOD } from '../src/data/sheetLayers.ts'
 
 const pg = new PGlite()
@@ -65,7 +66,7 @@ before(async () => {
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('ownerA','A','Owner','OA',$1),('otherB','B','Other','OB',$2)", [owner, other])
   await setupSharedSocial(pg)
   const migrations = new URL('../supabase/migrations/', import.meta.url)
-  for (const name of (await readdir(migrations)).filter(name => name.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(name, migrations), 'utf8'))
+  for (const name of (await readdir(migrations)).filter(isSyntheticSchemaMigration).sort()) await pg.exec(await readFile(new URL(name, migrations), 'utf8'))
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('bothA','A','Both','BA',$1),('bothB','B','Both','BB',$1)", [both])
   await pg.exec("insert into bob.areas(id,project_id,slug,name) values('areaA','A','wall','Wall work'),('siblingA','A','other','Other work'),('areaB','B','private','Private')")
   await pg.exec("insert into bob.tasks(id,area_id,name) values('sheet-task','areaA','Fit chosen board'),('other-task','areaB','Other task')")

@@ -119,6 +119,20 @@ explicitly; they cannot silently become a new setting invented from text.
 The prompt asks the image model to preserve the photographed setting, perspective
 and existing features. The result remains an illustrative proposal.
 
+Saved CAD write receipts also have an exact-revision chat preview in the
+2026-11-04 implementation. `BobChatDrawings` reads through
+`database.getProjectDrawingPreview`: authenticated project/revision metadata,
+source status and one saved SVG view, never the STEP export or full CAD geometry.
+The saved camera order chooses the first available isometric view, otherwise a
+saved orthographic view. Reads start near the visible transcript; bytes/URLs are
+not copied into message state. Opening the shared zoom modal rechecks the source.
+Historical/archived revisions retain their labels; changed sources show a warning;
+unavailable sources withhold pixels; read/image failures have recovery and the
+existing exact drawing link remains. Displaying a saved view does not record a
+Construction presentation, owner approval or fabrication readiness. This consumes
+existing drawing revision 3 as well as future receipts; no CAD or AI regeneration
+is needed. [Verification/publication status](p25-live-window-anchor-followup-2026-11-04.md#code-owned-rita-handoff-and-inline-drawing-preview).
+
 The assistant bubble shows saved media write receipts as image previews. Originals
 open in the shared image modal and survive transcript reload. Generation continues
 to use the existing private-media reserve/upload/finalise path and project write
@@ -478,3 +492,20 @@ Pin controls live only in the Project image gallery. Home and Project headers us
 public URLs or storage permission changes. Account reads never switch the active
 Project. Blob URLs are revoked on unmount/scope changes; failed/revoked downloads
 fall back without blocking navigation. Original uploads remain unchanged.
+
+
+## Image target recovery — 2026-11-04
+
+For executions with `operationPathsVersion:1`, the caller-authorized target is
+checked before paid generation. Generation identity includes the prompt, exact
+reference-image versions and pinned image-role/catalog configuration, excluding
+title, purpose and attachment target. The existing operation journal records
+that generation before dispatch. A successful PNG is saved privately to its
+project and finalized before linking to the requested work target. A target
+removed concurrently can therefore leave a ready project image and an honest
+partial attachment result. Repairing only the target reuses that media identity;
+a pending upload must be recovered/finalized first. Access and target relation
+are checked again; no attachment repair grants project access or CAD approval.
+The image-operation map and pending identity survive worker checkpoints without
+copying pixels into component state. These semantics do not deduplicate distinct
+owner turns globally. [Verification](bob-runtime-path-audit-2026-11-04.md#corrections).

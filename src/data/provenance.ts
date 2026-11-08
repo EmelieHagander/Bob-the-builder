@@ -9,6 +9,7 @@ export interface ProjectSource {
   retrievedAt: string
   updatedAt: string | null
   /** Legacy values must not be promoted to measured/specification evidence. */
+  visual?: { kind: 'cad' | 'concept'; ref: string; revision: number; view: string }
   truth: TruthState
 }
 
@@ -33,5 +34,18 @@ export interface AnswerEvidence {
   references?: ReferenceEvidence[]
   /** Caller-hydrated entry focus; retained with the owner's answer, never shared chat. */
   currentView?: import('../domain/bobScreen.ts').CurrentView
+  /** Server-written delivery notices inside the answer text. */
+  notices?: AnswerNotice[]
+}
+/** A server-written notice the answer text contains verbatim (owner, 2026-11-06).
+ * The chat replaces it with one short line; the stored text stays for debugging.
+ * failed: the turn stopped; only listed writes were saved. uncertain: some saves
+ * are unverified. info: a side note (cost, sync) hidden without replacement. */
+export interface AnswerNotice {
+  kind: 'failed' | 'uncertain' | 'info'
+  code: string
+  text: string
+  /** Owner-actionable gaps a stopped drawing still needs. */
+  missing?: string[]
 }
 export interface ReferenceEvidence { id:string;title:string;url:string;version:string;reviewedAt:string }

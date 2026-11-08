@@ -30,6 +30,25 @@ test('exact saved version is exported once, cached and reused without an AI or p
  for(let n=0;n<4;n++)assert.equal((await body(await c.handler(request()))).body.status,'ready')
  assert.equal(c.exports(),1);assert.equal(c.attempts(),1)
 })
+test('a saved drawing with side and rear cameras opens the same pinned 3D geometry', async () => {
+ const source = { ...recipe, views: ['front', 'left', 'back', 'bottom', 'isometric_front_left', 'isometric_back_right'] }
+ const sourceHash = await cadViewerSourceHash(source)
+ const c = context()
+ c.deps.authorize = async () => source
+ c.deps.claim = async (requested, hash) => {
+  assert.deepEqual(requested, pin)
+  assert.equal(hash, sourceHash)
+  // The geometry fixture comes from the native worker. Cameras change the
+  // drawing's source hash, while the saved solid and its edges stay identical.
+  return { status: 'ready', payload: { ...geometry, source_hash: sourceHash } }
+ }
+ const result = await body(await c.handler(request()))
+ assert.equal(result.status, 200)
+ assert.equal(result.body.status, 'ready')
+ assert.deepEqual(result.body.source, pin)
+ assert.deepEqual(result.body.geometry.definitions, geometry.definitions)
+ assert.equal(c.exports(), 0)
+})
 test('simultaneous viewers share a claim and polls do not trigger more exports',async()=>{
  const c=context();let complete!:()=>void
  const render=c.deps.render

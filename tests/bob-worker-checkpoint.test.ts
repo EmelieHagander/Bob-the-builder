@@ -24,7 +24,7 @@ type Step = (o: OpenAIServiceOptions) => OpenAIServiceResponse<string>
 const ANSWER = 'Konrad sparade lådan och servern kontrollerade den. Ritningen återstår.'
 
 async function turn(opts: { finalAnswer: boolean; bob: Step[]; konrad: Step[]; budget?: ReturnType<typeof createBobModelBudget>;
-  checkpoint?: { state?: BobAnswerState; onSave?: (state: BobAnswerState, budget: ReturnType<typeof createBobModelBudget>) => void }; yieldOnFinal?: boolean; workerCheckpoint?: boolean; journal?: BobJournal; failSave?: boolean }) {
+  checkpoint?: { state?: BobAnswerState; onSave?: (state: BobAnswerState, budget: ReturnType<typeof createBobModelBudget>) => void; afterWorkerStep?: () => void }; yieldOnFinal?: boolean; workerCheckpoint?: boolean; workerGates?: boolean; journal?: BobJournal; failSave?: boolean; toolEvents?: any[]; compactToolState?:boolean }) {
   const catalog = catalogFixture(), projectId = 'p', message = 'Konrad, gör lådan 500 mm bred.', hasAccess = async () => true
   const lookup = createProjectLookup(projectId, async (_p, input) => ({ data: { records: input.dataset === 'project' ? [{ id: projectId, name: 'Lådan' }] : [], related: [], truncated: false }, error: null }) as any, undefined, undefined, undefined, { unlimitedWork: true })
   const writer = createProjectWriter(projectId, message, async () => { throw Error('No write requested') }, async () => ({ data: [], error: null }), async () => ({ data: [], error: null }))
@@ -46,13 +46,16 @@ async function turn(opts: { finalAnswer: boolean; bob: Step[]; konrad: Step[]; b
     }) }
   }
   const budget = opts.budget ?? createBobModelBudget(1, 24, undefined, stopPolicy(opts.finalAnswer))
-  const requested: OpenAIServiceOptions[] = [], dispatched: OpenAIServiceOptions[] = [], observations: any[] = []
+  const requested: OpenAIServiceOptions[] = [], dispatched: OpenAIServiceOptions[] = [], observations: any[] = [], toolEvents: any[] = []
   let bobSteps = 0, konradSteps = 0
   const result = await runProjectAnswer({ projectId, userId: 'owner', message, lookup, writer, hasAccess, constructionTools, aiCatalog: catalog,
     unlimitedWork: true, corePreload: true, readToolPolicy, completeRequest: true, deadline: Infinity, observe: v => observations.push(v),
+    onTool: (v: unknown) => { toolEvents.push(v); opts.toolEvents?.push(v) },
+    compactToolState:opts.compactToolState,
     ...(opts.finalAnswer ? { finalAnswer: true } : {}),
     ...(opts.workerCheckpoint ? { workerCheckpoint: true } : {}),
-    ...(opts.checkpoint ? { checkpoint: { state: opts.checkpoint.state, save: async (state: BobAnswerState) => opts.checkpoint!.onSave?.(structuredClone(state), budget) } } : {}),
+    ...(opts.workerGates ? { workerGates: true } : {}),
+    ...(opts.checkpoint ? { checkpoint: { state: opts.checkpoint.state, save: async (state: BobAnswerState) => opts.checkpoint!.onSave?.(structuredClone(state), budget), afterWorkerStep: opts.checkpoint.afterWorkerStep } } : {}),
     // The production dispatch: every call shares one budget; tool_choice 'none' marks the final answer.
     callModel: catalogCall(async options => opts.journal ? opts.journal.run('model:' + options.functionName, options, () => model(options)) : model(options), catalog) } as any)
   async function model(options: OpenAIServiceOptions): Promise<OpenAIServiceResponse<string>> {
@@ -65,7 +68,7 @@ async function turn(opts: { finalAnswer: boolean; bob: Step[]; konrad: Step[]; b
         return opts.bob[bobSteps++](options)
       }, options.aiFunction ?? options.functionName, undefined, options.tool_choice === 'none')
   }
-  return { result, requested, dispatched, budget, observation: observations.at(-1), constructionCalls }
+  return { result, requested, dispatched, budget, observation: observations.at(-1), constructionCalls, toolEvents }
 }
 const handOver: Step = () => ({ ...reply(.1), data: null, responseId: 'b1', toolCalls: [call('h1', 'ask_structure_worker', { request: 'Konrad, gör lådan 500 mm bred.' })] })
 const reads = (n: number): Step => () => ({ ...reply(.1), data: null, responseId: 'k' + n, toolCalls: [call('k' + n + 'c', 'read_construction_draft', { page: n })] })
@@ -74,6 +77,62 @@ const reports: Step = () => ({ ...reply(.1, 'Lådan är sparad.'), responseId: '
 const stalls: Step = () => { throw new BobContinuation('yield', 'segment_wall') }
 const answer: Step = () => ({ ...reply(.05, ANSWER), responseId: 'b-final', outputPhase: 'final_answer' })
 const konrad = (list: OpenAIServiceOptions[]) => list.filter(o => o.functionName === 'structure-worker')
+
+test('CPU segments resume one saved specialist step at a time without duplicate dispatches or writes', async () => {
+  const store = { entries: [] as JournalEntry[], async save(entry: JournalEntry) { this.entries.push(structuredClone(entry)) } }
+  let saved: { state: BobAnswerState; journal: ReturnType<BobJournal['exportState']> } | undefined
+  const constructionCalls: string[] = []
+  const scripts = [[reads(1)], [reads(2)], [saves], [reports]]
+  let yields = 0
+  const toolEvents: any[] = []
+  for (let claim = 0; claim < scripts.length; claim++) {
+    const journal = createBobJournal(store, Infinity, Date.now, new Map(), { unlimitedWork: true })
+    if (saved) journal.restoreState(saved.journal)
+    const run = () => turn({ finalAnswer: true, workerCheckpoint: true, journal, toolEvents,compactToolState:true,
+      bob: claim === 0 ? [handOver] : [answer], konrad: scripts[claim],
+      checkpoint: { state: saved?.state,
+        onSave: state => { saved = { state: structuredClone(state), journal: journal.exportState() } },
+        afterWorkerStep: () => { yields++; throw new BobContinuation('yield', 'worker_step') } } })
+    if (claim < 3) {
+      await assert.rejects(run, e => e instanceof BobContinuation && e.message === 'worker_step')
+      assert.equal(saved!.state.worker!.progress.step, claim)
+      assert.equal((saved!.state.worker!.session as any).version,3)
+      assert.deepEqual((saved!.state.worker!.session as any).snapshot.tools,[])
+      assert.equal(saved!.state.toolbox.version,3)
+      constructionCalls.push(saved!.state.worker!.progress.calls.at(-1)!.tool)
+    } else {
+      const done = await run()
+      assert(done.result.ok); assert.equal(done.result.answer, ANSWER)
+      assert.equal(saved!.state.worker, undefined)
+    }
+  }
+  assert.equal(yields, 3)
+  const workerEventKeys = toolEvents.filter(v => v.index >= 100).map(v => `${v.step}:${v.index}`)
+  assert(workerEventKeys.length >= 3)
+  assert.equal(new Set(workerEventKeys).size, workerEventKeys.length, 'specialist diagnostic keys cannot overwrite earlier claims')
+  assert.deepEqual(constructionCalls, ['read_construction_draft', 'read_construction_draft', 'save_construction_draft'])
+  assert.equal(store.entries.filter(e => /^model:structure-worker:\d+$/.test(e.key)).length, 4)
+  assert.equal(store.entries.filter(e => /^model:ask-bob:\d+$/.test(e.key)).length, 2)
+})
+
+test('an unavailable Konrad is not started again in the same turn, including across checkpoints', async () => {
+  const states: BobAnswerState[] = []
+  const failed: Step = () => ({ success: false, data: null, model: 'fixture', usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, error: 'Network error: The signal has been aborted' })
+  const handOverAgain: Step = () => ({ ...reply(.1), data: null, responseId: 'b2', toolCalls: [call('h2', 'ask_structure_worker', { request: 'Samma jobb igen.' })] })
+  const first = await turn({ finalAnswer: true, workerCheckpoint: true, bob: [handOver, handOverAgain, answer], konrad: [failed],
+    checkpoint: { onSave: s => { states.push(s) } } })
+  assert(first.result.ok, JSON.stringify(first.result))
+  assert.equal(konrad(first.dispatched).length, 1, 'the second hand-over must not dispatch a model')
+  const refused = first.requested.filter(o => o.functionName === 'ask-bob').at(-1)!.messages!.find(m => m.role === 'tool' && m.tool_call_id === 'h2')
+  assert.equal((JSON.parse(String(refused?.content)) as any).reason, 'failed_earlier_this_turn')
+  const afterFailure = states.find(s => s.failedWorkers?.includes('structure') && !s.result)
+  assert(afterFailure, 'the failure latch survives a segment restart')
+
+  const resumed = await turn({ finalAnswer: true, workerCheckpoint: true, bob: [handOverAgain, answer], konrad: [],
+    checkpoint: { state: structuredClone(afterFailure) } })
+  assert(resumed.result.ok, JSON.stringify(resumed.result))
+  assert.equal(konrad(resumed.dispatched).length, 0, 'restored turn must not restart the failed specialist')
+})
 
 async function interrupted(workerCheckpoint: boolean) {
   const saves_: BobAnswerState[] = []
@@ -152,4 +211,23 @@ test('with the real journal, a resume replays only the interrupted step and disp
   assert.deepEqual(store.entries.filter(e => e.key.startsWith('model:structure-worker:')).map(e => e.key.split(':').at(-1)), ['0', '1', '2', '3'])
   assert.deepEqual(konrad(resumed.dispatched).map(o => o.previousResponseId), ['k3'])
   assert.deepEqual(resumed.constructionCalls.slice(0, 1), ['save_construction_draft'])
+})
+
+// Owner decision 2026-11-07 (decision 3): with worker gates only the identical
+// failed request is refused again; a changed request may start a new job.
+test('with worker gates a failed Konrad refuses only the identical request; a changed request starts a new job', async () => {
+  const states: BobAnswerState[] = []
+  const failed: Step = () => ({ success: false, data: null, model: 'fixture', usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, error: 'Network error: The signal has been aborted' })
+  const same: Step = () => ({ ...reply(.1), data: null, responseId: 'b2', toolCalls: [call('h2', 'ask_structure_worker', { request: 'Gör lådan 500 mm bred.' })] })
+  const changed: Step = () => ({ ...reply(.1), data: null, responseId: 'b3', toolCalls: [call('h3', 'ask_structure_worker', { request: 'Läs lådan igen och gör den 500 mm bred, en del i taget.' })] })
+  const first = await turn({ finalAnswer: true, workerCheckpoint: true, workerGates: true,
+    bob: [() => ({ ...reply(.1), data: null, responseId: 'b1', toolCalls: [call('h1', 'ask_structure_worker', { request: 'Gör lådan 500 mm bred.' })] }), same, changed, answer],
+    konrad: [failed, reports], checkpoint: { onSave: s => { states.push(s) } } })
+  assert(first.result.ok, JSON.stringify(first.result))
+  const outputs = (id: string) => JSON.parse(String(first.requested.filter(o => o.functionName === 'ask-bob').flatMap(o => o.messages ?? []).find(m => m.role === 'tool' && m.tool_call_id === id)?.content))
+  assert.equal(outputs('h2').reason, 'failed_earlier_this_turn', 'the identical request is refused without a model call')
+  assert.notEqual(outputs('h3').reason, 'failed_earlier_this_turn', 'a changed request is not refused')
+  assert.equal(konrad(first.dispatched).length, 2, 'the changed request dispatched a second Konrad job')
+  const latch = states.map(s => s.failedWorkers ?? []).find(f => f.length)
+  assert.ok(latch && latch.every(key => /^structure_r_[0-9a-f]{16}$/.test(key)), JSON.stringify(latch))
 })

@@ -137,6 +137,25 @@ himself. Manifests with `bob.tools` `build_workers_version` 1
   Steps, composes shells from pieces and handles drawing gaps. She is no longer
   the drawing reviewer: **code alone checks a drawing**
   ([CAD adapter](cad-adapter.md#code-drawing-check)).
+- **Code-owned Rita identity — 2026-11-04 implementation.** New execution
+  identities pin `drawingBindingVersion:1`. Bob's exact successful Construction
+  reads and Konrad's saved-record readback carry IDs/revisions in code. The
+  caller-authorized resolver retains the unique current linked drawing; a
+  focused drawing disambiguates identities. With no explicit read, only a
+  complete, unique current Construction list can establish a source. It never
+  chooses a first row, a newer revision after pinning, or a completed historical
+  request. The source revision, destination revision, work links and active
+  request form one durable CAD binding. Rita's native drawing/read schemas hide
+  routing IDs; forged identity arguments are refused and server arguments are
+  supplied before the domain handler. The model adapter reapplies this binding
+  after catalog reconstruction. Allocated/reused request IDs survive checkpoints;
+  saved requirements resume from their own request. Fresh dispatch checks and the
+  existing atomic writer fence source/destination changes and cancellation.
+  This is one Construction drawing operation: shell/piece and work-link writers
+  are excluded from this scoped bench until they have their own typed binding;
+  they cannot bypass it. Earlier pinned jobs retain their original interface.
+  The catalog role and hand-over remain a plain colleague request, without
+  geometry or model-authored authority IDs. [Evidence and rollout](p25-live-window-anchor-followup-2026-11-04.md#code-owned-rita-handoff-and-inline-drawing-preview).
 - **Mattias** keeps the materials shelf and now works the same way.
 - **Bob hands over no values.** Each hand-over (`ask_structure_worker`,
   `ask_drawing_worker`, `ask_materials_worker` v2) takes one `request`, written as
@@ -186,7 +205,10 @@ himself. Manifests with `bob.tools` `build_workers_version` 1
   its steps in Bob's turn checkpoint (`worker` in the answer state: hand-over index, worker
   tool session, chain id, pending tool results, calls and receipts), so a resume continues
   the job instead of replaying it from the first step; the same job hit "CPU Time exceeded"
-  on every resume. A job the spending stop ends reports `paused_at_limit`
+  on every resume. A job the spending stop ends reports `paused_at_limit`,
+  one that reaches its context ceiling `context_limit`, and one whose turn
+  state reaches the checkpoint size limit `state_limit` (2026-11-08; a first
+  step already past the ceiling is a failed worker), each
   with the same receipts and readback when the job is pinned to the
   [final answer](ask-bob-conversations.md#final-answer-past-stop) (installed 2026-11-01).
 
@@ -199,6 +221,25 @@ checks drawings. Source: `bob-workers.ts`, the toolbox setup in
 (`bob.tools.check_reads`: the construction, a drawing delivery, a record section)
 load from his first step and are never picker candidates; box run 13 cost USD 0.86
 ([record](foundation-verification.md#build-team-cost-2026-10-31)).
+
+**Konrad works in saved pieces — installed 2026-11-03; live-model acceptance pending**
+([deployment record](konrad-piece-progress-release-2026-11-03.md)).
+*For constructions, superseded 2026-11-07 for jobs pinned to
+`construction_sketch_version` 1: Konrad builds in a private sketch and saves
+once per assignment ([sketchbook, §6](bob-sketchbook-design-2026-11-07.md#6-built-2026-11-07)).
+The one-save-per-batch and readback rules below still apply to that commit.* New claimed turns pinned
+to `worker_piece_progress_version` 1 keep Konrad's existing construction tools,
+save ledger, code check and workpad. His role now chooses one natural affected
+wall/opening or comparable workpiece at a time on the same existing Construction;
+unrelated saved posts are preserved. Code executes at most one construction
+mutation per model tool batch, answers other batch calls as deferred, then
+reopens the **exact saved current revision** before the next model step. The
+readback is returned as a tiny verified/unknown status; absent, stale, archived
+or mismatched readback pauses the job with the write receipt intact. A model
+cannot turn that receipt into proof that all requested windows exist or that
+any part is structurally approved. The existing write-state check is reused;
+the owner reviews the aggregate design through Bob, not every stud. Existing
+pinned jobs and Rita/Mattias are unchanged; no new paid model is introduced.
 
 <a id="konrad-lean"></a>
 **Konrad's lean construction — installed 2026-11-01 (owner decisions; texts
@@ -248,6 +289,109 @@ tokens, and every box construction was glue only or screws only by chance.
   ([install](foundation-verification.md#finder-save-fixes-install-2026-11-01)).
 
 Pinned manifests keep the former schemas, rule fastener and lookups.
+
+<a id="konrad-lean-writing"></a>
+**Konrad writes the construction, code writes what follows — published
+2026-11-07 ([#502](bob-runtime-path-audit-2026-11-04.md#publication-502-2026-11-07))** (`tools.save_construction_draft`
+`lean_construction_version` 1, owner: "Kör B"; needs `default_zero_version` 1,
+`joint_fastener_version` 2, the FORM refinement and both sketch stores).
+Entry turn 2026-11-07: an 11-part wall was 26,590 characters Konrad typed in
+75–120 s; half were bindings and derived nodes, a quarter joints
+([record](bob-runtime-path-audit-2026-11-04.md#lean-construction-2026-11-07)).
+
+- **Formulas.** A number in the recipe, or in an upserted definition or part,
+  may be a formula over parameter node names (`"D - st"`, `"(h - hdr) / two"`):
+  `+ - * /`, parentheses, spaces around a minus sign. Code compiles each
+  operation to a derived node named `fx.<hash>` (the same formula is the same
+  node in every save) and binds the field, so the saved graph, provenance and
+  read-back are unchanged. Numbers are not formula syntax: each needs a named
+  decision or measurement with its reason. A repeat's `spacing_mm` takes a
+  formula. Fields get their real values from the graph before the recipe is
+  checked. A formula replaces a binding for its field. A binding to a path
+  the recipe lacks is refused and named (`binding_path_unknown`). A number
+  written where code computes the field from a node is refused, with the
+  computed value; the saved number sent again is computed anew and listed in
+  the answer (`recomputed`). Compilation stops at the plan's 1,024 nodes
+  (`formula_too_large`). Source: `cad-formulas.ts`.
+- **Joint rules.** `joint_rules` is Konrad's joining decision for two
+  definitions (fasteners and reason); code writes one joint, id `jr.<a>.<b>`,
+  for every pair of such parts touching face to face that has no joint, with the
+  faces in local coordinates, and the answer lists each joint it wrote and its
+  rule (`rule_joints`). Touching parts that must not be joined that way (resting,
+  sliding, removable) go in the rule's `except`; they stay
+  `contact_without_joint` until they get their own joint, as does any touching
+  pair without a rule. Existing parts are joined as the rule declares;
+  reference geometry is never joined. In a part edit a rule applies only to
+  the parts the edit adds, names or moves (computed place or size changed), so
+  an earlier `except` holds for the rest; a save or an edit with only rules
+  applies to every touching pair. Where a rule applies, code's joints take its
+  fasteners and reason, and code's joint of a pair it names in `except` goes;
+  `except` is sent again whenever the rule is. In saves and part edits a joint
+  code wrote follows its parts: written again when they moved, removed when
+  they are gone, when one becomes reference geometry, or when both are still
+  boxes that no longer touch (`code_joints_removed`). A role or parameter
+  change through its own tool leaves them until the next part edit; the check
+  names a joint whose faces no longer meet. Rules that write nothing say so
+  (`rule_note`; an edit with only such rules is refused as
+  `rules_wrote_nothing`). Since 2026-11-08 (`joint_rule_store_version` 1,
+  owner decision) the rules are **stored with the construction**
+  (`bob.artifact_construction_joint_rules`, one set per revision, inherited
+  by revisions written without one): a save states the whole set; a part edit
+  keeps the stored rules, adds those it sends and replaces a stored rule with
+  the same id or definition pair (at most 32), drops those of a removed
+  definition, and applies them to the parts it adds, changes or
+  moves without being sent again. Reads show them (overview and the joints
+  view). Before, rules lasted only for the call they came with, and Konrad
+  kept typing joints by hand.
+  Source: `construction-joint-rules.ts`.
+- **FORM mapping kept by code.** A part no mapping names goes to the active
+  concept component whose envelope holds it, only when exactly one does; a
+  removed part leaves its mapping;
+  `form_assign` (part edits) moves a part on purpose. A part outside every
+  component, or inside several, is named, not guessed. A part edit now carries
+  the mapping to the database (`20261107150000_construction_edit_form_mapping.sql`),
+  whose readiness seam validates and stores it for the new revision.
+- **A write refused for how it was written stays in the sketch.** Only a text
+  that is not plain prose, a formula or a joint rule (owner review 2026-11-07):
+  the rest is kept in the sketch with the issue, so the next call sends only the
+  correction, and commit checks everything again. A construction error
+  (geometry, concept, readiness, collisions) is refused as before and nothing
+  is kept: a joint-rule refusal, or a number written where a node computes
+  the field, is returned only once the construction passes its checks. A
+  formula that cannot be read hides the geometry, so it is kept and the
+  commit checks everything again. A kept sketch is never a
+  saved construction. A saved construction can be
+  revised whole in a keyed sketch (`save_construction_draft` with its
+  `record_id`, mode sketch), committed with its `new_key`; the sketch keeps the
+  construction and revision of its first call, so a commit never overwrites a
+  newer revision, and it cannot continue or be committed as another
+  construction (`operation_scope_changed`). A refused direct write is kept
+  only when no sketch work is open (for a save, under its key); a second
+  refused try replaces the first, and discards it when it cannot be kept
+  itself. A keyed sketch of a saved construction is fenced to it whether or
+  not the job is bound to one. The sketch of a refused part edit is dropped
+  when a saved change covers it (its ids, rules, assignments and text), and
+  named as open otherwise.
+- **What follows from a part removal.** Removing a part removes its role, its
+  joints, its bindings and formula nodes, and the material of a removed
+  definition; the answer lists the roles, joints and materials
+  (`removed_with_parts`). A node Konrad wrote stays: he removes it in the same
+  edit, or the edit is refused and names it (`parameter_unused_node`).
+- **Roles.** `quantity_policy` follows from the role and is not written; a
+  repeat's copies take the role given for the repeat's id.
+- **A save names its target** (owner decision 2026-11-08, pinned with the
+  stored joint rules):
+  in Konrad's job `save_construction_draft` takes `source_ref` — the
+  construction's reference revises it whole; `null` saves a new construction,
+  also in a job bound to another. Before, a second "new" construction in one job
+  was committed over the first (deep audit). A job working on another
+  construction stays on it after saving a new one. A sketch answer names the
+  target (`revises`); a save's receipt says `created` or `updated`; a whole
+  save names the stored rules it leaves out (`joint_rules_dropped`).
+
+The cost ledger prices a Claude answer cut by our own deadline from its known
+input and the output that streamed, marked `cost_basis =
+streamed_output_estimate` (a lower bound: thinking streams as a summary).
 
 <a id="materials-worker"></a>
 **Superseded for new manifests by [the build team](#build-team) (built
@@ -1147,3 +1291,41 @@ compile/save/decision guides now agree that Task links are staged and applied
 atomically on approval, and distinguish a specific apply instruction from a
 request for proposals. The September 24/25 generic CAD integration supersedes
 the original catalog release's future-tense geometry section above.
+
+
+## Code-owned worker operations — 2026-11-04
+
+New executions pin `operationPathsVersion:1`. Construction/material jobs keep
+one exact saved source after selection. An ordinary overview or navigation
+focus is not an assignment. Where several objects are relevant, workers select
+labelled, server-issued references; code supplies real IDs, exact revisions and
+typed source/destination links. Raw identity overrides, a changed current head,
+a different source after pinning, or revoked project access stop the operation.
+Local part keys, proposed geometry and material judgements remain domain inputs.
+Automatic checks enter the same reference fence using the actual saved receipt.
+
+Rita retains single-drawing, piece-batch, shell and Step/gap-link operations.
+Each batch piece has its own Construction pin; a saved drawing destination must
+have the matching typed source. Exact unreleased piece requests are recovered
+and released without creating duplicates; changed intent or an already started
+request is not silently reused. Mattias can reopen stock, needs and cut plans
+through `read_project_work`. Existing canonical construction needs/cut plans are
+updated under their saved identities, rather than duplicated.
+
+`catalogRuntimeSurface` is a declared server restriction, reapplied after
+catalog resolution and retained through context renewal and both provider
+serializers. It carries operation references and the build-guide switch;
+`assembly_dependencies` stays absent when guides are off. It does not replace
+catalog policy or accept arbitrary schemas. Old pinned executions retain their
+previous contract. [Correction evidence](bob-runtime-path-audit-2026-11-04.md#corrections)
+separates local verification, installation and owner acceptance.
+
+
+**Installed material binding correction, 2026-11-06:** catalog
+`worker_operation_bindings` may provide a `description` replacement at an exact
+schema `path`, applied during runtime projection of both manuals and native
+provider schemas. The material worker's `data` description lists its writable
+values; source/target IDs remain server-owned. This does not alter parameters
+or weaken identity/optimistic-concurrency validation. The publication changes
+only the named binding, preserving every other toolbox contract. See the
+[audit correction evidence](bob-runtime-path-audit-2026-11-04.md#three-project-corrections-2026-11-06).

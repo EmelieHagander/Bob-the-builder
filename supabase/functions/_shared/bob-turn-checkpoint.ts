@@ -40,7 +40,11 @@ function checkpointFromReceipt(value: unknown, binding: BobTurnCheckpointBinding
   const saved = receipt.revision === write.expectedRevision + 1 && !receipt.unchanged
   const kept = receipt.revision === write.expectedRevision && receipt.unchanged && write.expectedRevision >= 1
   if (!saved && !kept) throw new Error('invalid_checkpoint_revision')
-  return validateBobTurnCheckpoint({ ...binding, version: 1, revision: receipt.revision, state: write.state, journalState: write.journalState }, binding)
+  // Both payloads were canonicalized locally before the write. The receipt
+  // confirms their revision; walking and sorting the full state again adds no
+  // validation of the server acknowledgement.
+  return { jobId: binding.jobId, turnId: binding.turnId, catalogManifestId: binding.catalogManifestId,
+    version: 1, revision: receipt.revision!, state: write.state, journalState: write.journalState }
 }
 
 const KNOWN_CHECKPOINT_ERRORS = ['job_not_claimed', 'checkpoint_conflict', 'checkpoint_cursor_regression', 'invalid_turn_checkpoint',
@@ -77,9 +81,11 @@ export function createBobTurnCheckpoint(options: BobTurnCheckpointBinding & {
   save(write: BobTurnCheckpointWrite): Promise<unknown>
 }): BobTurnCheckpointStore {
   let current = options.checkpoint == null ? null : validateBobTurnCheckpoint(options.checkpoint, options)
+  let currentText = current && JSON.stringify(current.state)
+  let currentJournalText = current && JSON.stringify(stableJsonValue(current.journalState))
   let saving = false
   return {
-    current: () => current && stableJsonValue(current),
+    current: () => current && structuredClone(current),
     async commit(state) {
       if (saving) throw new Error('checkpoint_commit_in_progress')
       if (!state || typeof state !== 'object' || Array.isArray(state)) throw new Error('invalid_turn_checkpoint')
@@ -88,23 +94,27 @@ export function createBobTurnCheckpoint(options: BobTurnCheckpointBinding & {
       let phase = 'serialize', stateBytes: number | null = null
       try {
         const expectedRevision = current?.revision ?? 0
-        const nextState = stableJsonValue(state), journalState = options.journal.exportState()
+        const nextState = stableJsonValue(state), journalState = validateBobJournalState(options.journal.exportState())
         const nextStateText = JSON.stringify(nextState)
+        const nextJournalText = JSON.stringify(journalState)
         stateBytes = nextStateText.length
         if (stateBytes > CHECKPOINT_WARN_CHARS) console.warn('[Checkpoint size]', JSON.stringify({ job_id: options.jobId, state_chars: stateBytes,
           largest: checkpointSizeBreakdown(nextState as Record<string, unknown>) }))
         if (stateBytes > BOB_CHECKPOINT_MAX_CHARS) throw new Error('turn_checkpoint_too_large')
         const same = (snapshot: BobTurnCheckpoint) => JSON.stringify(snapshot.state) === nextStateText
-          && JSON.stringify(stableJsonValue(snapshot.journalState)) === JSON.stringify(stableJsonValue(journalState))
-        if (current && same(current)) return stableJsonValue(current)
+          && JSON.stringify(stableJsonValue(snapshot.journalState)) === nextJournalText
+        if (current && currentText === nextStateText && currentJournalText === nextJournalText) return structuredClone(current)
         phase = 'save'
         const write = { expectedRevision, state: nextState, journalState }
-        const saved = await options.save(write)
+        // The store callback cannot mutate the locally retained canonical state.
+        const saved = await options.save(structuredClone(write))
         phase = 'validate'
         const next = checkpointFromReceipt(saved, options, write) ?? validateBobTurnCheckpoint(saved, options)
         if (next.revision !== expectedRevision + 1 && !(next.revision === expectedRevision && same(next))) throw new Error('invalid_checkpoint_revision')
         current = next
-        return stableJsonValue(next)
+        currentText = JSON.stringify(next.state)
+        currentJournalText = JSON.stringify(stableJsonValue(next.journalState))
+        return structuredClone(next)
       } catch (error) {
         if (error instanceof BobContinuation) throw error
         if (error instanceof Error && error.message === 'turn_checkpoint_too_large') throw error

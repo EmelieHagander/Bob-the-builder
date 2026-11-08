@@ -12,7 +12,7 @@ const disk = <T>(value: T): T => JSON.parse(JSON.stringify(value))
 const tool = (name: string) => ({ type: 'function' as const, function: { name, description: 'Manual ' + name, parameters: { type: 'object' } } })
 const catalog = { definition: () => ({ metadata: { continuation_input_tokens: 1000, context_input_ceiling_tokens: 96000,
   continuation_summary_tokens: 1600, retained_tool_exchanges: 1, continuation_retention_version: 2 } }),
-  role: () => ({ systemMessage: 'Keep uncertainty explicit.' }), tool } as unknown as AiCatalogSession
+  role: () => ({ systemMessage: 'Keep uncertainty explicit.', providerAdapter: 'openai-responses-v1' }), tool } as unknown as AiCatalogSession
 const call = (id: string, name = 'read_record', args: unknown = {}) => ({ id, type: 'function' as const,
   function: { name, arguments: JSON.stringify(args) } })
 const response = (id: string, calls = [call(id)]): OpenAIServiceResponse => ({ success: true, model: 'fixture', data: null,

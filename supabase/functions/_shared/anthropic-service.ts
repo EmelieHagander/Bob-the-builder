@@ -30,15 +30,24 @@
 export const ANTHROPIC_ENABLED = true
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { OpenAIResponseItem } from './openai-content.ts'
-import { schemaIssues } from './schema-issues.ts'
+import { schemaIssues,safeSchemaPaths } from './schema-issues.ts'
+import { dedupSchema } from './tool-schema-dedup.ts'
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 // Pinned so a wire-shape change is a deliberate code edit.
 const ANTHROPIC_VERSION = '2023-06-01'
 const ANTHROPIC_BETA = 'thinking-binding-controls-2026-08-01'
 const MAX_RETRIES = 2
+/** Answer text or thinking arrived this recently when our deadline closed. */
+const CLAUDE_ACTIVE_STREAM_MS = 10_000
+/** One cache point; the five-minute default so every point shares one TTL. */
+const cachePoint = (): Json => ({ type: 'ephemeral' })
 // 5-minute cache writes cost 1.25x the base input price.
 const CACHE_WRITE_MULTIPLIER = 1.25
+/** Characters of streamed text, thinking or tool input per output token, for
+ * a cut answer that never reported its usage. Bob's output is mostly JSON and
+ * Swedish prose. */
+export const STREAMED_CHARS_PER_TOKEN = 3.5
 
 type Json = Record<string, unknown>
 type Block = Json & { type: string }
@@ -53,7 +62,9 @@ export interface AnthropicModelRow {
 }
 export interface AnthropicUsageRecord {
   model: string; inputTokens: number; cachedInputTokens: number; outputTokens: number
-  reasoningTokens: number; totalTokens: number; costUsd: number | null; success: boolean
+  reasoningTokens: number; totalTokens: number; costUsd: number | null; success: boolean;errorCode?:string;latencyMs?:number
+  /** Set when the cost is estimated from streamed output, not reported. */
+  costBasis?: 'streamed_output_estimate'
 }
 export interface AnthropicCallContext {
   apiKey: string
@@ -187,6 +198,13 @@ export async function anthropicMessages(options: OpenAIServiceOptions, ctx: Anth
         for (const call of msg.tool_calls ?? []) blocks.push({ type: 'tool_use', id: call.id, name: call.function.name, input: JSON.parse(call.function.arguments || '{}') })
         push('assistant', blocks)
       } else push('user', await contentBlocks(msg.content, ctx))
+      // A fixed cache point on the last block of a stable prefix (owner
+      // decision 2026-11-06): a read point that outlives a later rewrite of
+      // the transcript. Only pinned executions mark; others send the same bytes.
+      if (options.promptCachePoints === 1 && msg.cacheBoundary === 1) {
+        const block = out.at(-1)?.content.at(-1)
+        if (block) block.cache_control = cachePoint()
+      }
     }
   } else {
     const blocks: Block[] = []
@@ -218,11 +236,17 @@ export async function anthropicRequestBody(options: OpenAIServiceOptions, ctx: A
     // handoffs), so a replayed thinking block can belong to another prefix.
     // Drop it instead of failing the turn (live 400, 2026-11-02 21:23).
     thinking: { type: 'adaptive', block_binding: { prefix_mismatch_behavior: 'drop_block' } },
-    // Automatic prompt caching of the longest stable prefix.
-    cache_control: { type: 'ephemeral' },
+    // Automatic prompt caching at the end of the request (the growing tail).
+    cache_control: cachePoint(),
     stream: true,
   }
-  if (ctx.systemMessage) body.system = ctx.systemMessage
+  // Tools render before the system prompt, so a point on the system prompt's
+  // last block keeps tools and system readable whatever changes later in the
+  // transcript (every compaction and job start paid for them again, 2026-11-06).
+  // With the automatic point that is at most four: system, job start, settled
+  // compaction, tail.
+  if (ctx.systemMessage) body.system = options.promptCachePoints === 1
+    ? [{ type: 'text', text: ctx.systemMessage, cache_control: cachePoint() }] : ctx.systemMessage
   const outputConfig: Json = {}
   if (ctx.effort) outputConfig.effort = ctx.effort
   const tools = options.tools ?? []
@@ -231,7 +255,10 @@ export async function anthropicRequestBody(options: OpenAIServiceOptions, ctx: A
       // No strict tools on Claude: Bob's large tool schemas exceed its grammar
       // limit (live 400 "compiled grammar is too large", 2026-11-02 21:30).
       // Each tool keeps its full schema, and Bob's validators check every call.
-      input_schema: tool.function.parameters }))
+      // Owner decision 2026-11-06: repeated sub-schemas go once as $defs (measured
+      // 44,096 -> 34,561 tokens for Bob's five write tools, lossless).
+      input_schema: options.toolSchemaDedup === 1 ? dedupSchema(tool.function.parameters) as Json : tool.function.parameters,
+      ...(options.promptCachePoints === 1 && options.cacheAfterTool === tool.function.name ? { cache_control: cachePoint() } : {}) }))
     const parallel = (options.aiDefinition?.providerParameters as Json | undefined)?.parallel_tool_calls
     const choice = options.tool_choice
     // Forced tool choice is rejected by current Claude models unless the
@@ -248,11 +275,31 @@ export async function anthropicRequestBody(options: OpenAIServiceOptions, ctx: A
     outputConfig.format = { type: 'json_schema', schema: strictSchema(options.schema, true) }
   }
   if (Object.keys(outputConfig).length) body.output_config = outputConfig
+  capCachePoints(body)
   return body
 }
 
+const MAX_CACHE_POINTS = 4
+
+// Claude refuses a request with more than four cache points (live 400,
+// 2026-11-07 13:41: a compacted Konrad job sent system, core tool, job start,
+// settled compaction and the automatic tail). Tools and system stay the same
+// within a job, so the job-start point already covers the system prompt: drop
+// that one first, then the earliest message points.
+function capCachePoints(body: Json): void {
+  const marked = (blocks: unknown) => Array.isArray(blocks) ? (blocks as Block[]).filter(b => b.cache_control) : []
+  const messages = (body.messages as Array<{ content: Block[] }>).flatMap(m => marked(m.content))
+  const system = marked(body.system)
+  let excess = (body.cache_control ? 1 : 0) + system.length + marked(body.tools).length + messages.length - MAX_CACHE_POINTS
+  for (const block of [...(messages.length ? system : []), ...messages]) {
+    if (excess <= 0) break
+    delete block.cache_control
+    excess--
+  }
+}
+
 /** Collect one streamed Messages response into the final message object. */
-export async function collectStream(response: Response): Promise<Json> {
+export async function collectStream(response: Response, onEvent?: (type: string, message: Json, outputChars: number) => void): Promise<Json> {
   if (!response.body) throw new Error('anthropic_stream_missing')
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
   const message: Json = { content: [] as Block[], usage: {} }
@@ -299,7 +346,12 @@ export async function collectStream(response: Response): Promise<Json> {
     while ((cut = buffer.indexOf('\n\n')) >= 0) {
       const frame = buffer.slice(0, cut); buffer = buffer.slice(cut + 2)
       const data = frame.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trim()).join('')
-      if (data) handle(JSON.parse(data))
+      if (data) {
+        const event = JSON.parse(data) as Json
+        const delta = event.type === 'content_block_delta' ? event.delta as Json : null
+        onEvent?.(String(event.type ?? 'unknown'), message, delta ? String(delta.text ?? delta.thinking ?? delta.partial_json ?? '').length : 0)
+        handle(event)
+      }
     }
     if (done) break
   }
@@ -345,8 +397,11 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), ctx.timeoutMs)
   let message: Json
+  let response: Response | null = null
+  const startedAt = Date.now()
+  let events = 0, firstEventAt: number | null = null, lastEventAt: number | null = null, lastOutputAt: number | null = null
+  let streamed: Json | null = null, outputChars = 0
   try {
-    let response: Response | null = null
     for (let attempt = 0; ; attempt++) {
       response = await doFetch(ANTHROPIC_URL, { method: 'POST', signal: controller.signal, body: JSON.stringify(body),
         headers: { 'x-api-key': ctx.apiKey, 'anthropic-version': ANTHROPIC_VERSION, 'anthropic-beta': ANTHROPIC_BETA, 'content-type': 'application/json' } })
@@ -362,10 +417,62 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
       await response.body?.cancel()
       await sleep(retryDelayMs(response, attempt))
     }
-    message = await collectStream(response!)
+    message = await collectStream(response!, (type, partial, chars) => {
+      const now = Date.now()
+      streamed = partial
+      outputChars += chars
+      events++
+      if (firstEventAt === null) firstEventAt = now
+      lastEventAt = now
+      if (type === 'content_block_delta') lastOutputAt = now
+    })
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Request failed'
-    console.error('[Anthropic Service] Request error:', msg)
+    // Content-free diagnostics distinguish our own deadline from a provider
+    // disconnect, and a stalled prefill from a stream that was still active.
+    console.error('[Anthropic Service] Request error', JSON.stringify({
+      kind: controller.signal.aborted ? 'local_timeout' : 'network_or_stream',
+      elapsed_ms: Date.now() - startedAt, timeout_ms: ctx.timeoutMs,
+      events, first_event_ms: firstEventAt === null ? null : firstEventAt - startedAt,
+      since_last_event_ms: lastEventAt === null ? null : Date.now() - lastEventAt,
+      request_id: response?.headers.get('request-id') ?? null,
+      error: msg.slice(0, 120),
+    }))
+    // Our own deadline closed after the provider had begun the answer: it did
+    // not fit one window, whether text was still streaming or the model was
+    // still thinking in silence. Resending the same request repeats that
+    // (bed, 2026-11-06: twice 120 s, nothing saved; entry the same evening,
+    // silent both times), so callers get a distinct code and retry with a
+    // note. A deadline before the first event keeps the plain network code.
+    const cut = controller.signal.aborted && response?.ok === true && firstEventAt !== null
+    const active = lastOutputAt !== null && Date.now() - lastOutputAt <= CLAUDE_ACTIVE_STREAM_MS
+    // A request our own deadline cut was billed for what the provider did.
+    // Its input is known from the start of the stream and its output is
+    // estimated from what streamed (owner decision 2026-11-07: three cut
+    // Konrad answers had no price), or the provider's partial count if larger.
+    // Thinking streams as a summary, so the estimate is a lower bound. A
+    // network or provider error keeps an unknown cost, and so does a stream
+    // that never reported its input.
+    let priced: { cost: number; input: number; read: number; output: number } | null = null
+    if (response?.ok) {
+      const raw = ((streamed as Json | null)?.usage ?? {}) as Json
+      const read = Number(raw.cache_read_input_tokens ?? 0)
+      const input = Number(raw.input_tokens ?? 0) + Number(raw.cache_creation_input_tokens ?? 0) + read
+      const output = Math.max(Number(raw.output_tokens ?? 0), Math.ceil(outputChars / STREAMED_CHARS_PER_TOKEN))
+      const cost = controller.signal.aborted && firstEventAt !== null && Number.isFinite(Number(raw.input_tokens)) && typeof raw.input_tokens === 'number'
+        ? anthropicCostUsd(ctx.model, { ...raw, output_tokens: output }) : null
+      if (cost !== null) priced = { cost, input, read, output }
+      try { await ctx.log({ model, inputTokens: input, cachedInputTokens: read, outputTokens: priced ? output : 0, reasoningTokens: 0, totalTokens: input + (priced ? output : 0),
+        costUsd: priced ? priced.cost : null, ...(priced ? { costBasis: 'streamed_output_estimate' as const } : {}), success: false, latencyMs: Date.now() - startedAt,
+        errorCode: cut ? active ? 'model_output_window' : 'model_output_window_silent' : controller.signal.aborted ? 'local_timeout' : 'network_or_stream' }) }
+      catch { /* the ledger never decides the call outcome */ }
+    }
+    // The turn budget counts the estimate. It is not a provider receipt:
+    // estimatedCostUsd stays empty, so a drawing reservation stays pending
+    // for reconciliation and is never stored as a finished, reusable result.
+    const spent = priced ? { costEstimate: { usd: priced.cost, basis: 'streamed_output_estimate' as const, input_tokens: priced.input, cached_input_tokens: priced.read, output_tokens: priced.output } } : {}
+    if (cut) return { ...fail<T>(model, 'model_output_window'), ...spent, failure: { code: 'model_output_window' } }
+    if (priced) return { ...fail<T>(model, `Network error: ${msg}`), ...spent }
     return fail(model, `Network error: ${msg}`)
   } finally { clearTimeout(timer) }
 
@@ -375,7 +482,7 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
   const usage = { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: inputTokens + outputTokens, cached_input_tokens: read, reasoning_tokens: 0 }
   const estimatedCostUsd = anthropicCostUsd(ctx.model, raw)
   const servedBy = typeof message.model === 'string' ? message.model : model
-  const log = (success: boolean) => ctx.log({ model: servedBy, inputTokens, cachedInputTokens: read, outputTokens, reasoningTokens: 0,
+  const log = (success: boolean,errorCode?:string) => ctx.log({errorCode,latencyMs:Date.now()-startedAt, model: servedBy, inputTokens, cachedInputTokens: read, outputTokens, reasoningTokens: 0,
     totalTokens: usage.total_tokens, costUsd: estimatedCostUsd, success })
   const base = { usage, model: servedBy, reasoningEffort: ctx.effort, estimatedCostUsd, responseId: typeof message.id === 'string' ? message.id : undefined }
   const phaseAware = options.responsePhaseMode === 'aware'
@@ -386,12 +493,12 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
   const text = content.filter(b => b.type === 'text' && typeof b.text === 'string').map(b => b.text as string).join('\n\n')
 
   if (message.stop_reason === 'refusal') {
-    await log(!strict)
-    return { ...base, success: !strict, data: strict ? null : (text || 'model_refusal') as T, outputPhase: 'refusal', ...native, ...(strict ? { error: 'model_refusal' } : {}) }
+    await log(!strict,strict?'model_refusal':undefined)
+    return { ...base, success: !strict, data: strict ? null : (text || 'model_refusal') as T, outputPhase: 'refusal', ...native, ...(strict ? { error: 'model_refusal',failure:{code:'model_refusal'} } : {}) }
   }
   if (message.stop_reason === 'max_tokens') {
-    await log(false)
-    return { ...base, success: false, data: null, error: 'model_output_limit', ...(phaseAware ? { outputPhase: 'incomplete' as const } : {}) }
+    await log(false,'model_output_limit')
+    return { ...base, success: false, data: null, failure:{code:'model_output_limit'}, error: 'model_output_limit', ...(phaseAware ? { outputPhase: 'incomplete' as const } : {}) }
   }
   const calls = content.filter(b => b.type === 'tool_use')
   if (calls.length) {
@@ -400,8 +507,8 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
       toolCalls: calls.map(b => ({ id: String(b.id), type: 'function' as const, function: { name: String(b.name), arguments: JSON.stringify(b.input ?? {}) } })) }
   }
   if (!text) {
-    await log(false)
-    return { ...base, success: false, data: null, error: content.some(b => b.type === 'thinking') ? 'model_reasoning_only' : 'No content in Anthropic response' }
+    await log(false,content.some(b=>b.type==='thinking')?'model_reasoning_only':'model_empty_response')
+    return { ...base, success: false, data: null, failure:{code:content.some(b=>b.type==='thinking')?'model_reasoning_only':'model_empty_response'}, error: content.some(b => b.type === 'thinking') ? 'model_reasoning_only' : 'No content in Anthropic response' }
   }
   const phase = phaseAware ? { outputPhase: 'legacy' as const } : {}
   if (!strict || (options.tools?.length && !options.structuredToolOutput)) {
@@ -411,8 +518,9 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
   let parsed: T | null = null
   try { parsed = JSON.parse(text) } catch { /* honest parse failure */ }
   // The wire schema drops bounds Claude cannot enforce; the original holds them.
-  const valid = parsed !== null && (!options.schema || schemaIssues(options.schema, parsed).length === 0)
-  await log(valid)
+  const issues=parsed!==null&&options.schema?schemaIssues(options.schema,parsed):[]
+  const valid=parsed!==null&&!issues.length,code=parsed===null?'model_invalid_json':'model_schema_violation'
+  await log(valid,valid?undefined:code)
   return { ...base, success: valid, data: valid ? parsed : null, ...native, ...phase,
-    ...(valid ? {} : { error: options.structuredToolOutput ? 'invalid_structured_output' : 'Failed to parse JSON response' }) }
+    ...(valid ? {} : { error: options.structuredToolOutput ? 'invalid_structured_output' : 'Failed to parse JSON response',failure:{code,schemaPaths:options.schema?safeSchemaPaths(options.schema,issues):[]} }) }
 }

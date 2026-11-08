@@ -6,6 +6,26 @@ import { BobContinuation, createBobJournal } from '../supabase/functions/_shared
 const binding = { jobId: '11111111-1111-4111-8111-111111111111', turnId: '22222222-2222-4222-8222-222222222222', catalogManifestId: '33333333-3333-4333-8333-333333333333' }
 const journal = () => createBobJournal({ entries: [], save: async () => {} }, Date.now() + 60000)
 
+test('canonical state is isolated from inputs, store callbacks and returned snapshots, including unchanged commits', async () => {
+  let writes = 0
+  const store = createBobTurnCheckpoint({ ...binding, checkpoint: null, journal: journal(), save: async write => {
+    writes++
+    write.state.nested = { value: 'callback mutation' }
+    return { receipt_version: 1, job_id: binding.jobId, revision: write.expectedRevision + 1, unchanged: false }
+  } })
+  const input = { nested: { value: 'original' }, z: 2 }
+  const first = await store.commit(input)
+  input.nested.value = 'input mutation'
+  assert.deepEqual(first.state.nested, { value: 'original' })
+  ;(first.state.nested as any).value = 'returned mutation'
+  const second = await store.commit({ z: 2, nested: { value: 'original' } })
+  assert.equal(writes, 1); assert.equal(second.revision, 1)
+  ;(second.state.nested as any).value = 'unchanged return mutation'
+  const current = store.current()!
+  ;(current.state.nested as any).value = 'current return mutation'
+  assert.deepEqual(store.current()!.state.nested, { value: 'original' })
+})
+
 test('checkpoint error classes are bounded and never carry error text', () => {
   assert.equal(checkpointErrorClass(new Error('job_not_claimed')), 'job_not_claimed')
   assert.equal(checkpointErrorClass(new Error('AbortError: signal is aborted without reason')), 'timeout')

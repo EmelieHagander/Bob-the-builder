@@ -33,3 +33,14 @@ test('an older-page overlap cannot duplicate a message or a delegation notice',(
  assert.deepEqual(merged.messages.map(m=>m.seq),[1,1,2,3,4,5,6,7,8])
  assert.equal(merged.messages.filter(m=>m.text==='Delegated').length,1)
 })
+
+test('a late tail read cannot remove a reply already received from the same thread',()=>{
+ const current=page(102,106)
+ const late=page(99,103)
+ const accepted=refreshHistoryPage(current,late)
+ assert.equal(accepted,current,'retain the accepted snapshot so callers also retain work/read status')
+ assert.equal(refreshHistoryPage(current,{threadId:current.threadId,messages:[]}),current,'a late empty read of the same immutable thread cannot erase delivery')
+ assert.deepEqual(accepted.messages.map(m=>m.seq),[102,103,104,105,106])
+ const refreshed=page(102,106);refreshed.messages[4].text='same-sequence fresh delivery details'
+ assert.equal(refreshHistoryPage(current,refreshed).messages.at(-1)?.text,refreshed.messages[4].text)
+})

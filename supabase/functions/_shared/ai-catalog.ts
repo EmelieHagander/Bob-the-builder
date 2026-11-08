@@ -1,3 +1,6 @@
+import {runtimeToolSpec,type RuntimeToolSurface} from './runtime-tool-surface.ts'
+import { withoutServerRevisions } from './server-revisions.ts'
+import {drawingWorkerSpec} from './drawing-work.ts'
 /** Server-only, request-scoped AI configuration. The database owns definitions;
  * this module owns their format and provider-adapter validation. It has no
  * default prompt, model or tier and never reads project data. */
@@ -50,6 +53,14 @@ const object = (value: unknown): value is JsonObject => value !== null && typeof
 const string = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
 function fail(code: string, detail?: string): never { throw new AiCatalogError(code, detail) }
+/** Conversation continuation belongs to a protocol adapter, not a model brand.
+ * Future text adapters must declare one of these two wire contracts; image and
+ * embedding adapters must never accidentally receive a text-tool cursor. */
+export function textContinuationMode(adapter: ResolvedAiRole['providerAdapter']): 'provider-cursor' | 'message-replay' {
+  if (adapter === 'openai-responses-v1') return 'provider-cursor'
+  if (adapter === 'anthropic-messages-v1') return 'message-replay'
+  return fail('ai_profile_incompatible', 'text continuation adapter')
+}
 function validateProviderParameters(params: unknown, adapter: string): JsonObject {
   // Current Claude models reject sampling parameters and have no verbosity dial.
   const allowed = adapter === 'openai-images-v1' ? ['size','quality'] : adapter === 'openai-embeddings-v1' ? ['dimensions'] : adapter === 'anthropic-messages-v1' ? ['parallel_tool_calls'] : ['temperature','top_p','parallel_tool_calls','verbosity']
@@ -318,7 +329,7 @@ export function createAiCatalogSession(client: AiCatalogClient, options: { app: 
 /** One seam for all catalog-backed text callers, including tests. Output
  * contracts replace local schemas; task-specific data goes through declared
  * binders. Dynamic system context remains the trusted app server's input. */
-export function applyCatalogModelOptions<T extends { app: string; functionName: string; aiFunction?: string; systemMessage?: string; tools?: AiFunctionTool[]; timeoutMs?: number; catalogRoleKey?: string; catalogSchemaKey?: string; catalogVariables?: AiVariables; catalogSchemaParameters?: JsonObject; catalogToolParameters?: Record<string,JsonObject> }>(session: AiCatalogSession, options: T): T & { aiDefinition: ResolvedAiRole } {
+export function applyCatalogModelOptions<T extends { app: string; functionName: string; aiFunction?: string; systemMessage?: string; tools?: AiFunctionTool[]; timeoutMs?: number; catalogRoleKey?: string; catalogSchemaKey?: string; catalogVariables?: AiVariables; catalogSchemaParameters?: JsonObject; catalogToolParameters?: Record<string,JsonObject>; catalogDrawingWork?:boolean; catalogRuntimeSurface?:RuntimeToolSurface; catalogServerRevisions?:boolean }>(session: AiCatalogSession, options: T): T & { aiDefinition: ResolvedAiRole } {
   const role = session.role(options.catalogRoleKey ?? options.functionName,options.catalogVariables)
   const result: T & { aiDefinition: ResolvedAiRole } = { ...options, aiDefinition: role, systemMessage: options.systemMessage ?? role.systemMessage }
   if (role.timeoutMs !== undefined) result.timeoutMs = Math.min(options.timeoutMs ?? Infinity,role.timeoutMs)
@@ -327,6 +338,12 @@ export function applyCatalogModelOptions<T extends { app: string; functionName: 
     Object.assign(result,{schemaName: schema.name,schemaDescription: schema.description,schema: schema.schema})
   }
   if (options.tools) result.tools = options.tools.map(tool => session.tool(tool.function.name,{...options.catalogSchemaParameters,...options.catalogToolParameters?.[tool.function.name]}))
+  if(options.catalogDrawingWork&&result.tools)result.tools=result.tools.map(drawingWorkerSpec)
+  if(options.catalogRuntimeSurface&&result.tools)result.tools=result.tools.map(spec=>runtimeToolSpec(spec,options.catalogRuntimeSurface!))
+  // Owner decision 2026-11-07 (server_revisions_version 1): the tools sent to
+  // the model are rebuilt from the catalog here, so the server-owned revision
+  // fields are removed here too, after every other transformation.
+  if(options.catalogServerRevisions&&result.tools)result.tools=result.tools.map(spec=>withoutServerRevisions(spec))
   return result
 }
 /** Validate the actual call, too: capabilities must cover dynamically selected

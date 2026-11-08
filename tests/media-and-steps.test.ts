@@ -1,3 +1,4 @@
+import { isSyntheticSchemaMigration } from './support/project-schema.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
 import { before, after, test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -59,7 +60,7 @@ before(async () => {
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('oneA','A','One','OA',$1),('twoB','B','Two','TB',$2)", [one, two])
   await setupSharedSocial(pg)
   const dir = new URL('../supabase/migrations/', import.meta.url)
-  for (const f of (await readdir(dir)).filter(f => f.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(f, dir), 'utf8'))
+  for (const f of (await readdir(dir)).filter(isSyntheticSchemaMigration).sort()) await pg.exec(await readFile(new URL(f, dir), 'utf8'))
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('bothA','A','Both','BA',$1),('bothB','B','Both','BB',$1)", [both])
   await pg.exec("insert into bob.areas(id,project_id,slug,name) values('areaA','A','entry','Entry'),('areaB','B','private','Private'); insert into bob.tasks(id,area_id,name) values('taskA','areaA','Prepare opening'),('taskB','areaB','Private work')")
 })

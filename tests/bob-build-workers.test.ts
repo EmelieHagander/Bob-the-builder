@@ -1,9 +1,12 @@
+import {createWorkerOperations,type WorkerOperations} from '../supabase/functions/_shared/worker-operations.ts'
+import {PLAN_CAD_PIECES_TOOL} from '../supabase/functions/_shared/cad-pieces.ts'
+import {boundDrawingArguments} from '../supabase/functions/_shared/drawing-work.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { catalogFixture, catalogCall, preBuildWorkersCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { catalogCoreTools } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { runProjectAnswer, seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
-import { catalogWorkers, catalogRetiredTools, catalogCheckReads, saveReceipt, readbackReads, uncheckedConstructions } from '../supabase/functions/_shared/bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogPlanTools, saveReceipt, readbackReads, uncheckedConstructions } from '../supabase/functions/_shared/bob-workers.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createConstructionTools } from '../supabase/functions/_shared/construction-draft.ts'
@@ -21,7 +24,7 @@ import type { OpenAIServiceOptions } from '../supabase/functions/_shared/openai-
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
 const call = (id: string, name: string, args: unknown) => ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } })
 // 2026-11-01 (bob-konrad-lean-v1): Konrad also adds joint hardware the catalog lacks.
-const STRUCTURE = ['save_construction_draft', 'check_construction_draft', 'change_construction_parameters', 'edit_construction_parts', 'change_construction_roles', 'continue_construction_change', 'derive_construction_lists', 'transition_legacy_drawing', 'add_catalog_fastener']
+const STRUCTURE = ['save_construction_draft', 'check_construction_draft', 'change_construction_parameters', 'edit_construction_parts', 'change_construction_roles', 'continue_construction_change', 'derive_construction_lists', 'transition_legacy_drawing', 'add_catalog_fastener', 'commit_construction_sketch']
 const DRAWING = ['design_project_cad', 'save_cad_design', 'plan_cad_pieces', 'compose_cad_shell', 'link_cad_shell_steps', 'link_project_drawing', 'link_drawing_gap', 'ensure_drawing_gap_task']
 const names = (o: OpenAIServiceOptions) => (o.tools ?? []).map(t => t.function.name)
 const texts = (o: OpenAIServiceOptions) => (o.messages ?? []).map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content))
@@ -34,19 +37,32 @@ const tail = (catalog: AiCatalogSession, o: OpenAIServiceOptions, prefix: string
 }
 const ask = (tool: string, request: unknown) => () => ({ success: true, model: 'fixture', usage, responseId: 'b1', toolCalls: [call('c1', tool, request)] })
 const toolOutput = (o: OpenAIServiceOptions) => JSON.parse(String(o.messages!.find(m => m.role === 'tool')!.content))
+// The general catalog fixture predates the private workpad publication. v4
+// piece tests must opt into both pinned workpad switches, just as production
+// does, or the secure worker gate correctly refuses their mock handoff.
+const pieceCatalog = () => catalogFixture(manifest => {
+  const contract = manifest.definitions.find(row => row.prompt_key === 'agent-contract.ask-bob')!
+  const toolbox = manifest.definitions.find(row => row.prompt_key === 'bob.tools')!
+  contract.metadata = { ...contract.metadata, workpad_version: 1 }
+  toolbox.definition = { ...toolbox.definition, workpad_version: 1 }
+})
 
-async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>, readDraft?: (args: any) => unknown) {
+async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptions) => unknown)[], workerSteps: Record<string, ((o: OpenAIServiceOptions) => unknown)[]>, readDraft?: (args: any) => unknown, piecePreflight?: Record<string, unknown>, editResult?: Record<string, unknown>, boundDrawing?:{binding:any;seen:any[]},operationTest?:{operations:WorkerOperations;seen:any[]},extra:Record<string,unknown>={}) {
   const projectId = 'p', message = 'Rita lådan', hasAccess = async () => true
   const lookup = createProjectLookup(projectId, async (_project, input) => ({ data: { records: input.dataset === 'project' ? [{ id: projectId, name: 'Lådan', description: 'Saved project' }] : [], related: [], truncated: false }, error: null }) as any, undefined, undefined, undefined, { unlimitedWork: true })
   const writer = createProjectWriter(projectId, message, async () => { throw Error('No write requested') }, async () => ({ data: [], error: null }), async () => ({ data: [], error: null }))
   const real = createConstructionTools({ projectId, message, writer, constructionSourceRefresh: true, hasAccess, read: async () => ({}), readSources: async () => ({ project: new Map(), physical: new Map() }),
     readDelivery: async () => ({ status: 'ok', records: [] }) })
   const constructionCalls: { name: string; args: any }[] = []
-  const constructionTools = { ...real, tools: real.tools, get remaining() { return real.remaining }, execute: async (name: string, args: any) => {
+  const constructionTools = { ...real, tools: real.tools, get remaining() { return real.remaining },
+    readSavedSummary: async (id: string, revision: number) => {
+      constructionCalls.push({ name: 'saved_summary', args: { artifact_id: id, revision } })
+      return { status: 'ok', artifact_id: id, revision, current_revision: revision, source_state: 'current', archived: false }
+    }, execute: async (name: string, args: any) => {
     constructionCalls.push({ name, args })
     if (name === 'save_construction_draft') pendingImage = true // stands in for a worker opening an image
     if (name === 'read_construction_draft') return readDraft ? readDraft(args) : { status: 'ok', drafts: [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }] }
-    if (name === 'edit_construction_parts') return { status: 'invalid', validation: { code: 'unknown_part', fields: ['changes.0.part_id'] } }
+    if (name === 'edit_construction_parts') return editResult ?? { status: 'invalid', validation: { code: 'unknown_part', fields: ['changes.0.part_id'] } }
     if (name === 'check_construction_draft') return { status: 'checked', artifact_id: 'c1', revision: 3 }
     // A writer save, as production returns it: the receipt is nested.
     return { status: 'saved', receipt: { projectId, dataset: 'artifacts', recordId: 'c1', label: 'Lådan', operation: 'updated', savedAt: '2026-10-31T00:00:00Z', revision: 3, record: { title: 'Lådan' } } }
@@ -70,10 +86,28 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
   const cadAssistant: any = { pending: async () => [], tools: [DESIGN_CAD_TOOL], lifecycleTools: [], remaining: 4, lifecycleRemaining: 0,
     candidate: null, partial: false, failure: null, sources: [], lifecycle: async () => ({ status: 'invalid' }),
     consult: async () => { cadAssistant.candidate = { id: 'cand-1' }; return { status: 'ready', review: 'approved' } } }
+  if(boundDrawing){
+    cadAssistant.prepareDrawingWorker=async(sources:any)=>{boundDrawing.seen.push({sources});return {status:'ready',binding:boundDrawing.binding}}
+    cadAssistant.drawingWork=boundDrawing.binding
+    cadAssistant.boundArguments=(name:string,raw:unknown)=>boundDrawingArguments(name,raw,boundDrawing.binding)
+    cadAssistant.lifecycleTools=[catalog.tool('read_drawing_requests')]
+    cadAssistant.lifecycleRemaining=Infinity
+    cadAssistant.readBoundRequest=async()=>({status:'ok',requests:[],binding:boundDrawing.binding})
+    cadAssistant.consult=async(args:any)=>{boundDrawing.seen.push({args});return {status:'needs_data',reason:'fixture_only'}}
+  }
+  if(operationTest){cadAssistant.lifecycleTools=[PLAN_CAD_PIECES_TOOL];cadAssistant.lifecycleRemaining=Infinity;cadAssistant.lifecycle=async(name:string,args:any)=>{operationTest.seen.push({name,args});return {status:'queued',pieces:args.pieces.map((p:any)=>({piece_key:p.piece_key,status:'queued'}))}}}
   const bob: OpenAIServiceOptions[] = [], pickerInputs: any[] = [], ran: { name: string; status: string; rejection?: unknown }[] = []
   const workers: Record<string, OpenAIServiceOptions[]> = { 'structure-worker': [], 'drawing-worker': [], 'materials-worker': [] }
-  const result = await runProjectAnswer({ projectId, userId: 'owner', message, lookup, writer, hasAccess, constructionTools, solutionActions, projectContext, cadAssistant,
-    aiCatalog: catalog, corePreload: true, readToolPolicy, toolPicker: true, completeRequest: true, onTool: v => ran.push({ name: v.name, status: v.status, ...(v.rejection ? { rejection: v.rejection } : {}) }),
+  const result = await runProjectAnswer({ projectId, userId: 'owner', message, lookup, writer, hasAccess, constructionTools, solutionActions, projectContext, cadAssistant,...(boundDrawing?{boundDrawingWork:true}:{}),...(operationTest?{workerOperations:operationTest.operations}:{}),
+    ...(piecePreflight ? { workerPieceProgress: true, workerDesignReview: true,
+      workerFormPiece: {
+        readPiece: async () => piecePreflight,
+        readPlan: async () => ({ status: 'unavailable' }),
+        readConstruction: async () => ({ status: 'unavailable' }),
+      },
+      workpads: { load: async () => ({ status: 'ok' as const, revision: 0, note: null }),
+        update: async () => ({ status: 'noted', revision: 1 }) } } : {}),
+    ...extra, aiCatalog: catalog, corePreload: true, readToolPolicy, toolPicker: true, completeRequest: true, onTool: v => ran.push({ name: v.name, status: v.status, ...(v.rejection ? { rejection: v.rejection } : {}) }),
     callModel: catalogCall(async options => {
       if (options.functionName === 'completion-gate') return { success: true, model: 'fixture', usage, data: JSON.stringify({ work_remaining: false, reason: '' }) }
       if (options.functionName === 'tool-picker') { pickerInputs.push(JSON.parse(String(options.messages![0].content))); return { success: true, model: 'fixture', usage, data: JSON.stringify({ tools: [], reason: '' }) } }
@@ -85,6 +119,36 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
   assert.equal(result.ok, true, JSON.stringify(result))
   return { bob, workers, pickerInputs, ran, constructionCalls, cadAssistant, delivered: () => delivered }
 }
+
+
+test('v4 Plan focus gate prevents a paid Konrad call before the approved opening Step', async () => {
+  const piece = { status: 'not_focused', plan_revision: 2,
+    step_id: 'step-windows', focus_step_id: 'step-reconciliation', artifact_id: 'c1' }
+  const { bob, workers, constructionCalls, ran } = await turn(pieceCatalog(),
+    [ask('ask_structure_worker', { request: 'Work on the first window.' })], {}, undefined, piece)
+  assert.equal(workers['structure-worker'].length, 0, 'no model request reaches the expensive specialist')
+  assert.equal(constructionCalls.length, 0, 'no geometry is read or modified in this blocked handoff')
+  assert(ran.some(entry => entry.name === 'ask_structure_worker' && entry.status === 'needs_verification'))
+  const result = toolOutput(bob[1])
+  assert.deepEqual([result.status, result.reason, result.required_step_id, result.current_focus_step_id],
+    ['needs_verification', 'construction_piece_step_not_focused', 'step-windows', 'step-reconciliation'])
+  assert.match(String(result.note), /plan-focus flow/)
+})
+
+test('v4 canonical piece write conflict stops a second paid Konrad handoff in the same Bob turn', async () => {
+  const ready = { status: 'ready', artifact_id: 'c1', plan_revision: 2, step_id: 'step-windows',
+    focus_step_id: 'step-windows', requested_total_openings: 7 }
+  const { bob, workers, ran } = await turn(pieceCatalog(), [
+    ask('ask_structure_worker', { request: 'Make the first window.' }),
+    ask('ask_structure_worker', { request: 'Try the same blocked window again.' }),
+  ], { 'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'w-conflict',
+    toolCalls: [call('w1', 'edit_construction_parts', { expected_revision: 4 })] })] }, undefined, ready,
+    { status: 'conflict', message: 'construction_piece_too_spread_out' })
+  assert.equal(workers['structure-worker'].length, 1, 'a second specialist chain must not start')
+  assert.equal(toolOutput(bob[1]).reason, 'construction_piece_write_conflict')
+  assert.equal(toolOutput(bob[2]).reason, 'construction_piece_blocked_earlier_this_turn')
+  assert.equal(ran.filter(r => r.name === 'ask_structure_worker').length, 2)
+})
 
 test('Bob asks Konrad in plain words; Konrad has his own tools, the project in his persona and his project knowledge', async () => {
   const catalog = catalogFixture(), core = catalogCoreTools(catalog)!
@@ -103,6 +167,12 @@ test('Bob asks Konrad in plain words; Konrad has his own tools, the project in h
   for (const read of ['read_construction_draft', 'read_construction_delivery']) {
     assert(names(bob[0]).includes(read), read); assert(!pickerInputs[0].candidates.some((c: any) => c.name === read), read)
   }
+  // Owner decision 2026-11-08: Bob's own plan tools are on hand from his first step, never left to the picker.
+  const planTools = catalogPlanTools(catalog)
+  assert.deepEqual(planTools, ['compile_project_plan', 'edit_project_plan', 'save_compiled_project_plan', 'decide_project_plan', 'create_work_record', 'edit_work_record'])
+  for (const tool of planTools) assert(!pickerInputs[0].candidates.some((c: any) => c.name === tool), tool)
+  // This harness has no plan compiler or work records; the plan decision it has is listed.
+  assert(names(bob[0]).includes('decide_project_plan'))
   // The legacy box drawing skipped the construction and the review: retired for new jobs.
   assert(!names(bob[0]).includes('save_project_drawing') && !pickerInputs[0].candidates.some((c: any) => c.name === 'save_project_drawing'))
   assert.deepEqual([...catalogRetiredTools(catalog)], ['save_project_drawing'])
@@ -131,7 +201,7 @@ test('Bob asks Konrad in plain words; Konrad has his own tools, the project in h
   assert.deepEqual(report.receipts, [{ tool: 'save_construction_draft', dataset: 'artifacts', record_id: 'c1', revision: 3, operation: 'updated' },
     { tool: 'check_construction_draft', artifact_id: 'c1', revision: 3, status: 'checked', by: 'code' }])
   // The saved construction comes back with the report, read by code (report_readback_version 1).
-  assert.deepEqual(report.readback, [{ construction: { status: 'ok', drafts: [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }] } }])
+  assert.deepEqual(report.readback, [{ construction: { status: 'ok', artifact_id: 'c1', revision: 3, current_revision: 3, source_state: 'current', archived: false } }])
   // An image he opened goes with his own next call and is confirmed there; Bob's next call does not carry it.
   const [, second] = workers['structure-worker']
   assert(texts(second).some(t => t.includes('IMAGE-PIXELS'))); assert.equal(delivered(), 1)
@@ -147,9 +217,9 @@ test('the readback reads the saved construction at its saved revision; without t
   const { bob, constructionCalls } = await turn(catalog, [ask('ask_structure_worker', { request: 'Konrad, sätt ihop lådan.' })],
     { 'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'w1', toolCalls: [call('w1c', 'save_construction_draft', {})] })] })
   const report = toolOutput(bob[1])
-  assert.deepEqual(report.readback, [{ construction: { status: 'ok', drafts: [{ artifact_id: 'c1', title: 'Lådan', revision: 2 }] } }])
+  assert.deepEqual(report.readback, [{ construction: { status: 'ok', artifact_id: 'c1', revision: 3, current_revision: 3, source_state: 'current', archived: false } }])
   const read = constructionCalls.at(-1)!
-  assert.equal(read.name, 'read_construction_draft'); assert.equal(read.args.artifact_id, 'c1'); assert.equal(read.args.revision, 3); assert.equal(read.args.view, 'overview')
+  assert.equal(read.name, 'saved_summary'); assert.equal(read.args.artifact_id, 'c1'); assert.equal(read.args.revision, 3)
 })
 
 test('receipts are copied by code from nested and flat results; the readback reads each saved record once', () => {
@@ -229,6 +299,50 @@ test('Mattias works the same way: a plain request and his project knowledge', as
   assert.equal(toolOutput(bob[1]).status, 'ok')
 })
 
+// Våningssäng 2, 2026-11-08: only Konrad's persona asks for a plan before a
+// write (bob-tool-focus-v1), but the gate refused Rita and Mattias too.
+test('the plan gate holds Konrad only; Mattias writes without a plan note', async () => {
+  const catalog = pieceCatalog()
+  const workpads = { load: async () => ({ status: 'ok' as const, revision: 0, note: null }), update: async () => ({ status: 'noted', revision: 1 }) }
+  const cut = { record_ref: null, artifact_id: 'c1', revision: 3 }
+  const { ran } = await turn(catalog, [ask('ask_materials_worker', { request: 'Spara kapplanen.' }), ask('ask_structure_worker', { request: 'Flytta dörren.' })], {
+    'materials-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'm1', toolCalls: [call('m', 'save_construction_cut_plan', cut)] })],
+    'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 's1', toolCalls: [call('s', 'edit_construction_parts', { changes: [] })] })],
+  }, undefined, undefined, undefined, undefined, undefined, { workerPlan: true, workpads })
+  const mattias = ran.find(r => r.name === 'save_construction_cut_plan'), konrad = ran.find(r => r.name === 'edit_construction_parts')
+  assert.equal(mattias?.status, 'saved', JSON.stringify(mattias))
+  assert.equal((konrad?.rejection as { code?: string } | undefined)?.code, 'plan_required', JSON.stringify(konrad))
+})
+
+// Owner runs 2026-11-08: with material_follow_version 1, code reads the change
+// work of the construction Konrad saved and recalculates its material rows.
+test('after Konrad saves, code follows the saved revision\'s change work; without the pin it does not', async () => {
+  const konrad = { 'structure-worker': [() => ({ success: true, model: 'fixture', usage, responseId: 'w1', toolCalls: [call('w1c', 'save_construction_draft', {})] })] }
+  const ask1 = ask('ask_structure_worker', { request: 'Konrad, sätt ihop lådan.' })
+  const off = await turn(catalogFixture(), [ask1], konrad)
+  assert(!off.constructionCalls.some(c => c.name === 'read_construction_changes')); assert.equal(toolOutput(off.bob[1]).follow_up, undefined)
+  const on = await turn(catalogFixture(), [ask1], konrad, undefined, undefined, undefined, undefined, undefined, { materialFollow: true })
+  const read = on.constructionCalls.find(c => c.name === 'read_construction_changes')
+  assert.deepEqual([read?.args.artifact_id, read?.args.revision, read?.args.after], ['c1', 3, null])
+  const report = toolOutput(on.bob[1])
+  assert.equal(report.follow_up.by, 'code'); assert.deepEqual(report.follow_up.constructions.map((c: any) => [c.artifact_id, c.revision]), [['c1', 3]])
+  assert.equal(report.follow_up.constructions[0].recalculated, 0); assert.match(report.follow_up.note, /^Code recalculated no material row. The change work could not be read in full/, 'the note never claims work that did not happen')
+  assert.equal(report.outcome.deliverable, 'saved')
+})
+
+// Review of #508: rows a former pass left (not run in time) are finished by the
+// next Konrad hand-over even when it saves nothing: it follows its bound construction.
+test('a Konrad hand-over that saves nothing still follows the construction it is bound to', async () => {
+  const operations = createWorkerOperations({ version: 2, bindings: catalogFixture().definition('bob.tools', 'tool_contract').definition.worker_operation_bindings as any, projectId: 'p', hasAccess: async () => true,
+    load: async () => ({ status: 'ready', source: { artifact_id: 'c1', revision: 3 }, entries: [{ kind: 'construction', id: 'c1', revision: 3, label: 'Lådan' }] }),
+    validateMany: async () => true, prepareDrawing: async () => ({ status: 'ready' }), drawingArguments: () => null, drawingWork: () => undefined })
+  const { bob, constructionCalls } = await turn(catalogFixture(), [ask('ask_structure_worker', { request: 'Konrad, fortsätt konstruktionsändringen.' })], {},
+    undefined, undefined, undefined, undefined, { operations, seen: [] }, { materialFollow: true })
+  const read = constructionCalls.find(c => c.name === 'read_construction_changes')
+  assert.deepEqual([read?.args.artifact_id, read?.args.revision], ['c1', 3])
+  assert.deepEqual(toolOutput(bob[1]).follow_up.constructions.map((c: any) => [c.artifact_id, c.revision]), [['c1', 3]])
+})
+
 test('the workers come from the catalog; a tool belongs to one worker', () => {
   const catalog = catalogFixture(), workers = catalogWorkers(catalog)!
   assert.deepEqual(Object.keys(workers).sort(), ['drawing', 'materials', 'structure'])
@@ -271,4 +385,41 @@ test('a first construction is not handed to Konrad while the solution fails the 
   assert.equal(existing.workers['structure-worker'].length > 0, true, 'work on an existing construction is not gated')
   const pinned = await turn(catalogFixture(m => { const row = m.definitions.find(d => d.prompt_key === 'bob.tools')!; delete (row.definition as any).handover_readiness_version }), [ask('ask_structure_worker', { request: 'Konrad, konstruera ladan.' })], {}, notReady)
   assert.equal(pinned.workers['structure-worker'].length > 0, true, 'manifests before the publication keep the old hand-over')
+})
+
+
+test('Bob hands exact server-read identity to Rita; native tools and automatic knowledge use the bound scope',async()=>{
+ const id='10000000-0000-4000-8000-000000000001',drawing='20000000-0000-4000-8000-000000000001'
+ const binding={projectId:'p',construction:{artifact_id:id,revision:5},drawing:{artifact_id:drawing,revision:2},area_id:null,component_id:null,step_id:null,request_id:null}
+ const seen:any[]=[],sourceRead={artifact_id:id,revision:5,view:'overview',after:null,ids:[],result_id:null,section:null,step_id:null,work_kind:null}
+ const {workers,constructionCalls}=await turn(catalogFixture(),[
+  ask('read_construction_draft',sourceRead),ask('ask_drawing_worker',{request:'Visa fönstret från framsidan.'}),
+ ],{'drawing-worker':[
+  o=>{const spec=o.tools!.find(t=>t.function.name==='design_project_cad')!;assert(!('request_id' in (spec.function.parameters.properties as any)));assert(!names(o).includes('compose_cad_shell'))
+   return {success:true,model:'fixture',usage,responseId:'r1',toolCalls:[call('r1c','design_project_cad',{brief:'Front',handoff:null,requirement_changes:[],views:['front'],assembly_dependencies:null})]}}]},
+ args=>({status:'ok',projectId:'p',artifact_id:args.artifact_id,revision:args.revision,source_state:'current'}),undefined,undefined,{binding,seen})
+ assert.deepEqual(seen[0].sources,[binding.construction]);assert.equal(seen[1].args.artifact_id,drawing);assert.equal(seen[1].args.construction_revision,5);assert.equal(seen[1].args.request_id,null)
+ const knowledge=tail(catalogFixture(),workers['drawing-worker'][0],'drawing-worker').knowledge
+ assert.deepEqual(knowledge.drawing_work,binding);assert.equal(knowledge.constructions.artifact_id,id)
+ assert(constructionCalls.filter(c=>c.name==='read_construction_draft').every(c=>c.args.artifact_id===id&&c.args.revision===5))
+})
+
+
+test('ordinary Bob handover reaches Rita piece planning through the final catalog schema and code-owned source tuples',async()=>{
+ const seen:any[]=[],operations=createWorkerOperations({projectId:'p',hasAccess:async()=>true,
+  load:async()=>({status:'ready',source:null,entries:[{kind:'construction',id:'source-a',revision:2,label:'Frame'},{kind:'construction',id:'source-b',revision:5,label:'Roof'}]}),
+  validateMany:async()=>true,prepareDrawing:async()=>{throw Error('A piece batch must not take the single-source route')},drawingArguments:()=>null,drawingWork:()=>undefined})
+ const result=await turn(catalogFixture(),[ask('ask_drawing_worker',{request:'Rita, draw frame and roof as separate pieces.'})],{
+  'drawing-worker':[o=>{
+   const tool=o.tools!.find(t=>t.function.name==='plan_cad_pieces');assert(tool,'Rita can reach the larger flow')
+   const fields:any=tool.function.parameters;assert(!('area_id'in fields.properties));assert(!('artifact_id'in fields.properties.pieces.items.properties))
+   assert(o.catalogRuntimeSurface?.operation,'binding metadata reaches actual catalog call')
+   const sources=operations.exportState().scopes[0].entries
+   return{success:true,model:'fixture',usage,responseId:'piece-plan',toolCalls:[call('piece-call','plan_cad_pieces',{
+    assembly_title:'Barn',assembly_brief:'Frame and roof in common axes',pieces:sources.map(e=>({piece_key:e.label.toLowerCase(),brief:e.label,source_ref:e.ref,handoff:{}}))})]}
+  }]
+ },undefined,undefined,undefined,undefined,{operations,seen})
+ assert.equal(seen.length,1);assert.deepEqual(seen[0].args.pieces.map((p:any)=>[p.artifact_id,p.construction_revision]),[['source-a',2],['source-b',5]])
+ assert.equal(seen[0].args.area_id,null);assert.equal(result.workers['drawing-worker'].length,2)
+ assert(!names(result.bob[0]).includes('plan_cad_pieces'),'the coordinator retains the same owner boundary')
 })

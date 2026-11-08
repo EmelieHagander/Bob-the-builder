@@ -1,3 +1,7 @@
+export function validVisualSource(s:any){
+ const v=s?.visual;if(v===undefined)return true
+ return s.dataset==='image_pixels'&&v&&Object.keys(v).sort().join(',')==='kind,ref,revision,view'&&['cad','concept'].includes(v.kind)&&Number.isSafeInteger(v.revision)&&v.revision>0&&typeof v.view==='string'&&/^[A-Za-z][A-Za-z0-9_-]*(?:\.sheet(?:[2-9]|[1-9][0-9]))?$/.test(v.view)&&v.ref===`${v.kind==='cad'?'drawing':'concept'}:${s.recordId}:${v.revision}:${v.view}`
+}
 import type { AnswerEvidence, ProjectWriteReceipt } from './provenance.ts'
 import { BOB_SCREEN_SURFACES, isBobOpaqueId, type CurrentView } from '../domain/bobScreen.ts'
 
@@ -9,7 +13,7 @@ export function isBobCurrentView(value: unknown, projectId: string): value is Cu
     || v.surface !== null && !BOB_SCREEN_SURFACES.includes(v.surface)
     || typeof v.retrievedAt !== 'string' || !Number.isFinite(Date.parse(v.retrievedAt))
     || !v.focus || typeof v.focus !== 'object' || Array.isArray(v.focus)
-    || !Array.isArray(v.sources) || v.sources.length > 16 || !v.sources.every(s => s && s.projectId === projectId && typeof s.recordId === 'string' && typeof s.label === 'string' && typeof s.dataset === 'string')
+    || !Array.isArray(v.sources) || v.sources.length > 16 || !v.sources.every(s => s && s.projectId === projectId && typeof s.recordId === 'string' && typeof s.label === 'string' && typeof s.dataset === 'string' && validVisualSource(s))
     || !Array.isArray(v.warnings) || v.warnings.length > 32 || !v.warnings.every(w => typeof w === 'string' && w.length <= 200)) return false
   const entity = (e: unknown): e is {id:string;name:string} => !!e && typeof e === 'object' && !Array.isArray(e)
     && isBobOpaqueId((e as {id:unknown}).id) && typeof (e as {name:unknown}).name === 'string' && String((e as {name:unknown}).name).length <= 240
@@ -64,10 +68,13 @@ export function isBobAnswerEvidence(value: unknown, projectId: string): value is
   return evidence.kind === 'ai_assessment' && typeof evidence.partial === 'boolean'
     && (evidence.currentView === undefined || isBobCurrentView(evidence.currentView, projectId))
     && Array.isArray(evidence.sources) && evidence.sources.every(s => s && s.projectId === projectId
-      && typeof s.recordId === 'string' && typeof s.label === 'string' && typeof s.dataset === 'string')
+      && typeof s.recordId === 'string' && typeof s.label === 'string' && typeof s.dataset === 'string' && validVisualSource(s))
     && (evidence.writes === undefined || (Array.isArray(evidence.writes)
       && evidence.writes.every(r => isProjectWriteReceipt(r, projectId))))
     && (evidence.references === undefined || (Array.isArray(evidence.references) && evidence.references.length<=32
       && evidence.references.every(r=>r&&typeof r.id==='string'&&typeof r.title==='string'&&typeof r.version==='string'
         &&typeof r.reviewedAt==='string'&&Number.isFinite(Date.parse(r.reviewedAt))&&typeof r.url==='string'&&/^https:\/\//.test(r.url))))
+    && (evidence.notices === undefined || (Array.isArray(evidence.notices) && evidence.notices.length <= 8
+      && evidence.notices.every(n => n && ['failed', 'uncertain', 'info'].includes(n.kind) && typeof n.code === 'string' && typeof n.text === 'string'
+        && (n.missing === undefined || (Array.isArray(n.missing) && n.missing.every(m => typeof m === 'string'))))))
 }

@@ -1,9 +1,15 @@
+import { followConstructionChanges, followUpNote, savedConstructionTargets } from './construction-follow-up.ts'
+import {helperConversation} from './bob-helper-context.ts'
+import { withoutServerRevisions } from './server-revisions.ts'
+import type {WorkerOperations,OperationRole} from './worker-operations.ts'
+import { validConstructionRef, type ConstructionRef } from './drawing-work.ts'
 import type { PlanLinks } from './project-plan-links.ts'
 import type { BuildingScope } from './project-building-scope.ts'
 import type { WorkRecords } from './project-work-records.ts'
 import type { SolutionActions } from './project-solution-actions.ts'
 import type { ProjectEdits } from './project-edits.ts'
 import type { ConstructionTools } from './construction-draft.ts'
+import { constructionPieceHandoffGate } from './construction-piece-handoff.ts'
 import type { KnowledgeReader } from './building-knowledge.ts'
 import type { OperationalReader } from './project-operations.ts'
 import { fingerprint, rethrowContinuation } from './bob-job-journal.ts'
@@ -17,12 +23,14 @@ import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-servi
 import type { createProjectLookup } from './project-lookup.ts'
 import { buildBobHands, buildBobCompleteHands, bobToolAvailability } from './bob-prompt.ts'
 import type { AiCatalogSession } from './ai-catalog.ts'
+import { workpadTool, workpadFrame, type AgentWorkpads, type WorkpadAgent } from './bob-agent-workpad.ts'
 import { compactReceipts, type ProjectWriter } from './project-write.ts'
 import { humanTextIssues } from './human-text.ts'
 import { answerTextFragments, type AnswerTextOutcome } from './answer-text.ts'
 import { toolRejection } from './tool-rejection.ts'
 import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
-import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogReportReadback, catalogConstructionAutoCheck, catalogHandoverReadiness, handoverReadinessBlock, readbackReads, workerOwnedTools, parseWorkerJob, runWorker, validWorkerProgress, type WorkerProgress } from './bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogPlanTools, catalogReportReadback, catalogConstructionAutoCheck, catalogHandoverReadiness, handoverReadinessBlock, readbackReads, workerOwnedTools, parseWorkerJob, runWorker, validWorkerProgress, type WorkerProgress, withOutputLimitNote } from './bob-workers.ts'
+import { focusedWorkerStep, savedFormPieceEvidence } from './worker-form-piece.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
@@ -39,6 +47,8 @@ import type { ProjectCalculator } from './project-calculator.ts'
 import { type ToolPolicyReader, type ToolboxEntry, type ToolInstructions, type ToolGate, checkedToolSnapshot } from './project-tools/session.ts'
 import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' }
 
+/** The change note of a material row code recalculated after a construction change. */
+const FOLLOW_UP_CHANGE_NOTE = 'Omräknad av koden från den sparade konstruktionens recept efter en konstruktionsändring.'
 /** Instruction content comes from the pinned database manifest; shelf state is data. */
 export function buildBobSystemMessage(aiCatalog: AiCatalogSession, tools: OpenAIServiceOptions['tools'] = [], toolbox: ToolboxEntry[] = [], completeRequest = false, toolSheets = false, promptTiers = false): string {
   const shelf = sortToolbox(toolbox, aiCatalog.definition('bob.tools', 'tool_contract').definition.shelves as { label: string; tools: string[] }[])
@@ -151,7 +161,7 @@ function buildManagedMessages(aiCatalog: AiCatalogSession, opts: {
       ? [{ role: 'user' as const, content: text('outstanding') + '\n' + JSON.stringify(opts.drawingRequests) }] : []),
   ]
 }
-export type ModelCall = (options: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<string>>
+export type ModelCall = (options: OpenAIServiceOptions, beforeDispatch?: () => Promise<void>) => Promise<OpenAIServiceResponse<string>>
 export type ProjectAnswer =
   | { ok: true; answer: string; projectId: string; evidence: AnswerEvidence; providerResponseId?: string }
   | { ok: false; error: string }
@@ -163,26 +173,52 @@ export interface TurnProgress { stage: 'thinking' | 'tool' | 'finishing'; tool?:
  * reads the owner's latest instruction and the tool cards and names up to four
  * tools for the turn, so the offered list is right from the first step and
  * stays fixed. Any failure, invalid answer or empty choice keeps the phase set. */
-export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], drawingRequests: unknown, deadline: number, exclude: Set<string> = new Set()): Promise<string[] | null> {
+export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], drawingRequests: unknown, deadline: number, exclude: Set<string> = new Set(), limit = 4): Promise<string[] | null> {
   const candidates = opts.aiCatalog.manifest().definitions.flatMap(row => {
     const name = row.prompt_key.startsWith('tools.') ? row.prompt_key.slice(6) : ''
     const card = row.definition.card_description
     return row.definition_kind === 'tool_contract' && name && !core.includes(name) && !exclude.has(name) && typeof card === 'string' && card ? [{ name, card }] : []
   })
   if (!candidates.length) return null
+  return pickFromCards(opts, { latest_instruction: opts.message, ...(opts.continuedWork?helperConversation(opts.context,true):{memory_summary:opts.context?.summary??null,recent_conversation:(opts.context?.recent??[]).slice(-4).map(({role,text})=>({role,text:text.slice(0,1000)}))}),
+    pending_drawing_requests: Array.isArray(drawingRequests) ? drawingRequests.length : 0, always_loaded: core }, candidates, deadline, limit)
+}
+
+const WORKER_STOPS = new Set(['needs_verification', 'awaiting_design_review', 'unavailable', 'not_started'])
+
+/** A short, stable fingerprint of one hand-over (FNV-1a, 64 bit), so a failed
+ * or blocked request is refused again only when Bob repeats it unchanged. */
+export function requestFingerprint(job: { job: string; findings: string | null }): string {
+  let hash = 0xcbf29ce484222325n
+  for (const byte of new TextEncoder().encode(JSON.stringify([job.job, job.findings]))) {
+    hash ^= BigInt(byte); hash = (hash * 0x100000001b3n) & 0xffffffffffffffffn
+  }
+  return hash.toString(16).padStart(16, '0')
+}
+
+/** Owner decision 2026-11-06 (worker focus): the same picker names, from Bob's
+ * request to a worker, which of the worker's optional tools the job needs,
+ * beside its core tools. The worker then keeps that list for the whole job. */
+export async function pickWorkerTools(opts: ProjectAnswerOptions, request: string, core: string[], optional: string[], deadline: number, limit: number): Promise<string[] | null> {
+  const candidates = optional.flatMap(name => {
+    const card = opts.aiCatalog.manifest().definitions.find(row => row.prompt_key === 'tools.' + name && row.definition_kind === 'tool_contract')?.definition.card_description
+    return typeof card === 'string' && card ? [{ name, card }] : []
+  })
+  if (!candidates.length) return null
+  return pickFromCards(opts, { latest_instruction: request, always_loaded: core }, candidates, deadline, limit)
+}
+
+async function pickFromCards(opts: ProjectAnswerOptions, input: Record<string, unknown>, candidates: { name: string; card: string }[], deadline: number, limit: number): Promise<string[] | null> {
   const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'tool-picker', aiFunction: 'tool-picker', module: 'global',
     userId: opts.userId, catalogRoleKey: 'tool-picker', catalogSchemaKey: 'bob_tool_pick',
-    messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, memory_summary: opts.context?.summary ?? null,
-      recent_conversation: (opts.context?.recent ?? []).slice(-4).map(({ role, text }) => ({ role, text: text.slice(0, 1000) })),
-      pending_drawing_requests: Array.isArray(drawingRequests) ? drawingRequests.length : 0,
-      always_loaded: core, candidates }) }],
+    messages: [{ role: 'user', content: JSON.stringify({ ...input, candidates }) }],
     timeoutMs: Math.max(1000, Math.min(opts.modelTimeoutMs ?? 45_000, 15_000, deadline - Date.now())) })
   let value: unknown = result.data
   try { if (typeof value === 'string') value = JSON.parse(value) } catch { return null }
   const names = (value as { tools?: unknown } | null)?.tools
   if (!result.success || !Array.isArray(names)) return null
   const known = new Set(candidates.map(c => c.name))
-  const picked = [...new Set(names.filter((name): name is string => typeof name === 'string' && known.has(name)))].slice(0, 4)
+  const picked = [...new Set(names.filter((name): name is string => typeof name === 'string' && known.has(name)))].slice(0, limit)
   return picked.length ? picked : null
 }
 /** Embedded seed is for injected/offline callers only. Production supplies the
@@ -237,6 +273,12 @@ export interface BobAnswerState {
   finalCall?: boolean
   /** Worker checkpoints: the hand-over at this step and call index, and the worker's place in it. */
   worker?: { key: string; index: number; session: unknown; projectName?: string; progress: WorkerProgress }
+  /** Exact source reads carried by code into Rita's handover. */
+  drawingSources?:ConstructionRef[]
+  /** Diagnostic indices must not restart at zero on each specialist claim. */
+  workerToolEvents?: number
+  /** Failed hand-overs cannot start the same worker again during this owner turn. */
+  failedWorkers?: string[]
   tools: NonNullable<OpenAIServiceOptions['tools']>
   closedByLimit: boolean; closedByCommentary: boolean
   request?: OpenAIServiceOptions
@@ -247,9 +289,15 @@ export interface BobAnswerState {
 export interface BobAnswerCheckpoint {
   state?: BobAnswerState
   save(state: BobAnswerState): Promise<void>
+  /** Runtime scheduling, after a saved continuing specialist step and all stop checks. */
+  afterWorkerStep?(): void
 }
 export type ProjectAnswerOptions = {
+  continuedWork?:boolean;
   aiCatalog: AiCatalogSession;
+  /** Pinned per execution; Rita receives server-owned source/destination identity. */
+  boundDrawingWork?:boolean;
+  workerOperations?:WorkerOperations;
   /** Build guides (2026-10-30): the owner's switch. Off hides design_project_cad's assembly order. */
   buildGuideTools?: boolean;
   projectId: string; userId: string; message: string;
@@ -272,6 +320,17 @@ export type ProjectAnswerOptions = {
   /** Production turns ask the small tool picker when the manifest publishes it;
    * offline callers keep the phase choice unless they opt in. */
   toolPicker?: boolean;
+  /** Pinned per execution (tool_pick_limit): how many tools the picker may name; four before the pin. */
+  toolPickLimit?: number;
+  /** Pinned per execution (workerFocusVersion): a worker with a catalog focus is
+   * offered its core tools and the optional ones picked from Bob's request. */
+  workerFocus?: boolean;
+  /** Pinned per execution (materialFollowVersion 1): after Konrad's job, code
+   * recalculates the material rows of each construction revision it saved. */
+  materialFollow?: boolean;
+  /** Pinned per execution (workerPlanVersion): Konrad's construction write
+   * before a plan note in his workpad is refused with plan_required. */
+  workerPlan?: boolean;
   /** Pinned per execution: which buildings this project links, read once at turn start. */
   buildingLinks?: BuildingLinks;
   /** Pinned per execution (projectFactsVersion): orientation blocks are cut,
@@ -284,6 +343,41 @@ export type ProjectAnswerOptions = {
   finalAnswer?: boolean;
   /** Pinned per execution (workerCheckpointVersion): a worker's place is saved after each of its steps. */
   workerCheckpoint?: boolean;
+  workerStageContext?: boolean;
+  registerWorkerContextSurface?: (role: string, refresh: () => Promise<ContextSurface>) => () => void;
+  compactToolState?: boolean;
+  /** New claimed worker jobs only: restart Konrad's model chain after an exact
+   * saved construction readback and a later private workpad update. */
+  workerVerifiedRenewal?: boolean;
+  /** Pinned per new claimed turn: confirm each Konrad construction change before
+   * he starts another natural piece; never alter an in-flight worker protocol. */
+  workerPieceProgress?: boolean;
+  /** v3: finish a checked piece at the owner-visible review boundary. */
+  workerDesignReview?: boolean;
+  /** Owner decision 2026-11-07 (workerGatesVersion 1): the owner's chat answer is
+   * the review, so no stop after every piece; open piece verifications reach
+   * Konrad as facts in the same job; a failed or blocked hand-over refuses only
+   * the identical request this turn. */
+  workerGates?: boolean;
+  /** Owner decision 2026-11-07 (constructionSketchVersion 1): the construction
+   * sketches open in this turn, so Konrad's report says what is not saved. */
+  /** Pinned per execution (stableToolsVersion 1): a worker's core tools first, with a cache point after them. */
+  stableTools?: boolean;
+  /** Pinned per execution (serverRevisionsVersion 1): the server fills every revision; passed on to each tool session. */
+  serverRevisions?: { readers: import('./server-revisions.ts').RevisionReaders };
+  /** Pinned per execution (refusalGuardVersion 1): a refused call does not run again unchanged. */
+  refusalGuard?: boolean;
+  openSketches?: () => Promise<Record<string, unknown>[] | null>;
+  /** New v2 jobs: caller-authorized, code-only reads of the approved Plan and
+   * exact Construction revisions, not a second planner or worker tool. */
+  workerFormPiece?: {
+    readPlan(): Promise<unknown>;
+    readConstruction(id: string, revision: number): Promise<unknown>;
+    /** v4: authoritative spatial save/review gate; no provider metadata. */
+    readPiece?(): Promise<unknown>;
+  };
+  /** Private bounded notes, enabled by the pinned workpad contract on server-claimed turns. */
+  workpads?: AgentWorkpads;
   /** Drops a finished worker's model chain from the turn checkpoint. */
   releaseContext?: (responseId: string) => void;
   resultReferences?: boolean;
@@ -308,8 +402,12 @@ export async function runProjectAnswer(opts: ProjectAnswerOptions): Promise<Proj
       || ![saved.completionChecked, saved.closedNoteSent, saved.closedByLimit, saved.closedByCommentary].every(v => typeof v === 'boolean')
       || saved.reviewedAnswer !== undefined && (typeof saved.reviewedAnswer !== 'string' || !saved.reviewedAnswer)
       || saved.finalCall !== undefined && typeof saved.finalCall !== 'boolean'
+      || saved.workerToolEvents !== undefined && !counter(saved.workerToolEvents)
       || saved.worker !== undefined && (saved.phase !== 'tools' || !saved.worker || typeof saved.worker.key !== 'string' || saved.worker.index !== saved.toolIndex
         || !saved.worker.session || typeof saved.worker.session !== 'object' || saved.worker.projectName !== undefined && typeof saved.worker.projectName !== 'string' || !validWorkerProgress(saved.worker.progress, 40))
+      || saved.drawingSources !== undefined && (!Array.isArray(saved.drawingSources)||saved.drawingSources.some(ref=>!validConstructionRef(ref)))
+      || saved.failedWorkers !== undefined && (!Array.isArray(saved.failedWorkers) || new Set(saved.failedWorkers).size !== saved.failedWorkers.length
+        || saved.failedWorkers.some(key => typeof key !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(key)))
       || !saved.initial || !saved.toolbox || !saved.observation || !Array.isArray(saved.messages) || !Array.isArray(saved.tools) || !Array.isArray(saved.workResults)
       || (saved.phase !== 'ready' && (!saved.request || saved.request.app !== 'bob' || saved.request.aiFunction !== 'ask-bob' || saved.request.userId !== opts.userId))
       || (['response', 'tools'].includes(saved.phase) && !saved.response)
@@ -320,7 +418,7 @@ export async function runProjectAnswer(opts: ProjectAnswerOptions): Promise<Proj
   }
   if (saved?.result) return structuredClone(saved.result)
   let latest = saved
-  const checkpoint = opts.checkpoint ? { state: saved, save: async (state: BobAnswerState) => {
+  const checkpoint = opts.checkpoint ? { ...opts.checkpoint, state: saved, save: async (state: BobAnswerState) => {
     await opts.checkpoint!.save(state); latest = state
   } } : undefined
   const result = await runProjectAnswerFromState({ ...opts, checkpoint })
@@ -331,10 +429,18 @@ export async function runProjectAnswer(opts: ProjectAnswerOptions): Promise<Proj
 }
 async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<ProjectAnswer> {
   const restored = opts.checkpoint?.state
+  const drawingSources:ConstructionRef[]=structuredClone(restored?.drawingSources??[])
+  const rememberDrawingSource=(result:any)=>{
+    if(!(opts.boundDrawingWork||opts.workerOperations)||result?.status!=='ok'||result.projectId!==opts.projectId||!validConstructionRef({artifact_id:result.artifact_id,revision:result.revision}))return
+    const ref={artifact_id:result.artifact_id,revision:result.revision},at=drawingSources.findIndex(r=>r.artifact_id===ref.artifact_id)
+    if(at>=0)drawingSources.splice(at,1);drawingSources.push(ref)
+  }
   if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
   const briefing = restored ? restored.initial.briefing as Awaited<ReturnType<typeof opts.lookup.search>> : await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
   if (briefing.status !== 'ok') return { ok: false, error: briefing.status === 'denied' ? 'project_denied' : 'project_unavailable' }
   const contract = opts.aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
+  const workpads = opts.workpads && contract.workpad_version === 1
+    && opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.workpad_version === 1 ? opts.workpads : undefined
   const contextStrategy = contract.context_strategy_version === 1
   const boundedOrientation = contextStrategy && contract.orientation_directory_version === 1
   if (boundedOrientation && !opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.read_project_orientation')) throw new Error('tool_catalog_unavailable')
@@ -380,7 +486,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     return { native: [...specs.filter(spec => coreTools!.includes(spec.function.name)), opts.aiCatalog.tool(USE_TOOL, { include_manual: true })],
       sheets: specs.map(spec => spec.function.name).filter(name => !coreTools!.includes(name)) }
   }
-  const turnPreload = (phase: string | null) => [...turnTools(phase), ...workerHandOverNames, ...checkReads]
+  const turnPreload = (phase: string | null) => [...turnTools(phase), ...workerHandOverNames, ...checkReads, ...planTools, ...(workpads ? ['update_workpad'] : [])]
   const turnTools = (phase: string | null) => {
     if (!phaseTools) return preloadTools
     if (toolPick) return [...preloadTools, ...toolPick]
@@ -406,13 +512,15 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const workerHandOverNames = Object.values(workers ?? {}).map(worker => worker.tool)
   // The reads Bob checks a report with are loaded from the first step too.
   const checkReads = workers ? catalogCheckReads(opts.aiCatalog) : []
+  // Bob's own plan tools are on hand from his first step (plan_tools_version 1).
+  const planTools = workers ? catalogPlanTools(opts.aiCatalog) : []
   const reportReadback = !!workers && catalogReportReadback(opts.aiCatalog)
   const constructionAutoCheck = !!workers && catalogConstructionAutoCheck(opts.aiCatalog)
   const handoverReadiness = !!workers && catalogHandoverReadiness(opts.aiCatalog)
   // Retired tools are hidden from Bob the same way (new manifests only).
   const workerOwned = new Set([...workerOwnedTools(workers), ...catalogRetiredTools(opts.aiCatalog)])
   // Never picker candidates: the workers' own tools, and the hand-overs Bob always has.
-  const workerTools = new Set([...workerOwned, ...workerHandOverNames, ...checkReads])
+  const workerTools = new Set([...workerOwned, ...workerHandOverNames, ...checkReads, ...planTools])
   const bobPolicy: ToolPolicyReader = workerOwned.size ? async () => {
     const policy = await basePolicy()
     return { ...policy, tools: policy.tools.map(row => workerOwned.has(row.name) ? { ...row, active: false } : row) }
@@ -420,10 +528,11 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const withoutDiagnostics = (result: any) => { if (result && typeof result === 'object' && 'diagnostics' in result) { const { diagnostics: _d, ...rest } = result; return rest } return result }
   const workerSessions = new Map<string, ReturnType<typeof createBobToolSession>>()
   let currentStep = restored?.step ?? 0, currentIndex = -1
-  let workerToolEvents = 0
+  let workerToolEvents = restored?.workerToolEvents ?? restored?.worker?.progress.calls.length ?? 0
   // Worker checkpoints: the saved place is used once, by the same hand-over call.
   let workerResume = opts.workerCheckpoint ? restored?.worker : undefined
   let workerState: BobAnswerState['worker']
+  const failedWorkers = new Set(restored?.failedWorkers ?? [])
   // The project's name for the workers' personas: the locked snapshot, else one read.
   let projectName: string | undefined
   const readProjectName = async () => {
@@ -439,41 +548,153 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     version: Number((opts.aiCatalog.definition('tools.' + worker.tool, 'tool_contract').definition.envelope as { schema_version?: unknown } | undefined)?.schema_version ?? 1),
     gate: (): ToolGate => 'available',
     execute: async (raw: unknown) => {
+      // A future colleague must opt in explicitly; never let a new role reuse
+      // somebody else's private scratch note through an unchecked cast.
+      const workpadAgent: WorkpadAgent | null = key === 'structure' || key === 'drawing' || key === 'materials' ? key : null
+      const workerPads = workpadAgent ? workpads : undefined
+      if (opts.workerPieceProgress && key === 'structure' && (!workerPads || !reportReadback || !worker.knowledge))
+        throw new Error('worker_piece_progress_unavailable')
+      if (opts.workerFormPiece && key === 'structure'
+        && (!opts.workerPieceProgress || !constructionAutoCheck || !worker.tools.includes('check_construction_draft')))
+        throw new Error('worker_form_piece_unavailable')
+      if (opts.workerDesignReview && key === 'structure' && !opts.workerFormPiece)
+        throw new Error('worker_design_review_unavailable')
       const plain = !!worker.knowledge
       const job = parseWorkerJob(raw, plain)
       if (!job) return { status: 'invalid', issues: [{ path: '$', expected: plain ? 'request (text)' : 'job (text) and findings (text or null)' }] }
       const resume = workerResume && workerResume.key === key && workerResume.index === currentIndex ? workerResume : undefined
       workerResume = undefined
+      let constructionPiece: Record<string, unknown> | undefined
+      if (key === 'structure' && opts.workerFormPiece?.readPiece) {
+        try {
+          const read = await opts.workerFormPiece.readPiece()
+          constructionPiece = read && typeof read === 'object' && !Array.isArray(read) ? read as Record<string, unknown> : { status: 'unavailable' }
+        } catch (error) {
+          rethrowContinuation(error)
+          if (error instanceof Error && error.message === 'project_denied') throw error
+          constructionPiece = { status: 'unavailable' }
+        }
+        const preflight = constructionPieceHandoffGate(constructionPiece)
+        if (preflight) return preflight
+      }
+      // A provider failure already exhausted the journal's bounded replay.
+      // Bob may report the failure, but not start an equally costly fresh chain
+      // for the same specialist until the owner's next message starts a new turn.
+      // With worker gates (owner decision 2026-11-07) only the identical request
+      // is refused: after Bob changed the source or the request, a new job may start.
+      const failedKey = (base: string) => opts.workerGates ? base + '_r_' + requestFingerprint(job) : base
+      if (opts.workerFormPiece && key === 'structure' && failedWorkers.has(failedKey('structure_piece')))
+        return { status: 'needs_verification', worker: worker.role.replace(/^role\./, ''),
+          reason: 'construction_piece_blocked_earlier_this_turn',
+          note: 'A canonical bounded-construction write was already rejected in this turn. Do not spend another specialist chain on the same blocked geometry. Keep the saved revision unchanged; report the blocker and allow a new owner turn after the source or implementation is corrected.', calls: [] }
+      if (failedWorkers.has(failedKey(key))) return { status: 'unavailable', worker: worker.role.replace(/^role\./, ''), reason: 'failed_earlier_this_turn', calls: [] }
+      if(opts.workerOperations&&!resume&&workpadAgent){
+        const drawing=opts.currentView?.status==='ok'?opts.currentView.focus.drawing:undefined
+        const prepared=await opts.workerOperations.prepare(workpadAgent,drawingSources,drawing?{artifact_id:drawing.id,revision:drawing.revision}:undefined)
+        if(prepared.status!=='ready')return prepared
+      }
+      if(key==='drawing'&&opts.boundDrawingWork&&!opts.workerOperations&&!resume){
+        if(!opts.cadAssistant)return {status:'unavailable',reason:'drawing_binding_unavailable'}
+        const drawing=opts.currentView?.status==='ok'?opts.currentView.focus.drawing:undefined
+        const focus=drawing?{artifact_id:drawing.id,revision:drawing.revision}:undefined
+        const bound=await opts.cadAssistant.prepareDrawingWorker(drawingSources,focus)
+        if(bound.status!=='ready')return bound
+      }
       let session = workerSessions.get(key)
       if (!session || resume) {
-        session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: () => [...worker.tools, ...worker.reads], offerWaiting: true, readPolicy: basePolicy })
+        session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}),
+          drawingWorker: key==='drawing'&&opts.boundDrawingWork,
+          ...(opts.workerOperations&&workpadAgent?{workerOperation:{role:workpadAgent,operations:opts.workerOperations},
+            runtimeSurface:()=>({version:1 as const,buildGuides:!!opts.buildGuideTools,operation:opts.workerOperations!.surface(workpadAgent)})}:{}),
+          preloadTools: () => [...worker.tools, ...worker.reads, ...(workerPads ? ['update_workpad'] : [])], offerWaiting: true, readPolicy: basePolicy,
+          ...(workerPads ? { extraTools: [workpadTool(workerPads, workpadAgent!)] } : {}) })
         if (resume) session.restoreState(structuredClone(resume.session) as Parameters<typeof session.restoreState>[0])
         workerSessions.set(key, session)
       }
       if (resume?.projectName !== undefined) projectName = resume.projectName
       if (!resume && handoverReadiness && worker.tools.includes('save_construction_draft')) {
-        const blocked = await handoverReadinessBlock(session)
+        const blocked = await handoverReadinessBlock(opts.workerOperations&&workpadAgent?{prepare:()=>session!.prepare(),execute:(name,args)=>session!.execute(name,opts.workerOperations!.serverArgs(workpadAgent,name,args as Record<string,unknown>))}:session)
         if (blocked) return blocked
       }
       const stair = opts.context?.stair
       const history = stair ? stairConversation(opts.aiCatalog, stair) : (opts.context?.recent.slice(0, -1) ?? []).map(m => ({ role: m.role, content: m.text }))
       const workerStep = currentStep, workerIndex = currentIndex
+      const readSavedRecord = async (read: { label: string; tool: string; arguments: Record<string, unknown> }) => {
+        const { artifact_id: id, revision } = read.arguments
+        if (read.label === 'construction' && opts.constructionTools && typeof id === 'string' && Number.isSafeInteger(revision))
+          {const result=await opts.constructionTools.readSavedSummary(id, Number(revision));rememberDrawingSource(result);return result}
+        return withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments)))
+      }
+      const workerWorkpad = !resume && workerPads
+        ? await workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}`) : undefined
       const report = await runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
+        ...(opts.workerStageContext ? { stageContext: true, registerContextSurface: opts.registerWorkerContextSurface } : {}),
+        ...(workerPads ? { workpadEnabled: true, ...(workerWorkpad ? { workpad: workerWorkpad } : {}) } : {}),
+        ...(opts.workerFocus && worker.focus && workerPads ? { focus: { pick: (candidates: string[]) => pickWorkerTools(opts, job.job, worker.focus!.core, candidates, deadline, worker.focus!.optional_limit) } } : {}),
+        // Konrad's gate only: his persona is the one told to plan first
+        // (bob-tool-focus-v1). Rita and Mattias were refused for a plan nobody
+        // asked them for (Våningssäng 2, 2026-11-08: plan_required in batches).
+        ...(opts.workerPlan && workerPads && key === 'structure' ? { planGate: true } : {}),
+        ...(opts.materialFollow && key === 'structure' && worker.tools.includes('continue_construction_change') ? { followUp: async (receipts: Record<string, unknown>[]) => {
+          const operations = opts.workerOperations && workpadAgent ? opts.workerOperations : null
+          // A job that saved nothing still finishes rows a former pass left
+          // (review of #508): it follows the construction it was bound to.
+          const bound = operations?.exportState().scopes.find(scope => scope.role === workpadAgent)?.source
+          const targets = savedConstructionTargets(receipts)
+          if (!targets.length && bound) targets.push({ artifact_id: bound.artifact_id, revision: bound.revision })
+          if (!targets.length) return null
+          // One call at a time, through Konrad's own session: the same fence, quote and writer as his calls.
+          const run = async (name: string, args: Record<string, unknown>) => {
+            const result = withoutDiagnostics(await session!.execute(name, operations ? operations.serverArgs(workpadAgent!, name, args) : args))
+            try { opts.onTool?.({ name, status: String(result?.status ?? 'returned'), step: currentStep + 1, index: 100 + workerToolEvents++, ms: 0 }) } catch { /* diagnostics only */ }
+            return result
+          }
+          const results = await followConstructionChanges({ targets, hasAccess: opts.hasAccess, deadline,
+            read: (target, after) => run('read_construction_changes', { artifact_id: target.artifact_id, revision: target.revision, after }),
+            recalculate: (target, item, rowKey) => run('continue_construction_change', { ...(operations ? { artifact_id: target.artifact_id, revision: target.revision }
+              : { record_id: target.artifact_id, expected_revision: target.revision }), key: rowKey, item_id: item.id, action: 'recalculate',
+              review_note: null, output_revision: null, change_note: FOLLOW_UP_CHANGE_NOTE }) })
+          return { by: 'code', constructions: results, note: followUpNote(results) }
+        } } : {}),
+        ...(opts.openSketches && key === 'structure' ? { openSketches: opts.openSketches } : {}),
+        ...(opts.stableTools ? { stableTools: true } : {}),
+        ...(opts.refusalGuard ? { refusalGuard: true } : {}),
+        ...(opts.workerPieceProgress && key === 'structure' && workerPads && reportReadback && worker.knowledge
+          ? { pieceProgress: { ...(opts.continuedWork?{unmappedReview:true}:{}), ...(opts.workerGates ? { gatesAsFacts: true } : {}), readSaved: async (receipt: Record<string, unknown>) => {
+            const read = readbackReads([receipt])[0]
+            if (!read || !('tool' in read) || read.label !== 'construction') return { status: 'unavailable' }
+            return readSavedRecord(read)
+          }, ...(opts.workerDesignReview && !opts.workerGates ? { pauseForDesignReview: true } : {}), ...(opts.workerFormPiece ? { inspectSaved: async (receipt: Record<string, unknown>, toolArgs: unknown) => {
+            const id = typeof receipt.artifact_id === 'string' ? receipt.artifact_id : receipt.record_id
+            const revision = receipt.revision
+            if (typeof id !== 'string' || !Number.isSafeInteger(revision) || Number(revision) < 1)
+              return { status: 'unavailable', reason: 'saved_revision_identity_missing' }
+            const current = await opts.workerFormPiece!.readConstruction(id, Number(revision))
+            const previous = Number(revision) > 1 && current && typeof current === 'object'
+              && (opts.continuedWork || (current as { form_refinement?: unknown }).form_refinement != null)
+              ? await opts.workerFormPiece!.readConstruction(id, Number(revision) - 1) : null
+            return savedFormPieceEvidence(receipt, current, previous, opts.projectId, toolArgs, opts.continuedWork)
+          }, ...(opts.workerFormPiece.readPiece ? { readBoundedReview: async () => await opts.workerFormPiece!.readPiece!() as Record<string, unknown> } : {}) } : {}) } } : {}),
+        ...(opts.workerVerifiedRenewal && workerPads && opts.workerCheckpoint && opts.releaseContext
+          ? { verifiedRenewal: { loadWorkpad: (step: number) => workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}:renewal:${step}`) } }
+          : {}),
+        boundDrawingWork:key==='drawing'&&opts.boundDrawingWork,
+        ...(opts.workerOperations&&workpadAgent?{runtimeSurface:()=>({version:1 as const,buildGuides:!!opts.buildGuideTools,operation:opts.workerOperations!.surface(workpadAgent)})}:{}),
         session, hasAccess: opts.hasAccess, deadline, ...(opts.modelTimeoutMs ? { modelTimeoutMs: opts.modelTimeoutMs } : {}),
         ...(opts.finalAnswer ? { stopAsResult: true } : {}),
         ...(opts.releaseContext ? { releaseChain: opts.releaseContext } : {}),
         ...(opts.workerCheckpoint ? { progress: { ...(resume ? { restored: resume.progress } : {}), save: async (progress: WorkerProgress) => {
           workerState = { key, index: workerIndex, session: session!.exportState(), ...(projectName !== undefined ? { projectName } : {}), progress }
           await save(workerStep)
-        } } } : {}),
+        }, ...(opts.checkpoint?.afterWorkerStep ? { afterStep: opts.checkpoint.afterWorkerStep } : {}) } } : {}),
         readCurrent: async () => key === 'materials' ? opts.lookup.search({ dataset: 'materials', query: null, status: null, area_id: null, record_id: null }) : null,
         // In order, one at a time: the journal replays reads by position.
         // Auto check (2026-11-01): a saved construction left unchecked is checked by the server, in order.
-        ...(worker.knowledge && constructionAutoCheck && worker.tools.includes('check_construction_draft') ? { autoCheck: async (targets: { artifact_id: string; revision: number }[]) => {
+        ...(worker.knowledge && constructionAutoCheck && worker.tools.includes('check_construction_draft') ? { autoCheck: async (targets: { artifact_id: string; revision: number; component_ids?: string[] }[]) => {
           const results: Record<string, unknown>[] = []
           for (const target of targets) {
             let result: any
-            try { result = withoutDiagnostics(await session!.execute('check_construction_draft', { ...target, component_ids: [], requirement_checks: [], outputs: [] })) }
+            try { const args={ artifact_id: target.artifact_id,revision: target.revision, component_ids: target.component_ids ?? [], requirement_checks: [], outputs: [] };result = withoutDiagnostics(await session!.execute('check_construction_draft', opts.workerOperations&&workpadAgent?opts.workerOperations.serverArgs(workpadAgent,'check_construction_draft',args):args)) }
             catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; result = { status: 'unavailable' } }
             results.push({ ...target, ...(result && typeof result === 'object' ? result : {}), artifact_id: target.artifact_id, revision: target.revision })
             try { opts.onTool?.({ name: 'check_construction_draft', status: String(result?.status ?? 'returned'), step: currentStep + 1, index: 100 + workerToolEvents++, ms: 0 }) } catch { /* diagnostics only */ }
@@ -486,7 +707,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           for (const read of readbackReads(receipts)) {
             if (!('tool' in read)) { records.push({ [read.label]: { status: 'not_read', reason: read.not_read } }); continue }
             let record: unknown
-            try { record = withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments))) }
+            try { record = await readSavedRecord(read) }
             catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; record = { status: 'unavailable' } }
             const text = JSON.stringify(record) ?? ''
             records.push({ [read.label]: text.length <= 8000 ? record : { status: 'too_large', note: 'Read it with your own tools.' } })
@@ -497,9 +718,23 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         ...(worker.knowledge ? { variables: { project_name: await readProjectName() }, readKnowledge: async () => {
           const knowledge: Record<string, unknown> = {}
           for (const read of worker.knowledge!) {
-            try { knowledge[read.label] = withoutDiagnostics(await session!.execute(read.tool, structuredClone(read.arguments))) }
+            try {
+              const args=opts.workerOperations&&workpadAgent?opts.workerOperations.knowledgeArgs(workpadAgent,read.tool,structuredClone(read.arguments)):structuredClone(read.arguments)
+              if(key==='drawing'&&opts.boundDrawingWork){
+                for(const field of read.tool==='read_construction_draft'?['artifact_id','revision']:read.tool==='read_drawing_requests'?['request_id','after_id']:[])delete args[field]
+              }
+              knowledge[read.label] = withoutDiagnostics(await session!.execute(read.tool,args))
+            }
             catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; knowledge[read.label] = { status: 'unavailable' } }
           }
+          if (opts.workerFormPiece && key === 'structure') {
+            try { knowledge.focused_plan_step = focusedWorkerStep(await opts.workerFormPiece.readPlan(), opts.projectId) }
+            catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error;
+              knowledge.focused_plan_step = { status: 'unavailable' } }
+          }
+          if(opts.workerOperations&&workpadAgent)knowledge.operation_context=opts.workerOperations.describe(workpadAgent)
+          if(key==='drawing'&&opts.boundDrawingWork)knowledge.drawing_work=opts.cadAssistant?.drawingWork
+          if (constructionPiece) knowledge.construction_piece_boundary = constructionPiece
           return knowledge
         } } : {}),
         onTool: ({ name, status, ms, rejection }) => {
@@ -509,16 +744,25 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         } })
       // The job is over: Bob's next save records its result, not a place inside it.
       workerState = undefined
+      // P2 live acceptance 2026-11-04: inner Konrad correctly stopped on a
+      // canonical geometry conflict, but Bob handed the same blocked work back
+      // twice more in one turn (three paid chains, no new revision). Use the
+      // existing persisted per-turn failed-worker marker for this v4 boundary.
+      if (report.status === 'unavailable') failedWorkers.add(failedKey(key))
+      if (opts.workerFormPiece && key === 'structure' && report.status === 'needs_verification'
+        && report.reason === 'construction_piece_write_conflict') failedWorkers.add(failedKey('structure_piece'))
       return report
     } }))
   const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: turnPreload,
+    ...(opts.workerOperations?{runtimeSurface:()=>({version:1 as const,buildGuides:!!opts.buildGuideTools})}:{}),
     ...(boundedOrientation ? { orientationReader: { tools: [ORIENTATION_DIRECTORY_TOOL], execute: (raw: unknown) => {
       if (!orientationReader) throw new Error('context_unavailable')
       return orientationReader.execute(raw)
     }, exportState: () => {
       if (!orientationReader) throw new Error('context_unavailable')
       return orientationReader.exportState()
-    } } } : {}), readPolicy: bobPolicy, ...(workerHandOvers.length ? { extraTools: workerHandOvers } : {}) })
+    } } } : {}), readPolicy: bobPolicy, ...((workerHandOvers.length || workpads)
+      ? { extraTools: [...workerHandOvers, ...(workpads ? [workpadTool(workpads, 'bob')] : [])] } : {}) })
   if (restored) toolbox.restoreState(restored.toolbox)
   // The manifest is pinned before any journal operation. Do not add even an
   // undefined option or change the call sequence of an older running turn.
@@ -543,8 +787,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (!completionGate) return true
     const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'completion-gate', aiFunction: 'completion-gate', module: 'global',
       userId: opts.userId, catalogRoleKey: 'completion-gate', catalogSchemaKey: 'bob_completion_gate',
-      messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, memory_summary: opts.context?.summary ?? null,
-        recent_conversation: (opts.context?.recent ?? []).slice(-6).map(({ role, text }) => ({ role, text: text.slice(0, 2000) })),
+      messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, ...helperConversation(opts.context,opts.continuedWork),
+        ...(opts.continuedWork?{available_capabilities:toolbox.toolbox.map(({name,state,description})=>({name,state,description}))}:{}),
         candidate_final_answer: answer }) }],
       timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, 30_000, deadline - Date.now()) })
     let verdict: unknown = result.data
@@ -559,8 +803,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (!completionGate) return null
     const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'completion-gate', aiFunction: 'completion-gate', module: 'global',
       userId: opts.userId, catalogRoleKey: 'completion-gate', catalogSchemaKey: 'bob_completion_gate',
-      messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, memory_summary: opts.context?.summary ?? null,
-        recent_conversation: (opts.context?.recent ?? []).slice(-6).map(({ role, text }) => ({ role, text: text.slice(0, 2000) })),
+      messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, ...helperConversation(opts.context,opts.continuedWork),
+        ...(opts.continuedWork?{available_capabilities:toolbox.toolbox.map(({name,state,description})=>({name,state,description}))}:{}),
         candidate_final_answer: answer,
         saved_work: compactReceipts(opts.writer?.executedReceipts ?? []).slice(-32).map(({ dataset, label, operation, revision }) =>
           ({ dataset, label, operation, ...(revision ? { revision } : {}) })),
@@ -580,7 +824,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   if (phaseTools && Array.isArray(drawingRequests) && drawingRequests.length) drawingWork = true
   const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
   if (!restored && opts.toolPicker === true && phaseTools && coreTools
-    && opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.tool-picker')) toolPick = await pickTurnTools(opts, coreTools, drawingRequests, deadline, workerTools)
+    && opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.tool-picker')) toolPick = await pickTurnTools(opts, coreTools, drawingRequests, deadline, workerTools, opts.toolPickLimit ?? 4)
   if (restored?.initial.directory) {
     const directory = restoreOrientationDirectory(restored.initial.directory as Parameters<typeof restoreOrientationDirectory>[0], { projectId: opts.projectId, hasAccess: opts.hasAccess })
     orientationReader = directory.reader
@@ -603,6 +847,12 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     ...(Array.isArray(drawingRequests)&&drawingRequests.length?[{role:'user' as const,content:opts.aiCatalog.text('bob.frame.outstanding')+'\n'+JSON.stringify(drawingRequests)}]:[]),
     ...(opts.context ? opts.context.recent.map(m => ({ role: m.role, content: m.text })) : [{ role: 'user' as const, content: opts.message }]),
   ]
+  if (!restored && workpads) {
+    // The current owner instruction must stay newer than a remembered intention.
+    const currentRequest = messages.findLastIndex(item => item.role === 'user' && item.content === opts.message)
+    messages.splice(currentRequest < 0 ? Math.max(0, messages.length - 1) : currentRequest, 0,
+      { role: 'user', content: workpadFrame(await workpads.load('bob', 'turn')) })
+  }
   let preparedEpoch = restored ? restored.preparedEpoch : contextStrategy ? opts.contextEpoch?.() : undefined
   const observation: TurnObservation = structuredClone(restored?.observation ?? { steps: 0, tool_calls: 0, deferred_calls: 0, completion_checks: 0, nudges: 0, end: 'failed' })
   const observe = (end: TurnObservation['end']) => { observation.end = end; opts.observe?.({ ...observation }) }
@@ -627,10 +877,13 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
       ...(finalCall ? { finalCall } : {}),
       ...(workerState ? { worker: workerState } : {}),
+      ...((opts.boundDrawingWork||opts.workerOperations)?{drawingSources}:{}),
+      ...(workerToolEvents ? { workerToolEvents } : {}),
+      ...(failedWorkers.size ? { failedWorkers: [...failedWorkers] } : {}),
       tools, closedByLimit, closedByCommentary, request, response: pendingResponse, toolIndex }))
   }
   const answered = (text: string, responseId: string | undefined, incomplete: boolean): ProjectAnswer => ({ ok: true, answer: text, projectId: opts.projectId, providerResponseId: responseId,
-      evidence: { kind: 'ai_assessment', ...(opts.currentView ? { currentView: opts.getCurrentViewEvidence?.() ?? opts.currentView } : {}), references: opts.knowledgeReader?.references ?? [], sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
+      evidence: { kind: 'ai_assessment', ...(opts.currentView ? { currentView: opts.getCurrentViewEvidence?.() ?? opts.currentView } : {}), references: opts.knowledgeReader?.references ?? [], sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId&&x.visual?.ref===s.visual?.ref)===i),
         partial: incomplete || !!orientation?.warnings.length || !!opts.projectEdits?.partial || !!opts.solutionActions?.partial || !!opts.workRecords?.partial || !!opts.planLinks?.partial || !!opts.buildingScope?.partial || !!opts.buildTree?.partial || !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain || !!opts.writer?.hasUnresolvedWrites,
         ...(opts.writer?.receipts.length ? { writes: compactReceipts(opts.writer.receipts) } : {}) },
     })
@@ -682,7 +935,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       // The returned provider request and its eventual handlers share this
       // refreshed fence. A new describe call remains loaded for the next step.
       return { systemMessage: [buildBobSystemMessage(opts.aiCatalog, tools, shelf, opts.completeRequest, toolSheets, promptTiers), toolbox.workflowInstructions].filter(Boolean).join('\n\n'), tools: tools.length ? tools : undefined,
-        catalogSchemaParameters: schemaParameters(), catalogToolParameters: toolbox.toolParameters() }
+        catalogSchemaParameters: schemaParameters(), catalogToolParameters: toolbox.toolParameters(),...(opts.workerOperations?{catalogRuntimeSurface:{version:1 as const,buildGuides:!!opts.buildGuideTools}}:{}) }
     })
     if (closedByLimit && step > 0 && !closedNoteSent) {
       closedNoteSent = true
@@ -698,7 +951,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (availabilityMessage) availabilitySent = availability
     // The job's newly available tools, in detail, after everything else in this request.
     const sheetMessage = pendingSheets.length ? { role: 'user' as const, content: opts.aiCatalog.text('bob.toolbox.sheets-intro') + '\n' + JSON.stringify(pendingSheets.map(name => {
-      const spec = opts.aiCatalog.tool(name, { ...schemaParameters(), ...(toolbox.toolParameters()?.[name] ?? {}) }).function
+      const sheet = opts.aiCatalog.tool(name, { ...schemaParameters(), ...(toolbox.toolParameters()?.[name] ?? {}) })
+      // Server-owned revisions stay out of the sheet as out of the tool list.
+      const spec = (opts.serverRevisions ? withoutServerRevisions(sheet) : sheet).function
       return { name: spec.name, description: spec.description, parameters: spec.parameters }
     })) } : null
     for (const name of pendingSheets) sheetsSent.add(name)
@@ -710,7 +965,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (phase === 'ready') {
       request = {
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
-      userId: opts.userId, systemMessage, catalogRoleKey: 'ask-bob', catalogSchemaParameters: schemaParameters(),
+      userId: opts.userId, systemMessage, catalogRoleKey: 'ask-bob',...(opts.workerOperations?{catalogRuntimeSurface:{version:1 as const,buildGuides:!!opts.buildGuideTools}}:{}), catalogSchemaParameters: schemaParameters(),
       ...(toolbox.toolParameters() ? { catalogToolParameters: toolbox.toolParameters() } : {}),
       messages: [...messages, ...(opts.projectContext?.carrier() ?? []), ...(step === 0 && initialFooter ? [initialFooter] : []), ...(availabilityMessage ? [availabilityMessage] : []), ...(sheetMessage ? [sheetMessage] : [])], previousResponseId, tools: tools.length ? tools : undefined,
       ...(completionAware ? { responsePhaseMode: 'aware' as const } : {}),
@@ -733,7 +988,20 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         // He is told once that the tools are closed (the approved closed-bench note).
         const note = closedNoteSent ? [] : [{ role: 'user' as const, content: opts.aiCatalog.text('bob.note.prefix') + opts.aiCatalog.text('bob.note.closed', { budget: 'spending' }) }]
         closedNoteSent = true
-        request = { ...request, tool_choice: 'none', messages: [...request.messages, ...note] }
+        // Checkpointed model requests must retain their previous messages;
+        // never replace a malformed/missing conversation with just this note.
+        const priorMessages = request.messages
+        if (!Array.isArray(priorMessages)) throw new Error('turn_checkpoint_invalid')
+        request = { ...request, tool_choice: 'none', messages: [...priorMessages, ...note] }
+        pendingResponse = undefined
+        await save(step)
+        pendingResponse = await opts.callModel(request)
+      }
+      // A cut answer ran nothing: continue once, shorter.
+      const noted = !pendingResponse.success && Array.isArray(request.messages)
+        ? withOutputLimitNote(request.messages, pendingResponse.error) : null
+      if (noted) {
+        request = { ...request, messages: noted }
         pendingResponse = undefined
         await save(step)
         pendingResponse = await opts.callModel(request)
@@ -812,6 +1080,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
             }
           }
         }
+        if(toolName==='read_construction_draft')rememberDrawingSource(result)
         observation.tool_calls++
         // Its result carries the manual and parameters: that tool's sheet is in the conversation now.
         if (toolSheets && toolName === 'describe_tool' && result?.status === 'ok' && typeof result.name === 'string') sheetsSent.add(result.name)
@@ -822,8 +1091,14 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         const validationCode = completionV3 && rejection ? rejection.code
           : completionAware && typeof result?.validation?.code === 'string' ? result.validation.code : undefined
         try { opts.onTool?.({ name: toolName, status: String(result?.status ?? 'returned'), step: step + 1, index, ms: Date.now() - began,
-          ...(result?.diagnostics?{diagnostics:result.diagnostics}:{}),
-          ...(validationCode !== undefined ? { validation_code: validationCode } : {}), ...(rejection ? { rejection } : {}) }) } catch { /* diagnostics only */ }
+          ...(result?.diagnostics?{diagnostics:result.diagnostics}:workerHandOverNames.includes(toolName)&&result?.outcome&&typeof result.outcome==='object'
+            ?{diagnostics:{operation:'worker_outcome',deliverable:result.outcome.deliverable,product:result.outcome.product,saved:result.outcome.saved,
+              blocker:result.outcome.blocker?.reason??result.outcome.blocker?.status}}:{}),
+          ...(validationCode !== undefined ? { validation_code: validationCode } : {}), ...(rejection ? { rejection } : {}),
+          // A worker hand-over that stopped says why in the telemetry too (owner decision 2026-11-07):
+          // 11 needs_verification since 2026-11-02 could not be told apart afterwards.
+          ...(!rejection && WORKER_STOPS.has(String(result?.status)) && typeof result?.reason === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(result.reason)
+            ? { rejection: { code: result.reason, fields: [] } } : {}) }) } catch { /* diagnostics only */ }
         // Cache hits are worker-local telemetry. Their loss on resume must not
         // change model/journal bytes for the same exact source result.
         if (['work_read','work_change','work_check'].includes(result?.diagnostics?.operation)) {

@@ -7,6 +7,7 @@ import { createProjectLookup } from '../supabase/functions/_shared/project-looku
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { runProjectAnswer } from './support/bob-model-routing.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
+import { isSyntheticSchemaMigration } from './support/project-schema.ts'
 
 const pg=new PGlite()
 const owner='00000000-0000-0000-0000-000000000701'
@@ -71,7 +72,7 @@ before(async()=>{
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('ownerA','A','Owner','OW',$1),('carlA','A','Carl','CA',$2),('outB','B','Out','OU',$3)",[owner,carl,outsider])
   await setupSharedSocial(pg)
   const migrations=new URL('../supabase/migrations/',import.meta.url)
-  for(const f of (await readdir(migrations)).filter(f=>f.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(f,migrations),'utf8'))
+  for(const f of (await readdir(migrations)).filter(isSyntheticSchemaMigration).sort()) await pg.exec(await readFile(new URL(f,migrations),'utf8'))
   await pg.exec("insert into bob.areas(id,project_id,slug,name,phase) values('areaA','A','porch','Porch','planning'),('areaB','B','private','Private','planning')")
   await pg.exec("insert into bob.tasks(id,area_id,name,status,instructions) values('taskA','areaA','Control-measure opening','todo','Measure the actual opening before framing.'),('taskB','areaB','Private task','todo','Private')")
 })
@@ -365,5 +366,54 @@ test('a claimed turn discovers and approves the saved proposal then performs two
   assert.equal((await as(owner,'select name from bob.tasks where area_id=$1',[area])).rows.length,2)
   assert.equal((await as(owner,'select revision from bob.project_plan_revisions where project_id=$1',[project])).rows.length,1,'no replacement proposal was made')
   assert.equal(((await as(owner,'select bob.bob_read_write_receipts($1,$2,$3,$4) result',binding)).rows[0].result as any[]).length,3)
+  await assert.rejects(as(outsider,'select bob.project_plan_briefing($1)',[project]),/project_denied|permission denied/)
+})
+
+
+test('P2: unfinished Tasks cannot satisfy plan completion by selector or resolves link', async()=>{
+  const project='p2-task-proof',area='p2-area',taskId='p2-check-task'
+  await pg.query('insert into bob.projects(id,slug,name) values($1,$1,$2)',[project,'P2 task-evidence test'])
+  await pg.query('insert into bob.people(id,project_id,name,initials,auth_user_id) values($1,$2,$3,$4,$5)',[
+    'p2Owner',project,'Owner','OW',owner])
+  await pg.query('insert into bob.areas(id,project_id,slug,name,phase) values($1,$2,$1,$3,$4)',[
+    area,project,'Review area','planning'])
+  await pg.query('insert into bob.tasks(id,area_id,name,status,instructions) values($1,$2,$3,$4,$5)',[
+    taskId,area,'Review the saved source','todo','A note is not evidence of a completed check.'])
+  const requirement=(title:string,sel:any)=>({
+    requirement_id:null,type:'check',title,description:'Must be verified before completion',
+    resolution:'open',responsible_kind:'bob',responsible_person_id:null,evidence_selector:sel,
+  })
+  const none={kind:'none',id:null,subject:null,area_id:null}
+  const selector={kind:'task',id:taskId,subject:null,area_id:null}
+  const proposal=plan([step('active',{area_id:area,requirements:[
+    requirement('Task selected',selector),requirement('Task linked',none),
+  ]})])
+  await server(owner,'select bob_private.project_plan_propose($1,$2,$3)',[project,0,JSON.stringify(proposal)])
+  await server(owner,'select bob_private.project_plan_decide($1,$2,$3,$4,$5)',[
+    project,0,1,'approve','Test plan approved'])
+  const desk=async()=>((await as(owner,'select bob.project_plan_briefing($1) result',[project])).rows[0].result as any)
+  let initial=await desk()
+  assert.deepEqual(initial.current_step.requirements.map((q:any)=>q.status.state),['missing','missing'])
+  assert.equal(initial.completion.satisfied,0)
+  const linkedId=initial.current_step.requirements[1].id
+  await assert.rejects(server(owner,
+    'select bob_private.project_plan_link_evidence($1,$2,$3,$4,$5,$6,$7)',
+    [project,1,linkedId,'task',taskId,null,'resolves']),/plan_task_not_completed/)
+  assert.equal((await as(owner,'select count(*)::integer n from bob.project_plan_evidence where project_id=$1',[project])).rows[0].n,0)
+  await pg.query('update bob.tasks set status=$1 where id=$2',['done',taskId])
+  const receipt=(await server(owner,
+    'select bob_private.project_plan_link_evidence($1,$2,$3,$4,$5,$6,$7) result',
+    [project,1,linkedId,'task',taskId,null,'resolves'])).rows[0].result as any
+  assert.equal(receipt.requirement_status.state,'satisfied')
+  assert.equal(receipt.step_completion.satisfied,2)
+  assert.equal(receipt.step_completion.requirements_ready,true)
+  let completed=await desk()
+  assert.deepEqual(completed.current_step.requirements.map((q:any)=>q.status.state),['satisfied','satisfied'])
+  assert.equal(completed.completion.satisfied,2)
+  await pg.query('update bob.tasks set status=$1 where id=$2',['doing',taskId])
+  const reopened=await desk()
+  assert.deepEqual(reopened.current_step.requirements.map((q:any)=>q.status.state),['missing','missing'],
+    'both selector and historical link become incomplete again')
+  assert.equal(reopened.current_step.requirements[1].status.evidence[0].current.task_status,'doing')
   await assert.rejects(as(outsider,'select bob.project_plan_briefing($1)',[project]),/project_denied|permission denied/)
 })

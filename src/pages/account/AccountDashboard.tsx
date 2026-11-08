@@ -38,6 +38,7 @@ export function AccountDashboard() {
   const { data: accountAreaPhases } = useAsync(() => db.getAccountAreaPhases(projectIds), [projectIdsKey, version, projectVersion])
   const { data: overview, loading: buildingsLoading, error: buildingsError } = useAsync(() => db.getAccountBuildingOverview(projectIds), [projectIdsKey, version, projectVersion])
   const { data: projectOverview, error: overviewError } = useAsync(() => db.getAccountProjectOverview(projectIds), [projectIdsKey, version, projectVersion])
+  const { data: bobUnread } = useAsync(() => db.getBobUnreadProjects(projectIds), [projectIdsKey, version, projectVersion])
   const [modal, setModal] = useState<
     { kind: 'new' } | { kind: 'invite' } | { kind: 'project'; project: Project; editing: boolean } | null
   >(null)
@@ -66,10 +67,11 @@ export function AccountDashboard() {
   const otherProjects = (projects ?? []).filter(project => !overview?.links.some(link => link.projectId === project.id))
   const projectRow = (p: Project) => {
     const phases = (accountAreaPhases ?? []).filter(item => item.projectId === p.id)
+    const newFromBob = !!bobUnread?.has(p.id)
     return <ListItem key={p.id} className="account-project-row">
       <ProjectThumbnail projectId={p.id} mediaId={projectOverview?.find(item => item.projectId === p.id)?.thumbnailId} />
-      <button type="button" className="account-project-open" aria-label={`Open project ${p.name}`} onClick={() => openProject(p)}>
-        <span className="ui-row-title"><span>{p.name}</span><PhasePill phase={p.phase} /></span>
+      <button type="button" className="account-project-open" aria-label={`Open project ${p.name}${newFromBob ? ', new from Bob' : ''}`} onClick={() => openProject(p)}>
+        <span className="ui-row-title"><span>{p.name}</span><span className="account-project-marks">{newFromBob && <span className="bob-unread-badge">New from Bob</span>}<PhasePill phase={p.phase} /></span></span>
         {p.startDate && p.endDate && <span className="ui-row-meta"><SchedulePill project={p} /> · {formatDateRange(p.startDate, p.endDate)}</span>}
         <ProjectMetadata overview={projectOverview?.find(item => item.projectId === p.id)} />
         {phases.length > 0 && <span className="ui-row-meta">{phases.length} {phases.length === 1 ? 'Area' : 'Areas'} · {areaPhaseSummary(phases)}</span>}

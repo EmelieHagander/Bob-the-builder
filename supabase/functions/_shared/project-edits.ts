@@ -1,3 +1,5 @@
+import { measurementMillimetres } from './cad-lineage.ts'
+import { countSerializedTokens } from './bob-token-budget.ts'
 import { fingerprint, rethrowContinuation } from './bob-job-journal.ts'
 import { parseDesignIntent } from './project-design-intent.ts'
 import { evaluateConcept } from './solution-concept.ts'
@@ -84,6 +86,37 @@ export const PROJECT_EDIT_TOOLS = [
 export const WRITE_STATE_EDIT_NOTE = ' Saving a selected solution returns a fresh edit_ref for the saved revision and, for purpose=construction, construction_readiness; reuse them instead of reading again.'
 PROJECT_EDIT_TOOLS[1].function.description += CONCEPT_EDIT_GUIDE + WRITE_STATE_EDIT_NOTE
 
+export const EDIT_SECTIONS = ['description','assumptions','tradeoffs','summary','features','choices','alignment','references','measurements','model.nodes','model.components','model.views','model.constraints','model.frame','model.unsupported','model.source_bindings','complete'] as const
+export const COHERENT_EDIT_TOOLS = structuredClone(PROJECT_EDIT_TOOLS)
+/** Owner decision 2026-11-07 (write_check_version 1): the edit tool takes
+ * mode check|save. A check runs the same write in the database and rolls it
+ * back, so every rule, including the 30,000-byte readback, answers before a save. */
+export const WRITE_CHECK_NOTE = ' mode check runs this exact change through every save rule, including the 30,000-byte readback of the whole solution, and saves nothing; mode save keeps it. Check a large or uncertain change first.'
+export function withWriteCheck<T extends typeof PROJECT_EDIT_TOOLS>(tools: T): T {
+  const copy = structuredClone(tools)
+  const edit = copy.find(t => t.function.name === 'edit_project_record')!.function as { description: string; parameters: { properties: Record<string, unknown>; required: string[] } }
+  edit.description += WRITE_CHECK_NOTE
+  edit.parameters.properties.mode = { type: 'string', enum: ['check', 'save'] }
+  edit.parameters.required = [...edit.parameters.required, 'mode']
+  return copy
+}
+const coherentRead = COHERENT_EDIT_TOOLS[0].function
+coherentRead.description = 'Read a compact editable overview with an exact edit_ref. For a section, use resource=section, query=the returned section name, and next_ref=edit_ref initially, then the returned next_ref. Every page stays bound to that original revision. Complete is available explicitly. Re-read after conflicts.'
+;(coherentRead.parameters.properties.resource as any).enum.push('section')
+COHERENT_EDIT_TOOLS[1].function.description += ' Alignment basis is preserved when changes invalidate its status. Use add_choice_for_components with returned component_refs to create and link a choice atomically.'
+;(COHERENT_EDIT_TOOLS[1].function.parameters.properties.changes as any).items.anyOf.push(object({op:{type:'string',enum:['add_choice_for_components']},choice:DESIGN_CHOICE_ITEM,components:{type:'array',minItems:1,maxItems:48,uniqueItems:true,items:text}}))
+export async function measurementRef(snapshot:EditSnapshot,index:number){return 'measurement_'+(await fingerprint({project:snapshot.project_id,key:snapshot.key,revision:snapshot.record.revision,evidence:snapshot.measurement_evidence?.[index]})).slice(0,32)}
+;(COHERENT_EDIT_TOOLS[1].function.parameters.properties.changes as any).items.anyOf.push(object({op:{type:'string',enum:['bind_concept_measurement']},index:{type:'integer',description:'Existing concept node index.'},measurement_ref:text,required_reference:{type:'string',maxLength:120,minLength:1}}))
+COHERENT_EDIT_TOOLS[1].function.description += ' bind_concept_measurement uses a returned measurement_ref and existing node index; required_reference names the intended endpoints. Code copies the exact saved value and keeps a missing or different reference unresolved. Use unbind_concept_measurement to detach a source while retaining an explicit estimate. Never guess a dimension definition.'
+;(COHERENT_EDIT_TOOLS[1].function.parameters.properties.changes as any).items.anyOf.push(object({op:{type:'string',enum:['unbind_concept_measurement']},index:{type:'integer',description:'Existing concept node index; leaves its value as an explicit estimate.'}}))
+export async function componentRef(snapshot:EditSnapshot,id:string){return 'component_'+(await fingerprint({project:snapshot.project_id,key:snapshot.key,revision:snapshot.record.revision,id})).slice(0,32)}
+function overview(snapshot:EditSnapshot){
+ const r=snapshot.record,m=r.design_intent?.model
+ return {title:r.title,description_preview:String(r.description??'').slice(0,300),purpose:r.design_intent?.purpose,sections:EDIT_SECTIONS,
+  counts:{measurements:snapshot.measurements.length,features:r.design_intent?.features.length??0,choices:r.design_intent?.choices.length??0,...m?{nodes:m.nodes.length,components:m.components.length,views:m.views.length}:{}},
+  alignment:r.design_intent?.alignment?{status:r.design_intent.alignment.status}:null}
+}
+
 type Resource = 'project_description' | 'selected_solutions' | 'solutions'
 export type EditSnapshot = {
   project_id: string; key: string; resource: Resource; scope_label: string;
@@ -99,6 +132,7 @@ export type ProjectEditsState = {
   contexts: [string, EditSnapshot][];
   pages: [string, { resource: Resource; query: string | null; after: string }][];
   sources: ProjectSource[];
+  sectionPages?: [string,{edit_ref:string;section:string;offset:number}][];
 }
 const exact = (v: unknown, keys: string[]): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).sort().join(',') === [...keys].sort().join(',')
 const fail = (message: string): WriteResult => ({ status: 'invalid', message: 'No change made. ' + message })
@@ -107,7 +141,7 @@ const fail = (message: string): WriteResult => ({ status: 'invalid', message: 'N
  * path), plus the saved reason. Unchanged saved text is never re-checked. */
 export function changeProseRejection(changes: unknown, reason: unknown): HumanTextRejection | null {
   const fields: [string, unknown][] = Array.isArray(changes) ? changes.flatMap(change => {
-    try { const { path, value } = readChange(change); return value === undefined ? [] : proseFields(value, SOLUTION_PROSE, path.split('/').slice(1)) } catch { return [] }
+    try { const { path, value } = readChange(change?.op==='add_choice_for_components'?{op:'add_choice',choice:change.choice}:change); return value === undefined ? [] : proseFields(value, SOLUTION_PROSE, path.split('/').slice(1)) } catch { return [] }
   }) : []
   return humanTextRejection([...fields, ['reason', reason]])
 }
@@ -119,9 +153,10 @@ type ContentChange = { op: 'set' | 'append_text' | 'remove'; path: string; value
 function readChange(change: any): ContentChange {
   const typed = TYPED_CHANGES[change?.op as keyof typeof TYPED_CHANGES]
   if (typed) {
-    const keys = typed.index ? ['op', 'index', typed.field] : ['op', typed.field]
-    if (!exact(change, keys) || typed.index && (!Number.isSafeInteger(change.index) || change.index < 0)) throw new Error('Invalid change shape.')
-    return { op: 'set', path: typed.path + (typed.index ? change.index : ''), value: change[typed.field] }
+    const hasIndex = 'index' in typed
+    const keys = hasIndex ? ['op', 'index', typed.field] : ['op', typed.field]
+    if (!exact(change, keys) || hasIndex && (!Number.isSafeInteger(change.index) || change.index < 0)) throw new Error('Invalid change shape.')
+    return { op: 'set', path: typed.path + (hasIndex ? change.index : ''), value: change[typed.field] }
   }
   if (!exact(change, ['op', 'path', 'value_json']) || !['set', 'append_text', 'remove'].includes(change.op) || !safeText(change.path, 160)) throw new Error('Invalid change shape.')
   if (change.op === 'remove' ? change.value_json !== null : !safeText(change.value_json, 16000, true)) throw new Error('Supply a JSON value; remove uses null.')
@@ -142,12 +177,41 @@ const TYPED_CHANGES = {
 
 /** Clone the pinned read, never a newly fetched head. Paths deliberately cannot
  * address IDs, parents, versions, evidence links or arbitrary object properties. */
-export async function applyProjectDelta(snapshot: EditSnapshot, changes: unknown, reason: string) {
+export async function applyProjectDelta(snapshot: EditSnapshot, changes: unknown, reason: string, opts: {coherent?:boolean} = {}) {
   if (!Array.isArray(changes) || changes.length < 1 || changes.length > 40) throw new Error('Supply 1–40 content changes.')
   const record = structuredClone(snapshot.record)
   let explicitAlignment = false
   for (const [index, change] of changes.entries()) {
-    const { op, path, value } = readChange(change)
+    if(change?.op==='unbind_concept_measurement'){
+      const model=record.design_intent?.model,node=model?.nodes[change.index]
+      if(!opts.coherent||!exact(change,['op','index'])||!Number.isSafeInteger(change.index)||change.index<0||!node||!model.source_bindings?.some((b:any)=>b.node===node.id))throw Error('Use a linked measurement_ref and an existing input node from this edit context.')
+      model.source_bindings=model.source_bindings.filter((b:any)=>b.node!==node.id);node.reason=reason
+      continue
+    }
+    if(change?.op==='bind_concept_measurement'){
+      if(!opts.coherent||!exact(change,['op','index','measurement_ref','required_reference'])||!Number.isSafeInteger(change.index)||change.index<0||!safeText(change.required_reference,120))throw Error('Invalid change shape.')
+      let evidence:any
+      for(const [i,e] of (snapshot.measurement_evidence??[]).entries())if(await measurementRef(snapshot,i)===change.measurement_ref)evidence=e
+      const model=record.design_intent?.model,node=model?.nodes[change.index]
+      if(!evidence||!snapshot.measurements.some(m=>m.id===evidence.id&&m.revision===evidence.revision)||!node||!['decision','estimate','unknown'].includes(node.role))throw Error('Use a linked measurement_ref and an existing input node from this edit context.')
+      const mm=measurementMillimetres(evidence)
+      model.nodes[change.index]={id:node.id,role:'estimate',value:mm,unit:'mm',reason:'Linked saved measurement; its endpoints and source remain explicit.'}
+      model.version=2
+      const reference=evidence.reference??null
+      model.source_bindings=[...(model.source_bindings??[]).filter((b:any)=>b.node!==node.id),{node:node.id,measurement_id:evidence.id,measurement_revision:evidence.revision,value:evidence.value,unit:evidence.unit,reference,requested_reference:change.required_reference,reference_status:reference!==null&&reference===change.required_reference?'confirmed':'unresolved'}]
+      continue
+    }
+    let linked:string[]=[]
+    if(change?.op==='add_choice_for_components'){
+      if(!opts.coherent||!exact(change,['op','choice','components'])||!Array.isArray(change.components)||!change.components.length||change.components.length>48||new Set(change.components).size!==change.components.length)throw Error('Invalid change shape.')
+      for(const ref of change.components){
+        let matched:string|undefined
+        for(const c of snapshot.record.design_intent?.model?.components??[])if(c.active&&await componentRef(snapshot,c.id)===ref)matched=c.id
+        if(!matched||!record.design_intent?.model?.components.some((c:any)=>c.id===matched&&c.active))throw Error('Use an active component_ref from this edit context.')
+        linked.push(matched)
+      }
+    }
+    const { op, path, value } = readChange(linked.length?{op:'add_choice',choice:change.choice}:change)
     const fields = path.split('/').slice(1)
     if (!path.startsWith('/') || fields.some((f: string) => ['__proto__', 'constructor', 'prototype'].includes(f))) throw new Error('Unsupported content path.')
     const plain = snapshot.resource === 'project_description' ? ['description'] : ['title', 'description', 'assumptions', 'tradeoffs']
@@ -198,7 +262,9 @@ export async function applyProjectDelta(snapshot: EditSnapshot, changes: unknown
           const keys = Object.keys(value)
           if (keys.length !== shape.fields.length || !shape.fields.every((field) => keys.includes(field))) throw new Error(shape.message)
           const id = 'edit_' + (await fingerprint({ snapshot, changes, index })).slice(0, 24)
-          list.push({ ...value, id, ...(fields[1] === 'features' ? { source_ref: null } : {}) }); continue
+          list.push({ ...value, id, ...(fields[1] === 'features' ? { source_ref: null } : {}) })
+          for(const component of record.design_intent.model?.components??[])if(linked.includes(component.id))component.choices.push(id)
+          continue
         }
         if (!/^(0|[1-9][0-9]*)$/.test(fields[2]) || Number(fields[2]) >= list.length) throw new Error('Use an item index from this edit context.')
         const position = Number(fields[2])
@@ -220,7 +286,7 @@ export async function applyProjectDelta(snapshot: EditSnapshot, changes: unknown
     if (!safeText(record[field], max, field !== 'title')) throw new Error('Invalid or oversized ' + field + '.')
   }
   if (record.design_intent != null) {
-    if (!explicitAlignment) record.design_intent.alignment = { status: 'draft', basis: reason }
+    if (!explicitAlignment) record.design_intent.alignment = { status: 'draft', basis: opts.coherent ? record.design_intent.alignment?.basis || reason : reason }
     if (!parseDesignIntent(record.design_intent)) throw new Error('Design content is inconsistent or oversized. Preserve honest decisions and uncertainty.')
   }
   return record
@@ -256,13 +322,20 @@ export function displayEditSnapshot(snapshot: EditSnapshot) {
   }
 }
 
-export function createProjectEdits(opts: { projectId: string; read: ReadTransport;
+export function createProjectEdits(opts: { projectId: string; read: ReadTransport; coherent?:boolean;
   /** Exact selected scope, using the same caller-bound snapshot contract. */
   readSelected?: (areaId: string | null) => PromiseLike<{ data: unknown; error: unknown }>;
   writer?: ProjectWriter; hasAccess: () => Promise<boolean>; sources?: ProjectSource[]; unlimitedWork?: boolean;
   /** Pinned per manifest (write_state_version 1): a saved selected solution
    * returns its fresh edit entry and, for purpose=construction, its readiness. */
-  writeState?: { readiness?: (targetRevision: number, areaId: string | null) => Promise<DesignReadiness> } }) {
+  writeState?: { readiness?: (targetRevision: number, areaId: string | null) => Promise<DesignReadiness> };
+  /** Pinned per execution (write_check_version 1): edit_project_record takes
+   * mode check|save; a check runs the same write in the database and rolls it back. */
+  writeCheck?: boolean
+  /** Owner decision 2026-11-08: once the description weigher is published, it
+   * is the only author of the project description; Bob cannot edit it here. */
+  descriptionWeigher?: boolean }) {
+  const sectionPages = new Map<string,{edit_ref:string;section:string;offset:number}>()
   const contexts = new Map<string, EditSnapshot>()
   const pages = new Map<string, { resource: Resource; query: string | null; after: string }>()
   let reads = 0
@@ -276,7 +349,7 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
     contexts.set(ref, structuredClone(snapshot))
     const dataset = snapshot.resource === 'project_description' ? 'project' : 'solutions'
     if (opts.sources && !opts.sources.some(s => s.dataset === dataset && s.recordId === snapshot.record.id)) opts.sources.push({ projectId: opts.projectId, dataset, recordId: snapshot.record.id, label: snapshot.record.title ?? snapshot.scope_label, retrievedAt: new Date().toISOString(), updatedAt: snapshot.record.updated_at ?? snapshot.record.recorded_at ?? null, truth: 'unknown' })
-    return { edit_ref: ref, scope: snapshot.scope_label, selected: snapshot.target !== null, selected_version_is_current: snapshot.target === null || snapshot.head_revision === undefined || snapshot.head_revision === snapshot.record.revision, content: displayEditSnapshot(snapshot) }
+    return { edit_ref: ref, scope: snapshot.scope_label, selected: snapshot.target !== null, selected_version_is_current: snapshot.target === null || snapshot.head_revision === undefined || snapshot.head_revision === snapshot.record.revision, content: opts.coherent ? overview(snapshot) : displayEditSnapshot(snapshot) }
   }
   const prepare = async (value: unknown): Promise<{ status: 'ready'; payload: WritePayload; snapshot: EditSnapshot } | WriteResult> => {
     const v = value as Record<string, any>
@@ -286,7 +359,7 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
       const humanText = changeProseRejection(v.changes, v.reason)
       if (humanText) return { ...fail(humanText.message), validation: { code: 'human_text', fields: humanText.fields } }
       if (snapshot.target && snapshot.head_revision !== undefined && snapshot.head_revision !== snapshot.record.revision) throw new Error('The selected version is older than this solution’s latest version. Read the alternatives and reconcile the selected direction explicitly before editing; do not overwrite newer work.')
-      const record = await applyProjectDelta(snapshot, v.changes, v.reason)
+      const record = await applyProjectDelta(snapshot, v.changes, v.reason, {coherent:opts.coherent})
       const payload: WritePayload = snapshot.resource === 'project_description'
         ? { kind: 'bound_project', record_id: opts.projectId, expected_updated_at: snapshot.record.updated_at, expected_revision: null, request_quote: v.request_quote, data: { description: record.description } }
         : { kind: 'bound_solution', record_id: snapshot.record.id, expected_updated_at: null, expected_revision: snapshot.record.revision, request_quote: v.request_quote,
@@ -312,13 +385,13 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
     } catch (error) { rethrowContinuation(error); return unavailable() }
   }
   return {
-    tools: PROJECT_EDIT_TOOLS,
+    tools: opts.writeCheck ? withWriteCheck(opts.coherent ? COHERENT_EDIT_TOOLS : PROJECT_EDIT_TOOLS) : opts.coherent ? COHERENT_EDIT_TOOLS : PROJECT_EDIT_TOOLS,
     /** Prepare exactly the ordinary content delta without writing. The caller
      * may compose it with a Construction change in one database transaction. */
     prepare:async(value:unknown)=>await opts.hasAccess()?prepare(value):{status:'denied' as const},
     readSelected,
     exportState(): ProjectEditsState {
-      return JSON.parse(JSON.stringify({ version: 1, projectId: opts.projectId, reads, partial, contexts: [...contexts], pages: [...pages], sources: opts.sources ?? [] }))
+      return JSON.parse(JSON.stringify({ version: 1, projectId: opts.projectId, reads, partial, contexts: [...contexts], pages: [...pages], ...(opts.coherent?{sectionPages:[...sectionPages]}:{}), sources: opts.sources ?? [] }))
     },
     restoreState(state: ProjectEditsState) {
       if (!state || state.version !== 1 || state.projectId !== opts.projectId || !Number.isSafeInteger(state.reads) || state.reads < 0 || typeof state.partial !== 'boolean'
@@ -326,6 +399,7 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
         || state.contexts.some(entry => !Array.isArray(entry) || typeof entry[0] !== 'string' || entry[1]?.project_id !== opts.projectId)
         || state.sources.some(source => source?.projectId !== opts.projectId)) throw new Error('invalid_project_edits_state')
       const saved = structuredClone(state)
+      sectionPages.clear(); for(const [key,value] of saved.sectionPages??[]) { if(!contexts.has(value.edit_ref)&&!saved.contexts.some(([ref])=>ref===value.edit_ref)||!EDIT_SECTIONS.includes(value.section as any)||!Number.isSafeInteger(value.offset)||value.offset<0)throw Error('invalid_project_edits_state');sectionPages.set(key,value) }
       contexts.clear(); for (const [key, value] of saved.contexts) contexts.set(key, value)
       pages.clear(); for (const [key, value] of saved.pages) pages.set(key, value)
       opts.sources?.splice(0, opts.sources.length, ...saved.sources)
@@ -335,8 +409,33 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
     get remaining() { return opts.unlimitedWork ? Infinity : Math.max(0, 16 - reads) },
     async execute(name: string, value: unknown): Promise<any> {
       if (!await opts.hasAccess()) return { status: 'denied' }
+      if (name === 'read_project_edit_context' && opts.coherent && (value as any)?.resource==='section') {
+        const v=value as any
+        if(!exact(v,['resource','query','next_ref'])||!EDIT_SECTIONS.includes(v.query)||typeof v.next_ref!=='string')return fail('Invalid read selection.')
+        const page=contexts.has(v.next_ref)?{edit_ref:v.next_ref,section:v.query,offset:0}:sectionPages.get(v.next_ref)
+        const snapshot=page&&contexts.get(page.edit_ref)
+        if(!page||!snapshot||page.section!==v.query)return fail('Use the exact next_ref and filter returned by this read.')
+        if(v.query==='complete')return {status:'ok',edit_ref:page.edit_ref,content:displayEditSnapshot(snapshot),next_ref:null}
+        const full=displayEditSnapshot(snapshot) as any
+        let content=v.query==='measurements'?snapshot.measurement_evidence??[]:v.query.startsWith('model.')?snapshot.record.design_intent?.model?.[v.query.split('.')[1]]:v.query in full?full[v.query]:full.design_intent?.[v.query]
+        if(content===undefined)return {status:'empty',edit_ref:page.edit_ref,section:v.query,next_ref:null}
+        const array=Array.isArray(content),string=typeof content==='string'
+        const items:any[]=[];let offset=page.offset
+        if(array){
+          while(offset<content.length){
+            const item={index:offset,content:content[offset],...(v.query==='model.components'?{component_ref:await componentRef(snapshot,content[offset].id)}:v.query==='measurements'?{measurement_ref:await measurementRef(snapshot,offset)}:{})}
+            if(countSerializedTokens([...items,item])>2200){if(!items.length)return {status:'needs_focus',message:'This item exceeds the section page; request complete explicitly.',edit_ref:page.edit_ref};break}
+            items.push(item);offset++
+          }
+        } else if(string) { const part=content.slice(offset,offset+2200);items.push(part);offset+=part.length }
+        else {if(countSerializedTokens(content)>2200)return {status:'needs_focus',message:'Request complete explicitly.',edit_ref:page.edit_ref};items.push(content);offset=1}
+        let next_ref:string|null=null
+        if(offset<(array||string?content.length:1)){const next={...page,offset};next_ref='section_'+await fingerprint(next);sectionPages.set(next_ref,next)}
+        if(!await opts.hasAccess())return {status:'denied'}
+        return {status:'ok',edit_ref:page.edit_ref,section:v.query,items,next_ref}
+      }
       if (name === 'read_project_edit_context') {
-        if (!exact(value, ['resource', 'query', 'next_ref']) || !['project_description', 'selected_solutions', 'solutions'].includes(value.resource)
+        if (!exact(value, ['resource', 'query', 'next_ref']) || !(opts.descriptionWeigher ? ['selected_solutions', 'solutions'] : ['project_description', 'selected_solutions', 'solutions']).includes(value.resource)
           || !(value.query === null || safeText(value.query, 200)) || !(value.next_ref === null || typeof value.next_ref === 'string')) return fail('Invalid read selection.')
         if (!opts.unlimitedWork && reads >= 16) return { status: 'budget_exhausted' }
         const input = value.next_ref === null ? { resource: value.resource as Resource, query: value.query, after: null } : pages.get(value.next_ref)
@@ -359,6 +458,20 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
         } catch (error) { rethrowContinuation(error); return unavailable() }
       }
       if (name !== 'edit_project_record' || !opts.writer) return { status: 'denied' }
+      // Owner decision 2026-11-07: check first. The same prepared write runs in the
+      // database and is rolled back; the edit_ref stays valid for the real save.
+      let mode: 'check' | 'save' = 'save'
+      if (opts.writeCheck && value && typeof value === 'object' && !Array.isArray(value) && 'mode' in value) {
+        const { mode: requested, ...rest } = value as Record<string, unknown>
+        if (requested !== 'check' && requested !== 'save') return fail('mode is check or save.')
+        mode = requested; value = rest
+      }
+      if (mode === 'check') {
+        const prepared = await prepare(value)
+        if (prepared.status !== 'ready') return prepared
+        const checked = await opts.writer.check(prepared.payload)
+        return checked.status === 'checked' ? { status: 'checked', saved: false, message: 'This exact change would save; nothing was saved. Send the same change with mode save to keep it.' } : checked
+      }
       const v = value as Record<string, any>
       const snapshot = v && typeof v.edit_ref === 'string' ? contexts.get(v.edit_ref) : undefined
       const key = snapshot ? snapshot.resource + ':' + snapshot.key : 'unbound'
@@ -377,11 +490,11 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
           fresh ? { ...fresh.target } : { revision: NaN, area_id: snapshot.target.area_id }) : null
         return { status: 'saved', selected_updated: true,
           message: fresh ? 'Saved the same record. Use the returned edit_ref for another change.' : 'Saved the same record. Read again before another edit.',
-          content: fresh ? fresh.entry.content : displayEditSnapshot({ ...snapshot, record: result.receipt.record }),
+          content: fresh ? fresh.entry.content : opts.coherent ? overview({ ...snapshot, record: result.receipt.record }) : displayEditSnapshot({ ...snapshot, record: result.receipt.record }),
           ...(fresh ? { edit_ref: fresh.entry.edit_ref } : {}),
           ...(readiness ? { construction_readiness: readiness, ...(typeof readiness.creation_state === 'string' ? { creation_state: readiness.creation_state } : {}) } : {}) }
       }
-      return result.status === 'saved' ? { status: 'saved', selected_updated: snapshot?.target !== null && snapshot?.resource !== 'project_description', message: 'Saved the same record. Read again before another edit.', content: displayEditSnapshot({ ...snapshot!, record: result.receipt!.record }) } : result
+      return result.status === 'saved' ? { status: 'saved', selected_updated: snapshot?.target !== null && snapshot?.resource !== 'project_description', message: 'Saved the same record. Read again before another edit.', content: opts.coherent ? overview({ ...snapshot!, record: result.receipt!.record }) : displayEditSnapshot({ ...snapshot!, record: result.receipt!.record }) } : result
     },
   }
 }

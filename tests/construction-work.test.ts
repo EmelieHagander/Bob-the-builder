@@ -6,7 +6,7 @@ import { projectSchema, asProjectUser } from './support/project-schema.ts'
 import { constructionFormFixture } from './support/construction-form-fixture.ts'
 import { parameterPacket } from './support/cad-parameter-fixture.ts'
 import { manufacturePolicy } from './support/construction-instance-policy-fixture.ts'
-import { createConstructionTools } from '../supabase/functions/_shared/construction-draft.ts'
+import { createConstructionTools, constructionPreparationFailure } from '../supabase/functions/_shared/construction-draft.ts'
 import { createConstructionViews, constructionWorkItems } from '../supabase/functions/_shared/construction-views.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createProjectEdits } from '../supabase/functions/_shared/project-edits.ts'
@@ -69,7 +69,7 @@ test('one work read → atomic Solution/Construction change → complete check, 
   catch(e:any){return {status:e.code==='42501'?'denied':['PT409','40001'].includes(e.code)?'conflict':e.code==='22023'?'invalid':'unavailable',reason:e.message}}
  }
  let storedReads=0
- const options={projectId:project,message,writer,hasAccess:async()=>access,unlimitedWork:true,constructionViews:true,formEvidence:true,constructionSourceRefresh:true,coherentWork:true,
+ const options={projectId:project,message,writer,hasAccess:async()=>access,unlimitedWork:true,constructionViews:true,fastPageFit:true,formEvidence:true,constructionSourceRefresh:true,coherentWork:true,
   now:()=>new Date('2026-10-28T20:00:00Z'),read:(_id:string|null,revision:number|null)=>read(revision),readCurrent:()=>read(),
   readSources:async()=>({project:new Map(),physical:new Map()}),
   prepareEdit:preparation('bob.prepare_construction_edit'),prepareParameterChange:preparation('bob.prepare_construction_parameter_change'),prepareWork:preparation('bob.prepare_construction_work'),prepareSolutionEdit:edits.prepare,
@@ -206,6 +206,31 @@ test('one work read → atomic Solution/Construction change → complete check, 
   const receipt=await write(lastPayload);assert.equal(receipt.revision,4);assert.equal((await read()).revision,4)
   assert.equal((await rpc(owner,'bob.prepare_construction_work',[...binding,JSON.stringify({...lastPayload,data:{...lastPayload.data,construction:{...lastPayload.data.construction,data:{...lastPayload.data.construction.data,computed:null}}}})] )).status,'saved')
  })
+ await t.test('a decision saved in the Solution first leaves the part edit repairable with the current target revision',async()=>{
+  // Bed, 2026-11-06: Bob saved the owner's decisions, then Konrad's edit with
+  // target_revision:null was a terminal conflict that named no repair.
+  // A fresh writer: the previous case deliberately leaves an uncertain write.
+  const writer=createProjectWriter(project,message,transport,async()=>({data:[],error:null}),async()=>({data:[],error:null}),{unlimitedWork:true})
+  const edits=createProjectEdits({projectId:project,writer,hasAccess:async()=>access,unlimitedWork:true,
+   read:async q=>({data:await rpc(owner,'bob.read_bob_edit_context',[project,q.resource,q.query,q.after]),error:null}),
+   readSelected:async area=>({data:await rpc(owner,'bob.read_bob_selected_edit_context',[project,area]),error:null})})
+  const tools=createConstructionTools({...options,writer,prepareSolutionEdit:edits.prepare})
+  editRef=(await edits.readSelected(null) as any).entry.edit_ref
+  const decision=await edits.execute('edit_project_record',{edit_ref:editRef,changes:solutionChanges(640,470),reason:'Owner chose a deeper frame',request_quote:message})
+  assert.equal(decision.status,'saved',JSON.stringify(decision))
+  const stale=await read();assert.equal(stale.revision,4);assert.equal(stale.source_state,'changed')
+  const draft=stale.parameters.nodes.find((n:any)=>n.id===depth),{normalized,sources,...node}=draft
+  const edit={key:'deeper-after-decision',record_id:id,expected_revision:4,target_revision:null as number|null,request_quote:message,change_note:'Follow the saved deeper frame',
+   solution_edit:null,changes:{nodes:{upsert:[{...node,value:470}],remove:[]}}}
+  const refused=await tools.execute('edit_construction_parts',edit)
+  assert.equal(refused.status,'invalid',JSON.stringify({refused,sqlErrors}));assert.equal(refused.reason,'target_revision_required')
+  assert.match(refused.message,/current target_revision/);assert.equal((await read()).revision,4)
+  const target=(await rpc(owner,'bob.read_bob_selected_edit_context',[project,null]))[0].target.revision
+  const saved=await tools.execute('edit_construction_parts',{...edit,target_revision:target})
+  assert.equal(saved.status,'saved',JSON.stringify({saved,sqlErrors}))
+  const after=await read();assert.equal(after.revision,5);assert.equal(after.source_state,'current');assert.equal(after.target_revision,target)
+  assert.equal(after.recipe.definitions[0].y_mm,470)
+ })
 })
 
 test('work selection closes new neighbors, and source changes cannot splice a paged packet',async()=>{
@@ -259,4 +284,13 @@ test('large delivery inventories retain failures beyond the detail budget and re
    records:ids.slice(start,end).map(id=>({id,revision:1,current_revision:1,source:{artifact_id:_id,revision:1}})),truncated:true,next_after:ids[end-1]}
  }})
  assert.equal(limited.status,'incomplete');assert.equal(limited.resources[0].complete,false);assert.equal(limited.resources[0].record_count,384)
+})
+
+test('construction preparation names only the server write conflicts it can repair',()=>{
+ const generic='construction_edit_preparation_failed'
+ assert.deepEqual(constructionPreparationFailure({code:'PT409',message:'construction_changed'},generic),{status:'conflict',reason:'construction_changed'})
+ assert.deepEqual(constructionPreparationFailure({code:'PT409',message:'operation_reused'},generic),{status:'conflict',reason:'operation_reused'})
+ for(const [code,status] of [['PT409','conflict'],['40001','conflict'],['22023','invalid'],['42501','denied'],['XX000','unavailable']])
+  assert.deepEqual(constructionPreparationFailure({code,message:'relation "bob_private.secret" detail'},generic),{status,reason:generic},code)
+ assert.deepEqual(constructionPreparationFailure({code:'40001',message:'construction_changed'},generic),{status:'conflict',reason:generic})
 })

@@ -274,3 +274,12 @@ test('native-value compatibility fences the pinned contract, not a compatible li
   f.rows[0].schema_version = 1
   assert.equal((await session.execute(name, { value: 1 })).status, 'unavailable', 'v1 policy cannot authorize a v2 job')
 })
+
+test('explicit selection of an already visible capability loads it, validates arguments and preserves policy/gate fences',async()=>{
+ const f=fixture(),s=createToolSession({definitions:f.definitions,readPolicy:async()=>({phase:'concept',tools:f.rows}),toolInstructions:'lazy',selectVisible:true,preloadTools:()=>['read_records']})
+ await s.prepare();assert(!names(await s.prepare()).includes('analyse_materials'))
+ assert.equal((await s.execute('analyse_materials',{value:'wrong'})).status,'invalid')
+ assert.equal((await s.execute('analyse_materials',{value:3})).status,'saved')
+ f.setGate('draw_shape','missing_context');await s.prepare();f.setGate('draw_shape','available')
+ assert.equal((await s.execute('draw_shape',{value:3})).status,'not_offered','a capability that became available mid-batch was not visible and cannot gain authority retroactively')
+})

@@ -1,3 +1,6 @@
+import {catalogFixture} from './support/ai-catalog-fixture.ts'
+import {runtimeToolSpec} from '../supabase/functions/_shared/runtime-tool-surface.ts'
+import {anthropicRequestBody} from '../supabase/functions/_shared/anthropic-service.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
@@ -61,6 +64,15 @@ test('phase-aware Responses parsing selects final text, bounds commentary and pr
     output = { status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, output: [message('final_answer', 'Partial'), { type: 'function_call', call_id: 'bad', name: 'save', arguments: '{}' }] }
     const incomplete = await call(options)
     assert.equal(incomplete.success, false); assert.equal(incomplete.outputPhase, 'incomplete'); assert.equal(incomplete.data, null); assert.equal(incomplete.toolCalls, undefined)
+    const bound=runtimeToolSpec(catalogFixture().tool('design_project_cad'),{version:1,buildGuides:false,
+      operation:{version:1,role:'drawing',source:false,refs:{construction:['op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],drawing:[]}}})
+    output={output:[message('final_answer','Ready.')]}
+    assert.equal((await call({...options,tools:[bound]})).success,true)
+    const wire=requests.at(-1).tools[0].parameters
+    for(const key of ['artifact_id','request_id','construction_revision','assembly_dependencies'])assert(!(key in wire.properties),key)
+    assert('source_ref'in wire.properties)
+    const anthropic:any=await anthropicRequestBody({...options,tools:[bound]}, {apiKey:'fixture',model,maxOutputTokens:1000,systemMessage:'Fixture',effort:null,timeoutMs:1000,log:async()=>{}} as any)
+    assert.deepEqual(anthropic.tools[0].input_schema,bound.function.parameters)
     assert.equal(ledger.length, requests.length, 'every terminal outcome is accounted once')
   } finally { g.fetch = oldFetch; g.Deno = oldDeno; delete g.__phaseClient }
 })

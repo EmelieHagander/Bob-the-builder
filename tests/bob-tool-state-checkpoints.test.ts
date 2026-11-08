@@ -19,6 +19,31 @@ import type { DrawingRequest } from '../supabase/functions/_shared/cad-intake.ts
 
 const roundtrip = <T>(value:T):T => JSON.parse(JSON.stringify(value))
 const fail = async ():Promise<never> => { throw new Error('Completed work must not run again') }
+
+test('compact tool checkpoints omit derived policy text and recover the exact shelf without granting tools', async()=>{
+ let active=true,ready=false,executions=0
+ const definitions:ToolDefinition[]=['read_source','save_source'].map(name=>({version:1,
+  spec:{type:'function',function:{name,description:name,parameters:{type:'object'}}},
+  gate:()=>name==='save_source'&&!ready?'missing_context':'available',execute:async()=>{executions++;return {status:'ok'}}}))
+ const policies:ToolPolicy[]=definitions.map(d=>({name:d.spec.function.name,description:'Legacy description '.repeat(30),how_to:'Legacy manual '.repeat(100),schema_version:1,active:true,always_load:false,preload_phases:[]}))
+ const options={definitions,readPolicy:async()=>({phase:'design',tools:policies.map(p=>({...p,active}))}),
+  toolInstructions:'lazy' as const,preloadTools:()=>['read_source'],catalogTool:(name:string)=>({type:'function' as const,function:{name,description:'Pinned card for '+name,parameters:{type:'object'}}}),
+  compactState:{catalogManifestId:'immutable-catalog'}}
+ const first=createToolSession(options);await first.prepare()
+ const before=first.toolbox,state=roundtrip(first.exportState())
+ assert.equal(state.version,3);assert.deepEqual(state.snapshot?.tools,[]);assert.deepEqual(state.cards,[])
+ assert(!JSON.stringify(state).includes('Legacy manual'));assert(!JSON.stringify(state).includes('Pinned card'))
+ const next=createToolSession(options);next.restoreState(state)
+ assert.deepEqual(next.toolbox,before);assert.deepEqual(next.exportState(),state)
+ ready=true
+ assert.equal((await next.execute('save_source',{})).status,'not_offered','fresh availability does not retroactively grant an offer')
+ assert.equal((await next.execute('read_source',{})).status,'ok');assert.equal(executions,1)
+ active=false;assert.equal((await next.execute('read_source',{})).status,'unavailable');assert.equal(executions,1)
+ assert.throws(()=>createToolSession({...options,compactState:{catalogManifestId:'different'}}).restoreState(state),/checkpoint_invalid/)
+ assert.throws(()=>createToolSession({...options,compactState:undefined}).restoreState(state),/checkpoint_invalid/)
+ const corrupt=roundtrip(state);corrupt.shelfDescriptions=['missing_tool']
+ assert.throws(()=>next.restoreState(corrupt),/checkpoint_invalid/)
+})
 const requestId='33333333-3333-4333-8333-333333333333'
 
 test('tool checkpoint restores loaded manuals, carried manuals and the exact in-flight offer fence', async()=>{

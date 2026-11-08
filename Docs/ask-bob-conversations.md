@@ -106,6 +106,17 @@ cost or job-duration quotas. Provider capacity, payload/schema boundaries,
 authorization, cancellation and uncertain-outcome handling remain. A payload
 boundary must not be disguised as successful completion.
 
+### Recovered replies and failure diagnostics
+
+A receipt recovery confirms saved changes; it does not prove Bob completed the
+requested explanation or image review. The claimed-turn boundary reports the
+first stopping stage and an allowlisted error code to internal delivery telemetry,
+even when the final status is `recovered`. Unknown exceptions become `unclassified`;
+private exception text, prompts and pixels are never diagnostics. Normal durable
+yields are continuation, not failures. These fields do not alter user-facing
+receipt text or start another model call. Deployment and remaining live acceptance
+are recorded in the [2026-11-04 investigation](p25-live-window-anchor-followup-2026-11-04.md).
+
 ### PR1 — resume the next operation
 
 New jobs pin an execution version at enqueue. A worker restores a current private
@@ -137,7 +148,9 @@ Bob's own head and specialist chains with pending tool calls. A finished
 specialist chain, such as a CAD review with its preview pixels, is dropped.
 Above 500 000 characters the worker logs `[Checkpoint size]` with the largest
 keys (names and sizes only). Above `BOB_CHECKPOINT_MAX_CHARS` (2 000 000) it
-fails the job with `turn_checkpoint_too_large` instead of retrying the write.
+fails the job with `turn_checkpoint_too_large` instead of retrying the write;
+since 2026-11-08 a specialist hand-over that reaches it (with the final-answer
+pin) ends as `state_limit` with what it saved, and Bob's turn goes on.
 This fence exists because a 4.8 MB snapshot timed out on every save and starved
 the database on 2026-10-21.
 
@@ -248,6 +261,58 @@ old jobs and CAD omit the opt-in and retain their prior wire behavior. No new
 schema migration or public request-history logging is introduced.
 
 ### PR3 — bound result payloads without an AI history summary
+
+**First context-release increment, installed 2026-11-05:** newly created
+durable complete-request execution identities pin `imageInputDedupVersion: 1`.
+Only exact private image resolver references with the same detail level are
+deduplicated in the assembled model request, before its capacity estimate. The
+first occurrence stays in place; all text, source-status notices, distinct
+revisions/views and detail levels remain. Public URLs and execution archives are
+unchanged. The pin survives checkpoints; a mismatched restore is refused. Old
+execution identities omit the pin and retain byte-identical requests. This is
+deduplication only, not retirement of unique images or whole-stage renewal.
+The [audit increment](bob-runtime-path-audit-2026-11-04.md#image-dedup-increment-2026-11-05)
+owns test/release evidence; C1–C4 and R1–R6 remain the wider lifecycle work.
+
+**Next diagnostic increment, installed 2026-11-05:** complete-request
+assembly supplies content-free image counts separately from provider options.
+`[Bob image input attempt]` logs numeric `before`, `after`, `removed`,
+`unique_private`, `other` and `dedup_version` inside the existing journalled
+dispatcher, after the dispatch/time gates. Counts cover message `image_url`
+parts, not pixel bytes or token savings. `unique_private` means eligible exact
+private reference/detail identities; public, inline and ineligible-role parts
+are `other`. Completed journal replays produce no new attempt log; pending
+async recovery can produce another attempt, so log-row count is not billable
+model-call count. Capacity refusals before dispatch have no attempt log.
+Counts are neither checkpoint state nor provider/journal fingerprint input.
+No URLs, hashes, source IDs, text or pixels enter this diagnostic. The audit
+increment owns deployment status and the next ordinary owner-run comparison.
+
+**Explicit stage release, source verified 2026-11-05:** new published durable
+main executions pin `stageContextVersion: 1`. `advance_work_stage` is an internal
+read-only context operation, called alone when a question is settled. Its
+bounded replacement note holds source-bound findings, unresolved matters and
+the next step. `keep_image_refs` copies immutable `context_ref` handles supplied
+with successfully opened image metadata. Stable media IDs with different pixel
+versions have different handles. Unknown/public image identities remain literal.
+The original seed text and later user constraints remain verbatim; older tool
+payloads and assistant exchanges leave active input together, while the exact
+operation archive remains reachable through `get_work_history`. Kept pixels
+remain for ongoing comparison; released sources require a fresh canonical open
+when needed again. A new native handoff call/output pair and refreshed tool
+surface form the next request. Backend receipts, candidates, conflict stops and
+authorization gates are unchanged. The note is unverified working memory and
+cannot grant approval or project-write authority. Stage notes serialize in
+stable key order so JSONB restoration preserves journal fingerprints.
+
+Main `open_project_item` also reports that the app renders successfully viewed
+sources with its answer; the model need not generate a URL or a replacement
+ASCII sketch. Source evidence is still recorded only after actual pixel
+delivery. Colleagues retain their own private image delivery and existing
+renewal contracts. [Stage increment evidence](bob-runtime-path-audit-2026-11-04.md#stage-context-increment-2026-11-05)
+owns activation and acceptance; a single unsettled oversized question can still
+require narrower reads. Seed/directory size and whole-task model acceptance
+remain separate from this mechanism.
 
 **Prepared, not activated.** The explicit catalog opt-in above pins
 `resultReferenceVersion: 1` together with complete requests. Their native main-turn adapter never invokes
@@ -394,6 +459,74 @@ expertise helps. Project phase describes the setting; it does not prescribe a
 generic sequence or enlarge the assignment to finishing the entire project.
 
 ### What memory keeps
+
+**Private workpads — deployed 2026-11-03; live-model acceptance pending.**
+Bob, Konrad, Rita and Mattias each have one small, replaceable note scoped to the
+current private project thread and role (`bob_private.bob_agent_workpads`). It
+contains a goal, next step, at most six short steps/blockers, at most twelve
+references and a working/waiting/done status. It is loaded automatically at the
+start of new role work; `update_workpad` replaces the entire note using an
+expected revision. The server binds role identity and current authorized turn;
+old pinned jobs and guest/local chat do not use this store. An equal retry is
+idempotent and a stale competing update conflicts. A new conversation gets a
+new workpad, while a resumed worker keeps its already checkpointed model input.
+
+**Installed follow-up, 2026-11-06:** new manifests pin
+`workpad_freshness_version=1`. The claim-fenced `bob_agent_workpad_current`
+reader suppresses the old note if a later Bob write receipt exists in the same
+project, retaining its original stored content and CAS revision. A deliberate
+same-note reaffirmation after current-source reading advances the revision;
+a retry does not. This conservative fence does not infer which decisions are
+settled and does not detect every manual edit. Older jobs keep the original RPC.
+
+A note is **not** a second project memory: every reference is a hint to reopen
+the exact source, and neither a note nor its `noted` response counts as a
+construction save, check, approval or verified receipt. Canonical project
+revisions and actual tool receipts stay with their current owners. The notebook
+adds no model, and no new budget. The workpad alone does **not** reset an active
+specialist model chain or change the existing 150k-token continuation policy:
+doing that before a confirmed save could revive the repeated-read/unsaved-work
+regression. The separately gated, verified renewal is described below.
+
+Release order completed: `20261103121713_bob_agent_workpads.sql` (private table),
+matching `bob-worker` v186 and `ask-bob` v218, then
+`20261103122145_bob_agent_workpads_catalog.sql` (catalog activation).
+The owner deferred test/CI runs during rapid development; live-model acceptance
+and context-growth measurements remain open. [Release evidence](bob-workpad-release-2026-11-03.md).
+
+**Verified Konrad context renewal — deployed 2026-11-03; live-model acceptance pending.**
+The optional `worker_verified_renewal_version` 1 is pinned only on new claimed
+jobs with worker checkpoints and private workpads. Konrad retains the earlier
+150k continuation/compaction policy; an additional early renewal is possible
+after his provider input reaches 105k tokens, at most twice in one hand-over.
+It requires a real construction `saved` receipt, a *later* successful workpad
+update naming the next small step, an exact readback of that artifact/revision,
+fresh available project knowledge and a new seed under 75k content tokens.
+The new model input retains the original assignment, locked project snapshot,
+conversation and current knowledge; it includes the latest private note as an
+unverified hint and the exact readback identity as evidence of persistence,
+**not approval**. The old model chain is released only at a fully answered tool
+boundary, then the smaller next-state checkpoint is stored. If any guard fails,
+the pre-existing chain and progress checkpoint remain unchanged. Worker progress
+version 2 is pinned separately; active version-1 jobs are never reinterpreted.
+
+Activation followed the compatible runtime release via
+`20261103122214_bob_worker_verified_renewal_catalog.sql`; new jobs alone pin
+this behavior. No Actions or paid model runs were performed as part of the
+technical rollout. [Exact hosted versions and remaining acceptance](bob-workpad-release-2026-11-03.md).
+
+**Bounded Konrad pieces — installed 2026-11-03, not yet live-model-tested**
+([deployment record](konrad-piece-progress-release-2026-11-03.md)).
+`worker_piece_progress_version` 1 pins an additional boundary only on new
+claimed worker jobs with checkpoints and workpads. Konrad chooses a natural
+wall/opening scope, uses the existing small part/parameter tools and maintains
+the next piece in his note. Code returns one construction write per provider
+batch and reads its exact current revision immediately; a failed readback
+returns `needs_verification` with the saved receipt instead of risking a second
+unverified change. This makes an early save useful to the existing verified
+context renewal, without weakening form-scope/whole-model checks. It does not
+infer where a window belongs or replace the owner's eventual design review.
+Older pinned jobs keep their prior batch and readback behavior.
 
 *Manifests with `memory_stair_version` 1 replace the rewritten brief with the
 [memory stair](#memory-stair); this describes the pinned behavior.*
@@ -925,6 +1058,18 @@ to [bounded writes](ask-bob-writes.md). Pages and truncation remain explicit.
 <a id="final-answer-past-stop"></a>
 ### Final answer past the spending stop — installed 2026-11-01
 
+**Superseded in production 2026-11-03 ([PR #417](https://github.com/EmelieHagander/Bob-the-builder/pull/417)):**
+the `20261103081632_bob_remove_turn_usd_stop` migration published contract v18,
+`bob-turn-usd-stop-removed-v1`, removing the temporary per-turn
+USD 4 stop. New `work_allowance_version: 1` jobs have no
+turn spending or model-call allotment, while all usage remains recorded. Jobs
+already pinned to the historical spending stop keep their contract. The
+final-answer compatibility pin is harmless without a stop. Worker deadlines
+and the same-turn failed-handover guard remain active; neither is a spending cap.
+The two Edge functions were deployed as `bob-worker` v184 and `ask-bob` v216.
+
+The details below document the historical stop and its final-answer recovery.
+
 **Installed** with `bob-finder-save-fixes-v1` ([record](foundation-verification.md#finder-save-fixes-install-2026-11-01)). The final call also carries the approved closed-bench note once (`bob.note.closed`, budget "spending"; the prompt steward's call: no new text).
 
 Owner decision 2026-11-01: "Bob's final answer always gets through." The
@@ -953,8 +1098,8 @@ Jobs pinned with `final_answer_version` 1 on the same contract (execution
 
 No model-facing text changed. Source: `bob-model-budget.ts`, `bob-workers.ts`
 (`stopAsResult`), `project-answer.ts` (`finalCall`), `ask-openai.ts`; tests:
-`tests/bob-final-answer.test.ts`. **Not active:** the catalog flag is not
-published; publication, install and a paid acceptance run remain.
+`tests/bob-final-answer.test.ts`. **Historical policy only:** new work no longer
+uses this spending stop. No paid acceptance run has yet been performed.
 
 ### Bob-directed completion — 2026-09-27
 
@@ -1041,6 +1186,20 @@ A receipt-only recovery with no prepared notices can use one small read-only
 localisation call before settlement. Complete provider failure or no remaining
 budget uses language-neutral warning/open/saved marks and original labels.
 That path preserves partial evidence and never re-executes writes.
+
+**Chat line for notices — source 2026-11-06 (owner decision).** Every notice the
+server writes into an answer is also recorded in `evidence.notices` (`kind`
+failed / uncertain / info, the notice `code`, its exact `text`, and a stopped
+drawing's owner-actionable `missing` gaps). The stored answer text is unchanged,
+so the transcript, Bob's memory and debugging keep the full notice. The chat
+removes the marked text and shows one line instead: *Bob dropped the hammer,
+nothing was done this turn*; when receipts exist, *Only this was saved: …*; an
+uncertain save asks the owner to check before asking again. `info` notices
+(transcript not synchronised) are hidden without a line. The failed drawing-job
+notice written by `record_failed_drawing_job` carries the same marker
+(migration `20261106233000`). Cost notices about possible double charges
+(K5, 2026-10-07) are not marked and still show. Answers stored before this
+change show their original text. Edge deploy and migration are pending.
 
 ### Receipt-owned drawing event replies — 2026-10-10
 
@@ -1151,7 +1310,7 @@ The pattern follows Launchpad's async dispatch, continuation driver and resume p
 
 `pg_net` dispatches `bob-worker`; the `bob-background-turns` cron task checks queued and expired worker leases every minute, independently of any browser. A random private per-job capability authenticates this worker endpoint (`verify_jwt=false` only here). An atomic claim issues a new worker token and increments the existing conversation generation; duplicate dispatches and stale workers cannot settle the active claim or write project records. The driver maintains the conversation lock while work is active. A killed worker is recoverable after its 150-second lease.
 
-Each worker has a 140-second segment budget. Completed model responses, exact domain RPC results, CAD packets, media context and generated image bytes are checkpointed before proceeding. Re-entering the existing orchestration replays those results to rebuild loaded tools, specialist candidates and counters, then continues at the first unfinished operation. Input fingerprints stop divergent replay; domain revisions still guard new writes. If a write committed before its checkpoint was saved, the existing SQL receipt ledger reconciles the identical operation. A yield is an internal scheduling signal, never a failed user turn or invented user approval. Main model calls allow 100 seconds within a fresh segment; specialist budgets remain bounded. Transient provider errors can yield to a later attempt. Standard/high main-model settings and the canonical shared AI service are unchanged.
+Each worker has a 140-second segment budget. Completed model responses, exact domain RPC results, CAD packets, media context and generated image bytes are checkpointed before proceeding. Re-entering the existing orchestration replays those results to rebuild loaded tools, specialist candidates and counters, then continues at the first unfinished operation. Input fingerprints stop divergent replay; domain revisions still guard new writes. If a write committed before its checkpoint was saved, the existing SQL receipt ledger reconciles the identical operation. A yield is an internal scheduling signal, never a failed user turn or invented user approval. Background model calls use a role- and provider-bounded window within a fresh segment; specialist budgets remain bounded. Transient provider errors can yield to a later attempt. Standard/high main-model settings and the canonical shared AI service are unchanged.
 
 Journaled read deadlines seal either the result or the abort before checkpointing. Lookup, catalog and media readers wait for that checkpoint before delivering an outcome; a late SDK success cannot replace a timeout that Bob already saw. A pending shared AI job also pins the operation fingerprint and job identity before yielding. Changed input stops before another reservation or provider send. These markers grant no extra retry allowance, and membership, source freshness and image authority remain live checks.
 
@@ -1165,8 +1324,14 @@ Deploy `20260924120448_bob_background_jobs.sql` and `20260924120747_bob_backgrou
 
 ### Progress, stall detection and segment time — 2026-09-27
 
+- **Runtime optimizations O1–O4 (2026-11-04).** New execution identities pin `workingStateVersion:1` for exact envelope page fitting, catalog-bound compact tool-session state and the thin authorized construction readback. Missing pins preserve the old page algorithm, session representation and journal read sequence. Terminal journal cleanup is centralized at job status changes and excludes paused work and durable domain/cost/receipt records. [Implementation, measurements and rollout](p25-live-window-anchor-followup-2026-11-04.md#o1o4-implementation-2026-11-04) owns release/acceptance evidence.
+
+- **Small durable working state (2026-11-04).** Specialist terminal progress v3 persists the review/conflict/verification outcome before finishing can yield, releases the finished chain and carries no pending model messages. A restored terminal cannot advance to another specialist model call. Interrupted older review-piece saves return verification instead of proceeding. Construction state v3 keeps references to confirmed persisted checks, loading exact bodies through the authorized result reader on demand; unsaved and turn-local results remain in state. Code persistence readback skips table generation and retains exact revision/currentness metadata. Checkpoint commits retain immutable boundary copies and server receipt checks while reducing repeated canonicalization. Specialist tool-event indices survive claims. Deploy and rollback require drained active jobs because older runtimes reject v3 states. [Implementation and acceptance limits](p25-live-window-anchor-followup-2026-11-04.md#current-working-state-correction-2026-11-04).
+
 - **Stalls, not hops.** A claim whose previous segment saved at least one journal checkpoint resets the stall count. Five consecutive segments without a checkpoint fail the job as `background_stalled`. The 20-minute wall, the caller-token expiry and a hard ceiling of 60 claims remain; the former twelve-claim cap is gone.
-- **Several calls per segment.** The journal reserves a realistic duration per model role (main Bob and the CAD designer 75 seconds, reviewer 60, plan compiler 45, others 15–30) instead of the full 100-second timeout. A call is capped at the segment's remaining time plus 8 seconds; if the segment wall cuts it off, the worker yields and the call restarts in a fresh segment without counting as a provider retry.
+- **Several calls per segment.** OpenAI background jobs reserve 25 seconds (45 with images) for provider submission and durable polling; synchronous roles reserve a bounded role-specific interval. Claude streams synchronously inside the worker and instead reserves up to 90 seconds, with eight more seconds for the journal receipt. A second check immediately before dispatch prevents a billable Claude call with too little segment time remaining. Claude may use up to 120 seconds on a fresh 140-second segment, but never past its remaining segment window minus the receipt margin. A pre-dispatch yield does not consume a retry; an interrupted dispatched call is an uncertain potentially billed outcome, and the journal permits only one uncertain re-send for that exact operation.
+- **Specialist CPU segments (2026-11-04).** Claimed checkpoint jobs hand off after one completed continuing specialist step. The complete tool batch, durable progress and any context renewal are saved first. Canonical conflicts, missing verification, visual-review holds and final reports return to Bob before this scheduling boundary; a yield cannot skip them. The next invocation restores the same specialist and journal cursor instead of dispatching earlier model calls again. This scheduling callback adds no persisted state, input fingerprint, total work quota or owner confirmation. Synchronous and older non-checkpoint paths keep their existing scheduling. A single step must still fit the platform CPU envelope; successful local resumption does not prove hosted acceptance. [Release and remaining acceptance](p25-live-window-anchor-followup-2026-11-04.md#specialist-cpu-segment-correction).
+- **Claude stream diagnostics (2026-11-03).** The Anthropic adapter already uses streaming SSE. Its previous absolute 100-second timeout was a separate local limit, not a non-streaming API mode. On stream failure it now records elapsed time, whether the local timer fired, SSE event counts and first/last event timing without request or response content. This makes provider stalls distinguishable from local segment truncation; it does not promise recovery of an incomplete provider stream or exactly-once billing.
 - **Live status.** Workers publish a content-free progress marker (stage, tool name, step, saved-change count) through the service-only `bob_job_progress`. `bob_job_status` returns it to the job owner while the job runs, and the chat shows a status line such as "Working on the drawings… · 2 changes saved".
 - **Token lifetime.** Before a background send, the browser refreshes an access token that would expire within 25 minutes, so a long turn is not cut short by the sender's token.
 - **Diagnostics.** `bob.execution_events` gains one `tool` row per executed tool call (tool name, status, step) and records `end_reason` on the delivery row (answered, asked, step or time budget, or the failure code). Rows stay content-free.
@@ -1358,3 +1523,30 @@ without promising another run. Content-free metrics retain allowlisted phase,
 validation and ending categories; they do not store raw SQL errors or prompt
 content. The model stays GPT-5.4/high. The owner will test the real conversation
 after [technical release](foundation-verification.md#bob-task-workflow-release-2026-10-17).
+
+
+### Worker operation checkpoints — 2026-11-04
+
+`operationPathsVersion:1` belongs to the journaled execution identity, not a
+mutable global switch. Its compact `workerOperations` component stores the role,
+project, selected source, issued references and saved drawing receipts. Restore
+rejects foreign project/unknown role or invalid reference/pin/receipt state.
+Fresh current-head and caller checks still precede operations after restart.
+Old execution identities omit this component and retain their earlier contract.
+The same version enables thin drawing-identity reads and SQL-selected CAD
+sections (24 kB payload bound); Edge no longer downloads a full CAD envelope to
+answer these particular routing/section reads. This is a transport correction,
+not a measured cure for every CPU shutdown. See the [runtime correction evidence](bob-runtime-path-audit-2026-11-04.md#corrections).
+
+
+**Installed worker stage lifecycle, 2026-11-06:** new claimed/checkpointed jobs
+may separately pin `worker_stage_context_version=1`. Structure, drawing and
+materials then use native request replay, the immutable result archive and the
+same explicit stage handoff as main Bob. Each worker refreshes its own offered
+tool fence and exact operation surface; stage calls remain inside that worker's
+chain, with live access/image checks before dispatch. Known private pixels may
+leave active input, and exact saved-source refs are supplied to the worker
+without claiming a main-chat preview. Original assignments, uncertainty,
+code-derived receipt identities and exact history reopening survive restart.
+An absent pin retains the previous worker protocol. Installation and ordinary
+behavior acceptance are tracked in the [audit correction evidence](bob-runtime-path-audit-2026-11-04.md#three-project-corrections-2026-11-06).

@@ -103,6 +103,12 @@ export function parseCatalogWrite(value: unknown): WritePayload | null {
   if (v.kind === 'material' ? v.material_id !== null || v.material_revision !== null
     : typeof v.material_id !== 'string' || !uuid.test(v.material_id) || !revision(v.material_revision)) return null
   const { record_id, expected_revision, request_quote, ...data } = v
+  // Våningssäng 2 (2026-11-08): a delegated design choice (a common plywood
+  // sheet size) was refused three times because its source_quote was not a
+  // word-for-word excerpt, and Bob then asked the owner to type an exact
+  // phrase. A design choice's source is the current request that delegated
+  // it, so code records that request; the model cannot get it wrong.
+  if (data.source_kind === 'design_choice') { data.source_quote = request_quote; data.source_seq = null }
   return { kind: 'catalog', record_id: record_id as string | null, expected_revision: expected_revision as number,
     expected_updated_at: null, request_quote: request_quote as string, data }
 }
@@ -277,8 +283,11 @@ export function createMaterialCatalogReader(projectId: string, transport: Catalo
       const combined = !!options.lookup && input.action === 'search' && input.kind === 'material' && input.profile_code === null
         && Object.keys(input.properties as Record<string, unknown>).length === 0
       const reader = combined ? options.lookup! : transport
+      // parseCatalogRead validated these value types, but its public return
+      // type is a record because the parser serves several different actions.
       const request: Record<string, unknown> = combined
-        ? { query: input.query, categories: input.categories, after: input.after, id: null } satisfies MaterialLookupInput : input
+        ? { query: input.query as MaterialLookupInput['query'], categories: input.categories as MaterialLookupInput['categories'],
+          after: input.after as MaterialLookupInput['after'], id: null } satisfies MaterialLookupInput : input
       const controller = new AbortController()
       let timer: ReturnType<typeof setTimeout> | undefined
       try {

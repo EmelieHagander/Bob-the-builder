@@ -1,3 +1,4 @@
+import { BobChatDrawings } from './BobChatDrawings'
 import { createBobDraftBinding } from '../lib/bobDraftBinding'
 /*
  * Project-bound assistant drawer. The direct backend can read allowed project
@@ -16,34 +17,17 @@ import { BobWriteReceipts } from './BobWriteReceipts'
 import { createRequestScope } from '../lib/projectRequest'
 import { withLoadDeadline } from '../lib/loadDeadline'
 import { BOB_DRAFT_EVENT, getBobSurface, takePendingBobDraft, useBobSurfaceSnapshot } from '../lib/bobSurface'
-import type { BobScreenPointer, CurrentView } from '../domain/bobScreen'
+import type { BobScreenPointer } from '../domain/bobScreen'
 import { readOutgoing, reconcileOutgoing, type OutgoingTurn } from '../lib/bobOutgoing'
 import { formatDateTime } from '../lib/format'
 import { BOB_IMAGE_LIMIT, BOB_IMAGE_BYTES_LIMIT, parseBobImageIds } from '../domain/bobImages'
 import { BobChatImages } from './BobChatImages'
+import { answerDisplay } from '../lib/bobNotice'
 import { StoredImage } from './ProjectImages'
 import { UserError, userErrorMessage } from '../lib/userErrors'
-import { drawingStatusLabel, recordTypeLabel } from '../lib/labels'
 
 type RetryTurn = { text: string; turnId: string; screen?: BobScreenPointer | null; imageIds?: string[] }
 type DraftImage = { id: string; file: File; status: 'uploading' | 'ready' | 'failed'; error?: string }
-
-function ViewEvidence({ view }: { view: CurrentView }) {
-  if (view.status !== 'ok') return <p className="foundation-hint" role="status">
-    {view.status === 'not_found' ? 'The page selection could not be found in this project.' : view.status === 'unsupported' ? 'Detailed context for this page is unavailable.' : 'The page records could not be read.'} Bob has no verified page focus for this answer.
-  </p>
-  const f = view.focus
-  const warnings: Record<string, string> = { plan_step_goal_truncated: 'The Step goal was shortened in the page context.', plan_step_notes_truncated: 'The Step notes were shortened in the page context.', task_instructions_truncated: 'Task instructions were shortened in the page context.', selected_instruction_truncated: 'The selected instruction was shortened in the page context.' }
-  const labels = [f.area?.name, f.planStep?.name, f.task?.name, f.instruction?.name,
-    f.solution && `${f.solution.name} · v${f.solution.revision}`,
-    f.drawing && `${f.drawing.name} · v${f.drawing.revision}`, f.event?.name].filter(Boolean)
-  return <details className="bob-context-evidence">
-    <summary>Page records used{labels.length ? ` · ${labels.join(' / ')}` : ''}</summary>
-    <p className="foundation-hint">Read from the project at {formatDateTime(view.retrievedAt)}. Page focus does not approve measurements or drawings.</p>
-    {f.drawing && <p>Viewed drawing v{f.drawing.revision} · {drawingStatusLabel(f.drawing.status)} · {f.drawing.sourceState === 'current' ? 'linked sources current' : f.drawing.sourceState === 'changed' ? 'sources changed — review before use' : 'sources could not be checked'}</p>}
-    {view.warnings.length > 0 && <ul>{view.warnings.map((warning, i) => <li key={i}>{warnings[warning] ?? 'Some page context was limited. Open the saved source for its complete details.'}</li>)}</ul>}
-  </details>
-}
 
 const toneColor = {
   clay: { c: 'var(--clay)', bg: 'var(--clay-bg)' },
@@ -226,33 +210,27 @@ function MarkdownText({ text }: { text: string }) {
 function Bubble({ msg, projectId, attachedBefore, onAction, onOpenDrawing }: { msg: ChatMessage; projectId: string; attachedBefore?: string[]; onAction?: (action: string) => void; onOpenDrawing?: () => void }) {
   const isUser = msg.from === 'user'
   const generatedImages = [...new Set(msg.evidence?.writes?.filter(r => r.dataset === 'media' && r.operation === 'updated').map(r => r.recordId) ?? [])]
-  // Saved images Bob opened this turn are what his reply is about, so the owner
-  // sees them here too (2026-11-02: an earlier image Bob described never showed).
-  // The owner's own attachments just above and new illustrations are not repeated.
+  // Chat shows results, not sources (owner, 2026-11-06): sources, page focus and
+  // references stay in the stored evidence for debugging. A saved image Bob opened
+  // is shown only when it is what his reply is about, i.e. he delivered no picture
+  // of his own (2026-11-02). Attachments just above are not repeated.
   const shown = new Set([...generatedImages, ...(attachedBefore ?? [])])
-  const viewedImages = [...new Set(msg.evidence?.sources?.filter(s => s.dataset === 'image_pixels').map(s => s.recordId) ?? [])].filter(id => !shown.has(id))
+  const viewedImages = [...new Set(msg.evidence?.sources?.filter(s => s.dataset === 'image_pixels' && !s.visual).map(s => s.recordId) ?? [])].filter(id => !shown.has(id))
+  const hasVisualResult = generatedImages.length > 0 || msg.evidence?.sources.some(source => source.visual)
+    || msg.evidence?.writes?.some(write => ['artifacts','solutions'].includes(write.dataset) && write.operation !== 'deleted' && write.revision)
+  // Server delivery notices become one short line; the stored text keeps them.
+  const display = isUser ? { text: msg.text, line: null } : answerDisplay(msg.text, msg.evidence)
   return (
     <div className={`bob-message ${isUser ? 'bob-message-user' : 'bob-message-assistant'}`}>
       <div className="bob-bubble">
-        {msg.evidence && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 6 }}>Bob’s assessment</div>}
-        {isUser ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : <MarkdownText text={msg.text} />}
+        {isUser ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : display.text && <MarkdownText text={display.text} />}
+        {display.line && <p className="bob-dropped"><Icon name="hammer" weight="fill" size={16} color="var(--honey)" /><span>{display.line}</span></p>}
         <BobChatImages projectId={projectId} ids={parseBobImageIds(msg.imageIds)} />
         <BobChatImages projectId={projectId} ids={generatedImages} label="Project illustration" />
-        {viewedImages.length > 0 && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 }}>Earlier {viewedImages.length === 1 ? 'image' : 'images'} Bob looked at</div>}
-        <BobChatImages projectId={projectId} ids={viewedImages} label="Image Bob looked at" />
+        {!isUser&&<BobChatDrawings projectId={projectId} receipts={msg.evidence?.writes} sources={msg.evidence?.sources}/>}
+        {viewedImages.length > 0 && !hasVisualResult && <BobChatImages projectId={projectId} ids={viewedImages} label="Image Bob looked at" />}
         {isUser && msg.deliveryState === 'failed' && !msg.deliveryRecovery && <div className="foundation-hint" style={{ color: 'inherit' }}>Bob’s earlier attempt was interrupted. Your message is saved.</div>}
         {isUser && msg.deliveryRecovery === 'completed' && <div className="foundation-hint" style={{ color: 'inherit' }}>The drawing was saved after the earlier interruption.</div>}
-        {msg.evidence?.currentView && <ViewEvidence view={msg.evidence.currentView} />}
-        {msg.evidence && <details style={{ marginTop: 10, fontSize: 12, color: 'var(--ink-soft)' }}>
-          <summary>Project records consulted ({msg.evidence.sources.length})</summary>
-          <p>Stored project information; measurements and specifications are not verified.</p>
-          {msg.evidence.partial && <p>Some results were limited or unavailable.</p>}
-          <ul style={{ paddingLeft: 18 }}>{msg.evidence.sources.map((source, i) => <li key={i}><strong>{source.label}</strong> · {recordTypeLabel(source.dataset)}<br />Retrieved {formatDateTime(source.retrievedAt)}{source.updatedAt ? ` · updated ${formatDateTime(source.updatedAt)}` : ' · update time unknown'}</li>)}</ul>
-        </details>}
-        {!!msg.evidence?.references?.length && <details className="bob-evidence">
-          <summary>Building references ({msg.evidence.references.length})</summary>
-          <ul>{msg.evidence.references.map(r=><li key={r.id}><a href={r.url} target="_blank" rel="noopener noreferrer">{r.title}</a> · {r.version}<br />Reviewed {r.reviewedAt}. General guidance; project conditions need their own evidence.</li>)}</ul>
-        </details>}
         <BobWriteReceipts receipts={msg.evidence?.writes} onOpenDrawing={onOpenDrawing} />
         {msg.report && <div style={{ marginTop: 10, background: 'var(--canvas)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 13.5, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{msg.report}</div>}
         {msg.list && <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>{msg.list.map((it, i) => <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}><span style={{ width: 24, height: 24, borderRadius: 7, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', background: toneColor[it.tone].bg }}><Icon name={it.icon} weight="fill" size={13} color={toneColor[it.tone].c} /></span><span style={{ fontSize: 13.5, lineHeight: 1.4 }}>{it.text}</span></div>)}</div>}
@@ -486,7 +464,9 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   }, [project.id, historyAttempt])
 
   function applyServerHistory(history: Awaited<ReturnType<typeof db.getAskBobConversation>>) {
-    historyPage.current = refreshHistoryPage(historyPage.current, history)
+    const accepted = refreshHistoryPage(historyPage.current, history)
+    if (accepted === historyPage.current) return false
+    historyPage.current = accepted
     setHasOlder(!!historyPage.current.hasMore)
     setOlderError('')
     serverThread.current = history.threadId ?? null
@@ -504,6 +484,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     setHistoryNotice(held ? 'Your new message is kept in this tab, but receipt is not confirmed. Use Retry request when Bob is free.'
       : history.pending?.paused ? 'Bob is paused because the session expired. Reconnect to continue the same request; saved work is retained.'
       : history.retry ? 'The previous answer was interrupted. Retry to continue without repeating saved changes.' : '')
+    return true
   }
 
   async function loadOlder() {
@@ -600,8 +581,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           const history = await db.getAskBobConversation(project.id)
           if (!current()) return
           if (history.mode !== 'server') throw new Error('Conversation unavailable')
-          applyServerHistory(history)
-          if (!history.pending) {
+          if (applyServerHistory(history) && !history.pending) {
             if (history.messages.some(message => message.evidence?.writes?.length)) setNeedsRefresh(true)
             return
           }
@@ -645,8 +625,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       try {
         const history = await db.getAskBobConversation(project.id)
         if (isCurrent() && history.mode === 'server') {
-          applyServerHistory(history)
-          if (!history.pending) { setNeedsRefresh(true); return }
+          if (applyServerHistory(history) && !history.pending) { setNeedsRefresh(true); return }
         }
       } catch { /* Keep the same job and an honest unconfirmed stop. */ }
       if (isCurrent()) setWorkError(userErrorMessage(error, 'Could not confirm the stop. Bob may still be working.'))
@@ -782,7 +761,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         const history = await db.getAskBobConversation(project.id)
         if (!isCurrent()) return
         if (history.mode === 'server') {
-          applyServerHistory(history)
+          if (!applyServerHistory(history)) return
           if (history.messages.some(message => message.from === 'bob' && message.turnId === clientTurnId && message.evidence?.writes?.length)) setNeedsRefresh(true)
           if (result.unavailable === 'turn_in_flight' && outgoing.current?.turnId === clientTurnId) holdUntilFree({ text, turnId: clientTurnId, screen, imageIds })
           else if (waitingFree?.turnId === clientTurnId) setWaitingFree(null)

@@ -82,3 +82,19 @@ test('nothing to weigh: no saves, an uncertain write, or Bob already saved the d
     assert.equal(h.calls.length + h.payloads.length, 0)
   }
 })
+
+test('owner decision 2026-11-08: once the weigher is published, Bob cannot read the description for editing or save it', async () => {
+  const { createProjectEdits } = await import('../supabase/functions/_shared/project-edits.ts')
+  let reads = 0
+  const edits = createProjectEdits({ projectId: 'A', descriptionWeigher: true, hasAccess: async () => true,
+    read: async () => { reads++; return { data: [], error: null } } })
+  const result = await edits.execute('read_project_edit_context', { resource: 'project_description', query: null, next_ref: null }) as { status: string }
+  assert.notEqual(result.status, 'ok')
+  assert.equal(reads, 0)
+  const catalog = catalogFixture()
+  const read = catalog.definition('tools.read_project_edit_context').definition as any
+  assert.ok(!read.parameters.properties.resource.enum.includes('project_description'))
+  const edit = catalog.definition('tools.edit_project_record').definition as any
+  assert.match(edit.description, /kept after each turn by the description weigher/)
+  assert.doesNotMatch(edit.description, /Rewrite it when the project moves to a new phase/)
+})

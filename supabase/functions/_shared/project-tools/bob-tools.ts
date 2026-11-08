@@ -1,3 +1,7 @@
+import {runtimeToolSpec,type RuntimeToolSurface} from '../runtime-tool-surface.ts'
+import { SERVER_REVISIONS, createRefusalGuard, createRevisionMemory, fillServerRevisions, stripServerRevisions, withoutServerRevisions, type RevisionReaders } from '../server-revisions.ts'
+import type {WorkerOperations,OperationRole} from '../worker-operations.ts'
+import { drawingWorkerSpec } from '../drawing-work.ts'
 import { SUPERSEDED_PLAN_LINK_TOOLS, type PlanLinks } from '../project-plan-links.ts'
 import type { BuildTreeTools } from '../build-tree.ts'
 import type { BuildingScope } from '../project-building-scope.ts'
@@ -36,8 +40,8 @@ export const TOOLBOX_SHELVES: { label: string; tools: string[] }[] = [
   { label: 'Tasks and build days', tools: ['save_project_task', 'update_project_task_work', 'manage_task_readiness', 'delete_project_task', 'save_project_build_day', 'delete_project_build_day'] },
   { label: 'Measurements and design decisions', tools: ['save_project_measurement', 'archive_project_measurement', 'save_project_solution', 'select_project_target'] },
   { label: 'Calculations', tools: ['calculate_project'] },
-  { label: 'Drawings and CAD', tools: ['read_construction_delivery', 'read_construction_draft', 'save_construction_draft', 'edit_construction_parts', 'change_construction_parameters', 'transition_legacy_drawing', 'change_construction_roles', 'read_construction_changes', 'continue_construction_change', 'check_construction_draft', 'derive_construction_lists', 'design_project_cad', 'plan_cad_pieces', 'compose_cad_shell', 'read_cad_shell', 'link_cad_shell_steps', 'read_drawing_requests', 'read_drawing_request_work', 'link_drawing_gap', 'ensure_drawing_gap_task', 'cancel_drawing_request', 'restore_drawing_request', 'save_cad_design', 'link_project_drawing', 'save_project_building_plan', 'inspect_building_projection', 'save_project_stair', 'inspect_stair_options', 'create_project_room_layout', 'edit_project_room_layout', 'save_project_drawing'] },
-  { label: 'Materials, stock and Shopping', tools: ['search_material_catalog', 'read_material_catalog', 'save_catalog_definition', 'manage_project_material', 'derive_cad_material_requirement', 'check_construction_cut_fit', 'save_construction_cut_plan', 'delete_shopping_item', 'find_catalog_materials', 'add_catalog_fastener'] },
+  { label: 'Drawings and CAD', tools: ['ask_structure_worker', 'ask_drawing_worker', 'read_construction_delivery', 'read_construction_draft', 'save_construction_draft', 'edit_construction_parts', 'commit_construction_sketch', 'change_construction_parameters', 'transition_legacy_drawing', 'change_construction_roles', 'read_construction_changes', 'continue_construction_change', 'check_construction_draft', 'derive_construction_lists', 'design_project_cad', 'plan_cad_pieces', 'compose_cad_shell', 'read_cad_shell', 'link_cad_shell_steps', 'read_drawing_requests', 'read_drawing_request_work', 'link_drawing_gap', 'ensure_drawing_gap_task', 'cancel_drawing_request', 'restore_drawing_request', 'save_cad_design', 'link_project_drawing', 'save_project_building_plan', 'inspect_building_projection', 'save_project_stair', 'inspect_stair_options', 'create_project_room_layout', 'edit_project_room_layout', 'save_project_drawing'] },
+  { label: 'Materials, stock and Shopping', tools: ['ask_materials_worker', 'search_material_catalog', 'read_material_catalog', 'save_catalog_definition', 'manage_project_material', 'derive_cad_material_requirement', 'check_construction_cut_fit', 'save_construction_cut_plan', 'delete_shopping_item', 'find_catalog_materials', 'add_catalog_fastener'] },
   { label: 'Images and mockups', tools: ['list_project_category', 'open_project_item', 'describe_project_image', 'generate_project_image', 'attach_project_image', 'detach_project_image', 'finalize_project_image'] },
   { label: 'Building and site', tools: ['read_building_scope', 'change_building_scope', 'save_building_context', 'read_build_tree', 'place_build', 'create_sub_build'] },
   { label: 'Building knowledge', tools: ['search_building_knowledge'] },
@@ -87,8 +91,17 @@ export const DRAWING_CONTINUATION_PRELOAD = ['read_construction_draft', 'check_c
   'read_drawing_requests', 'read_drawing_request_work', 'read_construction_changes', 'change_construction_parameters',
   'edit_construction_parts', 'save_cad_design']
 
-export function createBobToolSession(opts: {
+export function createBobToolSession(opts: { continuedWork?:boolean;
+  /** Owner decision 2026-11-07 (server_revisions_version 1): no model types a
+   * revision; the server fills each one (see server-revisions.ts). */
+  serverRevisions?: { readers: RevisionReaders };
+  /** Owner feedback 2026-11-07 (refusal_guard_version 1): a refused call does not run again unchanged. */
+  refusalGuard?: boolean;
+  drawingWorker?:boolean;
+  workerOperation?:{role:OperationRole;operations:WorkerOperations};
+  runtimeSurface?:()=>RuntimeToolSurface;
   aiCatalog?: AiCatalogSession;
+  compactToolState?: boolean;
   /** Build guides (2026-10-30): the owner's switch. Off hides design_project_cad's assembly order. */
   buildGuideTools?: boolean;
   /** Tools of work already in progress, loaded without a describe_tool round. */
@@ -172,7 +185,8 @@ export function createBobToolSession(opts: {
         : boundPlanLinks && SUPERSEDED_PLAN_LINK_TOOLS.includes(spec.function.name) ? 'not_allowed'
         : boundWork && SUPERSEDED_WORK_TOOLS.includes(spec.function.name) ? 'not_allowed'
         : boundSolutions && ['save_project_solution', 'select_project_target'].includes(spec.function.name) ? 'not_allowed'
-        : boundEdits && spec.function.name === 'save_project_description' ? 'not_allowed'
+        // Owner decision 2026-11-08: the description weigher is the description's only author.
+        : (boundEdits || !!opts.aiCatalog?.manifest().definitions.some(row => row.prompt_key === 'role.description-weigher')) && spec.function.name === 'save_project_description' ? 'not_allowed'
         : boundEdits && spec.function.name === 'save_project_solution' && opts.writer.unresolvedTools.includes('edit_project_record') ? 'missing_context'
         : spec.function.name==='propose_project_plan'&&opts.planAssistant?.compilationAttempted ? 'missing_context'
         : writeGate(),
@@ -186,8 +200,8 @@ export function createBobToolSession(opts: {
     })),
     // New handlers can be installed before catalog activation; an older
     // durable manifest keeps its own bench instead of failing on the new row.
-    ...(opts.constructionTools?.tools ?? []).filter(spec=>!['edit_construction_parts','change_construction_parameters','transition_legacy_drawing','change_construction_roles','read_construction_changes','continue_construction_change','read_construction_delivery'].includes(spec.function.name)||!opts.aiCatalog||opts.aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.'+spec.function.name)).map(spec => ({ spec, version: 1,
-      gate: (): ToolGate => ['save_construction_draft','edit_construction_parts','change_construction_parameters','transition_legacy_drawing','change_construction_roles','continue_construction_change','save_construction_cut_plan'].includes(spec.function.name) && writeGate() !== 'available' ? writeGate() : opts.constructionTools!.remaining > 0 ? 'available' : 'budget_exhausted',
+    ...(opts.constructionTools?.tools ?? []).filter(spec=>!['edit_construction_parts','commit_construction_sketch','change_construction_parameters','transition_legacy_drawing','change_construction_roles','read_construction_changes','continue_construction_change','read_construction_delivery'].includes(spec.function.name)||!opts.aiCatalog||opts.aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.'+spec.function.name)).map(spec => ({ spec, version: 1,
+      gate: (): ToolGate => ['save_construction_draft','edit_construction_parts','commit_construction_sketch','change_construction_parameters','transition_legacy_drawing','change_construction_roles','continue_construction_change','save_construction_cut_plan'].includes(spec.function.name) && writeGate() !== 'available' ? writeGate() : opts.constructionTools!.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.constructionTools!.execute(spec.function.name, v),
     })),
     // FORM package 3 source packet: registered only where a publication carries
@@ -239,14 +253,58 @@ export function createBobToolSession(opts: {
     }] : []),
     ...(opts.extraTools ?? []),
   ]
-  return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions, ...(opts.preloadTools ? { preloadTools: opts.preloadTools } : {}), ...(opts.offerWaiting ? { offerWaiting: true } : {}),
+  // Owner decision 2026-11-07: the server fills every revision; the model's
+  // values are dropped, what it reads is remembered for records without a reader.
+  const revisionMemory=opts.serverRevisions?createRevisionMemory():undefined
+  const refusalGuard=opts.refusalGuard?createRefusalGuard():undefined
+  const revised=(def:ToolDefinition):ToolDefinition=>{
+    if(!revisionMemory&&!refusalGuard)return def
+    const name=def.spec.function.name,own=!!revisionMemory&&!!SERVER_REVISIONS[name]
+    return {...def,execute:async(raw:unknown)=>{
+      const repeated=refusalGuard?.before(name,raw)
+      if(repeated)return repeated
+      let args=raw
+      if(own){
+        const filled=await fillServerRevisions(name,stripServerRevisions(name,raw,SERVER_REVISIONS,{}),revisionMemory!,opts.serverRevisions!.readers)
+        if('error' in filled)return refusalGuard?refusalGuard.after(name,raw,filled.error):filled.error
+        args=filled.args
+      }
+      const result=await def.execute(args)
+      revisionMemory?.observe(name,result)
+      return refusalGuard?refusalGuard.after(name,raw,result):result
+    }}
+  }
+  const session=createToolSession({ definitions: registered.map(revised).filter(def=>!!opts.workerOperation||!opts.drawingWorker||!['plan_cad_pieces','compose_cad_shell','link_cad_shell_steps','link_project_drawing','link_drawing_gap','ensure_drawing_gap_task'].includes(def.spec.function.name)).map(def=>{
+    // A bound drawing operation cannot escape into another CAD/destination or
+    // work-link writer. Those operations need their own code-owned bindings.
+    if(opts.workerOperation){
+      const {role,operations}=opts.workerOperation,name=def.spec.function.name
+      return shelved({...def,execute:async(raw:unknown)=>{
+        const prepared=await operations.before(role,name,revisionMemory?stripServerRevisions(name,raw):raw)
+        if(prepared.status!=='ready'||!prepared.args)return prepared.result??{status:prepared.status,reason:prepared.reason,saved:false,...(prepared.available_refs?{available_refs:prepared.available_refs}:{})}
+        return operations.observe(role,name,prepared.args,await def.execute(prepared.args))
+      }})
+    }
+    if(!opts.drawingWorker||!opts.cadAssistant)return shelved(def)
+    const name=def.spec.function.name
+    if(!['design_project_cad','read_construction_draft','read_drawing_requests'].includes(name))return shelved(def)
+    return shelved({...def,spec:drawingWorkerSpec(def.spec),execute:async(raw:unknown)=>{
+      const args=opts.cadAssistant!.boundArguments(name,raw)
+      if(!args)return {status:'invalid',reason:'drawing_identity_is_server_owned',saved:false}
+      return name==='read_drawing_requests'?opts.cadAssistant!.readBoundRequest():def.execute(args)
+    }})
+  }), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions, ...(opts.preloadTools ? { preloadTools: opts.preloadTools } : {}), ...(opts.offerWaiting ? { offerWaiting: true } : {}),
+    ...(opts.compactToolState&&opts.aiCatalog?{compactState:{catalogManifestId:opts.aiCatalog.manifest().manifest_id}}:{}),
     ...(opts.aiCatalog?.manifest().definitions.some(row=>row.prompt_key==='bob.tools'&&row.metadata?.construction_work_version===1)?{
       autoLoadReady:true,followups:opts.aiCatalog.definition('bob.tools','tool_contract').definition.operation_followups as import('./session.ts').ToolFollowup[],
     }:{}),
+    selectVisible:opts.continuedWork,
     selectiveTools: opts.aiCatalog?.manifest().definitions.some(row => row.prompt_key === 'bob.workflows' && row.metadata?.selective_tools_version === 1),
     ...(opts.aiCatalog ? { catalogTool: (name, parameters) => {
         const definition = opts.aiCatalog!.tool(name, parameters)
-        return name === 'design_project_cad' && !opts.buildGuideTools ? withoutAssemblyOrder(definition) : definition
+        const visible=name === 'design_project_cad' && !opts.buildGuideTools ? withoutAssemblyOrder(definition) : definition
+        const shown=opts.runtimeSurface?runtimeToolSpec(definition,opts.runtimeSurface()):opts.drawingWorker?drawingWorkerSpec(visible):visible
+        return revisionMemory?withoutServerRevisions(shown):shown
       },
       ...(opts.toolInstructions === 'lazy' ? { catalogColleagues: (name: string) => bobColleagues(opts.aiCatalog!, [name]),
         catalogWorkflows: () => bobWorkflows(opts.aiCatalog!) } : {}),
@@ -256,6 +314,14 @@ export function createBobToolSession(opts: {
         if (!Number.isSafeInteger(version) || Number(version) < 1) throw new Error('tool_catalog_unavailable')
         return Number(version)
       } } : {}) })
+  if(!revisionMemory&&!refusalGuard)return session
+  // What the model read and what was refused survive a paused job with the rest of the session.
+  const exportState=session.exportState.bind(session),restoreState=session.restoreState.bind(session)
+  return Object.assign(session,{
+    exportState:()=>({...exportState(),...(revisionMemory?{revision_memory:revisionMemory.exportState()}:{}),...(refusalGuard?{refusal_memory:refusalGuard.exportState()}:{})}) as ReturnType<typeof exportState>,
+    restoreState:(state:Parameters<typeof restoreState>[0])=>{restoreState(state)
+      revisionMemory?.restoreState((state as {revision_memory?:unknown}).revision_memory);refusalGuard?.restoreState((state as {refusal_memory?:unknown}).refusal_memory)},
+  })
 }
 
 /** Present shelves in their fixed order, and tools in shelf order. */

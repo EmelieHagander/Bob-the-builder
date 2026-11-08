@@ -133,6 +133,8 @@ try {
     await page.getByRole('button', { name: 'Sign in', exact: true }).click()
     await page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     await page.locator('.account-project-row').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open project Porch A', exact: true }).click()
+    await page.locator('#project-information > summary').click()
+    await page.locator('.planning-tools > summary').click()
     await page.getByText('Project focus & lifecycle', { exact: true }).click()
     await page.getByRole('link', { name: /Building & spaces/ }).click()
     await page.getByRole('heading', { name: 'Building & spaces', exact: true }).waitFor()
@@ -201,6 +203,8 @@ try {
 
     await page.goto(base + '#/')
     await page.locator('.account-project-row').filter({ hasText: 'Porch B' }).getByRole('button', { name: 'Open project Porch B', exact: true }).click()
+    await page.locator('#project-information > summary').click()
+    await page.locator('.planning-tools > summary').click()
     await page.getByText('Project focus & lifecycle', { exact: true }).click()
     await page.getByRole('link', { name: /Building & spaces/ }).click()
     await page.getByText('Not linked to this project', { exact: true }).waitFor()

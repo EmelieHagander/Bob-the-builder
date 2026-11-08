@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from './support/pglite.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
+import { isSyntheticSchemaMigration } from './support/project-schema.ts'
 
 const pg = new PGlite()
 const owner = '92000000-0000-0000-0000-000000000001'
@@ -46,7 +47,7 @@ before(async () => {
   for (const directory of ['../db/migrations/', '../supabase/migrations/']) {
     if (directory.includes('supabase')) await setupSharedSocial(pg)
     const root = new URL(directory, import.meta.url)
-    for (const file of (await readdir(root)).filter(file => file.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(file, root), 'utf8'))
+    for (const file of (await readdir(root)).filter(isSyntheticSchemaMigration).sort()) await pg.exec(await readFile(new URL(file, root), 'utf8'))
   }
 })
 after(() => pg.close())

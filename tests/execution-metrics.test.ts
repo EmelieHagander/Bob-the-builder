@@ -215,3 +215,12 @@ test('tool diagnostics keep known task validation codes and omit arbitrary value
  assert.equal(Object.hasOwn(events.get('tool:1:3')!.counts,'validation_code'),false,'old callers remain unchanged')
  assert(!JSON.stringify([...events.values()]).includes('private_record_name'))
 })
+
+test('helper identities, usage linkage and internal history calls survive safe durable metrics without double-counting replay',async()=>{
+ const events=new Map<string,ExecutionEvent>(),metrics=createExecutionMetrics({runId:'r',turnId:'t',startedAt:0,write:async e=>{events.set(e.event_key,e)}})
+ await metrics.model({aiFunction:'tool-picker'} as any,{...reply,success:false,failure:{code:'model_schema_violation',schemaPaths:['$.tools[0]']}},5,{step:'model:tool-picker:0',attempt:0,usageEventId:'123'})
+ const model=[...events.values()][0];assert.equal(model.role,'other');assert.equal(model.counts.function_name,'tool-picker');assert.equal(model.counts.usage_event_id,'123');assert.equal(model.counts.failure_kind,'model_schema_violation')
+ const call={name:'get_work_history',status:'ok',callId:'PRIVATE_PROVIDER_ID',role:'ask-bob',ms:1}
+ await metrics.internalTool(call);await metrics.internalTool(call);assert.equal(events.size,2)
+ const internal=[...events.values()].find(e=>e.kind==='tool')!;assert.equal(internal.counts.internal,true);assert.equal(internal.counts.tool,'get_work_history');assert(!JSON.stringify(internal).includes('PRIVATE'))
+})

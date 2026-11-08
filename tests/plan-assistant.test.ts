@@ -117,6 +117,8 @@ test('compile tool needs only Bob intent; server supplies revision and mini+nano
   assert.equal(result.status,'ok');assert.equal(result.saved,false);assert.equal(result.current_revision,0)
   assert.equal(result.proposal_ready,true);assert.equal(assistant.canSave,true)
   assert.deepEqual(calls.map(c=>c.functionName),['plan-compiler','plan-reviewer'])
+  // Compiled plans reached 5,400 tokens; Claude needs ~60 s for that (2026-11-06).
+  assert(calls[0].timeoutMs!>60_000,String(calls[0].timeoutMs))
   for(const call of calls)assert(call.systemMessage!.includes(domainVocabulary('planner')))
   assert.equal(calls[0].module,'living-plan');assert.equal(calls[1].module,'living-plan')
   assert.equal(calls[0].reasoningEffort,undefined);assert.equal(calls[1].reasoningEffort,undefined,'reasoning comes from the catalog profile');assert.equal(calls[0].aiDefinition?.reasoningEffort,'low');assert.equal(calls[1].aiDefinition?.reasoningEffort,'low')

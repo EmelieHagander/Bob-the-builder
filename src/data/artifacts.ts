@@ -1,3 +1,4 @@
+import {sourceSvg,savedSvgPage,savedViewPin,sameSavedView} from '../../supabase/functions/_shared/saved-drawing-raster.ts'
 import { checkedStairStudy, type StairDetails } from '../lib/stairStudy'
 import { checkedBuildingPlan, type BuildingPlanDetails } from '../lib/buildingPlan'
 import { checkedRoomLayout, type RoomLayoutDetails } from '../lib/roomLayout'
@@ -74,6 +75,11 @@ export interface ProjectArtifact {
   hasRoomLayout?: boolean
   /** A saved construction source (parts, joints, materials) that drawings are rendered from, not a drawing itself. */
   isConstruction?: boolean
+}
+
+export interface DrawingChatPreview {
+ title:string; revision:number; latestRevision:number|null; archived:boolean; sourceStatus:DrawingSourceStatus;
+ view:string|null; svg:string|null;
 }
 
 export interface CadDrawing { recipe: Record<string, any>; manifest: Record<string, any>; files: Record<string, string>; step_id: string | null; source_artifact_id: string | null; source_revision: number | null; source_changed?: boolean }
@@ -276,6 +282,42 @@ export function createArtifacts(
 
   return {
     version,
+    /** One exact saved view, never the STEP export or full CAD recipe/files. */
+    async chatPreview(projectId:string,id:string,revision:number,requestedView?:string):Promise<DrawingChatPreview|null>{
+      const {db,guard}=connection(projectId)
+      if(requestedView!==undefined){
+        const {data,error}=await db.rpc('read_saved_drawing_view',{p_project:projectId,p_artifact:id,p_revision:revision,p_view:requestedView,p_svg:true});guard()
+        if(error||!data||data.status!=='ready')throw new UserError('The exact saved drawing view is unavailable.')
+        const pin=savedViewPin({project_id:projectId,artifact_id:id,revision,view:requestedView,source_sha256:data.source_sha256})
+        if(!pin||!sameSavedView(data,pin))throw new DataError('scope_mismatch','Drawing view revision mismatch.')
+        const page=savedSvgPage(await sourceSvg(data),requestedView);guard()
+        const bytes=new TextEncoder().encode(page.svg);let encoded='';for(let i=0;i<bytes.length;i+=8192)encoded+=String.fromCharCode(...bytes.subarray(i,i+8192))
+        return {title:data.title,revision,latestRevision:data.current_revision,archived:data.archived,sourceStatus:{source_state:data.source_state==='current'?'current':'changed',source_reasons:Array.isArray(data.source_reasons)&&data.source_reasons.every((r:unknown)=>typeof r==='string')?data.source_reasons as string[]:['source_unavailable']},view:requestedView,svg:btoa(encoded)}
+      }
+      const [detailRead,headRead,statusRead,viewsRead]=await Promise.all([
+        db.from('artifact_revision_details').select('project_id,artifact_id,revision,title,archived').eq('project_id',projectId).eq('artifact_id',id).eq('revision',revision).maybeSingle(),
+        db.from('artifacts').select('current_revision').eq('project_id',projectId).eq('id',id).maybeSingle(),
+        db.from('artifact_source_status').select('source_state,source_reasons').eq('project_id',projectId).eq('artifact_id',id).eq('revision',revision).maybeSingle(),
+        db.from('artifact_cad_revisions').select('views:recipe->views').eq('project_id',projectId).eq('artifact_id',id).eq('artifact_revision',revision).maybeSingle(),
+      ])
+      guard()
+      const detail=checked(detailRead) as Row|null,head=checked(headRead) as {current_revision:number}|null
+      const status=checked(statusRead) as DrawingSourceStatus|null,available=checked(viewsRead) as {views:unknown}|null
+      if(!detail)throw new UserError('Drawing preview unavailable. Reload to check access.')
+      if(detail.project_id!==projectId||detail.artifact_id!==id||detail.revision!==revision)throw new DataError('scope_mismatch','Drawing preview revision mismatch.')
+      if(!available)return null // A construction or other Artifact is not a CAD drawing.
+      const sourceStatus:DrawingSourceStatus=status&&['current','changed','unavailable'].includes(status.source_state)?status:{source_state:'unavailable',source_reasons:['source_unavailable']}
+      const result:DrawingChatPreview={title:detail.title,revision,latestRevision:head?.current_revision??null,archived:detail.archived,sourceStatus,view:null,svg:null}
+      if(sourceStatus.source_state==='unavailable')return result
+      const views=Array.isArray(available.views)?available.views:[]
+      const allowed=['isometric_front_left','isometric','isometric_back_left','isometric_back_right','front','back','left','right','top','bottom']
+      const view=requestedView?(allowed.includes(requestedView)&&views.includes(requestedView)?requestedView:null):views.find((name:unknown)=>typeof name==='string'&&name.startsWith('isometric')&&allowed.includes(name))??views.find((name:unknown)=>typeof name==='string'&&allowed.includes(name))
+      if(!view)return result
+      const read=await db.from('artifact_cad_revisions').select(`preview:files->>${view}`).eq('project_id',projectId).eq('artifact_id',id).eq('artifact_revision',revision).maybeSingle()
+      guard()
+      const row=checked(read) as unknown as {preview:string|null}|null
+      return {...result,view,svg:row?.preview??null}
+    },
     generation,
     async wireframe(projectId: string, id: string, revision: number, signal: AbortSignal, retry = false): Promise<CadViewerResult> {
       const { db, guard } = connection(projectId)

@@ -41,3 +41,11 @@ export function withOmittedNulls(schema: Record<string, any>, value: unknown): u
   for (const key of schema.required ?? []) if (!Object.hasOwn(filled, key) && acceptsNull(schema.properties[key])) filled[key] = null
   return filled
 }
+
+/** Only declared schema paths are diagnostics; unexpected output keys/values
+ * must never be copied into logs. */
+export function safeSchemaPaths(schema:Record<string,any>,issues:SchemaIssue[]):string[]{
+ const declared=new Set<string>(),visit=(s:any,path:string,depth=0)=>{if(!s||depth>12)return;declared.add(path);for(const branch of s.anyOf??[])visit(branch,path,depth+1);for(const [key,v] of Object.entries(s.properties??{}))visit(v,path+'.'+key,depth+1);if(s.items)visit(s.items,path+'[]',depth+1)}
+ visit(schema,'$')
+ return [...new Set(issues.map(i=>i.path).filter(path=>path.length<=120&&declared.has(path.replace(/\[\d+\]/g,'[]'))))].slice(0,8)
+}

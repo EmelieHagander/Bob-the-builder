@@ -81,9 +81,60 @@ export function constructionFormReadiness(design: DesignReadiness, refinement: F
   return { status, issues, form_scope: scope, design_readiness: design }
 }
 
+/** Owner decision 2026-11-07 (lean_construction_version 1): code keeps the
+ * FORM mapping in step with the parts. A part no mapping names goes to the one
+ * concept component whose envelope holds it; a removed part leaves its
+ * mapping; assign moves a part on purpose. Entry, 2026-11-07 13:48 and 13:59:
+ * a part edit could not name the mapping, so every added stud was refused
+ * (form_instance_unmapped) and only a complete save could add one. */
+export type FormAssignment = { instance_id: string; component_id: string }
+export const FORM_ASSIGN_SCHEMA = { type: 'array', maxItems: 128,
+  description: 'The concept component for a part that several components hold. Code maps every other part itself; empty for none.',
+  items: object({ instance_id: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_.:-]{0,79}$' }, component_id: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_-]{0,31}$' } }) }
+export function extendFormMapping(intent: DesignIntent, recipe: CadAssemblyRequest, raw: unknown, referenceIds: Set<string>, assign: FormAssignment[] = []): { refinement: FormRefinement; issues: ConceptIssue[]; changed: boolean } {
+  const before = parseFormRefinement(raw), issues: ConceptIssue[] = []
+  const active = new Set((intent.model?.components ?? []).filter(c => c.active).map(c => c.id))
+  const boxes = evaluateConcept(intent).boxes.filter(b => active.has(b.id))
+  const present = new Set(recipe.instances.map(i => i.id))
+  const mapping = new Map<string, string>()
+  for (const m of before.mappings) for (const id of m.instance_ids) if (present.has(id)) mapping.set(id, m.component_id)
+  for (const a of assign) {
+    if (!present.has(a.instance_id)) continue // a part removed since it was assigned
+    if (!active.has(a.component_id)) { issues.push({ code: 'form_assignment_invalid', ids: [a.instance_id, a.component_id], message: 'Assign a part to an active concept component.' }); continue }
+    mapping.set(a.instance_id, a.component_id)
+  }
+  const mappedComponents = new Set(before.mappings.map(m => m.component_id))
+  for (const i of recipe.instances) {
+    if (mapping.has(i.id)) continue
+    const d = recipe.definitions.find(d => d.id === i.definition_id) as { primitive: string; cuts?: unknown[]; x_mm: number; y_mm: number; z_mm: number } | undefined
+    const p = i.placement
+    if (!d || d.primitive !== 'box' || d.cuts?.length || [p.rx, p.ry, p.rz].some(n => n !== 0)) {
+      issues.push({ code: 'concept_mapping_unsupported', ids: [i.id], message: 'Refinement currently supports only uncut, unrotated boxes.' }); continue
+    }
+    const lo = [p.x, p.y, p.z], hi = [p.x + d.x_mm, p.y + d.y_mm, p.z + d.z_mm]
+    const solid = !referenceIds.has(i.id)
+    const holding = boxes.filter(b => (b.kind === 'solid') === solid && lo.every((v, k) => v >= b.min[k] - 1e-7) && hi.every((v, k) => v <= b.min[k] + b.size_mm[k] + 1e-7))
+    // Only an unambiguous match is mapped by code (owner review 2026-11-07).
+    if (holding.length === 1) mapping.set(i.id, holding[0].id)
+    else issues.push(holding.length
+      ? { code: 'form_instance_ambiguous', ids: [i.id, ...holding.map(b => b.id)], message: 'Several concept components hold this part; assign it to one.' }
+      : { code: 'form_instance_outside', ids: [i.id], message: 'No concept component holds this part; move it inside one or revise the Solution concept.' })
+  }
+  const grouped = new Map<string, string[]>()
+  for (const i of recipe.instances) { const c = mapping.get(i.id); if (c) grouped.set(c, [...(grouped.get(c) ?? []), i.id]) }
+  const order = [...before.mappings.map(m => m.component_id), ...[...grouped.keys()].filter(c => !mappedComponents.has(c))]
+  const mappings = order.filter(c => grouped.has(c)).map(c => ({ component_id: c, instance_ids: grouped.get(c)! }))
+  if (!mappings.length) return { refinement: before, issues: issues.length ? issues : [{ code: 'form_instance_unmapped', ids: [], message: 'Map every construction instance exactly once to an active concept component.' }], changed: false }
+  const refinement = { version: 1 as const, mappings }
+  return { refinement, issues, changed: JSON.stringify(refinement) !== JSON.stringify(before) }
+}
+
 /** Envelope preservation bounds a refinement; it does NOT prove function,
  * joinery, loads or fidelity. Every explicit refinement remains unverified. */
-export function constructionFormIssues(intent: DesignIntent, recipe: CadAssemblyRequest, referenceIds: Set<string>, raw: unknown, checkpoint = false): ConceptIssue[] {
+/** partial (a construction still being sketched, owner decision 2026-11-07):
+ * a component whose parts lie inside its envelope but do not fill it yet is
+ * reported as form_envelope_incomplete, not as changed geometry. */
+export function constructionFormIssues(intent: DesignIntent, recipe: CadAssemblyRequest, referenceIds: Set<string>, raw: unknown, checkpoint = false, partial = false): ConceptIssue[] {
   const refinement = parseFormRefinement(raw), scope = constructionFormScope(intent, refinement)
   const result = evaluateConcept(intent), issues = [...result.issues]
   const add = (code: string, ids: string[], message: string) => issues.push({ code, ids, message })
@@ -107,7 +158,22 @@ export function constructionFormIssues(intent: DesignIntent, recipe: CadAssembly
       at.forEach((v, k) => { min[k] = Math.min(min[k], v); max[k] = Math.max(max[k], v + dimensions[k]) })
       if ((box.kind !== 'solid') !== referenceIds.has(id)) add('concept_geometry_changed', [m.component_id, id], 'The physical/reference role differs from the selected concept.')
     }
-    if (min.some((v, k) => v !== box.min[k] || Math.abs(max[k] - (box.min[k] + box.size_mm[k])) > 1e-7)) add('concept_geometry_changed', [m.component_id], 'The refinement envelope differs from the exact selected concept.')
+    const exact = !min.some((v, k) => v !== box.min[k] || Math.abs(max[k] - (box.min[k] + box.size_mm[k])) > 1e-7)
+    const inside = min.every((v, k) => v >= box.min[k] - 1e-7) && max.every((v, k) => v <= box.min[k] + box.size_mm[k] + 1e-7)
+    if (!exact && partial && inside) add('form_envelope_incomplete', [m.component_id], 'The parts of this component lie inside its concept envelope but do not fill it yet.')
+    else if (!exact) {
+      // Name the parts that reach past the envelope and the numbers (deep audit
+      // 2026-11-08: a door beam was refused three times with no part named).
+      const hi = box.min.map((v, k) => v + box.size_mm[k]), axes = ['x', 'y', 'z']
+      const outside = parts.filter(({ i, d }) => {
+        const p = i!.placement, size = d as { x_mm: number; y_mm: number; z_mm: number }, at = [p.x, p.y, p.z], dims = [size.x_mm, size.y_mm, size.z_mm]
+        return at.some((v, k) => v < box.min[k] - 1e-7 || v + dims[k] > hi[k] + 1e-7)
+      }).map(p => p.id)
+      const span = (lo: number[], up: number[]) => axes.map((a, k) => `${a} ${+lo[k].toFixed(3)}..${+up[k].toFixed(3)}`).join(', ')
+      add('concept_geometry_changed', [m.component_id, ...outside.slice(0, 12)],
+        `The refinement envelope differs from the exact selected concept. Component ${m.component_id} spans ${span(box.min, hi)} mm; its parts span ${span(min, max)} mm.`
+        + (outside.length ? ` Parts outside it: ${outside.slice(0, 12).join(', ')}.` : ' Its parts do not fill it.'))
+    }
   }
   if (!checkpoint) {
     if (scope.pending_component_ids.length) add('form_components_pending', scope.pending_component_ids, 'These selected concept components remain outside this saved checkpoint.')

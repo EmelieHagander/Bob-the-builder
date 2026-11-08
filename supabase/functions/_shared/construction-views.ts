@@ -62,7 +62,9 @@ export function constructionViewItems(draft:Row,view:string,ids:string[]):{items
   out=[...items('definitions',definitions.filter(d=>match(d.id)||definitionIds.has(d.id))),...items('instances',selectedInstances)]
  }else if(view==='parameters')out=[...items('nodes',nodes.filter(n=>match(n.id))),...items('frames',all?arr(graph.frames):[])]
  else if(view==='bindings')out=items('bindings',bindings.filter(b=>match(b.path)||wanted.has(b.node)),'path')
- else if(view==='joints')out=items('joints',joints.filter(j=>match(j.id)||wanted.has(j.first.instance_id)||wanted.has(j.second.instance_id)))
+ else if(view==='joints')out=[...items('joints',joints.filter(j=>match(j.id)||wanted.has(j.first.instance_id)||wanted.has(j.second.instance_id))),
+  // The stored joining decisions code applies to new and moved parts (owner decision 2026-11-08).
+  ...items('joint_rules',arr(draft.joint_rules))]
  else if(view==='materials')out=items('materials',materials.filter(m=>match(m.definition_id)),'definition_id')
  else if(view==='roles')out=items('roles',roles.filter(r=>match(r.instance_id)),'instance_id')
  else if(view==='notes')out=[{collection:'description',id:'description',value:draft.description??''},...items('open_questions',arr(draft.open_questions)),
@@ -119,8 +121,8 @@ export function constructionWorkItems(draft:Row,ids:string[]):{items:Item[];miss
 
 /** Reuses exact-row/fragment paging. Every page is bound to governing source
  * revisions too, so changing a Solution/Step cannot silently splice pages. */
-export function constructionWorkPage(query:ConstructionViewQuery,header:Row,rows:Item[],binding:Row,budget=CONSTRUCTION_WORK_MAX_TOKENS){
- return page(query,header,rows,budget,{scope:'construction_work',binding:{...binding,step_id:query.step_id??null,work_kind:query.work_kind??null}})
+export function constructionWorkPage(query:ConstructionViewQuery,header:Row,rows:Item[],binding:Row,budget=CONSTRUCTION_WORK_MAX_TOKENS,fastFit=false){
+ return page(query,header,rows,budget,{fastFit,scope:'construction_work',binding:{...binding,step_id:query.step_id??null,work_kind:query.work_kind??null}})
 }
 
 /** Compact construction table (owner decision 2026-10-26, pinned per job).
@@ -204,10 +206,10 @@ function resultItems(output:Row):Item[]{
  * never an unlabeled truncation or a fabricated shortened fact. A layout may
  * bind extra selection inputs, present the page's rows differently and name the
  * read after the last page; without one, pages are unchanged. */
-type PageLayout={binding?:Row;scope?:string;present?:(records:Row[])=>Row;last?:Row}
+type PageLayout={binding?:Row;scope?:string;present?:(records:Row[])=>Row;last?:Row;fastFit?:boolean}
 async function page(query:ConstructionViewQuery,header:Row,rows:Item[],budget:number,layout:PageLayout={}):Promise<Row>{
  if(!Number.isSafeInteger(budget)||budget<CONSTRUCTION_VIEW_TOKENS||budget>(query.view==='work'?CONSTRUCTION_WORK_MAX_TOKENS:CONSTRUCTION_VIEW_MAX_TOKENS))throw new Error('construction_view_budget_invalid')
- const binding=(await exactHash({artifact_id:query.artifact_id,revision:query.revision,view:query.view,ids:query.ids,result_id:query.result_id,section:query.section,...layout.binding})).slice(0,24)
+ const binding=(await exactHash({artifact_id:query.artifact_id,revision:query.revision,view:query.view,ids:query.ids,result_id:query.result_id,section:query.section,...layout.binding,...(layout.fastFit?{page_fit:1}:{})})).slice(0,24)
  let index=0,offset=0
  if(query.after){const m=/^cv1:([a-f0-9]{24}):(\d+):(\d+)$/.exec(query.after);if(!m||m[1]!==binding)throw new Error('construction_view_cursor_invalid');index=Number(m[2]);offset=Number(m[3])}
  if(!Number.isSafeInteger(index)||index<0||index>rows.length||!Number.isSafeInteger(offset)||offset<0||index===rows.length&&offset!==0)throw new Error('construction_view_cursor_invalid')
@@ -219,6 +221,22 @@ async function page(query:ConstructionViewQuery,header:Row,rows:Item[],budget:nu
   next_read:i<rows.length?{...query,after:token(i,o)}:layout.last??null})
  const records:Row[]=[];let next=index
  if(countSerializedTokens(envelope([],next,offset))>budget)throw new Error('construction_view_header_too_large')
+ // New execution pin only. Find a contiguous prefix using logarithmic exact
+ // envelope probes instead of re-encoding every growing prefix. Token counts
+ // need not be monotone: only a prefix actually checked below may be returned.
+ // A shorter fitting page is valid; unreturned rows remain behind next_read.
+ if(layout.fastFit&&offset===0&&index<rows.length){
+  const fits=(end:number)=>countSerializedTokens(envelope(rows.slice(index,end),end,0))<=budget
+  let good=index,bad=rows.length+1,span=1
+  for(;;){
+   const end=Math.min(rows.length,index+span)
+   if(!fits(end)){bad=end;break}
+   good=end;if(end===rows.length)break
+   span*=2
+  }
+  while(good+1<bad){const end=Math.floor((good+bad)/2);if(fits(end))good=end;else bad=end}
+  if(good>index)return envelope(rows.slice(index,good),good,0)
+ }
  while(next<rows.length){
   const row=rows[next]
   if(offset===0&&countSerializedTokens(envelope([...records,row],next+1,0))<=budget){records.push(row);next++;continue}
@@ -236,7 +254,8 @@ async function page(query:ConstructionViewQuery,header:Row,rows:Item[],budget:nu
  return envelope(records,next,offset)
 }
 
-export function createConstructionViews(projectId:string,now:()=>Date=()=>new Date()){
+export function createConstructionViews(projectId:string,now:()=>Date=()=>new Date(),fastFit=false){
+ const fittedPage=(query:ConstructionViewQuery,header:Row,rows:Item[],budget:number,layout:PageLayout={})=>page(query,header,rows,budget,{...layout,fastFit})
  let observations:ConstructionObservation[]=[]
  const seen=new Map<string,ConstructionObservation>()
  function restore(value:unknown){
@@ -277,7 +296,7 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
    if(query.ids.length)return {status:'invalid',message:'Use a returned result section name, with ids:[], to reopen all of its exact findings.'}
    const rows=resultItems(o.output),selected=query.section?rows.filter(r=>r.collection===query.section):rows
    if(query.section&&!selected.length)return {status:'not_found',projectId,sections:sections(rows)}
-   return page(query,{projectId,status:'ok',artifact_id:o.artifact_id,revision:o.revision,result_id:o.id,observed_at:o.observed_at,
+   return fittedPage(query,{projectId,status:'ok',artifact_id:o.artifact_id,revision:o.revision,result_id:o.id,observed_at:o.observed_at,
     observation:'historical',current_revision:draft.current_revision??draft.revision,source_state:draft.source_state,archived:draft.archived,
     sections:sections(rows),message:'Exact earlier observation. Current source status is shown separately; this does not rerun the check or renew approval.',...extraHeader},selected,budget)
   }
@@ -292,19 +311,24 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
    const overview={...header,title:draft.title,area_id:draft.area_id,target_revision:draft.target_revision,construction_status:'draft',rendered:false,reviewed:false,
     ...(draft.form_refinement?{form:{verification:'unverified',solution_id:draft.solution_id,solution_revision:draft.solution_revision,mapped_components:arr(draft.form_scope?.component_ids).length,pending_components:arr(draft.form_scope?.pending_component_ids).length,pending_choices:arr(draft.form_scope?.pending_choice_ids).length,details_view:'notes'}}:{}),
     counts:{definitions:arr(draft.recipe?.definitions).length,instances:arr(draft.recipe?.instances).length,nodes:arr(draft.parameters?.nodes).length,
-     bindings:arr(draft.parameters?.bindings).length,joints:arr(draft.joints).length,materials:arr(draft.materials).length,
+     bindings:arr(draft.parameters?.bindings).length,joints:arr(draft.joints).length,...(Array.isArray(draft.joint_rules)?{joint_rules:draft.joint_rules.length}:{}),materials:arr(draft.materials).length,
      unknown_roles:draft.instance_policy==null?arr(draft.recipe?.instances).length:arr(draft.instance_policy.instances).filter(r=>r.role==='unknown').length,roles_recorded:draft.instance_policy!=null,open_questions:arr(draft.open_questions).length},
+    // Stored joint rules are few and decide how new parts are joined, so they show here whole.
+    ...(Array.isArray(draft.joint_rules)&&draft.joint_rules.length?{joint_rules:draft.joint_rules}:{}),
     previous_results:refs,views:views.filter(v=>!['overview','result'].includes(v)),details_omitted:true}
    if(table?.table!==true)return {...overview,next_read:{...query,revision:draft.revision,view:'notes'},message:'Description, questions, parts and dependencies are available in the named views. No current check is inferred from a saved draft or historical result.'}
    // The cursor also binds whether the server schedule was present: its rows differ.
    const fasteners=table.fasteners??null,rows=tableRows(draft,fasteners),openQuestions=arr(draft.open_questions).length
-   return page({...query,revision:draft.revision},{...overview,message:table.chosen?TABLE_MESSAGE_CHOSEN:TABLE_MESSAGE},rows,budget,{binding:{table:1,fasteners:fasteners!==null},scope:'overview_table',
+   return fittedPage({...query,revision:draft.revision},{...overview,message:table.chosen?TABLE_MESSAGE_CHOSEN:TABLE_MESSAGE},rows,budget,{binding:{table:1,fasteners:fasteners!==null},scope:'overview_table',
     present:records=>({table:presentTable(records,rows,fasteners,openQuestions)}),last:{...query,revision:draft.revision,view:'notes',after:null}})
   }
   const selected=constructionViewItems(draft,query.view,query.ids)
-  return page({...query,revision:draft.revision},{...header,missing_ids:selected.missing_ids,selection:query.ids,
+  return fittedPage({...query,revision:draft.revision},{...header,missing_ids:selected.missing_ids,selection:query.ids,
    dependency_scope:query.view==='dependencies'?'parameter ancestors/dependents, bound parts and directly attached joints; newly reached neighboring parts may have further dependencies':'selected view; use dependencies for formulas, sources and affected parts',
    open_question_count:arr(draft.open_questions).length,notes_view:'notes'},selected.items,budget)
  }
- return {read,observe,importObservation,observation:(id:string)=>structuredClone(seen.get(id)),exportState:()=>structuredClone(observations),restoreState:restore}
+ return {read,observe,importObservation,observation:(id:string)=>structuredClone(seen.get(id)),
+  findObservation:(select:(o:ConstructionObservation)=>boolean)=>structuredClone(observations.find(select)),
+  references:()=>observations.map(({output:_output,...ref})=>({...ref})),
+  exportState:(select:(o:ConstructionObservation)=>boolean=()=>true)=>structuredClone(observations.filter(select)),restoreState:restore}
 }

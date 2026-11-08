@@ -15,7 +15,7 @@ const output = (id: string) => ({ role: 'tool' as const, tool_call_id: id, conte
 const catalog = (limit = 64_000) => ({
   definition: () => ({ metadata: { continuation_input_tokens: limit, context_input_ceiling_tokens: 96_000,
     continuation_summary_tokens: 1600, retained_tool_exchanges: 1, continuation_retention_version: 2 } }),
-  role: () => ({ systemMessage: 'Catalog instructions.' }),
+  role: () => ({ systemMessage: 'Catalog instructions.', providerAdapter: 'openai-responses-v1' }),
   schema: (name: string) => ({ name, schema: { type: 'object', properties: {} } }), tool,
 }) as unknown as AiCatalogSession
 const request: OpenAIServiceOptions = { app: 'bob', coworkerId: 'bob', module: 'global', aiFunction: 'ask-bob', functionName: 'ask-bob',

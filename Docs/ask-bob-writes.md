@@ -123,7 +123,7 @@ accurate descriptions of existing implementations until their handlers migrate.
 
 ### Project description weigher (2026-11-02)
 
-**Committed; live only after Edge deploy and migration `20261102230000_project_description_weigher.sql`.**
+**Committed; live only after Edge deploy and migration `20261108190000_project_description_weigher.sql`.**
 The project description tells what is being built, for whom and why, its
 character and its current phase. It has one strict length,
 `PROJECT_DESCRIPTION_MAX` = 1500 characters (`src/domain/projectDescription.ts`):

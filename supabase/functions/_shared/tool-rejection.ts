@@ -29,6 +29,8 @@ export const EDIT_REJECTION_CODES: readonly (readonly [string, string])[] = [
   ['Add a new design feature or choice with op', 'edit_item_op'],
   ['Start, extend or replace concept model items with their typed op', 'edit_item_op'],
   ['A new design choice has exactly', 'edit_item_shape'],
+  ['Use an active component_ref from this edit context', 'edit_index'],
+  ['Use a linked measurement_ref and an existing input node from this edit context', 'edit_index'],
   ['Use an index from the saved concept read', 'edit_index'],
   ['Use an item index from this edit context', 'edit_index'],
   ['Change individual item fields', 'edit_item_operation'],

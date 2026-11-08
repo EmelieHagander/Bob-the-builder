@@ -163,10 +163,27 @@ export interface OpenAIServiceOptions {
   catalogSchemaKey?: string;
   catalogVariables?: AiVariables;
   catalogSchemaParameters?: Record<string, unknown>;
+  /** Server-pinned Rita scope; reapplied after catalog schema reconstruction. */
+  catalogDrawingWork?:boolean;
+  catalogRuntimeSurface?:import('./runtime-tool-surface.ts').RuntimeToolSurface;
+  /** Pinned per execution (tool_schema_dedup_version 1): repeated sub-schemas are
+   * sent once as $defs. Validators keep the inline schema. */
+  toolSchemaDedup?: 1;
+  /** Pinned per execution (prompt_cache_points_version 1): the Claude request
+   * marks fixed cache points after the system prompt and on the messages the
+   * caller flags with `cacheBoundary`, beside the automatic one at the end.
+   * OpenAI matches prefixes itself and ignores both. */
+  promptCachePoints?: 1;
+  /** Claude only, with promptCachePoints: a fixed cache point on this tool's
+   * definition. A worker's core tools come first and are the same in every
+   * job, so the next job reads them from cache (stable_tools_version 1). */
+  cacheAfterTool?: string;
   catalogToolParameters?: Record<string, Record<string, unknown>>;
   maxOutputTokens?: number;
   /** Explicit per-call ceiling for bounded internal routing. Does not alter app settings. */
   outputTokenLimit?: number;
+  /** Trusted server callback; never sent to the provider or serialized. */
+  onUsageLogged?: (id:string)=>void;
   timeoutMs?: number;
   /** Opt in to durable provider work. Only trusted app servers choose the receiver/context. */
   background?: BackgroundCall;
@@ -208,6 +225,10 @@ export interface OpenAIServiceOptions {
     nativeOutput?: OpenAIResponseItem[];
     /** Counting metadata only; never sent as provider input. */
     nativeReasoningTokens?: number;
+    /** The prefix up to and including this message stays stable between
+     * requests (job start, settled compaction). Set per request by the
+     * continuation; never stored in a chain or checkpoint. */
+    cacheBoundary?: 1;
   }>;
   tools?: Array<{
     type: 'function';
@@ -229,6 +250,7 @@ export interface OpenAIServiceOptions {
 export interface OpenAIServiceResponse<T = unknown> {
   /** Caller-owned recovery metadata; never provider text or input. */
   priorAttemptUncertain?: boolean;
+  failure?: {code:string;schemaPaths?:string[]};
   success: boolean;
   data: T | null;
   usage: {
@@ -254,6 +276,9 @@ export interface OpenAIServiceResponse<T = unknown> {
     };
   }>;
   estimatedCostUsd?: number | null;
+  /** A cut Claude answer's estimated cost (ledger cost_basis
+   * streamed_output_estimate); spending, not a provider receipt. */
+  costEstimate?: { usd: number; basis: 'streamed_output_estimate'; input_tokens: number; cached_input_tokens: number; output_tokens: number };
 }
 
 function sanitizeJsonSchema(schema: Record<string, unknown>, strict: boolean = false): Record<string, unknown> {
@@ -358,19 +383,6 @@ export async function callOpenAIResponses<T = unknown>(
   const timeoutMs = Math.min(requestedTimeoutMs,options.aiDefinition?.timeoutMs ?? Infinity);
 
   const maxOutputTokens = options.maxOutputTokens || 4000;
-
-  const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-  
-  if (!openAIApiKey) {
-    console.error('[OpenAI Service] Missing OPENAI_API_KEY');
-    return {
-      success: false,
-      data: null,
-      usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
-      model: FALLBACK_MODEL,
-      error: 'Missing OpenAI API key'
-    };
-  }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -494,10 +506,10 @@ export async function callOpenAIResponses<T = unknown>(
     effectiveSystemMessage = systemMessage || '';
   }
   
-  // Provider seam (Launchpad pattern): the pinned catalog model names its
-  // provider; a non-OpenAI model goes to its own adapter and returns this
+  // Provider seam (Launchpad pattern): the pinned catalog selects its protocol
+  // adapter; a non-OpenAI model goes to its own adapter and returns this
   // same response shape. Off unless ANTHROPIC_ENABLED is true in anthropic-service.ts.
-  if (catalogRole?.model.provider === 'anthropic') {
+  if (catalogRole?.providerAdapter === 'anthropic-messages-v1') {
     if (!ANTHROPIC_ENABLED) {
       return { success: false, data: null, usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, model: currentModel, error: 'ai_provider_disabled: anthropic' };
     }
@@ -517,9 +529,18 @@ export async function callOpenAIResponses<T = unknown>(
       timeoutMs, resolveImage: options.resolveImageInline ?? options.resolveImage,
       log: (r) => logAIUsage(aiClient, { app: options.app, module, aiFunction, userId, model: r.model,
         inputTokens: r.inputTokens, cachedInputTokens: r.cachedInputTokens, outputTokens: r.outputTokens,
-        reasoningTokens: r.reasoningTokens, totalTokens: r.totalTokens, costUsd: r.costUsd,
-        inputPricePer1m: anthropicModel.input_cost_per_1m_tokens, outputPricePer1m: anthropicModel.output_cost_per_1m_tokens, success: r.success }),
+        reasoningTokens: r.reasoningTokens, totalTokens: r.totalTokens, costUsd: r.costUsd, costBasis: r.costBasis,
+        inputPricePer1m: anthropicModel.input_cost_per_1m_tokens, outputPricePer1m: anthropicModel.output_cost_per_1m_tokens, success: r.success, errorCode:r.errorCode,latencyMs:r.latencyMs,onId:options.onUsageLogged }),
     });
+  }
+
+  // Vendor credentials belong to their adapter. A Claude-only deployment must
+  // not require an OpenAI secret merely to reach the Anthropic adapter.
+  const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!openAIApiKey) {
+    console.error('[OpenAI Service] Missing OPENAI_API_KEY');
+    return { success: false, data: null, usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+      model: currentModel, error: 'Missing OpenAI API key' };
   }
 
   try {
@@ -806,6 +827,7 @@ export async function callOpenAIResponses<T = unknown>(
     /** Everything the usage ledger needs that is constant for this call. */
     const usageBase = {
       background: !!options.background,
+      onId:options.onUsageLogged,
       app: options.app,
       module,
       aiFunction,
@@ -1215,15 +1237,17 @@ async function logAIUsage(
     reasoningTokens: number;
     totalTokens: number;
     costUsd: number | null;
+    costBasis?: 'streamed_output_estimate';
     inputPricePer1m: number;
     outputPricePer1m: number;
     success: boolean;
     background?: boolean;
+    errorCode?:string;latencyMs?:number;onId?:(id:string)=>void;
   }
 ): Promise<void> {
   // Durable completions and usage are committed atomically by ai_job_accept.
   if (params.background) return;
-  const { error } = await aiClient.from('ai_usage_events').insert({
+  const insert = aiClient.from('ai_usage_events').insert({
     app: params.app,
     user_id: params.userId || null,
     module: params.module,
@@ -1237,8 +1261,14 @@ async function logAIUsage(
     input_price_per_1m: params.inputPricePer1m,
     output_price_per_1m: params.outputPricePer1m,
     cost_usd: params.costUsd,
-    success: params.success
+    ...(params.costBasis ? { cost_basis: params.costBasis } : {}),
+    success: params.success,
+    ...(params.errorCode?{error_code:params.errorCode}:{}),
+    ...(Number.isFinite(params.latencyMs)?{latency_ms:Math.round(params.latencyMs!)}:{})
   });
+  const result = params.onId ? await insert.select('id').single() : await insert;
+  const {error}=result;
+  if(!error&&params.onId){const id=String((result as any).data?.id??'');if(/^\d{1,30}$/.test(id))params.onId(id)}
   if (error) console.error(`[OpenAI Service] Usage log failed: ${error.message}`);
 }
 

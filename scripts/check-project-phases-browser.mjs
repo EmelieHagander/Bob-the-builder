@@ -33,7 +33,7 @@ try {
     const areaPhase = new Map([['bedroom', 'complete'], ['office', 'build'], ['guestroom', 'design']])
     const archivedAreas = new Map()
     let archiveVersion = 0
-    let buildingReadDenied = false
+    let buildingReadDenied = false, bobUnread = true
     let blockBootRead = viewport.width === 320
     const pendingBootReads = []
     let bootReadStarted
@@ -55,7 +55,7 @@ try {
       if (inboxPath === '/rest/v1/rpc/drawing_work_list') return route.fulfill({status:200,json:{items:[],next_cursor:null},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
       if (inboxPath === '/functions/v1/ask-bob' && route.request().method()==='POST' && route.request().postDataJSON()?.action==='renew_requests') return route.fulfill({status:200,json:{ok:true,renewed:0},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
 
-      if (['/rest/v1/rpc/bob_chat_inbox','/rest/v1/rpc/bob_mark_chat_read','/rest/v1/bob_delegation_notices'].includes(inboxPath)) return route.fulfill({status:200,json:inboxPath.endsWith('bob_delegation_notices')?[]:null,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
+      if (['/rest/v1/rpc/bob_chat_inbox','/rest/v1/rpc/bob_mark_chat_read','/rest/v1/bob_delegation_notices'].includes(inboxPath)) return route.fulfill({status:200,json:inboxPath.endsWith('bob_delegation_notices')?[]:inboxPath.endsWith('bob_chat_inbox')&&bobUnread?{threadId:'00000000-0000-4000-8000-000000000001',latestSeq:2,readSeq:1,unread:true}:null,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
       const request = route.request()
       const url = new URL(request.url())
       const respond = options => route.fulfill({ ...options, headers: {
@@ -207,6 +207,8 @@ try {
     assert.deepEqual(authWarnings,[],'Account consumers share one Auth owner')
     const projectCard = page.locator('.account-project-row').filter({ hasText: 'Renovate upstairs' }).first()
     await projectCard.getByLabel('phase: Build').waitFor()
+    await projectCard.getByText('New from Bob', { exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Open project Renovate upstairs, new from Bob', exact: true }).waitFor()
     await projectCard.getByText('3 Areas · 1 Design · 1 Build · 1 Complete', { exact: true }).waitFor()
     await page.getByText('Happening now', { exact: true }).first().waitFor()
     const group = page.locator('.account-building-group').filter({hasText:'Stora huset'})
@@ -216,9 +218,11 @@ try {
     await projectCard.waitFor()
     await page.screenshot({path:`test-results/account-building-groups-${viewport.width}.png`,fullPage:true})
     buildingReadDenied = true
+    bobUnread = false
     await page.reload()
     await page.getByText('Building groups could not be loaded. All your projects are listed below.',{exact:true}).waitFor()
     await projectCard.getByLabel('phase: Build').waitFor()
+    assert.equal(await projectCard.getByText('New from Bob', { exact: true }).count(), 0, 'A read Bob reply leaves no mark on Home')
     buildingReadDenied = false
     await page.getByRole('button',{name:'Retry building groups',exact:true}).click()
     await group.locator('summary').waitFor()
@@ -244,8 +248,10 @@ try {
       'Readiness takes priority over lifecycle phase; Design work is not hidden or blocked by its phase')
     await page.getByRole('link', { name: 'Frame wall', exact: true }).click()
     await page.getByRole('heading', { name: 'Frame wall', exact: true }).waitFor()
+    await page.locator('#task-options > summary').click()
     await page.getByLabel('Area phase: Build').waitFor()
     await page.getByRole('region', { name: 'Task readiness', exact: true }).getByText('Blocked', { exact: true }).waitFor()
+    await page.getByText('Readiness details',{exact:true}).click()
     await page.getByLabel('Available: Circular saw', { exact: true }).click()
     await page.getByRole('region', { name: 'Task readiness', exact: true }).getByText('Readiness not reviewed', { exact: true }).waitFor()
     await page.getByRole('region', { name: 'Task readiness', exact: true }).getByRole('button', { name: 'Confirm ready', exact: true }).click()

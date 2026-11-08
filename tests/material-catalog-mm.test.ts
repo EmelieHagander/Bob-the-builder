@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from './support/pglite.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
+import { isSyntheticSchemaMigration } from './support/project-schema.ts'
 
 // Real SQL, including storage-level guards. These are not model-response fixtures.
 const pg = new PGlite()
@@ -60,7 +61,7 @@ before(async () => {
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('oneA','A','One','O',$1),('twoB','B','Two','T',$2)", [one, two])
   await setupSharedSocial(pg)
   const migrations = new URL('../supabase/migrations/', import.meta.url)
-  for (const file of (await readdir(migrations)).filter(f => f.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(file, migrations), 'utf8'))
+  for (const file of (await readdir(migrations)).filter(isSyntheticSchemaMigration).sort()) await pg.exec(await readFile(new URL(file, migrations), 'utf8'))
 })
 after(() => pg.close())
 

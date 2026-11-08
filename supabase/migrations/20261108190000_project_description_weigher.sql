@@ -114,4 +114,42 @@ begin
  end loop;
  perform shared.activate_ai_catalog('bob',activation);
 end $bob_description_weigher$;
+-- Owner decision 2026-11-08 (card "Vem får skriva projektbeskrivningen?" → "Bara
+-- vägaren"): the weigher is the description's only author. Bob's edit tools
+-- stop offering the project description; the rest of their contract is unchanged.
+do $bob_description_writer$
+declare
+ spec constant jsonb:=$description_writer_spec${
+ "edit_key": "tools.edit_project_record",
+ "old": "The project description tells what is being built, for whom and why, its character and where the project stands in its current phase; it holds no measurements, which live in measurements and the selected solution. Rewrite it when the project moves to a new phase.",
+ "new": "The project description is not edited here; it is kept after each turn by the description weigher.",
+ "read_key": "tools.read_project_edit_context"
+}$description_writer_spec$::jsonb;
+ prior shared.ai_prompt_versions; next_version integer; version_uuid uuid; activation jsonb:='{}'; d text; e jsonb;
+begin
+ perform pg_advisory_xact_lock(hashtextextended('ai_catalog:bob',0));
+ select v.* into prior from shared.ai_prompts p join shared.ai_prompt_versions v on v.id=p.active_version_id
+  where p.app='bob' and p.prompt_key=spec->>'edit_key' and p.retired_at is null for update of p;
+ if not found then raise exception 'description_writer_edit_missing'; end if;
+ d:=prior.definition->>'description';
+ if (length(d)-length(replace(d,spec->>'old','')))/length(spec->>'old')<>1 then raise exception 'description_writer_unexpected_edit_description'; end if;
+ select coalesce(max(version),0)+1 into next_version from shared.ai_prompt_versions where prompt_id=prior.prompt_id;
+ insert into shared.ai_prompt_versions(prompt_id,version,definition_kind,definition_format_version,metadata,content,definition,flow,available_variables)
+  values(prior.prompt_id,next_version,prior.definition_kind,prior.definition_format_version,
+   (prior.metadata-'seed_version'-'source_revision')||jsonb_build_object('publication','bob-description-weigher-v1','description_writer_version',1),
+   prior.content,jsonb_set(prior.definition,'{description}',to_jsonb(replace(d,spec->>'old',spec->>'new'))),prior.flow,prior.available_variables) returning id into version_uuid;
+ activation:=activation||jsonb_build_object(spec->>'edit_key',version_uuid);
+ select v.* into prior from shared.ai_prompts p join shared.ai_prompt_versions v on v.id=p.active_version_id
+  where p.app='bob' and p.prompt_key=spec->>'read_key' and p.retired_at is null for update of p;
+ if not found then raise exception 'description_writer_read_missing'; end if;
+ e:=prior.definition#>'{parameters,properties,resource,enum}';
+ if jsonb_typeof(e) is distinct from 'array' or not e ? 'project_description' then raise exception 'description_writer_unexpected_read_enum'; end if;
+ select coalesce(max(version),0)+1 into next_version from shared.ai_prompt_versions where prompt_id=prior.prompt_id;
+ insert into shared.ai_prompt_versions(prompt_id,version,definition_kind,definition_format_version,metadata,content,definition,flow,available_variables)
+  values(prior.prompt_id,next_version,prior.definition_kind,prior.definition_format_version,
+   (prior.metadata-'seed_version'-'source_revision')||jsonb_build_object('publication','bob-description-weigher-v1','description_writer_version',1),
+   prior.content,jsonb_set(prior.definition,'{parameters,properties,resource,enum}',e-'project_description'),prior.flow,prior.available_variables) returning id into version_uuid;
+ activation:=activation||jsonb_build_object(spec->>'read_key',version_uuid);
+ perform shared.activate_ai_catalog('bob',activation);
+end $bob_description_writer$;
 commit;

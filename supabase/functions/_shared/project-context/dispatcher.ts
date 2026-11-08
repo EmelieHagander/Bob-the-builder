@@ -1,5 +1,7 @@
+import {validVisualSource} from '../../../../src/data/bobEvidence.ts'
 import type { ProjectSource } from '../../../../src/data/provenance.ts'
 import { rethrowContinuation } from '../bob-job-journal.ts'
+import { stageImageRef } from '../image-context-ref.ts'
 
 /** Provider-neutral application content. Provider shaping belongs to the AI service. */
 export type ImagePart = { type: 'image_url'; image_url: string }
@@ -17,23 +19,32 @@ export interface ProjectContextState {
   pending: Opened[]
   /** Successfully delivered images retain evidence and an empty image URL. */
   delivered: Opened[]
+  metadataChanges?: Item[]
 }
 export interface ContextAdapter {
   checkpointed?: boolean
+  descriptionCache?:boolean
   category: string
   prefix: string
   count(signal: AbortSignal): Promise<number>
   list(input: ListRequest, signal: AbortSignal): Promise<{ items: Item[]; next_cursor: string | null }>
   open(ref: string, signal: AbortSignal): Promise<Opened>
+  refresh?(record:Opened,signal:AbortSignal):Promise<Opened|null>
+  /** Short selection descriptions for listed items that have none (owner decision 2026-11-06). */
+  describeMissing?(items: Item[], signal: AbortSignal): Promise<Item[]>
   current(ref: string, version: string, signal: AbortSignal): Promise<boolean>
 }
-export const CONTEXT_LIMITS = { calls: 12, batch: 4, images: 8, bytes: 16 * 1024 * 1024, timeoutMs: 12000 } as const
+export const CONTEXT_LIMITS = { calls: 12, batch: 4, images: 8, bytes: 16 * 1024 * 1024, timeoutMs: 12000, describeTimeoutMs: 40000 } as const
 
 /** One registry and one dispatcher per authorised turn. No storage/provider/SQL knowledge here. */
 export function createProjectContext(opts: {
   adapters: ContextAdapter[]; hasAccess: () => Promise<boolean>; sources: ProjectSource[];
   timeoutMs?: number;
   unlimitedWork?: boolean;
+  /** Only the main chat's opened evidence is automatically shown with its answer. */
+  chatPreviews?: boolean;
+  /** Exact private pixel identities for a worker's stage handoff, without chat previews. */
+  imageContextRefs?: boolean;
   reviewInstruction?:string;
   imageEvidenceInstruction?:string;
   reviewLabel?:string;
@@ -45,13 +56,14 @@ export function createProjectContext(opts: {
   let used = 0, imageCount = 0, byteCount = 0, partial = false
   let pending: Opened[] = []
   const delivered = new Map<string, Opened>()
+  const metadataChanges=new Map<string,Item>()
   const timeoutMs = opts.timeoutMs ?? CONTEXT_LIMITS.timeoutMs
-  async function bounded<T>(run: (signal: AbortSignal) => Promise<T>, checkpointed=false): Promise<T> {
+  async function bounded<T>(run: (signal: AbortSignal) => Promise<T>, checkpointed=false, ms=timeoutMs): Promise<T> {
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
     try {
       return await Promise.race([run(controller.signal), new Promise<never>((_, reject) => {
-        timer = setTimeout(() => { controller.abort(); if(!checkpointed)reject(new Error('unavailable')) }, timeoutMs)
+        timer = setTimeout(() => { controller.abort(); if(!checkpointed)reject(new Error('unavailable')) }, ms)
       })])
     } finally { if (timer) clearTimeout(timer) }
   }
@@ -63,7 +75,7 @@ export function createProjectContext(opts: {
       && Number.isSafeInteger(record.bytes) && record.bytes >= 0
       && record.image?.type === 'image_url' && typeof record.image.image_url === 'string'
       && (pendingImages ? record.image.image_url.startsWith('private-image:') : record.image.image_url === '')
-      && record.source && typeof record.source.projectId === 'string' && record.source.dataset === 'image_pixels'
+      && validVisualSource(record.source) && record.source && typeof record.source.projectId === 'string' && record.source.dataset === 'image_pixels'
       && typeof record.source.recordId === 'string' && typeof record.source.label === 'string'
       && typeof record.source.retrievedAt === 'string' && Number.isFinite(Date.parse(record.source.retrievedAt))
       && (record.source.updatedAt === null || typeof record.source.updatedAt === 'string')
@@ -96,13 +108,15 @@ export function createProjectContext(opts: {
       // The background media adapter supplies resolver refs. Inline pixels belong
       // only to synchronous callers and must never be copied into durable state.
       if (!checkpointImages(pending, true)) throw new Error('context_checkpoint_image_not_reference')
-      return structuredClone({ version: 1, used, imageCount, byteCount, partial, pending, delivered: [...delivered.values()] })
+      return structuredClone({ version: 1, used, imageCount, byteCount, partial, pending, delivered: [...delivered.values()],...(metadataChanges.size?{metadataChanges:[...metadataChanges.values()]}:{}) })
     },
     restoreState(state: ProjectContextState): void {
       if (!state || state.version !== 1 || ![state.used, state.imageCount, state.byteCount].every(value => Number.isSafeInteger(value) && value >= 0)
         || state.byteCount > CONTEXT_LIMITS.bytes || typeof state.partial !== 'boolean'
         || !checkpointImages(state.pending, true) || !checkpointImages(state.delivered, false)
         || new Set(state.delivered.map(record => record.item.ref)).size !== state.delivered.length) throw new Error('context_checkpoint_invalid')
+      if(state.metadataChanges&&(!Array.isArray(state.metadataChanges)||state.metadataChanges.length>state.delivered.length+state.pending.length||state.metadataChanges.some(item=>!item||typeof item.ref!=='string'||![...state.delivered,...state.pending].some(r=>r.item.ref===item.ref))))throw Error('context_checkpoint_invalid')
+      metadataChanges.clear();for(const item of state.metadataChanges??[])metadataChanges.set(item.ref,structuredClone(item))
       const restored = structuredClone(state)
       used = restored.used; imageCount = restored.imageCount; byteCount = restored.byteCount; partial = restored.partial
       pending = restored.pending
@@ -133,6 +147,7 @@ export function createProjectContext(opts: {
       if (name === 'describe_project_image') {
         if (!opts.describe || Object.keys(v).some(k => !['ref', 'description'].includes(k)) || typeof v.ref !== 'string'
           || typeof v.description !== 'string' || !v.description.trim() || v.description.length > 500) return invalid()
+        if(byRef(v.ref)?.descriptionCache===false)return {status:'unavailable',reason:'description_cache_not_supported',saved:false}
         const record = delivered.get(v.ref)
         if (!record) return { status: 'image_not_viewed', saved: false }
         try {
@@ -146,7 +161,14 @@ export function createProjectContext(opts: {
         if (typeof v.category !== 'string' || !registry.has(v.category)) return invalid()
         for (const k of ['query', 'area_id', 'after_id']) if (v[k] !== null && (typeof v[k] !== 'string' || (v[k] as string).length > 200)) return invalid()
         try {
-          const page = await bounded(signal => registry.get(v.category as string)!.list(v as ListRequest, signal),registry.get(v.category as string)!.checkpointed)
+          const adapter = registry.get(v.category as string)!
+          let page = await bounded(signal => adapter.list(v as ListRequest, signal),adapter.checkpointed)
+          // Descriptions are a selection aid: a slow or failed description
+          // leaves the listing usable without it.
+          if (adapter.describeMissing && page.items.some(item => item.description === undefined)) {
+            try { page = { ...page, items: await bounded(signal => adapter.describeMissing!(page.items, signal), adapter.checkpointed, CONTEXT_LIMITS.describeTimeoutMs) } }
+            catch (error) { rethrowContinuation(error) }
+          }
           if (!await opts.hasAccess()) return { status: 'denied', saved: false }
           return { status: page.items.length ? 'ok' : 'empty', mode: 'metadata', saved: false, ...page, truncated: page.next_cursor !== null }
         } catch (error) { rethrowContinuation(error); partial = true; return { status: 'unavailable', mode: 'metadata', saved: false } }
@@ -168,7 +190,11 @@ export function createProjectContext(opts: {
         if (byteCount + opened.bytes > CONTEXT_LIMITS.bytes) { partial = true; items.push({ ref, status: 'budget_exhausted' }); continue }
         byteCount += opened.bytes
         pending.push(opened)
-        items.push({ ...opened.item, status: 'prepared', delivery: 'pixels_on_next_model_call' })
+        items.push({ ...opened.item, status: 'prepared', delivery: 'pixels_on_next_model_call',
+          ...(opts.chatPreviews || opts.imageContextRefs ? { context_ref: stageImageRef(opened.image.image_url) } : {}),
+          ...(opts.chatPreviews ? { chat_preview: { status: 'attached_to_answer_after_pixel_delivery', ref: opened.item.ref,
+            revision: opened.source.visual?.revision ?? null, view: opened.source.visual?.view ?? null,
+            rendered_by: 'app', generated_url_required: false, approval_not_implied: true } } : {}) })
       }
       return { status: items.some(i => i.status === 'prepared') ? 'ok' : 'unavailable', saved: false, mode: 'image_open', items }
     },
@@ -178,25 +204,45 @@ export function createProjectContext(opts: {
       if (!delivered.size && !pending.length) return true
       if (!await opts.hasAccess()) return false
       const records = [...delivered.values(), ...pending]
-      try { return (await Promise.all(records.map(r => bounded(signal => byRef(r.item.ref)!.current(r.item.ref, r.version, signal))))).every(Boolean) }
-      catch { partial = true; return false }
+      try {
+        const refreshed=await Promise.all(records.map(async r=>{
+          const adapter=byRef(r.item.ref)!
+          if(!adapter.refresh)return await bounded(signal=>adapter.current(r.item.ref,r.version,signal))?r:null
+          return bounded(signal=>adapter.refresh!(r,signal))
+        }))
+        if(refreshed.some(r=>!r)||!await opts.hasAccess()){console.warn('[Bob visual context]',JSON.stringify({status:'unavailable',categories:[...new Set(records.map(r=>byRef(r.item.ref)!.category))]}));return false}
+        for(const [index,r] of refreshed.entries()){
+          if(!r)continue
+          const before=records[index]
+          if(JSON.stringify(before.item)!==JSON.stringify(r.item)){
+            metadataChanges.set(r.item.ref,structuredClone(r.item))
+            if(delivered.has(r.item.ref))delivered.set(r.item.ref,r)
+            else pending=pending.map(p=>p.item.ref===r.item.ref?r:p)
+          }
+        }
+        return true
+      }
+      catch { partial = true; console.warn('[Bob visual context]',JSON.stringify({status:'validation_failed'})); return false }
     },
     imageEvidence(){return new Map([...delivered.values(),...pending].map(r=>[r.item.ref,r.version]))},
     carrier(): ImageCarrier[] {
-      if (!pending.length) return []
+      if (!pending.length && !metadataChanges.size) return []
+      if(!pending.length)return [{role:'user',content:[{type:'text',text:JSON.stringify({saved_view_metadata_changed:[...metadataChanges.values()],pixels_unchanged:true,approval_not_implied:true})}]}]
       return [{ role: 'user', content: [
+        ...(metadataChanges.size?[{type:'text' as const,text:JSON.stringify({saved_view_metadata_changed:[...metadataChanges.values()],pixels_unchanged:true,approval_not_implied:true})}]:[]),
         { type: 'text', text: opts.imageEvidenceInstruction??(()=>{throw new Error('ai_prompt_missing: images.evidence-intro')})() },
         ...(pending.some(r => r.item.source_kind === 'ai_generated' || ['instruction', 'proposal'].includes(String(r.item.purpose)))
           ? [{ type: 'text' as const, text:[opts.reviewLabel??(()=>{throw new Error('ai_prompt_missing: images.review-label')})(),opts.reviewInstruction??(()=>{throw new Error('ai_prompt_missing: drawing-review.instruction')})()].join('\n') }] : []),
-        ...pending.flatMap(r => [{ type: 'text' as const, text: JSON.stringify({ ref: r.item.ref, title: r.item.title, version: r.version,
-          project_id: r.item.project_id, purpose: r.item.purpose, source_kind: r.item.source_kind, links: r.item.links, links_truncated: r.item.links_truncated }) }, r.image]),
+        ...pending.flatMap(r => [{ type: 'text' as const, text: JSON.stringify({ ref: r.item.ref, ...(opts.chatPreviews || opts.imageContextRefs ? { context_ref: stageImageRef(r.image.image_url) } : {}), title: r.item.title, ...(r.item.description !== undefined ? { description: r.item.description } : {}), version: r.version,
+          project_id: r.item.project_id, purpose: r.item.purpose, source_kind: r.item.source_kind, artifact_revision:r.item.artifact_revision,current_revision:r.item.current_revision,historical:r.item.historical,archived:r.item.archived,view:r.item.view,source_state:r.item.source_state,source_reasons:r.item.source_reasons, links: r.item.links, links_truncated: r.item.links_truncated }) }, r.image]),
       ] }]
     },
     /** Called only after a successful model call that included the carrier. Not at listing/download time. */
     confirmDelivery() {
+      metadataChanges.clear()
       for (const r of pending) {
         delivered.set(r.item.ref, { ...r, image: { type: 'image_url', image_url: '' } })
-        if (!opts.sources.some(s => s.dataset === 'image_pixels' && s.recordId === r.source.recordId && s.updatedAt === r.source.updatedAt)) opts.sources.push(r.source)
+        if (!opts.sources.some(s => s.dataset === 'image_pixels' && s.recordId === r.source.recordId && s.updatedAt === r.source.updatedAt && s.visual?.ref===r.source.visual?.ref)) opts.sources.push(r.source)
       }
       pending = [] // pixels are transient; the provider cursor handles this turn's continuation.
       if (opts.unlimitedWork) byteCount = 0 // Limit the pending provider packet, not previously delivered pixels.

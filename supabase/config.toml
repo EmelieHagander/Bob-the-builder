@@ -31,3 +31,7 @@ verify_jwt = false
 # One random capability per durable work item, validated by the atomic claim RPC.
 [functions.ai-background-worker]
 verify_jwt = false
+
+# Exact saved SVG page -> bounded PNG, caller JWT and RLS rechecked.
+[functions.drawing-preview]
+verify_jwt = true

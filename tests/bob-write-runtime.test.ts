@@ -140,6 +140,7 @@ test('retry with existing receipts runs no model and no writes, commits a recove
   assert.equal(result.ok,true);assert.equal(calls,0);assert.equal(f.writes,0)
   assert.equal(committed.r.providerResponseId,undefined)
   assert.match(committed.r.answer,/Chosen plan/)
+  assert.deepEqual(committed.r.evidence.notices,[{kind:'failed',code:'recovered',text:committed.r.answer}],'the chat replaces the whole notice answer with one line')
   assert.equal(committed.g,2)
 })
 
@@ -187,7 +188,8 @@ test('unverifiable settlement is explicit; access revocation suppresses both ans
   const f=writerFixture({recovered:[receipt],settlementFails:true})
   const result=await runClaimedProjectTurn({...base(),writer:f.writer,callModel:async()=>final()})
   assert.equal(result.ok,true)
-  if(result.ok){assert.match(result.answer,/⚠/);assert.equal(result.evidence.partial,true)}
+  if(result.ok){assert.match(result.answer,/⚠/);assert.equal(result.evidence.partial,true)
+    assert.deepEqual(result.evidence.notices?.map(n=>[n.kind,n.code,n.text===result.answer]),[['uncertain','uncertain',true]])}
   const denied=await runClaimedProjectTurn({...base(),writer:writerFixture({recovered:[receipt]}).writer,hasAccess:async()=>false,callModel:async()=>final()})
   assert.deepEqual(denied,{ok:false,error:'project_denied'})
 })

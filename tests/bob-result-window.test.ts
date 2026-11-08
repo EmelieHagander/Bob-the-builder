@@ -75,7 +75,7 @@ const disk = <T>(value: T): T => JSON.parse(JSON.stringify(value))
 const schema = (name: string) => ({ type: 'function' as const, function: { name, description: 'Manual ' + name, parameters: { type: 'object' } } })
 const fakeCatalog = { definition: () => ({ metadata: { continuation_input_tokens: 1_000_000, context_input_ceiling_tokens: 2_000_000,
   continuation_summary_tokens: 1600, retained_tool_exchanges: 1, continuation_retention_version: 2 } }),
-  role: () => ({ systemMessage: 'Keep uncertainty explicit.' }), tool: schema } as unknown as AiCatalogSession
+  role: () => ({ systemMessage: 'Keep uncertainty explicit.', providerAdapter: 'openai-responses-v1' }), tool: schema } as unknown as AiCatalogSession
 const seed: OpenAIServiceOptions = { app: 'bob', coworkerId: 'bob', module: 'global', functionName: 'ask-bob', catalogRoleKey: 'ask-bob',
   responseItemsMode: 'preserve', tools: ['read_construction_draft', 'search_material_catalog', 'save_construction_draft'].map(schema),
   messages: [{ role: 'user', content: 'Build the box.' }] }

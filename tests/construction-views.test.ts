@@ -1,6 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {createConstructionViews,CONSTRUCTION_VIEW_TOKENS,CONSTRUCTION_VIEW_MAX_TOKENS,CONSTRUCTION_VIEW_STEP_TOKENS,constructionViewBudget,CONSTRUCTION_EVIDENCE_VIEW_TOOL,type ConstructionViewQuery} from '../supabase/functions/_shared/construction-views.ts'
+import {createConstructionViews,constructionViewItems,CONSTRUCTION_VIEW_TOKENS,CONSTRUCTION_VIEW_MAX_TOKENS,CONSTRUCTION_VIEW_STEP_TOKENS,constructionViewBudget,CONSTRUCTION_EVIDENCE_VIEW_TOOL,type ConstructionViewQuery} from '../supabase/functions/_shared/construction-views.ts'
 import {createConstructionTools,checkedConstructionForDrawing} from '../supabase/functions/_shared/construction-draft.ts'
 import {checkConstruction} from '../supabase/functions/_shared/construction-checks.ts'
 import {countSerializedTokens} from '../supabase/functions/_shared/bob-token-budget.ts'
@@ -86,6 +86,27 @@ test('large canonical draft becomes a small overview and exact late-selected fac
  const unknown=await read(query());assert.equal(unknown.counts.unknown_roles,150);assert.equal(unknown.roles_recorded,false)
 })
 
+test('code persistence readback skips the model table and fastener work, retaining exact currentness and access checks',async()=>{
+ const {draft}=fixture(150);let allowed=true,reads=0
+ const tools=createConstructionTools({projectId:project,message:'Read saved',constructionViews:true,constructionTable:true,
+  hasAccess:async()=>allowed,read:async(id,revision)=>{reads++;assert.equal(id,artifact);assert.equal(revision,1);return draft},
+  readFasteners:async()=>assert.fail('persistence verification must not build a fastener table')})
+ const summary=await tools.readSavedSummary(artifact,1)
+ assert.equal(summary.status,'ok');assert.equal(summary.counts.instances,150)
+ assert.deepEqual([summary.artifact_id,summary.revision,summary.current_revision,summary.archived,summary.source_state],
+  [artifact,1,1,false,'current'])
+ assert(JSON.stringify(summary).length<4000);assert(!('table'in summary));assert(!('recipe'in summary))
+ draft.archived=true;draft.current_revision=2;draft.source_state='changed'
+ const historical=await tools.readSavedSummary(artifact,1)
+ assert.deepEqual([historical.archived,historical.current_revision,historical.source_state],[true,2,'changed'])
+ draft.projectId='other';assert.equal((await tools.readSavedSummary(artifact,1)).status,'unavailable')
+ allowed=false;const before=reads
+ assert.equal((await tools.readSavedSummary(artifact,1)).status,'denied');assert.equal(reads,before)
+ const revoked=createConstructionTools({projectId:project,message:'Read',hasAccess:async()=>allowed,
+  read:async()=>{allowed=false;return {...draft,projectId:project}}})
+ allowed=true;assert.equal((await revoked.readSavedSummary(artifact,1)).status,'denied')
+})
+
 test('dependency view retains transitive formulas, source pins, affected bindings and adjacent physical records',async()=>{
  const {draft}=fixture()
  draft.parameters.nodes=[{id:'source',role:'source',source:{kind:'project_measurement',id:material,revision:4},normalized:{value:600,unit:'mm'},sources:[{value:'600',truth:'measured'}]},
@@ -98,6 +119,37 @@ test('dependency view retains transitive formulas, source pins, affected binding
  for(const binding of draft.parameters.bindings)assert.deepEqual(rows.find(r=>r.collection==='bindings'&&r.id===binding.path)?.value,binding)
  assert.deepEqual(rows.find(r=>r.collection==='joints').value,draft.joints[0]);assert(rows.some(r=>r.collection==='roles'));assert(rows.some(r=>r.collection==='materials'))
  const missing=await views.read(draft,query('parts',{ids:['absent']}));assert.deepEqual(missing.missing_ids,['absent']);assert.equal(missing.coverage.total_items,0)
+})
+
+test('pinned fast page fitting preserves every row, fragment and exact budget across selections',async()=>{
+ const {draft}=fixture(45),views=createConstructionViews(project,now,true)
+ for(const view of ['parts','parameters','bindings','joints','materials','roles']){
+  const rows=await collect(q=>views.read(draft,q),query(view))
+  assert.deepEqual(rows,constructionViewItems(draft,view,[]).items,view)
+ }
+ draft.description='Åäö 🪵 é <|endoftext|> '.repeat(750)+'last exact note'
+ const notes=await collect(q=>views.read(draft,q),query('notes'))
+ assert.equal(JSON.parse(notes.filter(r=>r.collection==='description').map(r=>r.fragment?.text??JSON.stringify(r.value)).join('')),draft.description)
+ const first=await views.read(draft,query('parts'))
+ assert(first.next_read)
+ await assert.rejects(createConstructionViews(project,now).read(draft,first.next_read),/cursor_invalid/)
+ await assert.rejects(views.read({...draft,revision:2},{...first.next_read,revision:2}),/cursor_invalid/)
+ await assert.rejects(views.read(draft,{...first.next_read,ids:['part0']}),/cursor_invalid/)
+ const report=await views.observe('check',artifact,1,{status:'checked',issues:Array.from({length:140},(_,n)=>({id:'i'+n,message:'Åäö 🪵 '.repeat(8)}))})
+ const findings=await collect(q=>views.read(draft,q),{...report.result.read,section:'issues'})
+ assert.equal(findings.length,140);assert.equal(findings.at(-1).value.id,'i139')
+})
+
+test('thin readback uses no full geometry transport and checks access again after reading',async()=>{
+ let allowed=true
+ const summary={status:'ok',projectId:project,artifact_id:artifact,revision:1,current_revision:2,archived:true,source_state:'changed',view:'overview',counts:{instances:45}}
+ const make=(readSummary=async()=>summary)=>createConstructionTools({projectId:project,message:'Read',hasAccess:async()=>allowed,
+  read:async()=>assert.fail('thin readback must not fetch full geometry'),readSummary})
+ assert.deepEqual(await make().readSavedSummary(artifact,1),summary)
+ assert.equal((await make(async()=>({...summary,projectId:'other'})).readSavedSummary(artifact,1)).status,'unavailable')
+ assert.equal((await make(async()=>({...summary,revision:2})).readSavedSummary(artifact,1)).status,'unavailable')
+ const revoked=make(async()=>{allowed=false;return summary})
+ assert.equal((await revoked.readSavedSummary(artifact,1)).status,'denied')
 })
 
 test('all pages retain late records and oversized Unicode notes exactly; cursors reject different selections or versions',async()=>{

@@ -12,7 +12,8 @@ export function drawingUrl(drawing: { id: string; revision: number; area_id?: st
   return `/artifacts?drawing=${encodeURIComponent(drawing.id)}&revision=${drawing.revision}${drawing.area_id ? `&area=${encodeURIComponent(drawing.area_id)}` : ''}`
 }
 
-function Preview({ drawing }: { drawing: db.ProjectDrawingCard }) {
+type PreviewData = Pick<db.ProjectDrawingCard, 'id' | 'project_id' | 'revision' | 'title' | 'status' | 'preview_svg' | 'parametric_recipe' | 'source_media_id'>
+export function DrawingPreview({ drawing, compact = false }: { drawing: PreviewData; compact?: boolean }) {
   const data = drawing
   let src = data.preview_svg ? `data:image/svg+xml;base64,${data.preview_svg}` : null
   if (!src && data.parametric_recipe) {
@@ -24,7 +25,7 @@ function Preview({ drawing }: { drawing: db.ProjectDrawingCard }) {
   }
   if (src) return <img src={src} alt={`${drawing.title} — drawing preview`} loading="lazy" />
   if (data.source_media_id) return <StoredImage projectId={drawing.project_id} image={{ id: data.source_media_id, title: drawing.title }} allowRetry={false} />
-  return <p className="foundation-hint">Open drawing for its views and project evidence.</p>
+  return compact ? null : <p className="foundation-hint">Open drawing for its views and project evidence.</p>
 }
 
 function DrawingCard({ drawing }: { drawing: db.ProjectDrawingCard }) {
@@ -38,11 +39,14 @@ function DrawingCard({ drawing }: { drawing: db.ProjectDrawingCard }) {
     return () => observer.disconnect()
   }, [])
   return <article className="project-drawing-card" ref={ref}>
-    <DrawingLink projectId={drawing.project_id} returnLabel="Project plan" returnKey={`project:${drawing.id}`} to={drawingUrl(drawing)} className="project-drawing-open" aria-label={`Open drawing: ${drawing.title} · v${drawing.revision}`}>
-      <div className="project-drawing-preview">{drawing.source_state === 'unavailable' ? <p>Preview unavailable until sources can be checked.</p> : visible && <Preview drawing={drawing} />}</div>
+    <DrawingLink projectId={drawing.project_id} returnLabel="Images & drawings" returnKey={`project:${drawing.id}`} to={drawingUrl(drawing)} className="project-drawing-open" aria-label={`Open ${drawing.isConstruction ? 'model' : 'drawing'}: ${drawing.title} · v${drawing.revision}`}>
+      <p className="document-kind">{drawing.isConstruction ? 'Construction model' : 'Drawing'}</p>
+      {!drawing.isConstruction && <div className="project-drawing-preview">{drawing.source_state === 'unavailable' ? <p>Preview unavailable until sources can be checked.</p> : visible && <DrawingPreview drawing={drawing} />}</div>}
       <h3>{drawing.title}</h3>
       <p className="foundation-hint">{statusLabel[drawing.status]} · v{drawing.revision}</p>
     </DrawingLink>
+    {drawing.modelSource && <DrawingLink projectId={drawing.project_id} returnLabel="Images & drawings" returnKey={`model:${drawing.id}`}
+      to={drawingUrl(drawing.modelSource)} className="project-model-source">Source model · v{drawing.modelSource.revision}</DrawingLink>}
     <DrawingSourceNotice source={drawing} />
     {drawing.steps.length > 0 && <ul className="project-drawing-steps" aria-label="Related steps">
       {drawing.steps.map(step => <li key={step.id}><Link to={`/project?step=${encodeURIComponent(step.id)}`}>{step.title}</Link></li>)}
@@ -54,11 +58,11 @@ export function ProjectDrawings({ projectId }: { projectId: string }) {
   const version = useProjectVersion(), [retry, setRetry] = useState(0)
   const { data, error, loading } = useAsync(() => db.getProjectDrawingCards(projectId), [projectId, version, retry])
   return <section className="foundation-section project-drawings" aria-label="Project drawings">
-    <div className="foundation-heading"><h2>Drawings</h2><Link className="btn" to="/artifacts">All drawings</Link></div>
+    <div className="foundation-heading"><h2>Drawings and models</h2><Link className="btn" to="/artifacts">All drawings</Link></div>
     {error ? <div role="alert"><p>Project drawings could not be loaded.</p><button className="btn" onClick={() => setRetry(n => n + 1)}>Try again</button></div>
       : loading && !data ? <p role="status">Loading project drawings…</p>
-        : !data?.length ? <p className="foundation-hint">No saved drawings yet. Drawings Bob saves will appear here.</p>
+        : !data?.length ? <p className="foundation-hint">No saved drawings or models yet.</p>
           : <><div className="project-drawing-grid">{data.slice(0, 3).map(drawing => <DrawingCard key={`${projectId}:${drawing.id}:${drawing.revision}`} drawing={drawing} />)}</div>
-            {data.length > 3 && <p className="foundation-hint">Showing the three most recently updated drawings.</p>}</>}
+            {data.length > 3 && <p className="foundation-hint">Showing the three most recently updated documents.</p>}</>}
   </section>
 }
