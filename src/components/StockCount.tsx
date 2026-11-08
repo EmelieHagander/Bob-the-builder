@@ -64,20 +64,24 @@ export function StockCountRow({ group }: { group: StockGroup }) {
     setEntry(next); setEntered(true); remember(group, next)
   }
   const count = result.status === 'ok' ? ('sheets' in result ? plural(result.sheets, 'sheet', 'sheets') : 'boards' in result ? plural(result.boards.length, 'board', 'boards') : '') : null
-  const small = { ...inputStyle, width: sheet ? 52 : 60, minWidth: 0, padding: '0 4px', flex: '0 0 auto' }
+  const small = { ...inputStyle, width: 72, minWidth: 0, padding: '0 6px' }
+  const size = sheet ? `${entry.raw} × ${entry.rawWidth}` : entry.raw
   const why = result.status === 'too_long' ? `Longer than ${result.usable} mm: ${result.labels.join(', ')}` : result.status !== 'ok' && 'message' in result ? result.message : null
   return <div className="stock-row shop-state" data-state={state}>
-    <div className="stock-row-line">
-      <strong className="stock-row-name">{group.name}</strong>
-      <input style={small} inputMode="decimal" aria-label={sheet ? 'Sheet length' : 'Raw board length'} value={entry.raw} onChange={set('raw')} />
-      {sheet && <input style={small} inputMode="decimal" aria-label="Sheet width" value={entry.rawWidth} onChange={set('rawWidth')} />}
-      <select style={{ ...inputStyle, width: 54, minWidth: 0, padding: '0 2px', flex: '0 0 auto' }} aria-label="Unit" value={entry.unit} onChange={set('unit')}>{Object.keys(UNITS).map(unit => <option key={unit}>{unit}</option>)}</select>
-      <span className="stock-row-count" title={count ?? undefined}>{count ? (state === 'estimate' ? '≈' : '') + count.split(' ')[0] : '?'}</span>
-      <button type="button" className="stock-row-toggle" aria-expanded={open} aria-label={open ? 'Hide details' : 'Show details'} onClick={() => setOpen(v => !v)}>
-        <Icon name={open ? 'caret-down' : 'caret-right'} size={16} />
-      </button>
-    </div>
+    <button type="button" className="stock-row-line" aria-expanded={open} onClick={() => setOpen(v => !v)}>
+      <span className="stock-row-text">
+        <span className="stock-row-name">{group.name}</span>
+        <span className="stock-row-sub">{size} {entry.unit}{sheet ? ' sheets' : ' boards'} · {plural(group.parts.reduce((n, p) => n + p.quantity, 0), 'part', 'parts')}</span>
+      </span>
+      <span className="stock-row-count">{count ? (state === 'estimate' ? '≈ ' : '') + count : '?'}</span>
+      <Icon name={open ? 'caret-down' : 'caret-right'} size={14} />
+    </button>
     {open && <div className="stock-row-more">
+      <div className="stock-row-fields">
+        <input style={small} inputMode="decimal" aria-label={sheet ? 'Sheet length' : 'Raw board length'} value={entry.raw} onChange={set('raw')} />
+        {sheet && <>×<input style={small} inputMode="decimal" aria-label="Sheet width" value={entry.rawWidth} onChange={set('rawWidth')} /></>}
+        <select style={{ ...inputStyle, width: 64, minWidth: 0, padding: '0 4px' }} aria-label="Unit" value={entry.unit} onChange={set('unit')}>{Object.keys(UNITS).map(unit => <option key={unit}>{unit}</option>)}</select>
+      </div>
       {why && <p role="alert" className="stock-row-alert">{why}</p>}
       {result.status === 'ok' && <ol>{kind === 'board' && 'boards' in result ? result.boards.map((board, index) => <li key={index}>
         {board.pieces.map(piece => `${piece.label} ${piece.length}`).join(' · ')} <span className="foundation-hint">· offcut {metres(board.offcut)}</span>
