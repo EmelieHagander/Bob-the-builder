@@ -203,7 +203,7 @@ export function createBuildPreparation(client: SupabaseClient<any, any, any> | n
       // the PostgREST row limit or substitute a newer material revision.
       for (let offset = 0; offset < pins.length; offset += 32) {
         const selected = pins.slice(offset, offset + 32)
-        const records = checked(await db.from('catalog_item_revisions').select('item_id,revision,name,properties')
+        const records = checked(await db.from('catalog_item_revisions').select('item_id,revision,name,profile_code,properties')
           .or(selected.map(pin => `and(item_id.eq.${pin.id},revision.eq.${pin.revision})`).join(','))
           .limit(selected.length)) as Row[]
         guard()
