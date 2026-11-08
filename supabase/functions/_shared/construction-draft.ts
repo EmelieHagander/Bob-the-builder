@@ -580,9 +580,16 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   if(ruled.issues.length)deferred??={status:'invalid',reason:'joint_rule_invalid',issues:ruled.issues,message:'No construction changed. Correct the named joint rules.'}
   if(ruleSet&&ruleSet.length>32)deferred??={status:'invalid',reason:'joint_rules_full',message:'No construction changed. A construction holds at most 32 joint rules; replace one by its id or its definition pair.'}
   let formRefinement:FormRefinement|null=null
-  if(draft?.form_refinement&&Number.isSafeInteger(draft.target_revision)&&opts.readConstructionReadiness){
-   const read=parseDesignReadiness((await opts.readConstructionReadiness(draft.target_revision,draft.area_id??null,draft.form_refinement) as Record<string,unknown>|null)?.design_readiness)
+  // An edit the server moves to a newer selected Solution maps its parts in
+  // that Solution's concept; the saved pin is refused once the target moved
+  // (Entrén, 2026-11-08: every part edit after Bob's Solution edit failed).
+  const target=Number.isSafeInteger(v.target_revision)?v.target_revision as number:draft?.target_revision
+  if(draft?.form_refinement&&Number.isSafeInteger(target)&&opts.readConstructionReadiness){
+   const raw=await opts.readConstructionReadiness(target,draft.area_id??null,draft.form_refinement) as Record<string,unknown>|null
    if(!await opts.hasAccess())return {error:{status:'denied'}}
+   if(raw?.status==='conflict')return {error:{status:'conflict',reason:'construction_target_changed',
+    message:'No construction changed. The selected Solution changed while this edit was prepared; send the same edit again.'}}
+   const read=parseDesignReadiness(raw?.design_readiness)
    if(!read?.design_intent?.model)return {error:{status:'unavailable',message:'Could not read the concept this construction is mapped to; nothing changed.'}}
    const references=new Set(policy.instances.filter(i=>i.role==='reference').map(i=>i.instance_id))
    const ext=extendFormMapping(read.design_intent,recipe,draft.form_refinement,references,(v.form_assign??[]) as FormAssignment[])
@@ -591,7 +598,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    // that component's open choices into scope; say so before the write.
    const scope=(r:FormRefinement)=>r.mappings.map(m=>m.component_id).sort().join(',')
    if(ext.changed&&scope(ext.refinement)!==scope(draft.form_refinement)){
-    const again=parseDesignReadiness((await opts.readConstructionReadiness(draft.target_revision,draft.area_id??null,ext.refinement) as Record<string,unknown>|null)?.design_readiness)
+    const again=parseDesignReadiness((await opts.readConstructionReadiness(target,draft.area_id??null,ext.refinement) as Record<string,unknown>|null)?.design_readiness)
     if(!await opts.hasAccess())return {error:{status:'denied'}}
     if(!again)return {error:{status:'unavailable',message:'Could not verify advice for the completed mapping; nothing changed.'}}
     const scoped=constructionFormReadiness(again,ext.refinement)
@@ -759,8 +766,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   try{
    const draft=prepared.draft,data=domain.data as Record<string,any>,computed=data.computed as Record<string,any>|null
    const refinement=data.form_refinement??draft?.form_refinement
-   if(!computed?.recipe||!refinement||!Number.isSafeInteger(draft?.target_revision)||!opts.readConstructionReadiness)return []
-   const read=parseDesignReadiness((await opts.readConstructionReadiness(draft.target_revision,draft.area_id??null,refinement) as Record<string,unknown>|null)?.design_readiness)
+   // The concept of the target this write binds to (a moved one after a retarget).
+   const target=Number.isSafeInteger(data.target_revision)?data.target_revision as number:draft?.target_revision
+   if(!computed?.recipe||!refinement||!Number.isSafeInteger(target)||!opts.readConstructionReadiness)return []
+   const read=parseDesignReadiness((await opts.readConstructionReadiness(target,draft.area_id??null,refinement) as Record<string,unknown>|null)?.design_readiness)
    if(!await opts.hasAccess()||!read?.design_intent?.model)return []
    const recipe=parseCadAssemblyRequest(structuredClone(computed.recipe))
    if(!recipe)return []
