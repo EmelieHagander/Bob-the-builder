@@ -92,7 +92,8 @@ export const FORM_ASSIGN_SCHEMA = { type: 'array', maxItems: 128,
   description: 'The concept component for a part that several components hold. Code maps every other part itself; empty for none.',
   items: object({ instance_id: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_.:-]{0,79}$' }, component_id: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_-]{0,31}$' } }) }
 export function extendFormMapping(intent: DesignIntent, recipe: CadAssemblyRequest, raw: unknown, referenceIds: Set<string>, assign: FormAssignment[] = []): { refinement: FormRefinement; issues: ConceptIssue[]; changed: boolean } {
-  const before = parseFormRefinement(raw), issues: ConceptIssue[] = []
+  // null: a construction without a saved scope; code derives its first one.
+  const before: FormRefinement = raw == null ? { version: 1, mappings: [] } : parseFormRefinement(raw), issues: ConceptIssue[] = []
   const active = new Set((intent.model?.components ?? []).filter(c => c.active).map(c => c.id))
   const boxes = evaluateConcept(intent).boxes.filter(b => active.has(b.id))
   const present = new Set(recipe.instances.map(i => i.id))

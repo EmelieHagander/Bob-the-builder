@@ -17,7 +17,7 @@ import { schemaIssues, withOmittedNulls } from './schema-issues.ts'
 import { fingerprint, rethrowContinuation, type BobJournal } from './bob-job-journal.ts'
 import type { ProjectWriter,WritePayload } from './project-write.ts'
 import { parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
-import { conceptConstructionIssues } from './solution-concept.ts'
+import { conceptConstructionIssues, evaluateConcept } from './solution-concept.ts'
 import { FORM_REFINEMENT_SCHEMA, constructionFormReadiness, constructionFormIssues, type FormRefinement } from './construction-form.ts'
 import { REQUIREMENT_PROBES_SCHEMA, EVIDENCE_COMPONENTS_SCHEMA, checkConstructionEvidence, constructionEvidenceReuse, constructionEvidenceContract } from './construction-evidence.ts'
 import { withConstructionWorkRead, withConstructionWorkWrite, withConstructionWorkCheck, createConstructionWorkPackets, checkConstructionWorkOutputs, type ConstructionWorkSources } from './construction-work.ts'
@@ -602,20 +602,30 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   // that Solution's concept; the saved pin is refused once the target moved
   // (Entrén, 2026-11-08: every part edit after Bob's Solution edit failed).
   const target=Number.isSafeInteger(v.target_revision)?v.target_revision as number:draft?.target_revision
-  if(draft?.form_refinement&&Number.isSafeInteger(target)&&opts.readConstructionReadiness){
-   const raw=await opts.readConstructionReadiness(target,draft.area_id??null,draft.form_refinement) as Record<string,unknown>|null
+  // A construction that covers only part of the Solution concept (a floor in
+  // the entré, 2026-11-09) declares which concept components it covers; the
+  // database then checks only those. Code derives that scope from where the
+  // parts lie, exactly as it extends a saved scope (owner decision 2026-11-09).
+  if(draft&&Number.isSafeInteger(target)&&opts.readConstructionReadiness){
+   const saved=draft.form_refinement??null
+   const raw=await opts.readConstructionReadiness(target,draft.area_id??null,saved) as Record<string,unknown>|null
    if(!await opts.hasAccess())return {error:{status:'denied'}}
-   if(raw?.status==='conflict')return {error:{status:'conflict',reason:'construction_target_changed',
-    message:'No construction changed. The selected Solution changed while this edit was prepared; send the same edit again.'}}
    const read=parseDesignReadiness(raw?.design_readiness)
-   if(!read?.design_intent?.model)return {error:{status:'unavailable',message:'Could not read the concept this construction is mapped to; nothing changed.'}}
+   if(raw?.status==='conflict'&&(saved||read?.design_intent?.model))return {error:{status:'conflict',reason:'construction_target_changed',
+    message:'No construction changed. The selected Solution changed while this edit was prepared; send the same edit again.'}}
+   if(saved&&!read?.design_intent?.model)return {error:{status:'unavailable',message:'Could not read the concept this construction is mapped to; nothing changed.'}}
+   const partial=!saved&&!!read?.design_intent?.model&&(()=>{
+    const ids=new Set(recipe.instances.map(i=>i.id)),active=new Set(read.design_intent.model!.components.filter(c=>c.active).map(c=>c.id))
+    return evaluateConcept(read.design_intent).boxes.some(b=>active.has(b.id)&&!ids.has(b.id))
+   })()
+   if(saved||partial){
    const references=new Set(policy.instances.filter(i=>i.role==='reference').map(i=>i.instance_id))
-   const ext=extendFormMapping(read.design_intent,recipe,draft.form_refinement,references,(v.form_assign??[]) as FormAssignment[])
+   const ext=extendFormMapping(read!.design_intent!,recipe,saved,references,(v.form_assign??[]) as FormAssignment[])
    if(ext.issues.length)return {error:{status:'needs_data',reason:'form_mapping_incomplete',issues:ext.issues,message:'No construction changed. Move a part no concept component holds inside one; for a part several hold, name its component in form_assign.'}}
    // A part in a concept component this construction did not cover yet brings
    // that component's open choices into scope; say so before the write.
-   const scope=(r:FormRefinement)=>r.mappings.map(m=>m.component_id).sort().join(',')
-   if(ext.changed&&scope(ext.refinement)!==scope(draft.form_refinement)){
+   const scope=(r:FormRefinement|null)=>r?r.mappings.map(m=>m.component_id).sort().join(','):''
+   if(ext.changed&&scope(ext.refinement)!==scope(saved)){
     const again=parseDesignReadiness((await opts.readConstructionReadiness(target,draft.area_id??null,ext.refinement) as Record<string,unknown>|null)?.design_readiness)
     if(!await opts.hasAccess())return {error:{status:'denied'}}
     if(!again)return {error:{status:'unavailable',message:'Could not verify advice for the completed mapping; nothing changed.'}}
@@ -624,6 +634,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
      message:'No construction changed. A part sits in a concept component whose choices are still open; resolve them or move the part.'}}
    }
    if(ext.changed)formRefinement=ext.refinement
+   }
   }
   return {unused,staleBindings,joints:ruled.joints,stale:ruled.stale,made:ruled.made,formRefinement,cascade,recomputed,deferred,ruleSet}
  }

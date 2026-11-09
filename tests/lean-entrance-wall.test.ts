@@ -28,7 +28,7 @@ before(async()=>{
 })
 after(()=>pg.close())
 
-async function setup(message:string,intent:unknown){
+async function setup(message:string,intent:unknown,extra:Record<string,unknown>={}){
  const project=(await call(owner,'bob.create_project',[{name:'Entrén'}])).id,solution=randomUUID(),turn=randomUUID()
  await call(owner,'bob.solution_command',[project,'create',solution,0,{title:'Ram',description:'Entréns vänstra vägg',assumptions:'Ej mätt',tradeoffs:'Ej godkänd',measurements:[],design_intent:intent}])
  await call(owner,'bob.solution_command',[project,'select',solution,0,{solution_revision:1,reason:'Fixture'}])
@@ -37,12 +37,13 @@ async function setup(message:string,intent:unknown){
  const material=await write({kind:'catalog',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{action:'ensure',key:'material',kind:'material',name:'Fixture plywood',aliases:[],profile_code:'sheet_stock',profile_revision:1,categories:['wood.plywood','sheet'],properties:{thickness:{value:'18',unit:'mm',truth:'provided_spec',parameter:null,note:''}},material_id:null,material_revision:null,notes:'',source_kind:'design_choice',source_quote:message,source_seq:null}})
  const store=(fn:string)=>createConstructionSketchStore(async(action,key,expected,sketch)=>{
   try{return {data:await call(owner,'bob.'+fn,[...binding,action,key,expected,sketch===null?null:JSON.stringify(sketch)]),error:null}}catch(e:any){return {data:null,error:{code:e.code}}}})
- const tools=createConstructionTools({projectId:project,message,hasAccess:async()=>true,formRefinement:true,serverTarget:true,defaultZero:true,chosenJointFasteners:true,leanConstruction:true,
+ const tools=createConstructionTools({...extra,projectId:project,message,hasAccess:async()=>true,formRefinement:true,serverTarget:true,defaultZero:true,chosenJointFasteners:true,leanConstruction:true,
   sketches:store('construction_sketch'),newSketches:store('construction_new_sketch'),
   writer:createProjectWriter(project,message,async p=>{try{return {data:await write(p),error:null}}catch(e:any){return {data:null,error:{code:e.code,message:e.message}}}},async()=>({data:[],error:null}),async()=>({data:[],error:null})),
   read:(id,revision)=>call(owner,'bob.read_construction_draft',[project,id,revision,null]),readSources:async()=>({project:new Map(),physical:new Map()}),
   readCurrentTarget:async area=>(await call(owner,'bob.read_design_readiness',[project,area,null,'construction'])).target_revision??null,
   readConstructionReadiness:(t,area,r)=>call(owner,'bob.read_construction_readiness',[project,area,t,r]),
+  readDesignReadiness:(t,purpose,area)=>call(owner,'bob.read_design_readiness',[project,area??null,t,purpose]),
   readCatalog:(id,revision)=>call(owner,'bob.catalog_read',[project,{action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}]),
   prepareEdit:async p=>{try{return await call(owner,'bob.prepare_construction_edit',[...binding,JSON.stringify(p)])}catch(e:any){return {status:e.code==='PT409'?'conflict':e.code==='42501'?'denied':'invalid',reason:e.message}}}})
  return {project,tools,material:material.recordId as string,read:(id:string,revision:number|null=null)=>call(owner,'bob.read_construction_draft',[project,id,revision,null])}
@@ -100,4 +101,32 @@ test('the entry wall saves the same in the old and the lean format, also after a
  const b3=await read(lean.receipt.recordId)
  assert.ok(mapping(b3)[0][1].includes('lw_s3'),'code mapped the new part to the wall')
  assert.equal(b3.joints.length,23)
+})
+
+// Entré floor, 2026-11-09: a construction saved before its Solution had a
+// concept covers only part of the later concept (here the wall, not the
+// roof). Every edit was refused with concept_part_missing; code now derives
+// the components it covers from where its parts lie (owner decision A).
+test('a construction covering part of a later concept declares its components on the next edit',async()=>{
+ const full=wallIntent(),{model,...bare}=full
+ const {project,tools,material,read}=await setup(message,bare,{coherentWork:true,constructionViews:true})
+ const saved=await tools.execute('save_construction_draft',payload('utan',{...wall.lean,form_refinement:null},material))
+ assert.equal(saved.status,'saved',JSON.stringify(saved))
+ const id=saved.receipt.recordId
+ assert.equal((await read(id)).form_refinement??null,null)
+ const node=(nid:string,value:number)=>({id:nid,role:'decision',unit:'mm',reason:'Takets plats i konceptet.',value})
+ const roof={id:'roof',label:'Tak',kind:'solid',active:true,features:[],choices:[],position:['roof_p0','roof_p1','roof_p2'],size:['roof_s0','roof_s1','roof_s2']}
+ const withRoof={...full,model:{...model,nodes:[...model.nodes,...[25,120,2600].map((v,k)=>node(`roof_p${k}`,v)),...[95,2530,100].map((v,k)=>node(`roof_s${k}`,v))],components:[...model.components,roof]}}
+ const solution=(await read(id)).solution_id
+ await call(owner,'bob.solution_command',[project,'revise',solution,1,{title:'Ram',description:'Entréns vänstra vägg och tak',assumptions:'Ej mätt',tradeoffs:'Ej godkänd',measurements:[],design_intent:withRoof,change_note:'Taket kom till'}])
+ const at=(await call(owner,'bob.read_design_readiness',[project,null,null,'construction'])).target_revision
+ await call(owner,'bob.solution_command',[project,'select',solution,at,{solution_revision:2,reason:'Taket kom till'}])
+ assert.equal((await read(id)).source_state,'changed')
+ const edit=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:1,key:'utan_h',change_note:'Smalare fönster',request_quote:message,mode:'save',
+  changes:{nodes:{upsert:[{id:'win_w',role:'decision',unit:'mm',value:1000,reason:'Fönstret blir 100 cm brett.'}],remove:[]}},joint_rules:[],form_assign:[]})
+ assert.equal(edit.status,'saved',JSON.stringify(edit))
+ const after=await read(id)
+ assert.equal(after.source_state,'current')
+ assert.deepEqual(after.form_refinement.mappings.map((m:any)=>m.component_id),['wall_left'],'the wall declares only the component it covers')
+ assert.deepEqual(after.form_scope.pending_component_ids,['roof'],'the roof stays visible as not covered here')
 })
