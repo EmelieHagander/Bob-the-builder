@@ -244,6 +244,12 @@ async function verifyShell3D(page, view, fixture, width) {
     if(width<768) {
       const cdp=await page.context().newCDPSession(page)
       const x=size.x+size.width/2,y=size.y+size.height/2
+      assert.equal(await canvas.evaluate(el=>el.style.touchAction),'pan-x pan-y','inline 3D leaves one-finger drags to the page')
+      const swipeBefore=Number(await bed.getAttribute('data-renders'))
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]})
+      for(let i=1;i<=6;i++) await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+i*8,y:y-i*12}]})
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})
+      await page.waitForTimeout(100);assert.equal(Number(await bed.getAttribute('data-renders')),swipeBefore,'one finger does not turn the inline view')
       const touchBefore=Number(await bed.getAttribute('data-renders'))
       await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:x-20,y},{x:x+20,y}]})
       await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-45,y:y+10},{x:x+45,y:y+10}]})
@@ -261,6 +267,7 @@ async function verifyShell3D(page, view, fixture, width) {
     await view.getByRole('button',{name:'Fullscreen',exact:true}).click()
     const full=page.getByRole('dialog',{name:'Bunk bed · 3D fullscreen',exact:true})
     await full.waitFor();assert.equal(fixture.viewerCalls.length,network,'fullscreen reuses downloaded geometry')
+    assert.equal(await full.locator('canvas.shell3d-canvas').evaluate(el=>el.style.touchAction),'none','fullscreen 3D owns one-finger turning')
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth<=window.innerWidth),true)
     await page.screenshot({path:`test-results/cad-wireframe-fullscreen-${width}.png`})
     await page.keyboard.press('Escape');await full.waitFor({state:'detached'})
