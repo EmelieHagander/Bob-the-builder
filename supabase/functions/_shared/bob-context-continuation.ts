@@ -22,6 +22,8 @@ type Chain = {
   historicalImages?: Message[]
   resultReferences?: 1
   stageNote?: StageContextNote
+  /** The text adapter that produced the newest response in this chain. */
+  adapter?: string
 }
 /** Only live provider heads are retained. Map entries are arrays on disk so
  * a worker can restore a chain without replaying completed model/tool calls. */
@@ -215,6 +217,8 @@ function validHandoff(value: unknown, allowed: ReadonlySet<string>, tokens: numb
  */
 export function createBobContextContinuation(opts: {
   version?: number; aiCatalog: AiCatalogSession; callModel: ModelCall
+  /** Reads the live provider switch (owner decision 2026-11-09). */
+  refreshProvider?: (app: string) => Promise<void>
   /** Pinned only for new native main turns. CAD and legacy jobs keep their
    * existing compactor and archive cursor contract. */
   mainResultReferences?: 1
@@ -441,12 +445,14 @@ export function createBobContextContinuation(opts: {
   }
 
   /** The pinned adapter declares its wire protocol; Bob's loop is provider-neutral. */
-  const replaysMessages = (options: OpenAIServiceOptions): boolean =>
-    textContinuationMode(opts.aiCatalog.role(options.catalogRoleKey ?? options.functionName, options.catalogVariables).providerAdapter) === 'message-replay'
+  const adapterOf = (options: OpenAIServiceOptions) => opts.aiCatalog.role(options.catalogRoleKey ?? options.functionName, options.catalogVariables).providerAdapter
   const call: ModelCall = async (requested, beforeDispatch) => {
     // The compactor is deliberately not recursive. Other callers can use this
     // adapter without rewriting their schema, specialist loop or old journal.
     if (!enabled || requested.catalogRoleKey === 'context-compactor') return opts.callModel(requested, beforeDispatch)
+    // The live provider switch is read once here, before this call decides
+    // how to continue the chain, so the decision and the dispatch agree.
+    await opts.refreshProvider?.(requested.app)
     const role = requested.catalogRoleKey ?? requested.functionName
     const references = opts.mainResultReferences === 1 && requested.responseItemsMode === 'preserve'
       && requested.functionName === role && (role === 'ask-bob' || opts.workerStageContextVersion === 1
@@ -460,7 +466,8 @@ export function createBobContextContinuation(opts: {
       const native = options.responseItemsMode === 'preserve'
       // Validate the pinned text protocol before any model dispatch; an
       // unsupported adapter cannot silently inherit OpenAI's response cursor.
-      const replay = replaysMessages(options)
+      const adapter = adapterOf(options)
+      const replay = textContinuationMode(adapter) === 'message-replay'
       const identity = JSON.stringify([options.app, options.coworkerId, options.functionName, options.catalogRoleKey ?? options.functionName,
         ...(native ? ['complete-request-v1'] : []), ...(references ? ['result-references-v1'] : []),
         ...(native && opts.imageInputDedupVersion === 1 ? ['image-input-dedup-v1'] : []),
@@ -640,7 +647,9 @@ export function createBobContextContinuation(opts: {
       // A message-replay adapter keeps no conversation on its side: the
       // continuation pointer becomes the chain this adapter already holds,
       // sent in full with the exact native items (thinking blocks included).
-      if (!native && options.previousResponseId && replay) {
+      // After a provider switch the pointer names another provider's response,
+      // so the chain is sent in full once, as a stateless provider's would be.
+      if (!native && options.previousResponseId && (replay || chain.adapter !== undefined && chain.adapter !== adapter)) {
         const { previousResponseId: _pointer, prompt: _prompt, ...rest } = options
         options = { ...rest, messages: [...clone(chain.seed), ...clone(chain.groups.flat())] }
       }
@@ -685,6 +694,7 @@ export function createBobContextContinuation(opts: {
       chain.inputTokens = Math.max(0, response.usage.input_tokens)
       chain.outputTokens = Math.max(0, response.usage.output_tokens)
       chain.groups.push([resultMessage(response)])
+      chain.adapter = adapter
       const internal: ToolCall[] = chain.compacted || references ? response.toolCalls?.filter(tool => tool.function.name === HISTORY_TOOL
         || references && opts.stageContextVersion === 1 && tool.function.name === STAGE_CONTEXT_TOOL) ?? [] : []
       const external = response.toolCalls?.filter(tool => !internal.includes(tool)) ?? []

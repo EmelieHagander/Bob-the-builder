@@ -1,6 +1,6 @@
 import { responseMessageContent, hasImageContent, prepareResponseImages, readResponseItems, type OpenAIResponseItem, type OpenAIMessageContent } from './openai-content.ts';
 import { AIBackgroundPending, AIBackgroundStorageError, backgroundResponse, type BackgroundCall } from './ai-background.ts';
-import { validateAiCall, type ResolvedAiRole, type AiVariables } from './ai-catalog.ts';
+import { refreshProviderSwitch, validateAiCall, withLiveModel, type ResolvedAiRole, type AiVariables, type SwitchClient } from './ai-catalog.ts';
 import { schemaIssues } from './schema-issues.ts';
 import { ANTHROPIC_ENABLED, callAnthropicMessages } from './anthropic-service.ts';
 /**
@@ -362,9 +362,26 @@ async function fetchWithRetry(
   throw new Error('Max retries exceeded');
 }
 
+/** Reads the live text-provider switch (owner decision 2026-11-09). */
+export async function refreshLiveProvider(app: string): Promise<void> {
+  if (typeof Deno === 'undefined') return;
+  try { await refreshProviderSwitch(createAiClient() as unknown as SwitchClient, app) }
+  catch (error) { console.error('[AI provider switch] unavailable', error instanceof Error ? error.message : String(error)) }
+}
+
 export async function callOpenAIResponses<T = unknown>(
   options: OpenAIServiceOptions
 ): Promise<OpenAIServiceResponse<T>> {
+  // The live provider switch moves text tiers at every call. A call that
+  // continues a provider cursor uses the value its caller already read, so
+  // the continuation decision and this dispatch agree.
+  if (options.aiDefinition) {
+    if (!options.previousResponseId) await refreshLiveProvider(options.app);
+    try { options = { ...options, aiDefinition: withLiveModel(options.aiDefinition) }; }
+    catch (error) {
+      return { success: false, data: null, usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, model: options.aiDefinition.model.model_name, error: error instanceof Error ? error.message : 'ai_profile_incompatible' };
+    }
+  }
   const {
     prompt,
     systemMessage,

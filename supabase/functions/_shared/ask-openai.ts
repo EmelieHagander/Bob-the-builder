@@ -55,7 +55,7 @@ import { createMediaAdapter, imageDescriptionText, resolveMediaImage, resolveMed
 import { prepareChatImages } from './project-context/chat-images.ts'
 import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
-import { callOpenAIResponses, callOpenAIEmbeddings, generateImage, uploadOpenAIVisionFile } from './openai-service.ts'
+import { callOpenAIResponses, callOpenAIEmbeddings, generateImage, refreshLiveProvider, uploadOpenAIVisionFile } from './openai-service.ts'
 import { createBobContextContinuation, type ContextSurface } from './bob-context-continuation.ts'
 import { BOB_RESULT_WINDOW_TOKENS, BOB_CONSTRUCTION_RESULT_TOKENS, BOB_COMPACTION_BATCH } from './bob-result-references.ts'
 import { CONSTRUCTION_VIEW_TOOL, constructionViewBudget } from './construction-views.ts'
@@ -545,7 +545,7 @@ export async function answerWithOpenAi(opts: {
     return result
   } }
   const contextStrategy = execution.contextStrategyVersion === 1 && contract.context_strategy_version === 1
-  if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel,onInternalTool:value=>metrics?.internalTool(value)??Promise.resolve(),
+  if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel, refreshProvider: refreshLiveProvider,onInternalTool:value=>metrics?.internalTool(value)??Promise.resolve(),
     ...(execution.resultReferenceVersion === 1 ? { mainResultReferences: 1 } : {}),
     ...(execution.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
     ...(execution.workerStageContextVersion === 1 ? { workerStageContextVersion: 1 as const } : {}),
