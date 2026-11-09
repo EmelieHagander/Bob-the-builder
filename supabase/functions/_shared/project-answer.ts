@@ -320,7 +320,7 @@ export type ProjectAnswerOptions = {
   hasAccess: () => Promise<boolean>; previousResponseId?: string;
   writer?: ProjectWriter; context?: WorkingContext; deadline?: number; modelTimeoutMs?: number; unlimitedWork?: boolean;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;
-  onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string; diagnostics?:import('./execution-metrics.ts').WorkDiagnostics; rejection?: { code: string; fields: string[]; message_id?: string } }) => void;
+  onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; view?: string; validation_code?: string; diagnostics?:import('./execution-metrics.ts').WorkDiagnostics; rejection?: { code: string; fields: string[]; message_id?: string } }) => void;
   /** Names of the calls this model step will execute, before the first runs.
    * Called again with the same names when a checkpointed step resumes. */
   onToolBatch?: (names: string[]) => void;
@@ -804,10 +804,10 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           if (materialFollowUp) knowledge.material_follow_up = materialFollowUp
           return knowledge
         } } : {}),
-        onTool: ({ name, status, ms, rejection }) => {
+        onTool: ({ name, status, ms, rejection, view }) => {
           if (completionAware && writeTools.has(name)) workResults.push({ tool: name, status })
           // Distinct event keys: Bob's own calls use index 0..n of the step.
-          opts.onTool?.({ name, status, step: workerStep + 1, index: 100 + workerToolEvents++, ms, ...(rejection ? { rejection } : {}) })
+          opts.onTool?.({ name, status, step: workerStep + 1, index: 100 + workerToolEvents++, ms, ...(rejection ? { rejection } : {}), ...(view ? { view } : {}) })
         } })
       // The job is over: Bob's next save records its result, not a place inside it.
       workerState = undefined
@@ -1158,7 +1158,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           status: result.status, code: rejection.code, fields: rejection.fields }))
         const validationCode = completionV3 && rejection ? rejection.code
           : completionAware && typeof result?.validation?.code === 'string' ? result.validation.code : undefined
+        const readView = toolName === 'read_construction_draft' && args && typeof args === 'object' ? (args as { view?: unknown }).view : undefined
         try { opts.onTool?.({ name: toolName, status: String(result?.status ?? 'returned'), step: step + 1, index, ms: Date.now() - began,
+          ...(typeof readView === 'string' ? { view: readView } : {}),
           ...(result?.diagnostics?{diagnostics:result.diagnostics}:workerHandOverNames.includes(toolName)&&result?.outcome&&typeof result.outcome==='object'
             ?{diagnostics:{operation:'worker_outcome',deliverable:result.outcome.deliverable,product:result.outcome.product,saved:result.outcome.saved,
               blocker:result.outcome.blocker?.reason??result.outcome.blocker?.status}}:{}),

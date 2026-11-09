@@ -189,6 +189,8 @@ export type ConstructionToolsState = { version:1; used:number } | { version:2; u
  | {version:3;used:number;observations:ConstructionObservation[];savedResults:SavedConstructionResult[]}
 export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;unlimitedWork?:boolean;
  fastPageFit?:boolean;
+ /** Pinned per job (2026-11-09): check replies carry their findings inline. */
+ inlineCheckFindings?:boolean;
  readSummary?:(id:string,revision:number)=>Promise<unknown>;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
  readCurrent?:(id:string)=>Promise<unknown>;
@@ -272,7 +274,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  storedJointRules?:boolean;
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
- const views=createConstructionViews(opts.projectId,opts.now,opts.fastPageFit)
+ const views=createConstructionViews(opts.projectId,opts.now,opts.fastPageFit,opts.inlineCheckFindings)
  const targetless=<T extends {function:{parameters:any}}>(tool:T):T=>opts.serverTarget?withoutTargetRevision(tool):tool
  const workPackets=createConstructionWorkPackets(opts.projectId,opts.fastPageFit)
  const baseReadTool=opts.constructionViews?(opts.formEvidence?CONSTRUCTION_EVIDENCE_VIEW_TOOL:CONSTRUCTION_VIEW_TOOL):CONSTRUCTION_READ_TOOL
