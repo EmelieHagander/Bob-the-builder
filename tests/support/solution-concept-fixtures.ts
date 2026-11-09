@@ -21,8 +21,9 @@ export function conceptFixture(kind: 'box' | 'bed' | 'barn'): DesignIntent & { m
     node('length', 2000); node('width', 900); node('thickness', 40); node('lower', 400); node('upper', 1400)
     node('ladder_x', 50); node('ladder_y', 0); node('ladder_width', 300); node('ladder_height', 1500)
     node('drawer_width', 700); node('drawer_height', 250); node('drawer_x', 1000); node('opening_height', 900)
-    part('lower_deck', 'Lower sleeping platform', ['zero', 'zero', 'lower'], ['length', 'width', 'thickness'])
-    part('upper_deck', 'Upper sleeping platform', ['zero', 'zero', 'upper'], ['length', 'width', 'thickness'])
+    // The decks start behind the front ladder: solids touch, never overlap (2026-11-09).
+    part('lower_deck', 'Lower sleeping platform', ['zero', 'thickness', 'lower'], ['length', 'width', 'thickness'])
+    part('upper_deck', 'Upper sleeping platform', ['zero', 'thickness', 'upper'], ['length', 'width', 'thickness'])
     part('ladder', 'Wall mounted ladder envelope', ['ladder_x', 'ladder_y', 'zero'], ['ladder_width', 'thickness', 'ladder_height'])
     part('drawer', 'Drawer envelope', ['drawer_x', 'zero', 'zero'], ['drawer_width', 'width', 'drawer_height'])
     part('access', 'Access opening', ['ladder_x', 'zero', 'lower'], ['ladder_width', 'thickness', 'opening_height'], 'opening')

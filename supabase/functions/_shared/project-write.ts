@@ -398,6 +398,10 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
         construction_edit_compilation_mismatch:'The compiled result did not match the requested change. No revision was saved.'}
       if(error.message&&Object.hasOwn(reasons,error.message))return {status:'invalid',message:'No construction changed. '+reasons[error.message]}
     }
+    const overlap = /^concept_components_overlap:([A-Za-z0-9_+,-]{1,600})$/.exec(error.message ?? '')
+    if (overlap) return { status: 'invalid', reason: 'concept_components_overlap', overlapping: overlap[1].split(',').map(p => p.split('+')),
+      message: 'No solution saved. Two solid concept components take the same space (listed in overlapping). Move or resize one so they only touch; openings, spaces and references may overlap solids.',
+      validation: { code: 'domain_fields', fields: ['/design_intent/model/components'] } }
     // Entré floor, 2026-11-09: this read as a format error. It is a scope
     // gap: the construction builds only some of the concept's components.
     if (error.message === 'concept_part_missing' && ['construction', 'construction_edit', 'construction_parameters', 'construction_work'].includes(payload.kind)) return { status: 'invalid', reason: 'concept_part_missing', message: 'No construction changed. The selected Solution concept has components this construction has no parts for. A construction that builds only some components declares them in form_refinement (a part edit derives it from where the parts lie); the other components stay pending for their own constructions.', validation: { code: 'domain_fields', fields: ['form_refinement'] } }
