@@ -3423,6 +3423,25 @@ derived rows recalculated by code (same blank quantities; fastener rows follow
 the joints), and the rows without a recorded model left for a decision. The
 live counts were not read: the read-only query was refused in this session.
 
+<a id="publication-509-2026-11-08"></a>
+**Hosted publication of #509 — 2026-11-08, 15:05–15:15 UTC.** Owner: "Gå
+vidare" (GPT: good enough for a test). P0-1 kept as recommended: an unchanged
+quantity still gets a new revision. Quick CI on `ee55abf` passed (run
+42492979156). Merged at `586bf0b32d778e50b839f400e4673b296f06ce9c` (tree
+`627b615ab3e9bc42a89f830f73d344a1ccd06a25` equals the tested branch). Safety
+branch `save/bob-before-follow-up-report-2026-11-08` retains `752d390`. Zero
+active jobs before and after. No migration.
+
+1. bob-worker v223 (ezbr
+   `22b6f3b4f1e39ea6698520172eaf26e98dbb8d3ad8867c82d453a693bf6d6423`), ask-bob
+   v255 (`91eb9be2a7727fd15ee5d5abcb8e17df52bed15fa8b837c074839bab5d542888`),
+   deployed from `586bf0b` with `npx supabase@2.117.0 functions deploy --use-api`;
+   `verify_jwt` unchanged. Both returned bundles contain the row categories,
+   the honest follow-up note, the partial outcome, the goal-only shortening and
+   the bound-construction follow-up.
+
+Next: the owner's Våningssäng 2 turn, read back as listed under #508.
+
 <a id="owner-turn-after-509-2026-11-08"></a>
 ### Owner turn after #509: Våningssäng 2 "gör färdigt planeringen" — 2026-11-08, 16:06–16:28 UTC
 
