@@ -7,8 +7,9 @@ const sha256Hex=async(raw:Uint8Array<ArrayBuffer>)=>Array.from(new Uint8Array(aw
 /** Exact export set and bytes of a rendering, plus any build-guide pages its
  * notes list. A resumed save restores candidate files from their journal step
  * through this same check. */
-export async function verifyCadFiles(files:Record<string,unknown>,views:readonly string[],exports:Record<string,any>,buildGuide?:{status?:string;pages?:{key:string;sha256:string}[]}|null):Promise<void>{
- const pages=buildGuide?.status==='generated'&&Array.isArray(buildGuide.pages)?buildGuide.pages:[]
+export async function verifyCadFiles(files:Record<string,unknown>,views:readonly string[],exports:Record<string,any>,buildGuide?:{status?:string;store?:string;pages?:{key:string;sha256:string}[]}|null):Promise<void>{
+ // Pages kept in their own store (2026-11-09) never ride in the drawing files.
+ const pages=buildGuide?.status==='generated'&&buildGuide.store!=='pages'&&Array.isArray(buildGuide.pages)?buildGuide.pages:[]
  const expected=['step',...views]
  if(Object.keys(files).sort().join(',')!==[...expected,...pages.map(p=>p.key)].sort().join(','))throw new Error('invalid_cad_files')
  for(const k of expected){
@@ -16,18 +17,30 @@ export async function verifyCadFiles(files:Record<string,unknown>,views:readonly
   if(await sha256Hex(decodeBase64(encoded))!==exports?.[k]?.sha256)throw new Error('cad_hash_mismatch')
  }
  for(const page of pages){
-  const encoded=files[page.key];if(!/^guide-[0-9]{1,2}$/.test(page.key)||typeof encoded!=='string'||encoded.length>1400*1024)throw new Error('invalid_cad_file')
+  const encoded=files[page.key];if(!/^guide-[0-9]{1,3}$/.test(page.key)||typeof encoded!=='string'||encoded.length>1400*1024)throw new Error('invalid_cad_file')
   if(await sha256Hex(decodeBase64(encoded))!==page.sha256)throw new Error('cad_hash_mismatch')
  }
 }
 
-export type CadGuideRequest={recipe:CadAssemblyRequest;drawing_source:CadDrawingSource;joints:unknown[];steps:{joint_ids:string[]}[];fasteners:unknown|null;context_ids:string[]}
+export type CadGuideRequest={recipe:CadAssemblyRequest;drawing_source:CadDrawingSource;joints:unknown[];steps:{joint_ids:string[];section?:string}[];fasteners:unknown|null;context_ids:string[]}
+/** Steps [first, last) drawn in one worker call (worker RANGE_STEPS is 24). */
+export const GUIDE_RANGE_STEPS=12
+/** A guide is drawn a section at a time: runs of steps with the same section,
+ * at most GUIDE_RANGE_STEPS each (2026-11-09). */
+export function guideRanges(steps:CadGuideRequest['steps']):[number,number][]{
+ const ranges:[number,number][]=[]
+ steps.forEach((step,index)=>{const last=ranges.at(-1)
+  if(last&&last[1]===index&&index-last[0]<GUIDE_RANGE_STEPS&&steps[last[0]].section===step.section)last[1]=index+1
+  else ranges.push([index,index+1])})
+ return ranges
+}
+export const sha256Text=(text:string)=>sha256Hex(new TextEncoder().encode(text))
 export type CadGuideResult={notes:{version:1;basis:'proposed_order';pages:{key:string;sha256:string;kind:string;[k:string]:unknown}[]};files:Record<string,string>}
 
 /** Build-guide pages for one exact construction revision (2026-10-30). Same host
  * and secret as drawings; its own route, so /render and its contract stay unchanged. */
 export function createCadGuideTransport(endpoint:string|undefined,token:string|undefined,fetcher:typeof fetch=fetch){
- return async(request:CadGuideRequest):Promise<CadGuideResult>=>{
+ return async(request:CadGuideRequest&{range?:[number,number]}):Promise<CadGuideResult>=>{
   if(!endpoint||!token)throw new Error('cad_not_configured')
   const url=new URL(endpoint);if(url.protocol!=='https:')throw new Error('invalid_cad_host')
   url.pathname='/guide'
@@ -43,14 +56,14 @@ export function createCadGuideTransport(endpoint:string|undefined,token:string|u
   const bytes=new Uint8Array(size);let offset=0;for(const c of chunks){bytes.set(c,offset);offset+=c.length}
   const packet=JSON.parse(new TextDecoder().decode(bytes))
   const guide=packet?.guide,files=packet?.files
-  if(!guide||typeof guide!=='object'||guide.version!==1||guide.basis!=='proposed_order'||!Array.isArray(guide.pages)||!guide.pages.length||guide.pages.length>60
+  if(!guide||typeof guide!=='object'||guide.version!==1||guide.basis!=='proposed_order'||!Array.isArray(guide.pages)||!guide.pages.length||guide.pages.length>GUIDE_RANGE_STEPS+2
    ||!files||typeof files!=='object'||Array.isArray(files))throw new Error('invalid_cad_guide')
   const source=guide.drawing_source
   if(!source||Object.keys(source).sort().join(',')!=='artifact_id,revision'||source.artifact_id!==request.drawing_source.artifact_id||source.revision!==request.drawing_source.revision)throw new Error('cad_construction_source_mismatch')
   const keys=guide.pages.map((p:any)=>p?.key)
   if(new Set(keys).size!==keys.length||Object.keys(files).sort().join(',')!==[...keys].sort().join(','))throw new Error('invalid_cad_guide')
   for(const page of guide.pages){
-   if(typeof page.key!=='string'||!/^guide-[0-9]{1,2}$/.test(page.key)||typeof page.sha256!=='string'||!/^[0-9a-f]{64}$/.test(page.sha256)||typeof page.kind!=='string')throw new Error('invalid_cad_guide')
+   if(typeof page.key!=='string'||!/^guide-[0-9]{1,3}$/.test(page.key)||typeof page.sha256!=='string'||!/^[0-9a-f]{64}$/.test(page.sha256)||typeof page.kind!=='string')throw new Error('invalid_cad_guide')
    const encoded=files[page.key];if(typeof encoded!=='string'||encoded.length>1400*1024)throw new Error('invalid_cad_guide')
    const raw=decodeBase64(encoded)
    if(new TextDecoder().decode(raw.slice(0,4))!=='<svg'||await sha256Hex(raw)!==page.sha256)throw new Error('cad_guide_hash_mismatch')

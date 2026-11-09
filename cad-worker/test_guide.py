@@ -184,6 +184,30 @@ class GuideServiceTest(unittest.TestCase):
             self.assertEqual(guide['pages'][1]['joint_ids'], every)
             self.assertEqual(guide['pages'][1]['repeat'], 1)
 
+    def test_a_step_prints_its_section_title(self):
+        f = bench()
+        steps = [{**step, 'section': 'End frames' if n == 0 else 'Rails'} for n, step in enumerate(f['steps'])]
+        with tempfile.TemporaryDirectory() as tmp:
+            guide = render_guide(f['recipe'], f['joints'], steps, tmp, f['fasteners'], svg_only=True)
+            self.assertEqual([p.get('section') for p in guide['pages']], [None, 'End frames', 'Rails', 'Rails', None])
+            self.assertIn('End frames', Path(tmp, 'guide-1.svg').read_text())
+        for bad in ('', ' ', 'x' * 81, 3):
+            with self.subTest(section=bad), tempfile.TemporaryDirectory() as tmp, self.assertRaisesRegex(CadContractError, 'guide_step'):
+                render_guide(f['recipe'], f['joints'], [{**f['steps'][0], 'section': bad}] + f['steps'][1:], tmp, f['fasteners'])
+
+    def test_ranges_draw_the_same_pages_as_one_call(self):
+        # 2026-11-09: long guides are drawn a section at a time with global page numbers.
+        f = bench()
+        with tempfile.TemporaryDirectory() as whole, tempfile.TemporaryDirectory() as parts:
+            one = render_guide(f['recipe'], f['joints'], f['steps'], whole, f['fasteners'], svg_only=True)
+            pieces = [render_guide(f['recipe'], f['joints'], f['steps'], parts, f['fasteners'], svg_only=True, step_range=r)['pages'] for r in ([0, 1], [1, 3])]
+            self.assertEqual([p['key'] for p in pieces[0]], ['guide-0', 'guide-1'])
+            self.assertEqual([p['key'] for p in pieces[1]], ['guide-2', 'guide-3', 'guide-4'])
+            self.assertEqual([p['sha256'] for p in pieces[0] + pieces[1]], [p['sha256'] for p in one['pages']], 'identical bytes')
+            for bad in ([1, 1], [0, 4], [-1, 2], [0], 'x', [0, True]):
+                with self.subTest(range=bad), self.assertRaisesRegex(CadContractError, 'guide_range'):
+                    render_guide(f['recipe'], f['joints'], f['steps'], parts, f['fasteners'], svg_only=True, step_range=bad)
+
     def test_the_guide_route_names_its_refusal(self):
         import json, threading, urllib.request, urllib.error
         from http.server import HTTPServer

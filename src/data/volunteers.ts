@@ -103,6 +103,13 @@ export function createVolunteers(manager: SupabaseClient<any, any, any> | null, 
       if (result.taskId !== taskId || result.id !== id || result.revision !== revision) throw new UserError('Drawing could not be confirmed. Refresh the task.')
       return result
     },
+    /** Pages of a drawing's stored build guide (2026-11-09), only for a drawing this task shows. */
+    async guidePages(secret: string, projectId: string, taskId: string, id: string, revision: number, keys: string[]) {
+      const result = await request<{ projectId: string; taskId: string; id: string; revision: number; pages: Record<string, string> }>('volunteer_guide_pages',
+        { p_secret: secret, p_task: taskId, p_drawing: id, p_revision: revision, p_keys: keys }, projectId)
+      if (result.taskId !== taskId || result.id !== id || result.revision !== revision) throw new UserError('Drawing could not be confirmed. Refresh the task.')
+      return result.pages
+    },
     taskAction: (secret: string, projectId: string, taskId: string, action: 'claim' | 'release' | 'status' | 'check', data: Record<string, unknown> = {}) => request<VolunteerTask>('volunteer_task_action', { p_secret: secret, p_task: taskId, p_action: action, p_data: data }, projectId),
     async image(secret: string, taskId: string, mediaId: string, drawing?: { id: string; revision: number }): Promise<Blob> {
       if (!guest || !media) throw new UserError('Images need the connected app.')

@@ -5,7 +5,8 @@ import { CadSourceMap } from './CadSourceMap'
 import { lazy, Suspense, useCallback, useState } from 'react'
 import './StorageBoxDrawing.css'
 import { ZoomableImage } from './ZoomableImage'
-import { CadBuildGuide, type BuildGuideNotes } from './CadBuildGuide'
+import { CadBuildGuide, type BuildGuideNotes, type GuidePageLoader } from './CadBuildGuide'
+import * as db from '../data/database'
 const WireframeView = lazy(() => import('./CadWireframeView').catch(() => ({ default: WireframeUnavailable })))
 function WireframeUnavailable({onFallback}:{onFallback:(message:string)=>void}) {
  return <div role="alert"><p>The 3D viewer could not be loaded. Check the connection and try again.</p><button type="button" className="btn" onClick={()=>onFallback('')}>Show saved drawing</button></div>
@@ -20,8 +21,9 @@ function CadSheet({src,label,title,file}:{src:string;label:string;title:string;f
 }
 
 /** SVG is an image document, never injected into the page's DOM. */
-export function CadDrawingView({value,title,projectId,artifactId,revision,sourceStatus}:{value:Pick<CadDrawing,'files'|'recipe'|'source_changed'> & Partial<Pick<CadDrawing,'manifest'>> & {build_guide?:Record<string,any>|null};title:string;projectId?:string;artifactId?:string;revision?:number;sourceStatus?:DrawingSourceStatus}){
+export function CadDrawingView({value,title,projectId,artifactId,revision,sourceStatus,loadGuidePages}:{value:Pick<CadDrawing,'files'|'recipe'|'source_changed'> & Partial<Pick<CadDrawing,'manifest'>> & {build_guide?:Record<string,any>|null};title:string;projectId?:string;artifactId?:string;revision?:number;sourceStatus?:DrawingSourceStatus;/** Volunteers pass their own scoped reader; members read through project RLS. */loadGuidePages?:GuidePageLoader}){
  const [interactive,setInteractive]=useState(false),[notice,setNotice]=useState('')
+ const memberPages=useCallback<GuidePageLoader>((guideId,keys)=>db.getCadGuidePages(projectId!,guideId,keys),[projectId])
  const fallback=useCallback((message:string)=>{setInteractive(false);setNotice(message)},[])
  // Overviews first: a flat side of a large build is mostly one panel, so it says little about what the build is.
  const names:Record<string,string>={isometric:'Overview',isometric_front_left:'Overview front-left',isometric_back_left:'Overview back-left',isometric_back_right:'Overview back-right',front:'Front',back:'Back',left:'Left',right:'Right',top:'Top',bottom:'Bottom'}
@@ -43,7 +45,7 @@ export function CadDrawingView({value,title,projectId,artifactId,revision,source
   </Suspense>}
   {Object.keys(names).some(key=>value.files[key])&&<p className="foundation-hint">Each view fits the screen. To read part numbers and sizes, pinch or press + to zoom (on a computer: Ctrl + scroll wheel), then drag to move around.</p>}
   {Object.entries(names).filter(([key])=>value.files[key]).map(([key,label])=><CadSheet key={key} label={label} title={title} file={`${key}.svg`} src={`data:image/svg+xml;base64,${value.files[key]}`} />)}
-  <CadBuildGuide guide={(value.manifest?.build_guide??value.build_guide) as BuildGuideNotes|null|undefined} files={value.files} title={title} sourceChanged={value.source_changed} />
+  <CadBuildGuide guide={(value.manifest?.build_guide??value.build_guide) as BuildGuideNotes|null|undefined} files={value.files} title={title} sourceChanged={value.source_changed} loadPages={loadGuidePages??(projectId?memberPages:undefined)} />
   {value.files.step&&<a className="btn" download="assembly.step" href={`data:application/step;base64,${value.files.step}`}>Download 3D model</a>}
   <details><summary>Parts and sizes</summary>
    <p>Sizes are before notches and holes, with nothing added for saw cuts. Check grain and joints before cutting.</p>

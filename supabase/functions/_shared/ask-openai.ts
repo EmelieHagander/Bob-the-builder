@@ -47,6 +47,7 @@ import { createRecordDetailReader } from './project-record-detail.ts'
 import { createProjectImageTools } from './project-image-tools.ts'
 import { createCadAssistant, cadRenderInput } from './cad-assistant.ts'
 import { BUILD_GUIDE_FIELDS } from './runtime-tool-surface.ts'
+import { guideRanges, sha256Text, type CadGuideRequest } from './cad-transport.ts'
 import { createCadGuideTransport, createCadTransport } from './cad-transport.ts'
 import { createMaterialCatalogReader, materialFindResult, parseMaterialShortlist, shortlistLine, shortlistRef } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
@@ -987,6 +988,26 @@ export async function answerWithOpenAi(opts: {
       },
     }) : undefined
 
+  // One guide, drawn range by range (a section, at most GUIDE_RANGE_STEPS steps)
+  // and stored page by page under a content id unique to this job's guide.
+  const renderGuidePages=async(guide:CadGuideRequest)=>{
+   const guideId=await memo('cad:guide_id',guide,async()=>sha256Text(JSON.stringify(guide)+crypto.randomUUID()))
+   const transport=createCadGuideTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))
+   const pages:Record<string,unknown>[]=[]
+   for(const range of guideRanges(guide.steps)){
+    const notes=await memo('cad:guide_range',{guide_id:guideId,range},async()=>{
+     const result=await transport({...guide,range})
+     const decoder=new TextDecoder()
+     const rows=result.notes.pages.map(page=>{const raw=atob(result.files[page.key]),bytes=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i)
+      return {key:page.key,sha256:page.sha256,svg:decoder.decode(bytes)}})
+     const {error}=await internal.schema('bob').rpc('store_cad_guide_pages',{p_project:opts.projectId,p_guide:guideId,p_pages:rows}).abortSignal(AbortSignal.timeout(20000))
+     if(error)throw new Error('guide_store_failed')
+     return result.notes.pages
+    },70000)
+    pages.push(...notes)
+   }
+   return {version:1 as const,basis:'proposed_order' as const,store:'pages' as const,guide_id:guideId,pages:pages as any}
+  }
   const buildGuideOffered=aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.design_project_cad'&&BUILD_GUIDE_FIELDS.some(field=>(row.definition as any)?.parameters?.properties?.[field]!==undefined))
   // Read at most once per job: the first call's journal entry serves every later one.
   let buildGuideSwitch:Promise<boolean>|null=null
@@ -1039,28 +1060,28 @@ export async function answerWithOpenAi(opts: {
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
     makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,lookupPinned.timeoutMs,40,undefined,lookupOptions),
     callModel,
-    render:(recipe,source,beforeDispatch,guide)=>{
+    render:async(recipe,source,beforeDispatch,guide)=>{
      if(!source)throw new Error('checked_construction_source_required')
-     return memo('cad:render',cadRenderInput(recipe,source,guide),async()=>{
+     const packet=await memo('cad:render',cadRenderInput(recipe,source,guide),async()=>{
       await beforeDispatch?.()
       // Drawings carry no fasteners (owner decision 2026-10-26): they live in
       // Bob's construction lists and the material list only.
-      const packet=await createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source)
-      if(!guide)return packet
-      // Build guide (2026-10-30), same step as its drawing: a failed or oversized
-      // guide is recorded and never blocks the drawing.
-      try{
-       const result=await createCadGuideTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(guide)
-       if(JSON.stringify({...packet.files,...result.files}).length>5_500_000)return {...packet,build_guide:{failure:'guide_too_large'}}
-       return {...packet,files:{...packet.files,...result.files},build_guide:{notes:result.notes}}
-      }catch(error){
-       console.error('[Build guide unavailable]',JSON.stringify({error:error instanceof Error?error.message.slice(0,120):'unknown'}))
-       // A named refusal or transport check is kept as the reason; anything else stays generic.
-       const code=error instanceof Error&&/^[a-z_]{1,64}$/.test(error.message)&&error.message!=='cad_guide_unavailable'?error.message
-        :error instanceof Error&&error.name==='TimeoutError'?'guide_timeout':'guide_unavailable'
-       return {...packet,build_guide:{failure:code}}
-      }
-     },guide?90000:45000)
+      return await createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source)
+     },45000)
+     if(!guide)return packet
+     // Build guide (2026-10-30; own page store 2026-11-09): drawn one section at
+     // a time, each range its own journaled step, and its pages stored in
+     // bob.cad_guide_pages before the drawing is saved, so a guide of any length
+     // never rides in the drawing row. A failure is recorded and never blocks the drawing.
+     try{
+      return {...packet,build_guide:{notes:await renderGuidePages(guide)}}
+     }catch(error){
+      console.error('[Build guide unavailable]',JSON.stringify({error:error instanceof Error?error.message.slice(0,120):'unknown'}))
+      // A named refusal or transport check is kept as the reason; anything else stays generic.
+      const code=error instanceof Error&&/^[a-z_]{1,64}$/.test(error.message)&&error.message!=='cad_guide_unavailable'?error.message
+       :error instanceof Error&&error.name==='TimeoutError'?'guide_timeout':'guide_unavailable'
+      return {...packet,build_guide:{failure:code}}
+     }
     },
     // The owner's global switch (shared.ai_settings cad-build-guide; missing = off),
     // read once per job and only for catalogs that offer the order parameter.

@@ -1254,7 +1254,7 @@ for(const migration of migrations){
   }
  }
  // Build guide steps (cad-build-guide-v3): the same field swap as the migration.
- const buildSteps=source.match(/\$cad_build_steps_spec\$([\s\S]+?)\$cad_build_steps_spec\$/)
+ const buildSteps=source.match(/\$cad_build_sections_spec\$([\s\S]+?)\$cad_build_sections_spec\$/)
  if(buildSteps){
   const spec=JSON.parse(buildSteps[1]),row=seed.find(row=>row.key===spec.key),properties=row?.definition.parameters.properties
   if(properties&&!(spec.field in properties)&&spec.replaces in properties){

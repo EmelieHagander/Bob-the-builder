@@ -97,4 +97,61 @@ test('volunteers get guide pages only on drawings they can already read', async 
   // A construction that cannot be checked hides the drawing and its guide alike.
   const hidden = await read(unverifiable.id)
   assert.equal(hidden.sourceState, 'unavailable'); assert.equal(hidden.content, null)
+  // Stored pages (2026-11-09): the same scope, through their own reader.
+  const text = '<svg xmlns="http://www.w3.org/2000/svg"><text>stored</text></svg>', hash = createHash('sha256').update(text).digest('hex'), gid = 'e'.repeat(64)
+  await query('select bob.store_cad_guide_pages($1,$2,$3)', [project, gid, json([{ key: 'guide-0', sha256: hash, svg: text }])], null, 'service_role')
+  const stored = async (step: string) => {
+    const id = randomUUID()
+    await call('bob.artifact_command', [project, 'create', id, 0, json({ area_id: null, title: 'Stored guide drawing', kind: 'detail', description: 'Saved', status: 'concept', assumptions: 'Check', target_revision: 1, measurements: [], source_media_id: null })])
+    await pg.query('insert into bob.artifact_step_links values($1,$2,$3)', [project, id, step])
+    const guide = { version: 1, status: 'generated', basis: 'proposed_order', store: 'pages', guide_id: gid, construction: { artifact_id: pin.artifact_id, revision: pin.revision }, pages: [{ key: 'guide-0', kind: 'parts', sha256: hash }] }
+    await pg.exec('alter table bob.artifact_cad_revisions disable trigger user;')
+    try {
+      await pg.query('insert into bob.artifact_cad_revisions(project_id,artifact_id,artifact_revision,recipe,manifest,files) values($1,$2,1,$3,$4,$5)', [project, id,
+        json({ contract_version: 1, units: 'mm', definitions: [] }), json({ build_guide: guide }), json({ front: svg(9) })])
+    } finally { await pg.exec('alter table bob.artifact_cad_revisions enable trigger user;') }
+    return id
+  }
+  const mine = await stored(steps[0]), theirs = await stored(steps[1])
+  const pages = (id: string, keys: string[]) => call('bob.volunteer_guide_pages', [secret, task, id, 1, keys], 'anon')
+  assert.deepEqual((await pages(mine, ['guide-0', 'guide-9'])).pages, { 'guide-0': text })
+  await assert.rejects(pages(theirs, ['guide-0']), /Drawing unavailable/, 'another step\'s drawing stays hidden')
+  await assert.rejects(pages(visible.id, ['guide-0']), /Drawing unavailable/, 'a guide kept in its row has no stored pages')
+  await assert.rejects(call('bob.volunteer_guide_pages', ['f'.repeat(64), task, mine, 1, ['guide-0']], 'anon'), /./, 'a wrong session reads nothing')
+})
+
+// 2026-11-09: pages in their own store, any length, read through project access.
+test('stored guide pages: written once by the service, required before save, read by members and task volunteers only', async () => {
+  const project = (await call('bob.create_project', [json({ name: 'Stored guide proof' })])).id
+  const text = (n: number) => `<svg xmlns="http://www.w3.org/2000/svg"><text>stored ${n}</text></svg>`
+  const page = (n: number) => ({ key: `guide-${n}`, sha256: createHash('sha256').update(text(n)).digest('hex'), svg: text(n) })
+  const guideId = 'c'.repeat(64)
+  const store = (pages: unknown[], role = 'service_role') => query('select bob.store_cad_guide_pages($1,$2,$3) result', [project, guideId, json(pages)], role === 'service_role' ? null : owner, role)
+  await assert.rejects(store([page(0)], 'authenticated'), /permission denied/, 'clients cannot write pages')
+  assert.equal((await store([page(0), page(1)])).rows[0].result, 2)
+  assert.equal((await store([page(0)])).rows[0].result, 0, 'same bytes again is a no-op')
+  await assert.rejects(store([{ ...page(5), key: 'guide-0' }]), /cad_guide_pages_conflict/, 'a key never changes its body')
+  await assert.rejects(store([{ ...page(2), sha256: 'f'.repeat(64) }]), /cad_guide_pages_invalid/, 'the hash is checked')
+  await store(Array.from({ length: 30 }, (_, i) => page(i + 100)))
+  // The save trigger: notes with store 'pages' need every page stored, and no page in the row.
+  await pg.exec(`create temp table stored_rows (like bob.artifact_cad_revisions including defaults);
+    create trigger validate_cad_build_guide before insert on stored_rows for each row execute function bob_private.validate_cad_build_guide();`)
+  const notes = (keys: number[], change: (g: any) => void = () => {}) => {
+    const g: any = { version: 1, status: 'generated', basis: 'proposed_order', store: 'pages', guide_id: guideId, construction: { artifact_id: pin.artifact_id, revision: pin.revision },
+      pages: keys.map(n => ({ key: `guide-${n}`, kind: 'step', sha256: page(n).sha256 })) }
+    change(g); return { bob_construction: pin, build_guide: g }
+  }
+  const insert = (manifest: unknown, files: unknown = { front: svg(9) }) => pg.query(`insert into stored_rows(project_id,artifact_id,artifact_revision,recipe,manifest,files)
+    values($1,$2,1,'{"units":"mm","contract_version":1}',$3,$4)`, [project, randomUUID(), json(manifest), json(files)])
+  await insert(notes([0, 1, ...Array.from({ length: 30 }, (_, i) => i + 100)]))
+  for (const [name, manifest, files] of [
+    ['page not stored', notes([0, 7])], ['other hash', notes([0], g => { g.pages[0].sha256 = page(1).sha256 })],
+    ['other guide', notes([0], g => { g.guide_id = 'd'.repeat(64) })], ['bad id', notes([0], g => { g.guide_id = 'x' })],
+    ['unknown store', notes([0], g => { g.store = 'bucket' })], ['page in the row too', notes([0]), { front: svg(9), 'guide-0': svg(0) }],
+  ] as [string, unknown, unknown?][]) await assert.rejects(insert(manifest, files), /cad_build_guide_invalid/, name)
+  // Members read through RLS; another account reads nothing.
+  const member = (await query('select page_key from bob.cad_guide_pages where project_id=$1 and guide_id=$2', [project, guideId])).rows.length
+  assert.equal(member, 32)
+  const stranger = randomUUID(); await pg.query('insert into auth.users values($1,$2,now())', [stranger, 'stranger@example.test'])
+  assert.equal((await asProjectUser(pg, stranger, 'select page_key from bob.cad_guide_pages where project_id=$1', [project], 'authenticated')).rows.length, 0)
 })

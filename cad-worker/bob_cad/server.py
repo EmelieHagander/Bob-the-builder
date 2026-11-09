@@ -51,11 +51,12 @@ def guide_to_pipe(request, connection):
     """Build-guide pages (SVG) for one exact construction revision and its proposed order."""
     try:
         from .guide import render_guide
-        if not isinstance(request, dict) or set(request) != GUIDE_KEYS or request['drawing_source'] is None:
+        if not isinstance(request, dict) or set(request) - {'range'} != GUIDE_KEYS or request['drawing_source'] is None:
             raise ValueError('guide_request')
         with TemporaryDirectory() as directory:
             guide = render_guide(request['recipe'], request['joints'], request['steps'], directory, request['fasteners'],
-                                 request['context_ids'], drawing_source=request['drawing_source'], svg_only=True)
+                                 request['context_ids'], drawing_source=request['drawing_source'], svg_only=True,
+                                 step_range=request['range'] if 'range' in request else None)
             files = {}
             for page in guide['pages']:
                 raw = (Path(directory) / (page['key'] + '.svg')).read_bytes()

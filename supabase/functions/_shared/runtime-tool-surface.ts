@@ -1,9 +1,9 @@
 import type {ToolSpec} from './project-tools/session.ts'
 import {workerOperationSpec,type OperationSurface} from './worker-operations.ts'
 
-/** Every design_project_cad field that makes a build guide: build_steps
+/** Every design_project_cad field that makes a build guide: build_sections
  * (cad-build-guide-v3, 2026-11-09) and the order field of pinned older catalogs. */
-export const BUILD_GUIDE_FIELDS=['build_steps','assembly_dependencies'] as const
+export const BUILD_GUIDE_FIELDS=['build_sections','assembly_dependencies'] as const
 
 /** Server-owned restrictions applied after catalog resolution, at every entry
  * point (native offer, manual, renewal, provider). Never an arbitrary schema. */
