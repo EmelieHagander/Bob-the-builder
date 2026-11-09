@@ -803,7 +803,7 @@ export async function answerWithOpenAi(opts: {
     prepareSolutionEdit:projectEdits.prepare,
     prepareWork:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_work',{...binding,p_payload:payload},AbortSignal.timeout(12000))
-      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_work_preparation_failed'}
+      if(error)return constructionPreparationFailure(error,'construction_work_preparation_failed')
       return data
     },
     readWorkSources:async(draft:Record<string,any>|null,stepId:string|null)=>{

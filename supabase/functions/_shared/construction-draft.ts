@@ -176,9 +176,9 @@ export function latestObservations<T extends {artifact_id:string;revision:number
  return rows.filter(o=>o.revision===latest.get(o.artifact_id))
 }
 /** A failed construction preparation keeps the model-facing status mapping.
- * The server's two named write conflicts pass through so the repair can be
+ * The server's named write conflicts pass through so the repair can be
  * named; every other database detail stays behind the generic reason. */
-const NAMED_PREPARATION_CONFLICTS=new Set(['construction_changed','operation_reused'])
+const NAMED_PREPARATION_CONFLICTS=new Set(['construction_changed','construction_solution_changed','operation_reused'])
 export function constructionPreparationFailure(error:{code?:string|null;message?:string|null},fallback:string){
  const code=error.code??''
  return {status:code==='42501'?'denied':['PT409','40001'].includes(code)?'conflict':code==='22023'?'invalid':'unavailable',
@@ -311,6 +311,22 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    payload={...domain,kind:'construction_work',data:{key:v.key,solution:solution.payload,construction:domain}}
   }
   return {payload,domain,prepared:await (payload.kind==='construction_work'?opts.prepareWork!(payload):prepare(payload))}
+ }
+ // A joint Solution/Construction change needs a construction that already
+ // follows the selected Solution. On a stale one the server refuses with
+ // construction_changed; that is a missing step, not a write race, so name it
+ // (entré floor, 2026-11-09: two unnamed refusals, then a new construction).
+ const staleWorkRefusal=async(v:Record<string,any>,payload:WritePayload,prepared:Record<string,any>)=>{
+  if(payload.kind!=='construction_work'||prepared.status!=='conflict'||prepared.reason!=='construction_changed')return null
+  const current=await (opts.readCurrent?.(v.record_id)??opts.read(v.record_id,null,null)) as Record<string,any>
+  if(!await opts.hasAccess())return {status:'denied'}
+  if(current?.projectId!==opts.projectId||current.status!=='ok'||current.artifact_id!==v.record_id
+   ||current.revision!==v.expected_revision||current.archived!==false||current.source_state!=='changed')return null
+  return {status:'invalid',reason:'construction_not_current',source_state:current.source_state,
+   message:'Nothing changed. This construction still follows an older selected Solution or changed sources, so a joint Solution/Construction change is refused. '
+    +(opts.serverTarget?'First send this construction change alone with solution_edit:null; code binds it to the current selected Solution. '
+     :'First send this construction change alone with solution_edit:null and the current target_revision from view=work. ')
+    +'Then send the Solution change against the new construction revision.'}
  }
  const changed=(result:Record<string,any>,prepared:Record<string,any>,revision:number)=>opts.coherentWork?{...result,work_operation:'changed',
   diagnostics:{operation:'work_change',reused:prepared.status==='saved',revision,new_revision:result.receipt?.revision??null}}:result
@@ -738,6 +754,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     return {error:{status:'invalid',reason:'target_revision_required',source_state:current.source_state,
      message:'No construction changed. This revision still uses an older selected Solution or changed sources, so target_revision:null (keep the old pin) is refused. Read view=work for the current selected Solution and resend this same edit with its current target_revision. Changed measurements use change_construction_parameters with their newer revisions.'}}
   }
+  const stale=await staleWorkRefusal(v,payload,prepared)
+  if(stale)return {error:stale}
   if(prepared.status!=='ready'&&prepared.status!=='saved')return {error:prepared}
   if(prepared.status==='ready'){
    const draft=prepared.draft,next=prepared.next
@@ -1332,6 +1350,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(change.error)return change.error
     const {payload,domain,prepared}=change
     if(!await opts.hasAccess())return {status:'denied'}
+    const stale=await staleWorkRefusal(v,payload,prepared)
+    if(stale)return stale
     if(prepared.status!=='ready'&&prepared.status!=='saved')return prepared
     if(prepared.status==='ready'){
      const draft=prepared.draft
