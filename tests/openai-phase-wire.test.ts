@@ -69,7 +69,7 @@ test('phase-aware Responses parsing selects final text, bounds commentary and pr
     output={output:[message('final_answer','Ready.')]}
     assert.equal((await call({...options,tools:[bound]})).success,true)
     const wire=requests.at(-1).tools[0].parameters
-    for(const key of ['artifact_id','request_id','construction_revision','assembly_dependencies'])assert(!(key in wire.properties),key)
+    for(const key of ['artifact_id','request_id','construction_revision','assembly_dependencies','build_sections'])assert(!(key in wire.properties),key)
     assert('source_ref'in wire.properties)
     const anthropic:any=await anthropicRequestBody({...options,tools:[bound]}, {apiKey:'fixture',model,maxOutputTokens:1000,systemMessage:'Fixture',effort:null,timeoutMs:1000,log:async()=>{}} as any)
     assert.deepEqual(anthropic.tools[0].input_schema,bound.function.parameters)

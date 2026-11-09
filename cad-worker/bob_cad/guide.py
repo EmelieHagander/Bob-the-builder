@@ -17,7 +17,10 @@ from .worker import CadContractError, ID, _location, _shape, validate_drawing_so
 NS = 'http://www.w3.org/2000/svg'
 ET.register_namespace('', NS)
 GUIDE_VERSION = 1
-MAX_PAGES = 60
+# 2026-11-09: pages are stored one by one outside the drawing, so a guide has no
+# row-size ceiling; one call draws at most RANGE_STEPS of its steps.
+MAX_PAGES = 999
+RANGE_STEPS = 24
 _LAYERS = itertools.count()
 PAGE_W, PAGE_H = 1000, 750
 TOUCH_MM = 0.5
@@ -48,10 +51,12 @@ def validate_guide(joints, steps, ids):
                 or any(not isinstance(j.get(end), dict) or j[end].get('instance_id') not in ids for end in ('first', 'second'))
                 or j['first']['instance_id'] == j['second']['instance_id']): raise CadContractError('guide_joint')
         known[j['id']] = (j['first']['instance_id'], j['second']['instance_id'])
-    if not isinstance(steps, list) or not 1 <= len(steps) <= 200: raise CadContractError('guide_steps')
+    if not isinstance(steps, list) or not 1 <= len(steps) <= 997: raise CadContractError('guide_steps')
     used = set()
     for s in steps:
-        if (not isinstance(s, dict) or set(s) != {'joint_ids'} or not isinstance(s['joint_ids'], list) or not s['joint_ids']
+        # A step may name the guide section it belongs to (2026-11-09); it is printed on the page.
+        if (not isinstance(s, dict) or set(s) - {'section'} != {'joint_ids'} or not isinstance(s['joint_ids'], list) or not s['joint_ids']
+                or 'section' in s and not (isinstance(s['section'], str) and 1 <= len(s['section'].strip()) <= 80)
                 or any(i not in known or i in used for i in s['joint_ids'])): raise CadContractError('guide_step')
         used.update(s['joint_ids'])
     return known
@@ -272,29 +277,29 @@ def _signature(joint_ids, joints, boxes, defs_of):
 
 
 def _plan(steps, joint_ends, boxes, defs_of):
-    """Per step, its sub-assemblies grouped by identical geometry (drawn once, 'N×')."""
+    """One page per step (2026-11-09): the page count is the step count, so the
+    order Bob gives decides it, never the geometry. Identical sub-assemblies in
+    a step are drawn once ('N×'); a step that joins different things draws them
+    together on its one page."""
     plan = []
     for step in steps:
-        groups = []
-        for comp in _components(step['joint_ids'], joint_ends):
-            sig = _signature(comp, joint_ends, boxes, defs_of)
-            for g in groups:
-                if g['sig'] == sig: g['copies'].append(comp); break
-            else: groups.append({'sig': sig, 'copies': [comp]})
-        plan.append((step, groups))
+        comps = _components(step['joint_ids'], joint_ends)
+        sigs = {_signature(comp, joint_ends, boxes, defs_of) for comp in comps}
+        copies = comps if len(sigs) == 1 else [sorted(jid for comp in comps for jid in comp)]
+        plan.append((step, [{'copies': copies}]))
     return plan
 
 
-def render_guide(raw, joints, steps, output_dir, fasteners=None, context_ids=(), size=(1500, 1125), drawing_source=None, svg_only=False):
+def render_guide(raw, joints, steps, output_dir, fasteners=None, context_ids=(), size=(1500, 1125), drawing_source=None, svg_only=False, step_range=None):
     out = Path(output_dir); out.mkdir(parents=True, exist_ok=True)
     scratch = out / '.layers'; scratch.mkdir(exist_ok=True)
     try:
-        return _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size, drawing_source, svg_only)
+        return _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size, drawing_source, svg_only, step_range)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 
 
-def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size, drawing_source, svg_only):
+def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size, drawing_source, svg_only, step_range):
     req = validate_request(raw)
     validate_drawing_source(drawing_source)
     if not isinstance(context_ids, (list, tuple)) or len(set(context_ids)) != len(context_ids): raise CadContractError('guide_context')
@@ -312,13 +317,19 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
     lo = [min(b['min'][k] for b in boxes.values()) for k in range(3)]; hi = [max(b['max'][k] for b in boxes.values()) for k in range(3)]
     center = [(lo[k] + hi[k]) / 2 for k in range(3)]; size_mm = max(hi[k] - lo[k] for k in range(3))
     plan = _plan(steps, joint_ends, boxes, defs_of)
-    if sum(len(groups) for _, groups in plan) + 2 > MAX_PAGES: raise CadContractError('guide_too_many_pages')
+    if len(plan) + 2 > MAX_PAGES: raise CadContractError('guide_too_many_pages')
+    # A range draws steps [first, last) with their global numbers; the box page
+    # comes with the first range and the done page with the last.
+    first, last = (0, len(plan)) if step_range is None else step_range if isinstance(step_range, (list, tuple)) and len(step_range) == 2 else (None, None)
+    if (not all(isinstance(v, int) and not isinstance(v, bool) for v in (first, last)) or not 0 <= first < last <= len(plan)
+            or step_range is not None and last - first > RANGE_STEPS): raise CadContractError('guide_range')
     pages = []
 
     def label(part_ids):
         return ', '.join(marker_ranges(sorted(numbers[i] for i in part_ids)))
 
     def save(page, key, note):
+        if note['kind'] == 'parts' and first > 0: return
         if drawing_source:
             # Every page names the exact construction it was drawn from.
             _text(page, PAGE_W - 30, 26, f'Construction version {drawing_source["revision"]} · ID {drawing_source["artifact_id"]}', 10, '400', 'end', '#555555')
@@ -373,7 +384,10 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
 
     placed = set(context_ids)
     number = 0
-    for step, groups in plan:
+    for index, (step, groups) in enumerate(plan):
+        if not first <= index < last:
+            number += len(groups); placed |= {i for jid in step['joint_ids'] for i in joint_ends[jid]}
+            continue
         for g in groups:
             number += 1
             comp = g['copies'][0]
@@ -419,6 +433,7 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
             ET.SubElement(page, f'{{{NS}}}circle', {'cx': '76', 'cy': '76', 'r': '44', 'fill': 'none', 'stroke': INK, 'stroke-width': '3'})
             _text(page, 76, 99, str(number), 60, '700', 'middle')
             if len(g['copies']) > 1: _text(page, 136, 99, f'{len(g["copies"])}×', 42, '700')
+            if step.get('section'): _text(page, 136, 44, step['section'].strip(), 18, '700')
             view = _View(context + lifted + arrows, cam, (320, 60, 650, 630), scratch)
             view.layer(page, [solids[i] for i in sorted(placed)], CONTEXT, 1.6)
             view.layer(page, [solids[i] for i in bases if i not in placed], INK, 2.2)
@@ -443,11 +458,12 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
                 others = [sorted({i for jid in c for i in joint_ends[jid]}, key=lambda i: numbers[i]) for c in g['copies'][1:]]
                 _text(page, 240, 82, 'Build this again with', 15, '400', 'start', '#333333')
                 _text(page, 240, 104, '; '.join(', '.join(f'P{numbers[i]}' for i in o) for o in others), 15, '700', 'start')
-            save(page, f'guide-{number}', {'kind': 'step', 'step': number, 'repeat': len(g['copies']), 'joint_ids': sorted(j for c in g['copies'] for j in c),
+            save(page, f'guide-{number}', {'kind': 'step', 'step': number, **({'section': step['section'].strip()} if step.get('section') else {}), 'repeat': len(g['copies']), 'joint_ids': sorted(j for c in g['copies'] for j in c),
                                            'new_instance_ids': fresh, 'lifted_instance_ids': movers, 'camera': camera_name,
                                            'fasteners': hardware, 'glue': glue, 'unsized_joint_ids': unsized})
         placed |= {i for jid in step['joint_ids'] for i in joint_ends[jid]}
 
+    if last < len(plan): return {'version': GUIDE_VERSION, 'basis': 'proposed_order', 'drawing_source': drawing_source, 'pages': pages}
     loose = [i for i in ids if i not in placed]
     page = _page(); _text(page, 40, 80, 'Done', 36, '700')
     _View(list(solids.values()), (1, -1, 1), (120, 110, 760, 540), scratch).layer(page, list(solids.values()), INK, 2.2)

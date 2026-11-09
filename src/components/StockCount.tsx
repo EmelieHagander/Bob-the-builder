@@ -101,3 +101,12 @@ export function StockCountRow({ group, bought }: { group: StockGroup; bought?: {
     </div>}
   </div>
 }
+
+/** The row's count as the list shows it (this browser's entered size, or the estimate), for print. */
+export function stockSummary(group: StockGroup) {
+  const entry = remembered(group) ?? defaults(group), sheet = isSheet(group)
+  const { result } = compute(group, entry)
+  const count = result.status === 'ok' ? ('sheets' in result ? plural(result.sheets, 'sheet', 'sheets') : 'boards' in result ? plural(result.boards.length, 'board', 'boards') : null) : null
+  return { name: group.name, size: `${sheet ? `${entry.raw} × ${entry.rawWidth}` : entry.raw} ${entry.unit}${sheet ? ' sheets' : ' boards'}`,
+    count, estimate: remembered(group) === null, parts: group.parts.reduce((n, p) => n + p.quantity, 0) }
+}

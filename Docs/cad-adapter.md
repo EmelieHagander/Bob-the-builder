@@ -1277,6 +1277,50 @@ Browser checks: `check-volunteer-browser.mjs` (pages, labels, zoom at
 
 Release order, continued: deploy Pages after the Edge.
 
+#### Build guides in sections, pages in their own store — 2026-11-09
+
+**Status: in PR, not deployed.** Våningssäng 2 (2026-11-08 20:35, GPT) saved its
+drawing with `build_guide.status: failed`. Bob had sent `assembly_dependencies`
+as a near-serial chain over 129 joints; `assemblyStages` made 51 levels and the
+worker drew one page per sub-assembly per level, more than its 60 pages, so it
+refused (`guide_too_many_pages`). The refusal reached the drawing only as
+`guide_unavailable`. Root cause: the page count was the depth of a dependency
+graph, which Bob cannot see. Owner decisions the same day: Bob names the steps;
+guides may be long, in reasonable pieces; pages get their own store (no ceiling
+from the drawing row).
+
+- **Contract.** Publication `cad-build-guide-v3`
+  (`20261109080000_cad_build_sections_catalog.sql`) replaces the order field with
+  `build_sections`: titled sections (1–40), each with its steps in build order
+  (1–12), a step being the joints done together on one page; every saved joint
+  in exactly one step. The Edge checks shape and joint coverage before any
+  render or review. Jobs pinned to an earlier catalog still send
+  `assembly_dependencies` and keep the old path.
+- **Worker.** One page per step; identical sub-assemblies in a step are drawn
+  once ("N×"), different ones together. A step's section title is printed on its
+  page and returned in its notes. `/guide` takes an optional `range` [first,
+  last) of at most 24 steps with global page numbers (box page with the first
+  range, done page with the last), and answers a refusal as 422 `{"error": code}`.
+- **Edge.** The drawing render step no longer carries the guide. Each section
+  (at most 12 steps, `guideRanges`) is its own journaled step
+  (`cad:guide_range`): one worker call, then its pages go to
+  `bob.store_cad_guide_pages` under a content id unique to the job's guide
+  (`cad:guide_id`). Notes get `store: 'pages'` and `guide_id`; no `guide-*` file
+  rides in the drawing. A failure keeps its named code (or `guide_timeout`) as
+  `build_guide.reason`.
+- **Database** (`20261109075000_cad_build_guide_pages.sql`):
+  `bob.cad_guide_pages` (one immutable row per page, member read through
+  project access), `bob.store_cad_guide_pages` (service role), the save trigger
+  requiring every noted page stored with its hash, and
+  `bob.volunteer_guide_pages` (only for a drawing the task already shows).
+  Guides saved earlier keep their pages in the row and read as before.
+- **App.** Sections are inline expands; their pages load when opened
+  (members through `db.getCadGuidePages`, volunteers through
+  `volunteers.guidePages`, at most 30 pages per read).
+- **Release order.** Migration `20261109075000`, Modal worker
+  (`modal-cad.yml`), Edge (`ask-bob`, `bob-worker`) with no drawing job running,
+  migration `20261109080000`, then Pages.
+
 #### Build guide installation and paid runs
 
 **Installed 2026-10-30** (owner OK), from main `03144da` (PR #383), after a check

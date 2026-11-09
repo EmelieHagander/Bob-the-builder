@@ -51,11 +51,12 @@ def guide_to_pipe(request, connection):
     """Build-guide pages (SVG) for one exact construction revision and its proposed order."""
     try:
         from .guide import render_guide
-        if not isinstance(request, dict) or set(request) != GUIDE_KEYS or request['drawing_source'] is None:
+        if not isinstance(request, dict) or set(request) - {'range'} != GUIDE_KEYS or request['drawing_source'] is None:
             raise ValueError('guide_request')
         with TemporaryDirectory() as directory:
             guide = render_guide(request['recipe'], request['joints'], request['steps'], directory, request['fasteners'],
-                                 request['context_ids'], drawing_source=request['drawing_source'], svg_only=True)
+                                 request['context_ids'], drawing_source=request['drawing_source'], svg_only=True,
+                                 step_range=request['range'] if 'range' in request else None)
             files = {}
             for page in guide['pages']:
                 raw = (Path(directory) / (page['key'] + '.svg')).read_bytes()
@@ -66,8 +67,11 @@ def guide_to_pipe(request, connection):
             if len(body) > MAX_RESPONSE:
                 raise ValueError('guide_output_too_large')
             connection.send_bytes(body)
-    except Exception:
-        connection.send_bytes(b'')
+    except Exception as error:
+        # A refusal names its fixed code (an identifier, never project data) so
+        # the caller can record why no guide was made; anything else stays blank.
+        code = str(error) if isinstance(error, ValueError) else ''
+        connection.send_bytes(json.dumps({'error': code}).encode() if code.isidentifier() and len(code) <= 64 else b'')
     finally:
         connection.close()
 
@@ -117,6 +121,13 @@ class Handler(BaseHTTPRequestHandler):
             body = receive.recv_bytes(MAX_RESPONSE)
             if not body:
                 self.send_error(422)
+                return
+            if self.path == '/guide' and body.startswith(b'{"error":'):
+                self.send_response(422)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
                 return
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
