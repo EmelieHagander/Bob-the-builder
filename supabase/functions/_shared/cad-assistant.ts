@@ -412,8 +412,12 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
   const constructionEvidence:{tool:string;result:unknown}[]=[]
   const constructionFailure=async(checked:any)=>{
    partial=true
+   // With blocking_issues (formCheckpoint pin) the reply names what stops the
+   // drawing; fabrication gaps stay counted but never read as the blocker.
+   const blocking=Array.isArray(checked?.blocking_issues)?checked.blocking_issues:null
+   const check=blocking&&checked?.checked?(({fabrication_gaps,...rest}:any)=>rest)(checked.checked):checked?.checked??null
    const failure={status:checked?.status==='unavailable'?'unavailable':'needs_data',stage:'construction',saved:false,reason:'construction_not_ready',request_id:request?.id??null,
-    artifact_id:construction?.artifact_id,revision:construction?.revision,check:checked?.checked??null,
+    artifact_id:construction?.artifact_id,revision:construction?.revision,...(blocking?{blocking_issues:blocking}:{}),check,
     next_action:catalogText("feedback.cad-assistant.next-action.facd61c3e829")}
    if(!renewingConstruction||renewalAccepted)await persist(failure.status==='unavailable'?'retrieval_failed':'needs_data',{reviewed_candidate:undefined})
    return failure
@@ -669,7 +673,7 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
        ...(packet&&!codeOnly?{targeted_review:targetedReviewRecord(review,referenceStatus,reuseKey,presentation)??undefined}:{})})
       if(request&&opts.requestStore?.atomicSave)candidate.drawing_request={id:request.id,revision:request.revision}
       savedRequest=opts.requestStore?.atomicSave||!request?null:{id:request.id,revision:request.revision,payload:structuredClone(payload)}
-      return {status:'ready',request_id:request?.id??null,saved:false,summary:review.summary,quality:acceptedReview,candidate:{title:candidate.title,part_count:candidate.packet.recipe.instances.length,assumptions:candidate.assumptions}}
+      return {status:'ready',request_id:request?.id??null,saved:false,summary:review.summary,quality:acceptedReview,candidate:{title:candidate.title,part_count:candidate.packet.recipe.instances.length,assumptions:candidate.assumptions,...(candidate.packet.manifest?.bob_form_checkpoint?{form_checkpoint:candidate.packet.manifest.bob_form_checkpoint}:{})}}
      }
      metrics.review_rejections++
      if(!opts.unlimitedWork&&(reviews>=3||renders>=4)){candidate=null;partial=true;return {status:'incomplete',stage:'review',saved:false,review}}
@@ -719,7 +723,9 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
    const parameters=inheritCadParameters(opts.projectId,construction.recipe,construction.parameters,recipe)
    const measurements=parameterSourcePins(parameters).project
    const lineage=buildCadLineage(opts.projectId,recipe,[],new Map(),handoff.coordinates)
-   const metadata={title:construction.title,description:construction.description,assumptions:('Concept drawing. '+(construction.open_questions??[]).join(' ')).slice(0,3500),target_revision:Number(selected.revision),measurements,
+   const formCheckpoint=ready.form_checkpoint as {version:1;pending_component_ids:string[]}|undefined
+   const label=formCheckpoint?'Partial concept drawing'+(formCheckpoint.pending_component_ids.length?' (not drawn yet: '+formCheckpoint.pending_component_ids.join(', ')+')':'')+'. ':'Concept drawing. '
+   const metadata={title:construction.title,description:construction.description,assumptions:(label+(construction.open_questions??[]).join(' ')).slice(0,3500),target_revision:Number(selected.revision),measurements,
     source_artifact_id:null,source_revision:null,part_ids:[],area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:drawingArtifactId,expected_revision:expected}
    const pin={version:1,project_id:opts.projectId,artifact_id:construction.artifact_id,revision:construction.revision,check:ready.checked}
    constructionEvidence.push({tool:'checked_construction',result:{...construction,check:ready.checked}})
@@ -760,7 +766,7 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
      :{...base,status:'failed',reason:guideOutcome?.failure??'guide_unavailable'}
     packet={...packet,manifest:{...packet.manifest,build_guide:buildGuide}}
    }
-   packet={...packet,manifest:{...packet.manifest,bob_lineage:lineage,bob_parameters:parameters,bob_construction:pin,bob_design_intent:readiness.pin,bob_design_images:designImages}}
+   packet={...packet,manifest:{...packet.manifest,bob_lineage:lineage,bob_parameters:parameters,bob_construction:pin,bob_design_intent:readiness.pin,bob_design_images:designImages,...(formCheckpoint?{bob_form_checkpoint:formCheckpoint}:{})}}
    renderFingerprint=opts.loadRenderFiles?await fingerprint(cadRenderInput(recipe,drawingSource,guideInput)):null
    candidate={...metadata,packet};reviewPending=true
    const checked=await reviewCurrentCandidate()
