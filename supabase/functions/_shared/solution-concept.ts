@@ -97,6 +97,15 @@ export function evaluateConcept(intent: DesignIntent) {
     }
     boxes.push({ ...c, min: xyz as number[], size_mm: size as number[] })
   }
+  // Owner decision 2026-11-09: two solids may touch but never share space
+  // (entré: supports over the floor made every joist ambiguous). Mirrors
+  // bob_private.concept_solid_overlaps.
+  const solids = boxes.filter(b => b.kind === 'solid')
+  for (let i = 0; i < solids.length; i++) for (let j = i + 1; j < solids.length; j++) {
+    const a = solids[i], b = solids[j]
+    if ([0, 1, 2].every(k => Math.min(a.min[k] + a.size_mm[k], b.min[k] + b.size_mm[k]) - Math.max(a.min[k], b.min[k]) > 1e-6))
+      add('component_overlap', [a.id, b.id], `${a.label} and ${b.label} take the same space; move or resize one so they only touch.`)
+  }
   if (!model.components.some(c => c.active)) add('empty_model', [], 'The concept has no active components. Restore or add the intended geometry before construction.')
   for (const v of model.views) if (v.at !== null && (mm(v.at) === null || Math.abs(mm(v.at)!) > 1e6)) add('section_unresolved', [v.id], `${v.label}: the section position is unknown or invalid.`)
   for (const c of model.constraints) {

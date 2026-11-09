@@ -27,7 +27,8 @@ test('saved Solution views are exact, read-only, caller/project/view bounded, wi
 test('SQL source validator rejects foreign, fabricated or unlinked measurements; unresolved endpoints are not construction ready',async()=>{
  const [snapshot]=await call(owner,'read_bob_edit_context',[project,'solutions',null,null]) as EditSnapshot[]
  assert.equal(snapshot.measurement_evidence![0].id,measurement);assert.equal(snapshot.measurement_evidence![0].reference,null)
- const index=snapshot.record.design_intent.model.nodes.findIndex((n:any)=>n.role==='decision'||n.role==='estimate')
+ // Bind the height (not the origin): moving the origin made solids overlap (2026-11-09 rule).
+ const index=snapshot.record.design_intent.model.nodes.findIndex((n:any)=>n.id==='height')
  const next=await applyProjectDelta(snapshot,[{op:'bind_concept_measurement',index,measurement_ref:await measurementRef(snapshot,0),required_reference:'frame outer height'}],'Attach saved source',{coherent:true})
  const data={title:next.title,description:next.description,assumptions:next.assumptions,tradeoffs:next.tradeoffs,design_intent:next.design_intent,measurements:snapshot.measurements,change_note:'Attach saved source'}
  await call(owner,'solution_command',[project,'revise',solution,1,data])
