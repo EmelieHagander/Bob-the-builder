@@ -121,6 +121,21 @@ accurate descriptions of existing implementations until their handlers migrate.
 > change; the system binds its target, retrieves existing data and preserves
 > everything the change does not address.
 
+### Project description weigher (2026-11-02)
+
+**Committed; live only after Edge deploy and migration `20261108190000_project_description_weigher.sql`.**
+The project description tells what is being built, for whom and why, its
+character and its current phase. It has one strict length,
+`PROJECT_DESCRIPTION_MAX` = 1500 characters (`src/domain/projectDescription.ts`):
+200 below the ~1,700 characters that fit Bob's 500-token orientation, so the
+stored text is always what Bob reads. A database trigger on `bob.projects`
+enforces it for every writer; Bob's validators and the account form use the
+same constant. After a Bob turn that saved something (and did not save the
+description itself), `description-weigher.ts` runs the nano-tier role
+`description-weigher` once, before settlement, and writes through the same
+claimed writer. Its text must pass `projectDescriptionIssue` (no measurements,
+within the limit) or nothing is saved.
+
 ### First implementation: project description and existing solutions
 
 **Technically deployed through PR #254; ordinary-member/model acceptance remains open.**

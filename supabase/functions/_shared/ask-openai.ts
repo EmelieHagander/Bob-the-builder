@@ -74,6 +74,7 @@ import { compactReceipts, createProjectWriter } from './project-write.ts'
 import { prepareWorkingContext, restoreWorkingContext, type WorkingContextSession, type WorkingContextState } from './bob-working-context.ts'
 import { prepareMemoryStair, journalStairStore } from './bob-memory-stair.ts'
 import { runClaimedProjectTurn } from './project-turn.ts'
+import { weighProjectDescription, DESCRIPTION_WEIGHER_ROLE } from './description-weigher.ts'
 import { createAiCatalogSession, applyCatalogModelOptions, type AiCatalogSession } from './ai-catalog.ts'
 import type { AgentWorkpads, WorkpadSnapshot } from './bob-agent-workpad.ts'
 
@@ -220,7 +221,7 @@ export async function answerWithOpenAi(opts: {
   const WORKER_ROLES = new Set(['materials-worker', 'structure-worker', 'drawing-worker'])
   // 'bob-ask-<32 hex>' becomes 'bob-<role>-<32 hex>': one route per worker and project.
   const workerCacheKey = (key: string, role: string) => 'bob-' + role + '-' + key.slice('bob-ask-'.length)
-  const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'completion-gate': 15000, 'tool-picker': 15000, 'tool-repair': 15000, 'material-finder': 20000, 'materials-worker': 60000, 'structure-worker': 75000, 'drawing-worker': 60000, 'memory-stair': 30000, 'bob-delivery-language': 15000 }
+  const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'completion-gate': 15000, 'tool-picker': 15000, 'tool-repair': 15000, 'material-finder': 20000, 'materials-worker': 60000, 'structure-worker': 75000, 'drawing-worker': 60000, 'memory-stair': 30000, 'bob-delivery-language': 15000, 'description-weigher': 30000 }
   let drawingRequestId:string|null=null
   let drawingBudget:ReturnType<typeof createDrawingBudget>|undefined
   let modelBudget: ReturnType<typeof createBobModelBudget>
@@ -708,7 +709,7 @@ export async function answerWithOpenAi(opts: {
     ...(claimedServer ? { modelFeedback: { message: opts.message, read: before => rpc('read_model_feedback', { ...binding, p_before: before }, AbortSignal.timeout(12000)) } } : {}),
     read: input => rpc('read_bob_solution_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
   })
-  const projectEdits = createProjectEdits({ coherent:execution.solutionWorkVersion===1,unlimitedWork, projectId: opts.projectId, writer, hasAccess, sources: lookup.sources,
+  const projectEdits = createProjectEdits({ descriptionWeigher: aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.' + DESCRIPTION_WEIGHER_ROLE), coherent:execution.solutionWorkVersion===1,unlimitedWork, projectId: opts.projectId, writer, hasAccess, sources: lookup.sources,
     ...(writeState ? { writeState: { readiness: constructionReadinessReader } } : {}),
     ...(execution.writeCheckVersion === 1 ? { writeCheck: true } : {}),
     read: input => rpc('read_bob_edit_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
@@ -1364,6 +1365,23 @@ export async function answerWithOpenAi(opts: {
       .then(({ data, error }) => projectFactsPacket(data, !!error, opts.projectId))
       .catch(error => { rethrowContinuation(error); return projectFactsPacket(null, true, opts.projectId) })
     : null
+  // Owner decision 2026-11-02: published role → a nano turn keeps the description tight.
+  const weighDescription = writer && aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.' + DESCRIPTION_WEIGHER_ROLE)
+    ? (answer: string) => weighProjectDescription({ projectId: opts.projectId, userId: opts.userId, message: opts.message, answer, writer, callModel, hasAccess, deadline,
+      ...(journal ? { yieldSegment: (): never => { throw new BobContinuation('yield', 'segment_wall') } } : {}),
+      read: () => memo('description:read', {}, async () => {
+        const project = await client.from('projects').select('name,type,phase,description,updated_at').eq('id', opts.projectId).abortSignal(AbortSignal.timeout(10000)).maybeSingle()
+        if (project.error || !project.data) return null
+        const plan = await client.from('project_plans').select('current_revision').eq('project_id', opts.projectId).abortSignal(AbortSignal.timeout(10000)).maybeSingle()
+        const steps = plan.data?.current_revision == null ? { data: [] as { title: string; state: string | null }[] }
+          : await client.from('project_plan_steps').select('title,state').eq('project_id', opts.projectId).eq('plan_revision', plan.data.current_revision)
+            .order('position').limit(40).abortSignal(AbortSignal.timeout(10000))
+        const p = project.data as { name: string; type: string | null; phase: string | null; description: string | null; updated_at: string }
+        return { project: { name: p.name, type: p.type, phase: p.phase, description: p.description ?? '', updatedAt: p.updated_at },
+          plan: ((steps.data ?? []) as { title: string; state: string | null }[]).map(({ title, state }) => ({ title, state })) }
+      }),
+    }).then(outcome => console.log('[Bob description]', JSON.stringify({ outcome })))
+    : undefined
   let turnFailure: import('./bob-turn-failure.ts').BobTurnFailure | undefined
   try {
   const result=await runClaimedProjectTurn({
@@ -1377,7 +1395,7 @@ export async function answerWithOpenAi(opts: {
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
-    ...opts, continuedWork:execution.continuedWorkVersion===1, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? CLAUDE_BACKGROUND_TIMEOUT_MS : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
+    ...opts, continuedWork:execution.continuedWorkVersion===1, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, ...(weighDescription ? { weighDescription } : {}), beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? CLAUDE_BACKGROUND_TIMEOUT_MS : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
     readToolPolicy,
     boundDrawingWork:execution.drawingBindingVersion===1&&execution.operationPathsVersion===undefined,
     ...(workerOperations?{workerOperations}:{}),

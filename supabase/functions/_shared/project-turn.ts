@@ -55,6 +55,8 @@ export async function runClaimedProjectTurn(opts: { continuedWork?:boolean;
   onFailure?: (value: BobTurnFailure) => void;
   onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string }) => void;
   onToolBatch?: (names: string[]) => void;
+  /** Runs once after a completed answer, before settlement; see description-weigher.ts. */
+  weighDescription?: (answer: string) => Promise<unknown>;
   deadline?: number; resume?: boolean; beforeSettle?: () => void; modelTimeoutMs?: number; unlimitedWork?: boolean;
   finalAnswer?: boolean;
   workerCheckpoint?: boolean;
@@ -115,6 +117,11 @@ export async function runClaimedProjectTurn(opts: { continuedWork?:boolean;
     rethrowContinuation(error)
     await fail()
     return {ok:false,error:'project_denied'}
+  }
+  // The description follows what this turn saved; its own write settles with them.
+  if (opts.weighDescription && result.ok && opts.writer?.receipts.length && !opts.writer.uncertain && !(recovered && !opts.resume)) {
+    try { await opts.weighDescription(result.answer) }
+    catch (error) { rethrowContinuation(error) }
   }
   opts.beforeSettle?.()
   if (opts.writer) {
