@@ -30,7 +30,7 @@ begin
     end if;
     for tiers in select key tier, value#>>'{}' model_name from jsonb_each(entry.value) loop
       if tiers.tier not in ('nano','mini','standard') or not exists(select 1 from shared.ai_models m
-        where m.model_name=tiers.model_name and m.provider=entry.provider and m.is_active and m.model_type::text=tiers.tier
+        where m.model_name=tiers.model_name and m.provider::text=entry.provider and m.is_active and m.model_type::text=tiers.tier
           and m.capabilities->>'provider_adapter'=case entry.provider when 'anthropic' then 'anthropic-messages-v1' else 'openai-responses-v1' end) then
         raise exception 'ai_provider_switch_model_unavailable: % %', entry.provider, tiers.tier using errcode='22023';
       end if;
