@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ZoomableImage } from './ZoomableImage'
+import { CadGuidePrint } from './CadGuidePrint'
 
 /** Build-guide notes saved with a drawing version (manifest.build_guide, 2026-10-30). */
 export type BuildGuideNotes = {
@@ -79,8 +80,10 @@ function GuideSection({ section, children }: { section: string; children: (open:
 
 /** IKEA-style pages made with the drawing, in order. Absent notes mean the
  * guide was switched off when this version was made: nothing is shown. */
-export function CadBuildGuide({ guide, files, title, sourceChanged, loadPages }: {
+export function CadBuildGuide({ guide, files, title, sourceChanged, loadPages, projectId }: {
   guide: BuildGuideNotes | null | undefined; files: Record<string, string>; title: string; sourceChanged?: boolean; loadPages?: GuidePageLoader
+  /** Members only: the print adds the pinned construction's shopping and cut lists. */
+  projectId?: string
 }) {
   if (!guide || typeof guide !== 'object') return null
   if (guide.status !== 'generated') {
@@ -94,6 +97,7 @@ export function CadBuildGuide({ guide, files, title, sourceChanged, loadPages }:
     <summary>Build guide · {pages.length} {pages.length === 1 ? 'page' : 'pages'}</summary>
     <p className="foundation-hint">Step-by-step pages from the saved construction and Bob's proposed order. Not reviewed; fastener counts are rule-of-thumb proposals, not a strength check.</p>
     {sourceChanged && <p role="alert" className="solution-attention">The construction has changed since this guide was made. It still shows its recorded version.</p>}
+    {pages.length > 0 && <CadGuidePrint guide={guide} files={files} title={title} pageLabel={pageLabel} loadPages={loadPages} projectId={projectId} />}
     {guideGroups(pages).map((group, index) => group.section === null
       ? <GuidePages key={'pages-' + index} pages={group.pages} guide={guide} files={files} title={title} loadPages={loadPages} />
       : <GuideSection key={'section-' + index} section={`${group.section} · ${group.pages.length} ${group.pages.length === 1 ? 'step' : 'steps'}`}>

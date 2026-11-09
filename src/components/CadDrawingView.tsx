@@ -45,7 +45,7 @@ export function CadDrawingView({value,title,projectId,artifactId,revision,source
   </Suspense>}
   {Object.keys(names).some(key=>value.files[key])&&<p className="foundation-hint">Each view fits the screen. To read part numbers and sizes, pinch or press + to zoom (on a computer: Ctrl + scroll wheel), then drag to move around.</p>}
   {Object.entries(names).filter(([key])=>value.files[key]).map(([key,label])=><CadSheet key={key} label={label} title={title} file={`${key}.svg`} src={`data:image/svg+xml;base64,${value.files[key]}`} />)}
-  <CadBuildGuide guide={(value.manifest?.build_guide??value.build_guide) as BuildGuideNotes|null|undefined} files={value.files} title={title} sourceChanged={value.source_changed} loadPages={loadGuidePages??(projectId?memberPages:undefined)} />
+  <CadBuildGuide guide={(value.manifest?.build_guide??value.build_guide) as BuildGuideNotes|null|undefined} files={value.files} title={title} sourceChanged={value.source_changed} loadPages={loadGuidePages??(projectId?memberPages:undefined)} projectId={loadGuidePages?undefined:projectId} />
   {value.files.step&&<a className="btn" download="assembly.step" href={`data:application/step;base64,${value.files.step}`}>Download 3D model</a>}
   <details><summary>Parts and sizes</summary>
    <p>Sizes are before notches and holes, with nothing added for saw cuts. Check grain and joints before cutting.</p>
