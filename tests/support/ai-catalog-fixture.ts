@@ -1253,6 +1253,18 @@ for(const migration of migrations){
    const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'cad-build-guide-v2'};versions.set(row.key,versions.get(row.key)!+1)
   }
  }
+ // Build guide steps (cad-build-guide-v3): the same field swap as the migration.
+ const buildSteps=source.match(/\$cad_build_steps_spec\$([\s\S]+?)\$cad_build_steps_spec\$/)
+ if(buildSteps){
+  const spec=JSON.parse(buildSteps[1]),row=seed.find(row=>row.key===spec.key),properties=row?.definition.parameters.properties
+  if(properties&&!(spec.field in properties)&&spec.replaces in properties){
+   row.definition=structuredClone(row.definition)
+   const {[spec.replaces]:_old,...rest}=row.definition.parameters.properties
+   row.definition.parameters.properties={...rest,[spec.field]:structuredClone(spec.property)}
+   row.definition.parameters.required=row.definition.parameters.required.map((key:string)=>key===spec.replaces?spec.field:key)
+   const{seed_version,source_revision,...meta}=row.metadata??{};row.metadata={...meta,publication:'cad-build-guide-v3'};versions.set(row.key,versions.get(row.key)!+1)
+  }
+ }
  const stageCard=source.match(/\$stage_context_card_spec\$([\s\S]+?)\$stage_context_card_spec\$/)
  if(stageCard){
   const patch=JSON.parse(stageCard[1]),row=seed.find(row=>row.key===patch.key)

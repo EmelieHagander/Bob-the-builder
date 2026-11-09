@@ -1277,6 +1277,32 @@ Browser checks: `check-volunteer-browser.mjs` (pages, labels, zoom at
 
 Release order, continued: deploy Pages after the Edge.
 
+#### Build steps instead of a dependency order — 2026-11-09
+
+**Status: in PR, not deployed.** Våningssäng 2 (2026-11-08 20:35, GPT) saved its
+drawing with `build_guide.status: failed`. Bob had sent `assembly_dependencies`
+as a near-serial chain over 129 joints; `assemblyStages` made 51 levels and the
+worker drew one page per sub-assembly per level, more than its 60 pages, so it
+refused (`guide_too_many_pages`). The refusal reached the drawing only as
+`guide_unavailable`. Root cause: the page count was the depth of a dependency
+graph, which Bob cannot see.
+
+- **Contract.** Publication `cad-build-guide-v3`
+  (`20261109080000_cad_build_steps_catalog.sql`) replaces the order field with
+  `build_steps`: the guide's steps in build order, each the saved joints done
+  together, every saved joint in exactly one step, 1–58 steps (60 pages minus
+  the box and done pages). The schema bounds the count; the Edge checks it and
+  the joint coverage before any render or review. Jobs pinned to an earlier
+  catalog still send `assembly_dependencies` and keep the old path.
+- **Worker.** One page per step: identical sub-assemblies in a step are drawn
+  once ("N×"); a step that joins different things draws them together. The page
+  count is the step count. `/guide` answers a refusal as 422 `{"error": code}`
+  (a fixed identifier, never project data).
+- **Edge.** The named code (or `guide_timeout`) is saved as
+  `build_guide.reason`; anything unnamed stays `guide_unavailable`.
+- **Release order.** Modal worker (`modal-cad.yml`), then Edge (`ask-bob`,
+  `bob-worker`), then the migration.
+
 #### Build guide installation and paid runs
 
 **Installed 2026-10-30** (owner OK), from main `03144da` (PR #383), after a check

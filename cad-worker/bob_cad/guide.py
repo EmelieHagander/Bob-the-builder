@@ -272,16 +272,16 @@ def _signature(joint_ids, joints, boxes, defs_of):
 
 
 def _plan(steps, joint_ends, boxes, defs_of):
-    """Per step, its sub-assemblies grouped by identical geometry (drawn once, 'N×')."""
+    """One page per step (2026-11-09): the page count is the step count, so the
+    order Bob gives decides it, never the geometry. Identical sub-assemblies in
+    a step are drawn once ('N×'); a step that joins different things draws them
+    together on its one page."""
     plan = []
     for step in steps:
-        groups = []
-        for comp in _components(step['joint_ids'], joint_ends):
-            sig = _signature(comp, joint_ends, boxes, defs_of)
-            for g in groups:
-                if g['sig'] == sig: g['copies'].append(comp); break
-            else: groups.append({'sig': sig, 'copies': [comp]})
-        plan.append((step, groups))
+        comps = _components(step['joint_ids'], joint_ends)
+        sigs = {_signature(comp, joint_ends, boxes, defs_of) for comp in comps}
+        copies = comps if len(sigs) == 1 else [sorted(jid for comp in comps for jid in comp)]
+        plan.append((step, [{'copies': copies}]))
     return plan
 
 
@@ -312,7 +312,7 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
     lo = [min(b['min'][k] for b in boxes.values()) for k in range(3)]; hi = [max(b['max'][k] for b in boxes.values()) for k in range(3)]
     center = [(lo[k] + hi[k]) / 2 for k in range(3)]; size_mm = max(hi[k] - lo[k] for k in range(3))
     plan = _plan(steps, joint_ends, boxes, defs_of)
-    if sum(len(groups) for _, groups in plan) + 2 > MAX_PAGES: raise CadContractError('guide_too_many_pages')
+    if len(plan) + 2 > MAX_PAGES: raise CadContractError('guide_too_many_pages')
     pages = []
 
     def label(part_ids):

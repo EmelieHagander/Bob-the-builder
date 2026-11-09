@@ -26,6 +26,7 @@ import { HANDOFF_INPUT_SCHEMA, REQUIREMENT_CHANGES_SCHEMA, prepareDesignHandoff 
 import { designIntentHandoff, parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
 import { verifyCadFiles, type CadGuideRequest } from './cad-transport.ts'
 import { assemblyStages } from './construction-lists.ts'
+import { BUILD_GUIDE_FIELDS } from './runtime-tool-surface.ts'
 import { constructionInstancePolicy } from './construction-instance-policy.ts'
 import { parseFastenerSchedule } from './construction-fasteners.ts'
 import { applyTargetedReuse, buildCadReviewPacket, codeCheckBasis, codeDrawingCheckEnabled, codeFindingReview, codePassReview, formEvidenceCoverage, parseTargetedCadAnswers, parseTargetedReviewRecord, previewHashes, reusedTargetedReview, targetedReuseKey, targetedReviewBasis, targetedReviewEnabled, targetedReviewRecord, withReusedRequirements, type CadReviewPacket, type TargetedReuse } from './cad-targeted-review.ts'
@@ -51,15 +52,26 @@ export function withoutResumeViews<T>(value:T):T{
 export const ASSEMBLY_ORDER_SCHEMA={type:['array','null'],maxItems:1024,items:{type:'object',additionalProperties:false,required:['joint_id','depends_on'],
  properties:{joint_id:{type:'string'},depends_on:{type:'array',maxItems:1024,items:{type:'string'}}}},
  description:'The build guide made with this drawing: the builders follow it page by page with the parts in front of them. For every saved joint, the joints that must already be done before it, in the order you would put it together. Null only when the construction has no saved joints.'}
+/** Build guides, cad-build-guide-v3 (2026-11-09): Bob names the guide's steps
+ * himself, one page each. The dependency graph above made the page count its
+ * depth, which Bob cannot see: a near-serial chain over 129 joints gave 51
+ * levels and more pages than the worker draws (Våningssäng 2, 2026-11-08). The
+ * schema now bounds the count; older pinned catalogs keep the order field. */
+export const BUILD_STEP_LIMIT=58 // worker MAX_PAGES 60 minus the box and done pages
+export const BUILD_STEPS_SCHEMA={type:['array','null'],minItems:1,maxItems:BUILD_STEP_LIMIT,items:{type:'object',additionalProperties:false,required:['joint_ids'],
+ properties:{joint_ids:{type:'array',minItems:1,maxItems:1024,items:{type:'string'}}}},
+ description:'The build guide made with this drawing, one page per step: the builders follow it page by page with the parts in front of them. List the steps in the order you would put it together; a step is the saved joints done together at that point, the way an assembly manual groups them. Every saved joint is in exactly one step. Null only when the construction has no saved joints.'}
 export function withoutAssemblyOrder<T>(value:T):T{
  const copy:any=structuredClone(value),parameters=copy?.function?.parameters??copy?.parameters
- if(parameters?.properties?.assembly_dependencies===undefined)return copy
- delete parameters.properties.assembly_dependencies;parameters.required=parameters.required.filter((key:string)=>key!=='assembly_dependencies')
+ for(const field of BUILD_GUIDE_FIELDS){
+  if(parameters?.properties?.[field]===undefined)continue
+  delete parameters.properties[field];parameters.required=parameters.required.filter((key:string)=>key!==field)
+ }
  return copy
 }
 export const DESIGN_CAD_TOOL=tool('design_project_cad',
   'Render a requested drawing of one exact saved, checked construction revision. Every project drawing needs its own construction source with stable part IDs, dimensions, placements, pinned catalog materials and declared joints before CAD. Read or save the construction, compare it with the owner requirements and original reference images, run check_construction_draft and correct that same construction before calling this tool. For an older drawing, use transition_legacy_drawing to retain its geometry and identities and establish the missing material/joint evidence. Pass the saved construction Artifact ID, or its already linked drawing ID, and the exact receipt revision. CAD reuses the saved geometry; it cannot design a replacement assembly. Reference pixels and the original requirements accompany independent candidate review. Reuse the same request_id on retry. Returns a checked candidate that still needs save_cad_design.',
-  {request_id:{...nullable,description:'Use the saved request ID only when the current owner message requests or continues a drawing deliverable. A message about the same object, a correction, an image description, or a project-text update does not by itself request CAD. Complete a text-only request through its own read/write tools and finish the reply without resuming the drawing. When a drawing is requested, reuse this ID, its saved requirements and a source-current draft; no extra confirmation is needed. Null only for a new drawing request. With an ID, pass handoff:null and requirement_changes:[] to preserve ALL requirements; put explicit requirement corrections in requirement_changes.'},brief:{type:'string'},handoff:{anyOf:[HANDOFF_INPUT_SCHEMA,{type:'null'}],description:'New request only: transfer owner requirements without IDs; the server creates and persists their identities. Map coordinates and views, keep unknown directions null and cite exact source refs. Resume with null: the server reads the saved handoff, including earlier corrections. Use requirement_changes only for explicit additions or changes.'},requirement_changes:REQUIREMENT_CHANGES_SCHEMA,area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{type:'string',description:'Exact saved construction Artifact ID, or a drawing already linked to that construction. A missing construction must be saved and checked first. The server renders its geometry verbatim into a linked drawing.'},construction_revision:{type:'integer',minimum:1,maximum:999999999,description:'Copy the exact saved/read construction revision. On retry retain the pinned version. To renew an existing request after revising and checking that SAME construction, explicitly pass its newer current receipt revision with the same request_id and handoff:null. The server preserves requirements, discards obsolete candidates/retries and checks readiness and sources again. It never follows a newer head implicitly or changes construction identity.'},views:RESUME_VIEWS_SCHEMA,assembly_dependencies:ASSEMBLY_ORDER_SCHEMA})
+  {request_id:{...nullable,description:'Use the saved request ID only when the current owner message requests or continues a drawing deliverable. A message about the same object, a correction, an image description, or a project-text update does not by itself request CAD. Complete a text-only request through its own read/write tools and finish the reply without resuming the drawing. When a drawing is requested, reuse this ID, its saved requirements and a source-current draft; no extra confirmation is needed. Null only for a new drawing request. With an ID, pass handoff:null and requirement_changes:[] to preserve ALL requirements; put explicit requirement corrections in requirement_changes.'},brief:{type:'string'},handoff:{anyOf:[HANDOFF_INPUT_SCHEMA,{type:'null'}],description:'New request only: transfer owner requirements without IDs; the server creates and persists their identities. Map coordinates and views, keep unknown directions null and cite exact source refs. Resume with null: the server reads the saved handoff, including earlier corrections. Use requirement_changes only for explicit additions or changes.'},requirement_changes:REQUIREMENT_CHANGES_SCHEMA,area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{type:'string',description:'Exact saved construction Artifact ID, or a drawing already linked to that construction. A missing construction must be saved and checked first. The server renders its geometry verbatim into a linked drawing.'},construction_revision:{type:'integer',minimum:1,maximum:999999999,description:'Copy the exact saved/read construction revision. On retry retain the pinned version. To renew an existing request after revising and checking that SAME construction, explicitly pass its newer current receipt revision with the same request_id and handoff:null. The server preserves requirements, discards obsolete candidates/retries and checks readiness and sources again. It never follows a newer head implicitly or changes construction identity.'},views:RESUME_VIEWS_SCHEMA,build_steps:BUILD_STEPS_SCHEMA})
 export const SAVE_CAD_TOOL=tool('save_cad_design','Save the exact independently reviewed rendering of its saved, checked construction revision from this turn, including the construction source pin and plan Step link. Source, material and target revisions are checked again at publication. This concept drawing is not measured truth or structural certification.',
   {request_quote:{type:'string'}})
 const READ_REQUESTS_TOOL=tool('read_drawing_requests','Read minimal project drawing status and exact saved Artifact references. No private chat or drafts. Use after_id for the next page.',{request_id:{type:['string','null']},after_id:{type:['string','null']}})
@@ -77,6 +89,10 @@ export const cadRenderInput=(recipe:CadAssemblyRequest,source:CadDrawingSource,g
  * files) and notes, or why there are none. Never part of the saved packet itself. */
 export type CadGuideOutcome={notes?:{pages:{key:string;sha256:string;kind:string;[k:string]:unknown}[]};failure?:string}
 const forReview=(manifest:Record<string,any>)=>{const {build_guide:_guide,...rest}=manifest;return rest}
+function buildStepsInput(value:unknown):boolean{
+ return value===undefined||value===null||Array.isArray(value)&&value.length>=1&&value.length<=BUILD_STEP_LIMIT&&value.every(s=>object(s)&&Object.keys(s).join(',')==='joint_ids'
+  &&Array.isArray(s.joint_ids)&&s.joint_ids.length>=1&&s.joint_ids.length<=1024&&s.joint_ids.every((id:unknown)=>typeof id==='string'&&id.length<=200))
+}
 function assemblyOrderInput(value:unknown):boolean{
  return value===undefined||value===null||Array.isArray(value)&&value.length<=1024&&value.every(d=>object(d)&&Object.keys(d).sort().join(',')==='depends_on,joint_id'
   &&typeof d.joint_id==='string'&&d.joint_id.length<=200&&Array.isArray(d.depends_on)&&d.depends_on.length<=1024&&d.depends_on.every((id:unknown)=>typeof id==='string'&&id.length<=200))
@@ -248,10 +264,10 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
    return withoutBudgetDetails(terminalFailure)
   }
   candidate=null;acceptedReview=null;requiredTools=[];savedRequest=null
-  if(!object(raw)||Object.keys(raw).filter(k=>k!=='request_id'&&k!=='requirement_changes'&&k!=='construction_revision'&&k!=='views'&&k!=='assembly_dependencies').sort().join(',')!=='area_id,artifact_id,brief,component_id,handoff,step_id'||!text(raw.brief,6000)
+  if(!object(raw)||Object.keys(raw).filter(k=>k!=='request_id'&&k!=='requirement_changes'&&k!=='construction_revision'&&k!=='views'&&k!=='assembly_dependencies'&&k!=='build_steps').sort().join(',')!=='area_id,artifact_id,brief,component_id,handoff,step_id'||!text(raw.brief,6000)
     ||[raw.area_id,raw.component_id,raw.step_id,raw.artifact_id].some(v=>v!==null&&!text(v,200)))return {status:'invalid',saved:false}
   if(raw.request_id!=null&&!uuid(raw.request_id))return {status:'invalid',saved:false}
-  if(!assemblyOrderInput(raw.assembly_dependencies))return {status:'invalid',saved:false,reason:'assembly_order_invalid'}
+  if(!assemblyOrderInput(raw.assembly_dependencies)||!buildStepsInput(raw.build_steps)||raw.assembly_dependencies!==undefined&&raw.build_steps!==undefined)return {status:'invalid',saved:false,reason:'assembly_order_invalid'}
   raw=structuredClone(raw)
   if(!object(raw))return {status:"invalid",saved:false}
   if(!await opts.hasAccess())throw new Error('project_denied')
@@ -354,7 +370,7 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
    await dependencies.record(name,args,result);return result
   }
   let retryInputs:{evidence:Record<string,unknown>;images:unknown}|undefined
-  const withoutOrder=(brief:Record<string,any>)=>{const {assembly_dependencies:_order,...rest}=brief;return rest}
+  const withoutOrder=(brief:Record<string,any>)=>{const {assembly_dependencies:_order,build_steps:_steps,...rest}=brief;return rest}
   const sourceFingerprint=async()=>retryInputs?drawingInputFingerprint(withoutOrder(raw),{...retryInputs.evidence,dependencies:await dependencies.digest()},retryInputs.images):''
   const retryFingerprint=async()=>retryInputs?drawingInputFingerprint(withoutOrder(raw),{...retryInputs.evidence,runtimeVersion,dependencies:await dependencies.digest()},retryInputs.images):''
   let expected=0
@@ -683,7 +699,17 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
    let guidePlan:{steps:{joint_ids:string[]}[]}|{skip:string}|null=null
    if(opts.buildGuide&&await opts.buildGuide.enabled()){
     const joints=Array.isArray(ready.draft?.joints)?ready.draft.joints:[]
-    if(raw.assembly_dependencies==null)guidePlan={skip:'no_assembly_order'}
+    if(raw.build_steps!==undefined){
+     // Bob's own steps, one page each: every saved joint exactly once.
+     const ids=joints.map((j:any)=>j.id),listed=raw.build_steps?.flatMap((s:any)=>s.joint_ids)??[]
+     const missing=ids.filter((id:string)=>!listed.includes(id)),unknown=listed.filter((id:string)=>!ids.includes(id)),twice=listed.filter((id:string,i:number)=>listed.indexOf(id)!==i)
+     if(raw.build_steps===null)guidePlan={skip:'no_assembly_order'}
+     else if(!joints.length)guidePlan={skip:'no_joints'}
+     else if(missing.length||unknown.length||twice.length)return {status:'invalid',stage:'build_guide',saved:false,reason:'assembly_order_invalid',
+      message:'Put every saved joint in exactly one step.',joint_ids:[...new Set([...missing,...unknown,...twice])].sort()}
+     else guidePlan={steps:raw.build_steps.map((s:any)=>({joint_ids:[...s.joint_ids]}))}
+    }
+    else if(raw.assembly_dependencies==null)guidePlan={skip:'no_assembly_order'}
     else if(!joints.length)guidePlan={skip:'no_joints'}
     else{
      const order=assemblyStages(joints.map((j:any)=>j.id),raw.assembly_dependencies)

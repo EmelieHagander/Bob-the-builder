@@ -46,6 +46,7 @@ import type { OpenAIServiceOptions } from './openai-service.ts'
 import { createRecordDetailReader } from './project-record-detail.ts'
 import { createProjectImageTools } from './project-image-tools.ts'
 import { createCadAssistant, cadRenderInput } from './cad-assistant.ts'
+import { BUILD_GUIDE_FIELDS } from './runtime-tool-surface.ts'
 import { createCadGuideTransport, createCadTransport } from './cad-transport.ts'
 import { createMaterialCatalogReader, materialFindResult, parseMaterialShortlist, shortlistLine, shortlistRef } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
@@ -986,7 +987,7 @@ export async function answerWithOpenAi(opts: {
       },
     }) : undefined
 
-  const buildGuideOffered=aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.design_project_cad'&&(row.definition as any)?.parameters?.properties?.assembly_dependencies!==undefined)
+  const buildGuideOffered=aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.design_project_cad'&&BUILD_GUIDE_FIELDS.some(field=>(row.definition as any)?.parameters?.properties?.[field]!==undefined))
   // Read at most once per job: the first call's journal entry serves every later one.
   let buildGuideSwitch:Promise<boolean>|null=null
   const buildGuideOn=()=>buildGuideSwitch??=buildGuideOffered?memo('cad:build_guide_switch',{},async()=>{
@@ -1054,7 +1055,10 @@ export async function answerWithOpenAi(opts: {
        return {...packet,files:{...packet.files,...result.files},build_guide:{notes:result.notes}}
       }catch(error){
        console.error('[Build guide unavailable]',JSON.stringify({error:error instanceof Error?error.message.slice(0,120):'unknown'}))
-       return {...packet,build_guide:{failure:'guide_unavailable'}}
+       // A named refusal or transport check is kept as the reason; anything else stays generic.
+       const code=error instanceof Error&&/^[a-z_]{1,64}$/.test(error.message)&&error.message!=='cad_guide_unavailable'?error.message
+        :error instanceof Error&&error.name==='TimeoutError'?'guide_timeout':'guide_unavailable'
+       return {...packet,build_guide:{failure:code}}
       }
      },guide?90000:45000)
     },

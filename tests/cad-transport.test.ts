@@ -124,6 +124,14 @@ test('build guide transport posts to /guide and returns pages bound to their not
   await assert.rejects(createCadGuideTransport('https://fixture.invalid/render','fixture',f)(guideRequest),error,name)
  }
 })
+test('a guide refusal keeps the worker\'s named code; anything else stays generic',async()=>{
+ const answer=(status:number,body:string)=>(async()=>new Response(body,{status}))as unknown as typeof fetch
+ const call=(f:typeof fetch)=>createCadGuideTransport('https://fixture.invalid/render','fixture',f)(guideRequest)
+ await assert.rejects(call(answer(422,'{"error": "guide_too_many_pages"}')),/^Error: guide_too_many_pages$/)
+ await assert.rejects(call(answer(422,'{"error": "Not A Code"}')),/cad_guide_unavailable/)
+ await assert.rejects(call(answer(422,'')),/cad_guide_unavailable/)
+ await assert.rejects(call(answer(504,'{"error": "guide_steps"}')),/cad_guide_unavailable/,'only a 422 names a refusal')
+})
 test('saved drawing files accept guide pages only when their notes list them with matching hashes',async()=>{
  const step=Buffer.from('ISO-10303-21;').toString('base64'),front=page(9)
  const exports={step:{sha256:sha256Of(step)},front:{sha256:sha256Of(front)}}

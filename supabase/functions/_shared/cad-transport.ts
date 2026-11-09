@@ -32,7 +32,12 @@ export function createCadGuideTransport(endpoint:string|undefined,token:string|u
   const url=new URL(endpoint);if(url.protocol!=='https:')throw new Error('invalid_cad_host')
   url.pathname='/guide'
   const response=await fetcher(url,{method:'POST',redirect:'error',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(request),signal:AbortSignal.timeout(45000)})
-  if(!response.ok||!response.body)throw new Error('cad_guide_unavailable')
+  if(!response.ok||!response.body){
+   // The worker names its refusal (a fixed identifier, e.g. guide_too_many_pages)
+   // so the saved notes say why no guide was made (2026-11-09).
+   const refusal=response.status===422?await response.json().then((b:any)=>b?.error,()=>null):null
+   throw new Error(typeof refusal==='string'&&/^[a-z_]{1,64}$/.test(refusal)?refusal:'cad_guide_unavailable')
+  }
   const reader=response.body.getReader(),chunks:Uint8Array[]=[];let size=0
   while(true){const {value,done}=await reader.read();if(done)break;size+=value.byteLength;if(size>6*1024*1024){await reader.cancel();throw new Error('cad_guide_too_large')}chunks.push(value)}
   const bytes=new Uint8Array(size);let offset=0;for(const c of chunks){bytes.set(c,offset);offset+=c.length}

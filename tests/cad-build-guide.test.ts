@@ -28,7 +28,7 @@ function fixture({enabled=true,guide='ok' as 'ok'|'fail'}={}){
   render:async(r:any,_pin:any,_guard:any,g:any)=>{
    seen.renders++;seen.guides.push(g);const packet=source.packet(r)
    if(!g)return packet
-   return guide==='ok'?{...packet,files:{...packet.files,'guide-0':'PHN2Zz4=','guide-1':'PHN2Zz4=','guide-2':'PHN2Zz4='},build_guide:{notes:{pages}}}:{...packet,build_guide:{failure:'guide_unavailable'}}
+   return guide==='ok'?{...packet,files:{...packet.files,'guide-0':'PHN2Zz4=','guide-1':'PHN2Zz4=','guide-2':'PHN2Zz4='},build_guide:{notes:{pages}}}:{...packet,build_guide:{failure:'guide_too_many_pages'}}
   },
   callModel:async(o:any)=>{seen.models++;seen.review+=JSON.stringify(o.messages);return reviewReply()},
   buildGuide:{enabled:async()=>enabled,readFasteners:async()=>{seen.fasteners++;return structuredClone(schedule)}}} as any)
@@ -77,31 +77,63 @@ test('a failed guide is recorded and the drawing is still reviewed and ready',as
  const f=fixture({guide:'fail'})
  assert.equal((await f.assistant.consult({...request,assembly_dependencies:[{joint_id:'post_rail',depends_on:[]}]})).status,'ready')
  assert.equal(f.assistant.candidate!.packet.manifest.build_guide.status,'failed')
- assert.equal(f.assistant.candidate!.packet.manifest.build_guide.reason,'guide_unavailable')
+ assert.equal(f.assistant.candidate!.packet.manifest.build_guide.reason,'guide_too_many_pages','the worker\'s named refusal is kept')
  assert.equal(Object.keys(f.assistant.candidate!.packet.files).some(k=>k.startsWith('guide-')),false)
 })
 
-test('the order parameter is offered only when the switch is on',()=>{
- assert.ok('assembly_dependencies' in DESIGN_CAD_TOOL.function.parameters.properties)
- assert.ok(DESIGN_CAD_TOOL.function.parameters.required.includes('assembly_dependencies'))
+test('the steps parameter is offered only when the switch is on',()=>{
+ assert.ok('build_steps' in DESIGN_CAD_TOOL.function.parameters.properties)
+ assert.equal('assembly_dependencies' in DESIGN_CAD_TOOL.function.parameters.properties,false)
+ assert.ok(DESIGN_CAD_TOOL.function.parameters.required.includes('build_steps'))
  const hidden=withoutAssemblyOrder(DESIGN_CAD_TOOL)
- assert.equal('assembly_dependencies' in hidden.function.parameters.properties,false)
- assert.equal(hidden.function.parameters.required.includes('assembly_dependencies'),false)
+ assert.equal('build_steps' in hidden.function.parameters.properties,false)
+ assert.equal(hidden.function.parameters.required.includes('build_steps'),false)
+ const legacy:any=structuredClone(DESIGN_CAD_TOOL);legacy.function.parameters.properties.assembly_dependencies={};legacy.function.parameters.required.push('assembly_dependencies')
+ assert.equal('assembly_dependencies' in withoutAssemblyOrder(legacy).function.parameters.properties,false,'a pinned older catalog is hidden too')
+})
+
+// 2026-11-09: Bob names the guide's steps; the page count is the step count.
+test('Bob\'s steps go to the worker as they are, one page each',async()=>{
+ const f=fixture()
+ assert.equal((await f.assistant.consult({...request,build_steps:[{joint_ids:['post_rail']}]})).status,'ready')
+ assert.deepEqual(f.seen.guides[0].steps,[{joint_ids:['post_rail']}])
+ assert.equal(f.assistant.candidate!.packet.manifest.build_guide.status,'generated')
+})
+test('steps that miss, repeat or invent a joint, or exceed the page limit, are answered before any render',async()=>{
+ const many=Array.from({length:BUILD_STEP_LIMIT+1},()=>({joint_ids:['post_rail']}))
+ for(const steps of [[],[{joint_ids:[]}],[{joint_ids:['post_rail']},{joint_ids:['post_rail']}],[{joint_ids:['post_rail','missing']}],[{joint_ids:['post_rail'],title:'x'}],many]){
+  const f=fixture()
+  const out:any=await f.assistant.consult({...request,build_steps:steps})
+  assert.equal(out.status,'invalid',JSON.stringify(steps).slice(0,80));assert.equal(f.seen.renders,0);assert.equal(f.seen.models,0)
+ }
+ const both=fixture()
+ assert.equal((await both.assistant.consult({...request,build_steps:[{joint_ids:['post_rail']}],assembly_dependencies:[{joint_id:'post_rail',depends_on:[]}]})).status,'invalid')
+ const none=fixture()
+ assert.equal((await none.assistant.consult({...request,build_steps:null})).status,'ready')
+ assert.equal(none.assistant.candidate!.packet.manifest.build_guide.reason,'no_assembly_order')
 })
 
 // 20261030171000 (cad-build-guide-v1) and 20261101020000 (cad-build-guide-v2, text):
 // the catalog carries exactly the runtime's order schema.
 import {catalogFixture} from './support/ai-catalog-fixture.ts'
-import {ASSEMBLY_ORDER_SCHEMA} from '../supabase/functions/_shared/cad-assistant.ts'
-test('the catalog publication adds the same nullable, required order parameter as the runtime',()=>{
+import {ASSEMBLY_ORDER_SCHEMA,BUILD_STEPS_SCHEMA,BUILD_STEP_LIMIT} from '../supabase/functions/_shared/cad-assistant.ts'
+// 20261109080000 (cad-build-guide-v3) swaps the order field for build_steps in place.
+test('the catalog publication carries the same nullable, required steps parameter as the runtime',()=>{
  const catalog=catalogFixture(),tool:any=catalog.tool('design_project_cad'),parameters=tool.function?.parameters??tool.parameters
- assert.deepEqual(parameters.properties.assembly_dependencies,ASSEMBLY_ORDER_SCHEMA)
- assert.equal(parameters.required.at(-1),'assembly_dependencies')
- assert.equal(catalog.manifest().definitions.find(d=>d.prompt_key==='tools.design_project_cad')!.metadata.publication,'cad-build-guide-v2')
+ assert.deepEqual(parameters.properties.build_steps,BUILD_STEPS_SCHEMA)
+ assert.equal('assembly_dependencies' in parameters.properties,false)
+ assert.equal(parameters.required.at(-1),'build_steps')
+ assert.equal(catalog.manifest().definitions.find(d=>d.prompt_key==='tools.design_project_cad')!.metadata.publication,'cad-build-guide-v3')
+ assert.equal(BUILD_STEPS_SCHEMA.maxItems,58,'worker MAX_PAGES 60 minus the box and done pages')
  // Other fields' texts are owned by later publications (bob-build-workers-v1); the order field and required list agree.
  assert.deepEqual(parameters.required,DESIGN_CAD_TOOL.function.parameters.required,'catalog and local required lists agree')
 })
-test('the order field says what the guide is for; null only without joints',()=>{
+test('the steps field says what the guide is for; null only without joints',()=>{
+ assert.match(BUILD_STEPS_SCHEMA.description,/one page per step/)
+ assert.match(BUILD_STEPS_SCHEMA.description,/exactly one step/)
+ assert.match(BUILD_STEPS_SCHEMA.description,/Null only when the construction has no saved joints/)
+})
+test('the historical order field keeps its text for pinned catalogs',()=>{
  assert.match(ASSEMBLY_ORDER_SCHEMA.description,/builders follow it page by page/)
  assert.match(ASSEMBLY_ORDER_SCHEMA.description,/Null only when the construction has no saved joints/)
  assert.doesNotMatch(ASSEMBLY_ORDER_SCHEMA.description,/Build guide only/)

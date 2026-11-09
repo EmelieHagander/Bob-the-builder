@@ -174,6 +174,34 @@ class GuideServiceTest(unittest.TestCase):
                 self.assertEqual(hashlib.sha256(data).hexdigest(), page['sha256'])
                 self.assertIn('Construction version 4 · ID 11111111-1111-4111-8111-111111111111', data.decode())
 
+    def test_one_page_per_step_even_when_a_step_joins_different_things(self):
+        # 2026-11-09: the page count is the step count Bob chose, never the geometry.
+        f = bench()
+        every = sorted(j for step in f['steps'] for j in step['joint_ids'])
+        with tempfile.TemporaryDirectory() as tmp:
+            guide = render_guide(f['recipe'], f['joints'], [{'joint_ids': every}], tmp, f['fasteners'], svg_only=True)
+            self.assertEqual([p['kind'] for p in guide['pages']], ['parts', 'step', 'done'])
+            self.assertEqual(guide['pages'][1]['joint_ids'], every)
+            self.assertEqual(guide['pages'][1]['repeat'], 1)
+
+    def test_the_guide_route_names_its_refusal(self):
+        import json, threading, urllib.request, urllib.error
+        from http.server import HTTPServer
+        from bob_cad.server import Handler
+        f = bench()
+        envelope = {'recipe': f['recipe'], 'drawing_source': SOURCE, 'joints': f['joints'], 'steps': [], 'fasteners': f['fasteners'], 'context_ids': []}
+        with patch.dict(os.environ, {'BOB_CAD_TOKEN': 'fixture-token-' + 'x' * 32}):
+            server = HTTPServer(('127.0.0.1', 0), Handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+            auth = {'Authorization': 'Bearer ' + os.environ['BOB_CAD_TOKEN'], 'Content-Type': 'application/json'}
+            try:
+                with self.assertRaises(urllib.error.HTTPError) as error:
+                    urllib.request.urlopen(urllib.request.Request(f'http://127.0.0.1:{server.server_port}/guide', data=json.dumps(envelope).encode(), method='POST', headers=auth), timeout=45)
+                self.assertEqual(error.exception.code, 422)
+                self.assertEqual(json.loads(error.exception.read()), {'error': 'guide_steps'})
+            finally:
+                server.shutdown(); server.server_close(); thread.join(timeout=5)
+
     def test_page_cap_and_construction_pin_are_enforced(self):
         f = bench()
         with tempfile.TemporaryDirectory() as tmp:

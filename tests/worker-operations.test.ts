@@ -101,7 +101,7 @@ test('the final catalog model surface preserves source ownership and guide on/of
   const result=applyCatalogModelOptions(catalog,{app:'bob',functionName:'drawing-worker',catalogVariables:{project_name:'Fixture'},catalogRuntimeSurface:runtime,
    tools:['design_project_cad','plan_cad_pieces','compose_cad_shell','link_project_drawing'].map(name=>catalog.tool(name))})
   const p:any=result.tools![0].function.parameters
-  assert.equal('assembly_dependencies' in p.properties,guides);assert(!('artifact_id' in p.properties));assert(!('request_id' in p.properties));assert('source_ref'in p.properties)
+  assert.equal('build_steps' in p.properties,guides);assert(!('assembly_dependencies' in p.properties));assert(!('artifact_id' in p.properties));assert(!('request_id' in p.properties));assert('source_ref'in p.properties)
   assert(!('artifact_id'in (result.tools![1].function.parameters as any).properties.pieces.items.properties))
  }
  // Only Konrad owns this writer, so role restrictions still come from the catalog.
