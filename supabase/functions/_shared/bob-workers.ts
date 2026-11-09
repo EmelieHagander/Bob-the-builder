@@ -304,7 +304,7 @@ export async function runWorker(opts: {
   followUp?: (receipts: Record<string, unknown>[]) => Promise<unknown>
   /** Checks, by code, each saved construction revision the job left unchecked; returns the check results. */
   autoCheck?: (targets: { artifact_id: string; revision: number; component_ids?: string[] }[]) => Promise<Record<string, unknown>[]>
-  onTool?: (value: { name: string; status: string; ms: number; rejection?: ToolRejection }) => void
+  onTool?: (value: { name: string; status: string; ms: number; rejection?: ToolRejection; view?: string }) => void
   /** Owner decision 2026-11-01: a job stopped by the spending stop reports back
    * paused_at_limit with what it saved, instead of failing Bob's turn. */
   stopAsResult?: boolean
@@ -625,7 +625,10 @@ export async function runWorker(opts: {
         renewal.notedRevision = result.revision
       if (name === 'update_workpad' && status === 'noted' && plannedNote((args as { note?: unknown } | null)?.note)) planned = true
       const rejection = ['invalid', 'conflict'].includes(status) ? toolRejection(result) : undefined
-      try { opts.onTool?.({ name: NAME.test(name) ? name : 'invalid_name', status, ms: Date.now() - began, ...(rejection ? { rejection } : {}) }) } catch { /* diagnostics only */ }
+      // Which construction page was read (2026-11-09): view name only, never content.
+      const view = name === 'read_construction_draft' ? (args as { view?: unknown } | null)?.view : undefined
+      try { opts.onTool?.({ name: NAME.test(name) ? name : 'invalid_name', status, ms: Date.now() - began, ...(rejection ? { rejection } : {}),
+        ...(typeof view === 'string' && NAME.test(view) ? { view } : {}) }) } catch { /* diagnostics only */ }
       messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) })
     }
     for (const call of response.toolCalls.slice(8)) messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ status: 'deferred' }) })
