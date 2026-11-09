@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { PerspectiveCamera, Scene, Vector3, WebGLRenderer } from 'three'
+import { PerspectiveCamera, Scene, TOUCH, Vector3, WebGLRenderer } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import type { CadWireframe } from '../../supabase/functions/_shared/cad-wireframe.ts'
 import type { ShellComponent } from '../lib/cadShell'
@@ -40,6 +40,12 @@ export default function CadWireframeCanvas({ title, geometry, components, select
     const camera = new PerspectiveCamera(45, 1, 1, 1e8); camera.up.set(0, 0, 1)
     const controls = new OrbitControls(camera, canvas)
     controls.screenSpacePanning = true; controls.listenToKeyEvents(el)
+    // Inline, one finger belongs to the page so the drawing never traps scrolling:
+    // two fingers turn and zoom. Fullscreen has no page behind it, so one finger turns.
+    if (!expanded) {
+      controls.touches = { ONE: null, TWO: TOUCH.DOLLY_ROTATE }
+      canvas.style.touchAction = 'pan-x pan-y'
+    }
     let frame = 0, renders = 0, disposed = false
     const requestRender = () => {
       if (disposed || document.hidden || frame) return
@@ -109,7 +115,7 @@ export default function CadWireframeCanvas({ title, geometry, components, select
     <div className="foundation-actions shell3d-controls">
       <button type="button" className="btn" onClick={() => fitRef.current()}>Fit view</button>
       <button type="button" className="btn" data-fullscreen-toggle onClick={() => setExpanded(v => !v)}>{expanded ? 'Close fullscreen' : 'Fullscreen'}</button>
-      <span className="foundation-hint">Drag to turn · pinch to zoom · two fingers to move</span>
+      <span className="foundation-hint">{expanded ? 'Drag to turn · pinch to zoom · two fingers to move' : 'Two fingers to turn and zoom · Fullscreen to move'}</span>
     </div>
     <div ref={host} className="shell3d-viewport" tabIndex={0} role="img" aria-label={`3D line view of ${title}`}
       data-budget-segments={counts.segments} data-budget-calls={counts.drawCalls} />

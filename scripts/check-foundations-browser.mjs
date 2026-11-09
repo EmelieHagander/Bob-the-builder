@@ -394,6 +394,8 @@ try {
     assert(await scrollOf()>panStart+30,'A mouse drag pans the zoomed sheet')
     await sheet.getByRole('button',{name:'Reset zoom',exact:true}).click()
     await sheet.getByText('100%',{exact:true}).waitFor()
+    // One finger on a drawing scrolls on to the page once the drawing has no more to scroll.
+    assert.equal(await sheetViewport.evaluate(el=>getComputedStyle(el).overscrollBehaviorY),'auto','Drawings never trap page scrolling')
     // A plain wheel keeps scrolling the page; Ctrl + wheel (also a trackpad pinch) zooms the sheet.
     await page.mouse.move(cx,cy);await page.mouse.wheel(0,-120)
     await sheet.getByText('100%',{exact:true}).waitFor()
