@@ -3441,3 +3441,47 @@ active jobs before and after. No migration.
    the bound-construction follow-up.
 
 Next: the owner's Våningssäng 2 turn, read back as listed under #508.
+
+<a id="owner-turn-after-509-2026-11-08"></a>
+### Owner turn after #509: Våningssäng 2 "gör färdigt planeringen" — 2026-11-08, 16:06–16:28 UTC
+
+Job `cb935130`, turn `9eb3aef5`, read back from `bob.execution_events` and
+`bob.bob_messages`. Nothing was changed. USD 9.75: Mattias 6.91 (104 calls),
+Bob 1.55, Rita 1.26, picker 0.03.
+
+- **Drawing works.** Rita redrew the bed (`save_cad_design`, `link_project_drawing`
+  saved): #507's multi-step binding holds.
+- **Bob's answer is honest**: drawing done, Shopping empty, cut plan blocked, a
+  ceiling-height risk (192 cm stored, about 60 cm above the top mattress).
+- **Mattias redid material rows by hand.** 25 `derive_cad_material_requirement`
+  saves, 59 `get_work_history` reads, four `step_budget` stops, average 67k input
+  tokens per call. Cause: the rows were pending from Konrad's revision 26 (this
+  morning, before #508); #508's code recalculation runs only after a Konrad job,
+  and Mattias has no `continue_construction_change`.
+- **No cut plan for timber.** `check_construction_cut_fit` and
+  `save_construction_cut_plan` answered `unsupported`: the saved cut plan covers
+  every instance of a construction, sheet stock only, at most 24 blanks
+  (`construction-cut-fit.ts`, `check_cut_plan_layout`), and Shopping refuses
+  construction blank needs outside a cut plan (`pack_construction_blank`). A
+  mixed timber/plywood construction cannot reach Shopping. Owner decision
+  2026-11-08: redesign as its own PR, plan first.
+- Smaller: Bob deferred the plan's work steps until the owner answered, asked for
+  an exact sentence to approve a sheet format, and `save_catalog_definition` was
+  refused three times (`m955e5c5a`).
+
+<a id="material-follow-2-2026-11-08"></a>
+#### Built: code follows pending rows before Mattias (material_follow_version 2)
+
+Owner decision 2026-11-08 ("Fix 1 nu"). With the new pin, before Mattias's job
+code reads the change work of the construction Konrad's scope binds and runs the
+same server recalculation (`continue_construction_change`, recalculate) through
+Konrad's tool path, without a model (`followBeforeMaterials` in
+`project-answer.ts`). Mattias reads the result as `material_follow_up` in his
+knowledge; Bob reads it in the hand-over result. Rows that need a decision stay
+pending and are listed. Version 1 jobs are unchanged.
+
+Migration `20261108170000_bob_material_follow_before_materials.sql` publishes the
+pin and refuses to run unless version 1 is live. Order: Edge (ask-bob,
+bob-worker) first, then the migration. Test: `bob-build-workers` (version 1 does
+not follow before Mattias; version 2 reads `c1@3` and Mattias's knowledge holds
+the result).

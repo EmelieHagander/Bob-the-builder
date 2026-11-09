@@ -468,3 +468,30 @@ Pack quoting reuses the existing SQL owner and exact supplier article read.
 [Verification](foundation-verification.md#common-calculator--2026-10-12) owns
 installation/model evidence. The authored-price defect remains a separate open
 correction under [its owner](#authored-prices-and-display-total).
+
+<a id="shop-count-2026-11-08"></a>
+## Boards and sheets counted in the shop — 2026-11-08
+
+Owner design 2026-11-08 (replaces the planned database cut-plan redesign for
+timber): **Cut list & purchasing** (`/build-lists`) lists the construction's
+materials. Each row shows an estimate from a common size until the person enters
+the raw size they see in the shop (board length, or sheet length and width; mm,
+cm or m), a saw kerf and an edge or end margin. Code then counts the boards or
+sheets and shows which part comes from which (`src/domain/stockCount.ts`,
+`src/components/StockCount.tsx`).
+
+- Boards: longest first, first fit; each board loses the margin at both ends and
+  one kerf per cut. A part's length is the axis left after the profile's
+  thickness and width. A part longer than the usable board is named, never split.
+- Sheets: the existing guillotine check (`construction-cut-fit.ts`), trying 1 to
+  16 sheets; at most 24 sheet parts.
+- Estimates: sheets use the size the saved material states; boards use 3.6 m.
+  Both are labelled estimates. Kerf 3 mm and margin 10 mm are editable starting
+  points.
+- Nothing is saved to the project and no AI is called; the entered sizes are
+  remembered in that browser only. The saved cut plan, reservations and Shopping
+  publication are unchanged.
+
+The saved cut plan still covers sheet stock only, at most 24 blanks, for every
+instance of a construction (see the 2026-11-08 record in
+`bob-runtime-path-audit-2026-11-04.md`).

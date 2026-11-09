@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { catalogFixture, catalogCall, preBuildWorkersCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { catalogCoreTools } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { runProjectAnswer, seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
-import { catalogWorkers, catalogRetiredTools, catalogCheckReads, saveReceipt, readbackReads, uncheckedConstructions } from '../supabase/functions/_shared/bob-workers.ts'
+import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogPlanTools, saveReceipt, readbackReads, uncheckedConstructions } from '../supabase/functions/_shared/bob-workers.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createConstructionTools } from '../supabase/functions/_shared/construction-draft.ts'
@@ -167,6 +167,12 @@ test('Bob asks Konrad in plain words; Konrad has his own tools, the project in h
   for (const read of ['read_construction_draft', 'read_construction_delivery']) {
     assert(names(bob[0]).includes(read), read); assert(!pickerInputs[0].candidates.some((c: any) => c.name === read), read)
   }
+  // Owner decision 2026-11-08: Bob's own plan tools are on hand from his first step, never left to the picker.
+  const planTools = catalogPlanTools(catalog)
+  assert.deepEqual(planTools, ['compile_project_plan', 'edit_project_plan', 'save_compiled_project_plan', 'decide_project_plan', 'create_work_record', 'edit_work_record'])
+  for (const tool of planTools) assert(!pickerInputs[0].candidates.some((c: any) => c.name === tool), tool)
+  // This harness has no plan compiler or work records; the plan decision it has is listed.
+  assert(names(bob[0]).includes('decide_project_plan'))
   // The legacy box drawing skipped the construction and the review: retired for new jobs.
   assert(!names(bob[0]).includes('save_project_drawing') && !pickerInputs[0].candidates.some((c: any) => c.name === 'save_project_drawing'))
   assert.deepEqual([...catalogRetiredTools(catalog)], ['save_project_drawing'])
@@ -335,6 +341,33 @@ test('a Konrad hand-over that saves nothing still follows the construction it is
   const read = constructionCalls.find(c => c.name === 'read_construction_changes')
   assert.deepEqual([read?.args.artifact_id, read?.args.revision], ['c1', 3])
   assert.deepEqual(toolOutput(bob[1]).follow_up.constructions.map((c: any) => [c.artifact_id, c.revision]), [['c1', 3]])
+})
+
+// Våningssäng 2, 2026-11-08 16:06: rows left pending by an earlier turn were
+// redone by Mattias with the model (25 rows, USD 6.91). With
+// material_follow_version 2, code recalculates them through Konrad's tool
+// path before Mattias starts, and Mattias's brief says what was done and left.
+test('before Mattias starts, code follows the bound construction\'s pending rows (version 2 only)', async () => {
+  const operations = () => createWorkerOperations({ version: 2, bindings: catalogFixture().definition('bob.tools', 'tool_contract').definition.worker_operation_bindings as any, projectId: 'p', hasAccess: async () => true,
+    load: async () => ({ status: 'ready', source: { artifact_id: 'c1', revision: 3 }, entries: [{ kind: 'construction', id: 'c1', revision: 3, label: 'Lådan' }] }),
+    validateMany: async () => true, prepareDrawing: async () => ({ status: 'ready' }), drawingArguments: () => null, drawingWork: () => undefined })
+  const ask1 = ask('ask_materials_worker', { request: 'Mattias, gör materiallistan.' })
+  let brief: string | undefined
+  const mattias = { 'materials-worker': [(o: OpenAIServiceOptions) => { brief = JSON.stringify(o.messages); return { success: true, model: 'fixture', usage, responseId: 'm1', output: 'Klart.' } }] }
+  const off = await turn(catalogFixture(), [ask1], mattias, undefined, undefined, undefined, undefined, { operations: operations(), seen: [] }, { materialFollow: true })
+  assert(!off.constructionCalls.some(c => c.name === 'read_construction_changes'), 'version 1 follows only after Konrad')
+  assert.equal(toolOutput(off.bob[1]).material_follow_up, undefined)
+  const on = await turn(catalogFixture(), [ask1], mattias, undefined, undefined, undefined, undefined, { operations: operations(), seen: [] }, { materialFollow: true, materialFollowBeforeMaterials: true })
+  const read = on.constructionCalls.find(c => c.name === 'read_construction_changes')
+  assert.deepEqual([read?.args.artifact_id, read?.args.revision], ['c1', 3])
+  const report = toolOutput(on.bob[1])
+  assert.equal(report.material_follow_up.by, 'code')
+  assert.deepEqual(report.material_follow_up.constructions.map((c: any) => [c.artifact_id, c.revision]), [['c1', 3]])
+  assert.match(brief ?? '', /material_follow_up/, 'Mattias is told what code did before he starts')
+})
+
+test('the catalog pins material_follow_version 2 for new jobs', () => {
+  assert.equal(catalogFixture().definition('agent-contract.ask-bob', 'agent_contract').metadata.material_follow_version, 2)
 })
 
 test('the workers come from the catalog; a tool belongs to one worker', () => {

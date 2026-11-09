@@ -810,6 +810,13 @@ for(const migration of migrations){
    publishAs(row,'bob-stored-joint-rules-v1');row.metadata={...row.metadata,joint_rule_store_version:1};versions.set(key,versions.get(key)!+1)
   }
  }
+ // Owner decision 2026-11-08: Bob's plan tools are loaded from his first step.
+ const planTools=source.match(/\$plan_tools_definition\$([\s\S]+?)\$plan_tools_definition\$/)
+ if(planTools){
+  const box=seed.find(r=>r.key==='bob.tools')
+  if(box.definition.build_workers_version!==1||box.definition.plan_tools_version!==undefined||box.definition.plan_tools!==undefined)throw new Error('plan_tools_toolbox_unexpected')
+  box.definition={...box.definition,...JSON.parse(planTools[1])};publishAs(box,'bob-plan-tools-v1');versions.set(box.key,versions.get(box.key)!+1)
+ }
  // Owner runs 2026-11-08: the recalculation is bound under its own fields; code follows Konrad's saves.
  const materialFollow=source.match(/\$material_follow_binding\$([\s\S]+?)\$material_follow_binding\$/)
  if(materialFollow){
@@ -821,6 +828,13 @@ for(const migration of migrations){
   const contract=seed.find(r=>r.key==='agent-contract.ask-bob')
   if(contract.metadata.refusal_guard_version!==1||contract.metadata.material_follow_version!==undefined)throw new Error('material_follow_contract_unexpected')
   publishAs(contract,'bob-material-follow-v1');contract.metadata={...contract.metadata,...tagged('material_follow_contract')};versions.set(contract.key,versions.get(contract.key)!+1)
+ }
+ // Owner run 2026-11-08 16:06: code also follows pending rows before Mattias's job.
+ const materialFollow2=source.match(/\$material_follow_2_contract\$([\s\S]+?)\$material_follow_2_contract\$/)
+ if(materialFollow2){
+  const contract=seed.find(r=>r.key==='agent-contract.ask-bob')
+  if(contract.metadata.material_follow_version!==1)throw new Error('material_follow_2_contract_unexpected')
+  publishAs(contract,'bob-material-follow-v2');contract.metadata={...contract.metadata,...JSON.parse(materialFollow2[1])};versions.set(contract.key,versions.get(contract.key)!+1)
  }
  // Owner decision 2026-11-07: worker gates (chat answer is the review, gate facts in-job, identical-request refusal).
  const workerGates=source.match(/\$worker_gates_contract\$([\s\S]+?)\$worker_gates_contract\$/)

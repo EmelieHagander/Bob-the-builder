@@ -10,7 +10,8 @@ export type RevisionResolver = 'memory' | 'catalog' | 'measurement' | 'space_mea
 /** path is relative to the arguments; '*' is every item of an array. id and
  * area name sibling keys of the field; when set, kind must equal the
  * sibling `kind`. A null id gives `create` (or null). */
-export type RevisionRule = { path: string[]; resolver: RevisionResolver; id?: string[]; area?: string[]; kind?: string; create?: number }
+/** method, when set, must equal the sibling `method`: one tool can carry several calculation shapes. */
+export type RevisionRule = { path: string[]; resolver: RevisionResolver; id?: string[]; area?: string[]; kind?: string; method?: string; create?: number }
 type Rules = Record<string, RevisionRule[]>
 
 const rule = (path: string, resolver: RevisionResolver, extra: Omit<RevisionRule, 'path' | 'resolver'> = {}): RevisionRule => ({ path: path.split('.'), resolver, ...extra })
@@ -32,9 +33,15 @@ export const SERVER_REVISIONS: Rules = {
     rule('joint_rules.*.fasteners.*.material_revision', 'catalog', { id: ['material_id'] }), ...sources('changes.nodes.upsert.*')],
   change_construction_parameters: [construction, ...sources('changes.*')],
   change_construction_roles: [construction],
+  // Each revision belongs to one calculation method. Test turn 2026-11-08: a
+  // parameter_graph_v1 call got article/plan/revision set to null and was
+  // refused as a schema mismatch, so Bob calculated by hand.
   calculate_project: [...sources('calculation.nodes.*'), rule('calculation.needs.*.revision', 'memory', { id: ['id'] }),
-    rule('calculation.article_revision', 'memory', { id: ['article_id'] }), rule('calculation.plan_revision', 'memory', { id: ['plan_id'] }),
-    rule('calculation.revision', 'memory', { id: ['record_id', 'requirement_id'] })],
+    rule('calculation.article_revision', 'memory', { id: ['article_id'], method: 'pack_purchase_v1' }),
+    rule('calculation.plan_revision', 'memory', { id: ['plan_id'], method: 'stair_study_v1' }),
+    rule('calculation.revision', 'construction', { id: ['record_id'], method: 'construction_parameters_v1' }),
+    rule('calculation.revision', 'memory', { id: ['record_id'], method: 'saved_stair_study_v1' }),
+    rule('calculation.revision', 'memory', { id: ['requirement_id'], method: 'material_purchase_v1' })],
   check_construction_cut_fit: [rule('candidates.*.material_revision', 'catalog', { id: ['material_id'] })],
   save_construction_cut_plan: [rule('candidates.*.material_revision', 'catalog', { id: ['material_id'] }),
     rule('candidate_sources.*.revision', 'memory', { id: ['record_id'] })],
@@ -180,6 +187,7 @@ export async function fillServerRevisions(name: string, raw: unknown, memory: Re
     const field = r.path.at(-1)!
     for (const parent of parents(args, r.path)) {
       if (r.kind && parent.kind !== r.kind) continue
+      if (r.method && parent.method !== r.method) continue
       const idKey = r.id?.find(k => k in parent)
       const id = idKey ? parent[idKey] : undefined
       if (r.id && (id === null || id === undefined)) { parent[field] = r.create ?? null; continue }
