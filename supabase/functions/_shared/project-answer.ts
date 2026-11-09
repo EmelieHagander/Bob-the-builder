@@ -60,6 +60,21 @@ export function buildBobSystemMessage(aiCatalog: AiCatalogSession, tools: OpenAI
 /** Owner decision 2026-10-30 (tool sheets): a provider call to use_tool runs the
  * named tool; anything else is the call itself. */
 export const USE_TOOL = 'use_tool'
+
+/** Konrad's start packet: what he read first in every job, read once by code.
+ * Each part is kept only when small enough; otherwise he pages it himself. */
+export async function constructionStartPacket(read: (args: Record<string, unknown>) => Promise<unknown>, ref: string): Promise<Record<string, unknown>> {
+  const base = { source_ref: ref, ids: [], after: null, section: null, result_id: null, work_kind: null, step_id: null }
+  const packet: Record<string, unknown> = {}
+  for (const [label, args] of [['overview', { view: 'overview' }], ['work', { view: 'work', work_kind: 'parts' }], ['checks', { view: 'results' }]] as const) {
+    let value: unknown
+    try { value = await read({ ...base, ...args }) }
+    catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; value = { status: 'unavailable' } }
+    packet[label] = (JSON.stringify(value) ?? '').length <= START_PACKET_PART_CHARS ? value : { status: 'too_large', note: 'Read it with your own tools.' }
+  }
+  return packet
+}
+const START_PACKET_PART_CHARS = 30000
 function unwrapToolCall(call: { function: { name: string; arguments: string } }, toolSheets: boolean): { name: string; args: unknown } {
   let args: unknown = null
   try { args = JSON.parse(call.function.arguments) } catch { /* the handler reports invalid input */ }
@@ -317,6 +332,8 @@ export type ProjectAnswerOptions = {
   carryLoadedTools?: boolean;
   /** Pinned per execution: the core reading tools are loaded from the first step. */
   corePreload?: boolean;
+  /** Konrad's start packet (owner decision 2026-11-09): pinned per job. */
+  workerStartPacket?: boolean;
   /** Production turns ask the small tool picker when the manifest publishes it;
    * offline callers keep the phase choice unless they opt in. */
   toolPicker?: boolean;
@@ -774,6 +791,13 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
               knowledge.focused_plan_step = { status: 'unavailable' } }
           }
           if(opts.workerOperations&&workpadAgent)knowledge.operation_context=opts.workerOperations.describe(workpadAgent)
+          // Owner decision 2026-11-09: half of Konrad's steps in the entrance job only
+          // re-read the construction he was handed (overview, parts, checks) at the
+          // start of each job. Code reads them once, before his first step.
+          if (opts.workerStartPacket && key === 'structure' && opts.workerOperations && workpadAgent) {
+            const ref = opts.workerOperations.startRef(workpadAgent)
+            if (ref) knowledge.construction_start = await constructionStartPacket(async read => withoutDiagnostics(await session!.execute('read_construction_draft', read)), ref)
+          }
           if(key==='drawing'&&opts.boundDrawingWork)knowledge.drawing_work=opts.cadAssistant?.drawingWork
           if (constructionPiece) knowledge.construction_piece_boundary = constructionPiece
           // Read by code before this job: rows already recalculated, and what is left for Mattias.

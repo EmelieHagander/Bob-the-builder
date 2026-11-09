@@ -410,7 +410,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; modelRenewalVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; toolSchemaDedupVersion?: 1; promptCachePointsVersion?: 1; workerFocusVersion?: 1; workerPlanVersion?: 1; workerGatesVersion?: 1; writeCheckVersion?: 1; constructionSketchVersion?: 1 | 2; stableToolsVersion?: 1; serverTargetVersion?: 1; serverRevisionsVersion?: 1; refusalGuardVersion?: 1; materialFollowVersion?: 1 | 2; toolPickLimit?: number; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; modelRenewalVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; toolSchemaDedupVersion?: 1; promptCachePointsVersion?: 1; workerFocusVersion?: 1; workerPlanVersion?: 1; workerGatesVersion?: 1; writeCheckVersion?: 1; constructionSketchVersion?: 1 | 2; stableToolsVersion?: 1; serverTargetVersion?: 1; serverRevisionsVersion?: 1; refusalGuardVersion?: 1; materialFollowVersion?: 1 | 2; toolPickLimit?: number; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workerStartPacketVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -433,6 +433,9 @@ export async function answerWithOpenAi(opts: {
       // A model step whose reservation lapsed while the sign-in expired is sent again
       // after Reconnect (2026-11-09). Jobs without this pin fail that step as before.
       ...(checkpoint ? { modelRenewalVersion: 1 as const } : {}),
+      // Konrad gets the construction he is handed in his first message (owner decision
+      // 2026-11-09). Jobs without this pin let him read it himself.
+      workerStartPacketVersion: 1 as const,
       ...bobCompleteRequestVersions(!!checkpoint, contract),
       ...bobStageContextVersion(!!checkpoint, contract),
       // Opened pixels leave after use (owner decision 2026-11-06). Jobs without this pin keep every opened image.
@@ -516,6 +519,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.rolloverVersion !== undefined && execution.rolloverVersion !== 1) throw new Error('rollover_version_invalid')
   if (execution.groundingReadOrderVersion !== undefined && execution.groundingReadOrderVersion !== 1) throw new Error('grounding_read_order_version_invalid')
   if (execution.modelDeadlineVersion !== undefined && execution.modelDeadlineVersion !== 1) throw new Error('model_deadline_version_invalid')
+  if (execution.workerStartPacketVersion !== undefined && execution.workerStartPacketVersion !== 1) throw new Error('worker_start_packet_version_invalid')
   if (execution.modelRenewalVersion !== undefined && (execution.modelRenewalVersion !== 1 || execution.modelDeadlineVersion !== 1)) throw new Error('model_renewal_version_invalid')
   if (execution.completeRequestVersion !== undefined && execution.completeRequestVersion !== 1) throw new Error('complete_request_version_invalid')
   if (execution.resultReferenceVersion !== undefined && (execution.resultReferenceVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('result_reference_version_invalid')
@@ -1350,6 +1354,7 @@ export async function answerWithOpenAi(opts: {
     // Older in-flight journals keep their recorded post-rollover requests.
     carryLoadedTools: execution.toolCarryVersion === 1,
     ...(execution.corePreloadVersion === 1 ? { corePreload: true } : {}),
+    ...(execution.workerStartPacketVersion === 1 ? { workerStartPacket: true } : {}),
     // Used only when the pinned manifest publishes role.tool-picker (2026-10-30).
     toolPicker: true,
     ...(buildingLinks ? { buildingLinks } : {}),
