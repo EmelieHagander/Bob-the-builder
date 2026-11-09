@@ -170,6 +170,13 @@ export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBin
  surface(role:OperationRole):OperationSurface{const s=get(role);return {version:1,role,source:!!s.source,flexible:opts.version!==1,...(opts.version!==1&&opts.bindings?{bindings:opts.bindings}:{}),...(opts.stableRefs?{stable:true}:{}),...(opts.explicitSaveTarget?{explicitSave:true}:{}),refs:Object.fromEntries(kinds.map(kind=>[kind,s.entries.filter(e=>e.kind===kind).map(e=>e.ref)]))}},
  describe(role:OperationRole){const s=get(role);return {projectId:opts.projectId,source:s.source?{ref:s.entries.find(e=>e.kind==='construction'&&e.id===s.source!.artifact_id&&e.revision===s.source!.revision)?.ref}:null,
   selections:s.entries.map(({ref,kind,label})=>({ref,kind,label}))}},
+ /** The construction a structure job can only mean: its bound source, else the
+  * only construction in scope. Null when the job could mean several. */
+ startRef(role:OperationRole):string|null{const s=get(role)
+  const bound=s.source&&s.entries.find(e=>e.kind==='construction'&&e.id===s.source!.artifact_id&&e.revision===s.source!.revision)
+  if(bound)return bound.ref
+  const all=s.entries.filter(e=>e.kind==='construction');return all.length===1?all[0].ref:null
+ },
  /** Initial catalog knowledge reads are server-originated; discard their old
   * routing placeholders before passing the same native handler fence. */
  knowledgeArgs(role:OperationRole,name:string,raw:Record<string,unknown>){const args=structuredClone(raw),s=get(role)
