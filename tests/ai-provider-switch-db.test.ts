@@ -13,6 +13,8 @@ const claude = { provider_adapter: 'anthropic-messages-v1', reasoning_efforts: [
 before(async () => {
   await pg.exec('create role anon; create role authenticated; create role service_role bypassrls; create schema auth; create table auth.users(id uuid primary key);')
   await setupSharedSocial(pg)
+  // Live shared.ai_models.provider is the shared.ai_provider enum, not text.
+  await pg.exec("create type shared.ai_provider as enum ('openai','anthropic'); alter table shared.ai_models alter column provider drop default, alter column provider type shared.ai_provider using provider::shared.ai_provider")
   await pg.exec(await sql('20261009144206_ai_definition_catalog.sql'))
   await pg.query("update shared.ai_models set capabilities=$1 where model_type in ('nano','mini','standard')", [openai])
   await pg.query(`insert into shared.ai_models(model_name,provider,model_type,is_active,is_current_for_type,max_output_tokens,supports_images,supports_reasoning,supports_json_schema,capabilities)
