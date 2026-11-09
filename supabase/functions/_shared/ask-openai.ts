@@ -246,8 +246,10 @@ export async function answerWithOpenAi(opts: {
     const expiresAt = opts.background?.workAllowanceVersion === 1 ? opts.background.authorityExpiresAt! : new Date(opts.background?.deadline ?? 0).toISOString()
     // A refreshed owner JWT must not alter an already accepted model job's
     // immutable reservation. Old execution manifests retain their call order.
+    // A renewed attempt is its own AI job with its own deadline; attempt 0 keeps the old key.
+    const attemptKey = identity && execution.modelRenewalVersion === 1 && identity.attempt > 0 ? identity.key + ':attempt:' + identity.attempt : identity?.key
     const modelExpiresAt = asyncModels && identity && execution.modelDeadlineVersion === 1
-      ? await pinBobModelDeadline(memo, identity, expiresAt) : expiresAt
+      ? await pinBobModelDeadline(memo, { ...identity, key: attemptKey! }, expiresAt) : expiresAt
     const started = performance.now()
     // Do not spend money on a Claude request whose stream cannot finish before
     // the next worker segment. Check again *after* contextual pre-dispatch work.
@@ -270,7 +272,7 @@ export async function answerWithOpenAi(opts: {
         // calls often missed the cache (Konrad's second call read nothing from it).
         ...(promptCacheKey && WORKER_ROLES.has(options.catalogRoleKey ?? options.functionName) ? { promptCacheKey: workerCacheKey(promptCacheKey, options.catalogRoleKey ?? options.functionName) } : {}),
         ...(asyncModels && identity ? { background: {
-          key: opts.background!.jobId + '/' + identity.key, fingerprint: identity.fingerprint, receiver: 'bob',
+          key: opts.background!.jobId + '/' + attemptKey, fingerprint: identity.fingerprint, receiver: 'bob',
           context: { jobId: opts.background!.jobId, role: options.aiFunction },
           expiresAt: modelExpiresAt,
           ...recovery,
@@ -288,6 +290,9 @@ export async function answerWithOpenAi(opts: {
     // connection may have been billed, so the journal re-sends it once and reports it.
     if (journal && !result.success && /OpenAI API error: (429|5[0-9]{2})/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_retry')
     if (journal && !result.success && /Network error/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_uncertain')
+    // The reservation lapsed with the old sign-in; the owner has since reconnected.
+    if (journal && !result.success && result.error === 'ai_background_expired' && execution.modelRenewalVersion === 1
+      && Date.parse(modelExpiresAt) < Date.parse(expiresAt)) throw new BobContinuation('yield', 'model_deadline_renewed')
     return result
    }, synchronousClaude ? claudeJournalReserveMs(timeout) : asyncModels ? (options.images?.length || hasImageContent(options.messages) ? 45000 : 25000)
      : Math.min(timeout, RESERVE_MS[options.aiFunction] ?? 45000))}catch(error){
@@ -405,7 +410,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; toolSchemaDedupVersion?: 1; promptCachePointsVersion?: 1; workerFocusVersion?: 1; workerPlanVersion?: 1; workerGatesVersion?: 1; writeCheckVersion?: 1; constructionSketchVersion?: 1 | 2; stableToolsVersion?: 1; serverTargetVersion?: 1; serverRevisionsVersion?: 1; refusalGuardVersion?: 1; materialFollowVersion?: 1 | 2; toolPickLimit?: number; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; modelRenewalVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; toolSchemaDedupVersion?: 1; promptCachePointsVersion?: 1; workerFocusVersion?: 1; workerPlanVersion?: 1; workerGatesVersion?: 1; writeCheckVersion?: 1; constructionSketchVersion?: 1 | 2; stableToolsVersion?: 1; serverTargetVersion?: 1; serverRevisionsVersion?: 1; refusalGuardVersion?: 1; materialFollowVersion?: 1 | 2; toolPickLimit?: number; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -425,6 +430,9 @@ export async function answerWithOpenAi(opts: {
       // Identical reads reused within the turn until it writes (2026-10-29). Jobs without this pin read every time.
       lookupReuseVersion: 1 as const,
       ...(checkpoint ? { groundingReadOrderVersion: 1 as const, modelDeadlineVersion: 1 as const } : {}),
+      // A model step whose reservation lapsed while the sign-in expired is sent again
+      // after Reconnect (2026-11-09). Jobs without this pin fail that step as before.
+      ...(checkpoint ? { modelRenewalVersion: 1 as const } : {}),
       ...bobCompleteRequestVersions(!!checkpoint, contract),
       ...bobStageContextVersion(!!checkpoint, contract),
       // Opened pixels leave after use (owner decision 2026-11-06). Jobs without this pin keep every opened image.
@@ -508,6 +516,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.rolloverVersion !== undefined && execution.rolloverVersion !== 1) throw new Error('rollover_version_invalid')
   if (execution.groundingReadOrderVersion !== undefined && execution.groundingReadOrderVersion !== 1) throw new Error('grounding_read_order_version_invalid')
   if (execution.modelDeadlineVersion !== undefined && execution.modelDeadlineVersion !== 1) throw new Error('model_deadline_version_invalid')
+  if (execution.modelRenewalVersion !== undefined && (execution.modelRenewalVersion !== 1 || execution.modelDeadlineVersion !== 1)) throw new Error('model_renewal_version_invalid')
   if (execution.completeRequestVersion !== undefined && execution.completeRequestVersion !== 1) throw new Error('complete_request_version_invalid')
   if (execution.resultReferenceVersion !== undefined && (execution.resultReferenceVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('result_reference_version_invalid')
   if (execution.resultWindowVersion !== undefined && (![1, 2].includes(execution.resultWindowVersion) || execution.resultReferenceVersion !== 1)) throw new Error('result_window_version_invalid')

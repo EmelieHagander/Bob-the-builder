@@ -1214,7 +1214,8 @@ export async function callOpenAIResponses<T = unknown>(
       data: null,
       usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
       model: currentModel,
-      error: options.background ? 'ai_background_unavailable' : `Network error: ${errorMessage}`
+      // An expired reservation is named so a resumed job can send the step again.
+      error: options.background ? (errorMessage === 'ai_background_expired' ? 'ai_background_expired' : 'ai_background_unavailable') : `Network error: ${errorMessage}`
     };
   }
 }
