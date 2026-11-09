@@ -281,10 +281,21 @@ export interface OpenAIServiceResponse<T = unknown> {
   costEstimate?: { usd: number; basis: 'streamed_output_estimate'; input_tokens: number; cached_input_tokens: number; output_tokens: number };
 }
 
-function sanitizeJsonSchema(schema: Record<string, unknown>, strict: boolean = false): Record<string, unknown> {
+// OpenAI strict mode refuses these keywords with a 400 for the whole request
+// (live 2026-11-09 17:29: uniqueItems in edit_project_record ended a Bob turn
+// after 2.6 USD of work). The wire schema drops them; the original schema keeps
+// them for Bob's own validators (schemaIssues), as on the Claude path.
+const OPENAI_STRICT_UNSUPPORTED = new Set(['uniqueItems','contains','minContains','maxContains','minProperties','maxProperties',
+  'patternProperties','propertyNames','dependentRequired','dependentSchemas','if','then','else','not','unevaluatedProperties','unevaluatedItems'])
+
+export function sanitizeJsonSchema(schema: Record<string, unknown>, strict: boolean = false): Record<string, unknown> {
   if (!schema || typeof schema !== 'object') return schema;
   
-  const sanitized = { ...schema };
+  const sanitized = strict ? Object.fromEntries(Object.entries(schema).filter(([key]) => !OPENAI_STRICT_UNSUPPORTED.has(key))) : { ...schema };
+  if (strict) for (const key of ['anyOf', 'allOf', 'oneOf'] as const)
+    if (Array.isArray(sanitized[key])) sanitized[key] = (sanitized[key] as Record<string, unknown>[]).map(s => sanitizeJsonSchema(s, strict));
+  if (strict) for (const key of ['$defs', 'definitions'] as const)
+    if (sanitized[key] && typeof sanitized[key] === 'object') sanitized[key] = Object.fromEntries(Object.entries(sanitized[key] as Record<string, Record<string, unknown>>).map(([k, v]) => [k, sanitizeJsonSchema(v, strict)]));
   
   const isObjectType =
     sanitized.type === 'object' ||
@@ -314,7 +325,7 @@ function sanitizeJsonSchema(schema: Record<string, unknown>, strict: boolean = f
     );
   }
   
-  if (sanitized.type === 'array' && sanitized.items) {
+  if ((sanitized.type === 'array' || (Array.isArray(sanitized.type) && sanitized.type.includes('array'))) && sanitized.items) {
     sanitized.items = sanitizeJsonSchema(sanitized.items as Record<string, unknown>, strict);
   }
   
