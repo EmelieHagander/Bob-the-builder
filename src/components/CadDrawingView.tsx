@@ -31,7 +31,9 @@ export function CadDrawingView({value,title,projectId,artifactId,revision,source
   <CadSourceMap recipe={value.recipe} manifest={value.manifest} projectId={projectId} sourceStatus={sourceStatus} />
  </section>
  return <section aria-label={`${title} CAD drawings`}>
-  <p className="foundation-hint">Concept · dimensions in mm. Site fit and construction checks remain as stated in the drawing assumptions.</p>
+  {value.manifest?.bob_form_checkpoint
+   ?<p className="solution-attention">Partial drawing · dimensions in mm. Part of the build is not drawn yet.</p>
+   :<p className="foundation-hint">Concept · dimensions in mm. Site fit and construction checks remain as stated in the drawing assumptions.</p>}
   {value.source_changed&&<p role="alert" className="solution-attention">The source construction has changed. This detail still shows its recorded revision.</p>}
   <CadSourceMap recipe={value.recipe} manifest={value.manifest} projectId={projectId} sourceStatus={sourceStatus} />
   {projectId&&artifactId&&revision&&<div className="foundation-actions">

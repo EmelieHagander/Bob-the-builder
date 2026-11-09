@@ -1593,15 +1593,40 @@ export type ConstructionTools=ReturnType<typeof createConstructionTools>
 
 /** The drawing desk uses the same checker and exact caller reads, without
  * trusting a model's earlier assertion that a checkpoint passed. */
-export async function checkedConstructionForDrawing(opts:Parameters<typeof createConstructionTools>[0],id:string,revision:number) {
+/** A FORM checkpoint (owner decision 2026-11-09: "Ja, märkt som delritning")
+ * may be drawn as a labelled partial drawing when its only whole-check issues
+ * say that the refinement is unverified and named components are still out.
+ * Lists, cut plans and purchases keep requiring concept_ready. */
+const FORM_CHECKPOINT_CODES=new Set(['form_components_pending','form_refinement_unverified'])
+export function constructionFormCheckpoint(checked:any):{version:1;pending_component_ids:string[]}|null {
+ if(checked?.status!=='checked'||checked.concept_ready!==false||!Array.isArray(checked.issues)||checked.issues.length!==checked.issue_count)return null
+ if(checked.issues.some((i:any)=>!FORM_CHECKPOINT_CODES.has(i?.code))||checked.issues.filter((i:any)=>i.code==='form_refinement_unverified').length!==1)return null
+ const pending=checked.issues.filter((i:any)=>i.code==='form_components_pending')
+ if(pending.length>1||pending.some((i:any)=>!Array.isArray(i.ids)||!i.ids.length||i.ids.some((id:unknown)=>typeof id!=='string')))return null
+ return {version:1,pending_component_ids:pending[0]?.ids??[]}
+}
+/** What actually stops a drawing: whole-check issues only. Fabrication gaps
+ * never block a drawing (entré run 2026-11-09 blamed 141 gaps instead). */
+export function constructionBlockingIssues(checked:any){
+ const byCode=new Map<string,{code:string;count:number;ids:string[]}>()
+ for(const issue of Array.isArray(checked?.issues)?checked.issues:[]){
+  const row=byCode.get(issue.code)??{code:issue.code,count:0,ids:[]}
+  row.count++;for(const id of issue.ids??[])if(row.ids.length<12&&!row.ids.includes(id))row.ids.push(id)
+  byCode.set(issue.code,row)
+ }
+ return [...byCode.values()]
+}
+export async function checkedConstructionForDrawing(opts:Parameters<typeof createConstructionTools>[0],id:string,revision:number,formCheckpoint=false) {
  // CAD performs a fresh whole-construction check, not the interactive work
  // packet/output interface. Keep its schema and arguments on the same contract.
  const tools=createConstructionTools({...opts,constructionViews:false,formEvidence:false,coherentWork:false})
  const checked=await tools.execute('check_construction_draft',{artifact_id:id,revision})
- if(checked.status!=='checked'||!checked.concept_ready)return {status:checked.status==='checked'?'needs_data':checked.status,checked}
+ const form=formCheckpoint?constructionFormCheckpoint(checked):null
+ if(checked.status!=='checked'||(!checked.concept_ready&&!form))return {status:checked.status==='checked'?'needs_data':checked.status,checked,
+  ...(formCheckpoint&&checked.status==='checked'?{blocking_issues:constructionBlockingIssues(checked)}:{})}
  const draft=await opts.read(id,revision,null) as Record<string,any>
  if(!await opts.hasAccess())return {status:'denied',checked}
  if(draft?.projectId!==opts.projectId||draft.status!=='ok'||draft.artifact_id!==id||draft.revision!==revision
   ||draft.current_revision!==revision||draft.source_state!=='current'||draft.archived)return {status:'conflict',checked}
- return {status:'ready',draft,checked}
+ return {status:'ready',draft,checked,...(form?{form_checkpoint:form}:{})}
 }
