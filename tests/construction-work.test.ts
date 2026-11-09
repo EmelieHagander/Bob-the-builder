@@ -222,6 +222,12 @@ test('one work read → atomic Solution/Construction change → complete check, 
   const draft=stale.parameters.nodes.find((n:any)=>n.id===depth),{normalized,sources,...node}=draft
   const edit={key:'deeper-after-decision',record_id:id,expected_revision:4,target_revision:null as number|null,request_quote:message,change_note:'Follow the saved deeper frame',
    solution_edit:null,changes:{nodes:{upsert:[{...node,value:470}],remove:[]}}}
+  // Entré floor, 2026-11-09: a joint Solution/Construction change on the
+  // stale construction was refused as construction_work_preparation_failed.
+  const currentRef=(await edits.readSelected(null) as any).entry.edit_ref
+  const joint=await tools.execute('edit_construction_parts',{...edit,key:'joint-on-stale',solution_edit:{edit_ref:currentRef,changes:solutionChanges(640,480),reason:'Deeper still'}})
+  assert.equal(joint.status,'invalid',JSON.stringify({joint,sqlErrors}));assert.equal(joint.reason,'construction_not_current')
+  assert.match(joint.message,/solution_edit:null/);assert.equal((await read()).revision,4)
   const refused=await tools.execute('edit_construction_parts',edit)
   assert.equal(refused.status,'invalid',JSON.stringify({refused,sqlErrors}));assert.equal(refused.reason,'target_revision_required')
   assert.match(refused.message,/current target_revision/);assert.equal((await read()).revision,4)
@@ -290,6 +296,7 @@ test('construction preparation names only the server write conflicts it can repa
  const generic='construction_edit_preparation_failed'
  assert.deepEqual(constructionPreparationFailure({code:'PT409',message:'construction_changed'},generic),{status:'conflict',reason:'construction_changed'})
  assert.deepEqual(constructionPreparationFailure({code:'PT409',message:'operation_reused'},generic),{status:'conflict',reason:'operation_reused'})
+ assert.deepEqual(constructionPreparationFailure({code:'PT409',message:'construction_solution_changed'},generic),{status:'conflict',reason:'construction_solution_changed'})
  for(const [code,status] of [['PT409','conflict'],['40001','conflict'],['22023','invalid'],['42501','denied'],['XX000','unavailable']])
   assert.deepEqual(constructionPreparationFailure({code,message:'relation "bob_private.secret" detail'},generic),{status,reason:generic},code)
  assert.deepEqual(constructionPreparationFailure({code:'40001',message:'construction_changed'},generic),{status:'conflict',reason:generic})
