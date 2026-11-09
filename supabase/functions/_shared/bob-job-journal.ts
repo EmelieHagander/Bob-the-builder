@@ -103,7 +103,7 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
   let restored: BobJournalState | undefined
   const afterCursor = (entry: JournalEntry) => {
     if (!restored) return true
-    const operation = /^(.*):(\d+)$/.exec(entry.key.replace(/:(?:waiting|started|retry:\d+)$/, ''))
+    const operation = /^(.*):(\d+)$/.exec(entry.key.replace(/:(?:waiting(?::\d+)?|started|retry:\d+)$/, ''))
     return !operation || Number(operation[2]) >= (restored.positions[operation[1]] ?? 0)
   }
   const reusedCount = () => (restored?.reusedModelCalls ?? 0) + [...entries.values()].filter(e => afterCursor(e) && (e.value as { reused?: unknown } | null)?.reused === true).length
@@ -139,14 +139,16 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
       const position = positions.get(stream) ?? 0
       positions.set(stream, position + 1)
       const key = `${stream}:${position}`, hash = await fingerprint(input)
-      const waiting=entries.get(key+':waiting')
-      if(waiting&&waiting.fingerprint!==hash){
-        stopped=new BobContinuation('stop','continuation_changed',undefined,key);throw stopped
-      }
       // Retry markers are numbered from 1 without gaps; look them up directly
       // instead of scanning every entry on each replayed call.
       const retries:JournalEntry[]=[]
       for(let n=1;entries.has(key+':retry:'+n);n++)retries.push(entries.get(key+':retry:'+n)!)
+      // Each attempt waits on its own AI job; a retry is a new job, not a changed one.
+      const waitKey=key+':waiting'+(retries.length?':'+retries.length:'')
+      const waiting=entries.get(waitKey)
+      if(waiting&&waiting.fingerprint!==hash){
+        stopped=new BobContinuation('stop','continuation_changed',undefined,key);throw stopped
+      }
       if(retries.some(e=>e.fingerprint!==hash)){
         stopped=new BobContinuation('stop','continuation_changed',undefined,key);throw stopped
       }
@@ -195,12 +197,12 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
         if(error instanceof BobContinuation&&error.aiWait){
           if(waiting&&(waiting.value as {id?:string})?.id!==error.aiWait.id){stopped=new BobContinuation('stop','continuation_changed',undefined,key);throw stopped}
           if(!waiting){
-            const marker={key:key+':waiting',fingerprint:hash,value:{id:error.aiWait.id}}
+            const marker={key:waitKey,fingerprint:hash,value:{id:error.aiWait.id}}
             try{await store.save(marker)}catch{stopped=new BobContinuation('yield','checkpoint_unavailable');throw stopped}
             entries.set(marker.key,marker)
           }
         }
-        if(error instanceof BobContinuation&&error.kind==='yield'&&['provider_retry','provider_uncertain','segment_wall'].includes(error.message)){
+        if(error instanceof BobContinuation&&error.kind==='yield'&&['provider_retry','provider_uncertain','segment_wall','model_deadline_renewed'].includes(error.message)){
           // A durable queue must not retry the same failing model call until
           // the twenty-minute turn expires. Keep the retry count with its
           // exact input, across workers, then return an honest failure. A
