@@ -27,7 +27,7 @@ export interface ProjectOrientation {
   /** Exact saved requirements and server-computed evidence state, never a model
    * summary. A source revision pins their meaning; summaries cannot replace it. */
   completionRequirements: { sourceId: string; record: Record<string, unknown> }[];
-  workingPlan: { status: string; revision: number | null; pendingProposal: Record<string, unknown> | null };
+  workingPlan: { status: string; revision: number | null; savedFocus?: { id: string; title: string } | null; pendingProposal: Record<string, unknown> | null };
   recentSharedFacts: unknown[];
   completeness: { areas: boolean; plan: boolean; hierarchy: boolean; requirements: boolean };
   sources: OrientationSource[]; warnings: string[]; footer: BoundedPresentation;
@@ -56,6 +56,27 @@ function longestPrefix(value: string, render: (prefix: string) => string, maxTok
   return chars.slice(0, low).join('')
 }
 
+/** Read-only helpers use the same approved step and evidence state that Bob
+ * actually saw. The packet describes turn start, even if this turn later writes. */
+export function planStepAtTurnStart(orientation?: ProjectOrientation) {
+  if (!orientation?.workingPlan.revision) return
+  const step = orientation.focus.card.level === 'step' ? orientation.focus.card
+    : orientation.ancestors.find(card => card.level === 'step')
+  if (!step) return
+  const requirements = orientation.completionRequirements
+  const limit = 6
+  return {
+    revision: orientation.workingPlan.revision, origin: orientation.focus.origin,
+    step: { title: step.name, state: step.status, phase: step.phase },
+    ...(orientation.focus.origin === 'screen' ? { saved_focus: orientation.workingPlan.savedFocus } : {}),
+    requirements: requirements.slice(0, limit).map(({ record }) => ({
+      title: text(record.title), state: object(record.status) ? text(record.status.state) || null : null,
+      responsible: text(record.responsible_kind) || null,
+    })),
+    all_requirements_listed: orientation.completeness.requirements && requirements.length <= limit,
+  }
+}
+
 export async function prepareProjectOrientation(opts: {
   projectId: string; userId: string; briefing: LookupResult; currentView?: CurrentView;
   lookup: { search(value: LookupInput): Promise<LookupResult> }; context?: WorkingContext; message: string;
@@ -64,6 +85,7 @@ export async function prepareProjectOrientation(opts: {
   /** 'cut' (pinned with project facts, 2026-10-26): an oversized block keeps its
    * longest original prefix, labelled cut, instead of a model presentation. */
   presentation?: 'model' | 'cut';
+  includeSavedFocus?: boolean;
 }): Promise<ProjectOrientation> {
   if (!await opts.hasAccess()) throw new Error('project_denied')
   if (opts.briefing.projectId !== opts.projectId || opts.briefing.status !== 'ok'
@@ -175,7 +197,9 @@ export async function prepareProjectOrientation(opts: {
   const completionRequirements = rows(focusStep?.requirements).map(record => ({ sourceId: source('plan', planRevision ? String(planRevision) : null, planRevision, record.id), record: { ...record } }))
   const working = object(project.working_plan) ? project.working_plan : {}
   const pending = object(working.pending_proposal) ? pick(working.pending_proposal, ['record_id', 'revision', 'based_on_revision', 'created_at']) : null
+  const savedFocus = opts.includeSavedFocus ? steps.find(step => step.id === plan?.focus_step_id) : undefined
   const workingPlan = { status: text(working.status) || (plan ? 'approved' : 'unavailable'), revision: planRevision,
+    ...(opts.includeSavedFocus && planComplete ? { savedFocus: savedFocus ? { id: savedFocus.id, title: text(savedFocus.title) } : null } : {}),
     pendingProposal: pending ? { ...pending, status: 'proposed', sourceId: source('plan', text(pending.record_id) || String(pending.revision), revision(pending.revision)) } : null }
   const requestSource = source('conversation', opts.context ? `${opts.context.recent.at(-1)!.seq}` : 'current_request')
   const sourceDescription = focus.level === 'project' ? '' : focus.level === 'step'
