@@ -1198,6 +1198,22 @@ context_ids)` draws, from the exact saved construction:
   schedule (short contact, short screw) are printed for the step.
 - **Done:** the whole assembly with its total size; parts in no step are named.
 
+Hardware artwork is selected once for the guide and reused on its box and step pages.
+The catalogue item ID and revision distinguish otherwise identical names and dimensions.
+Six starter outlines cover the bunk-bed fittings. Other named fittings go through
+the existing project-image provider, then the CAD worker reduces the result to a
+96 px PNG. The image-describer model checks that thumbnail against the item name,
+notes and any product photo before it can enter the cache. These pictures identify
+parts. The construction owns dimensions and quantities.
+
+The service-only `bob.guide_item_illustrations` row holds the accepted thumbnail and
+a short generation lease. An optional `reference_media_id` links an uploaded product
+photo from the item's own project. Changing the link invalidates the thumbnail and
+claim. Global items use catalogue descriptions. Review or provider failure leaves
+the row labelled by name. Another guide can retry after the cooldown.
+For release, install the illustration migration, update the Modal worker, then deploy
+`ask-bob` and `bob-worker`. Saved pages retain their original bytes until a new guide is produced.
+
 It returns notes (`version`, `basis: proposed_order`, per page the joints, new
 and lifted parts, camera, hardware, unsized joints). Fasteners come only from
 `bob_private.construction_fastener_schedule`; without a schedule nothing is
