@@ -245,7 +245,10 @@ export async function answerWithOpenAi(opts: {
    // free-form drawing answer at work-router's next position; do not replay it
    // as a phrasebook or collide with its fingerprint during a release.
    const modelStream=options.catalogSchemaKey==='bob_delivery_language'?'model:delivery-language-v1':'model:'+options.functionName
-   try{return await memo(modelStream, options, async identity => {
+   // Diagnostics affect neither prompt bytes nor spending. Keep the prior
+   // Claude id out of journal fingerprints to preserve in-flight replay.
+   const { cacheDiagnosticsPreviousMessageId: _diagnosticId, ...journalOptions } = options
+   try{return await memo(modelStream, journalOptions, async identity => {
     await beforeDispatch?.()
     const expiresAt = opts.background?.workAllowanceVersion === 1 ? opts.background.authorityExpiresAt! : new Date(opts.background?.deadline ?? 0).toISOString()
     // A refreshed owner JWT must not alter an already accepted model job's
