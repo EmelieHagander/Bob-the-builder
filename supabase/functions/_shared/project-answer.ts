@@ -32,7 +32,7 @@ import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
 import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogPlanTools, catalogReportReadback, catalogConstructionAutoCheck, catalogHandoverReadiness, handoverReadinessBlock, readbackReads, workerOwnedTools, parseWorkerJob, runWorker, validWorkerProgress, type WorkerProgress, withOutputLimitNote } from './bob-workers.ts'
 import { focusedWorkerStep, savedFormPieceEvidence } from './worker-form-piece.ts'
 import type { WorkingContext } from './bob-working-context.ts'
-import { planStepAtTurnStart, prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
+import { readPlanOrientationPacket, planStepAtTurnStart, prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
 import { restoreOrientationDirectory } from './bob-orientation-directory.ts'
 import { countContextTokens } from './bob-token-budget.ts'
@@ -188,7 +188,7 @@ export interface TurnProgress { stage: 'thinking' | 'tool' | 'finishing'; tool?:
  * reads the owner's latest instruction and the tool cards and names up to four
  * tools for the turn, so the offered list is right from the first step and
  * stays fixed. Any failure, invalid answer or empty choice keeps the phase set. */
-export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], drawingRequests: unknown, deadline: number, exclude: Set<string> = new Set(), limit = 4, plan?: ReturnType<typeof planStepAtTurnStart>): Promise<string[] | null> {
+export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], drawingRequests: unknown, deadline: number, exclude: Set<string> = new Set(), limit = 4, plan?: ReturnType<typeof planStepAtTurnStart>, afterPlanChange = false): Promise<string[] | null> {
   const candidates = opts.aiCatalog.manifest().definitions.flatMap(row => {
     const name = row.prompt_key.startsWith('tools.') ? row.prompt_key.slice(6) : ''
     const card = row.definition.card_description
@@ -196,7 +196,7 @@ export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], 
   })
   if (!candidates.length) return null
   return pickFromCards(opts, { latest_instruction: opts.message, ...(opts.continuedWork?helperConversation(opts.context,true):{memory_summary:opts.context?.summary??null,recent_conversation:(opts.context?.recent??[]).slice(-4).map(({role,text})=>({role,text:text.slice(0,1000)}))}),
-    ...(plan ? { plan_at_turn_start: plan } : {}),
+    ...(plan ? { [afterPlanChange ? 'current_plan' : 'plan_at_turn_start']: plan } : {}),
     pending_drawing_requests: Array.isArray(drawingRequests) ? drawingRequests.length : 0, always_loaded: core }, candidates, deadline, limit)
 }
 
@@ -266,7 +266,10 @@ export interface BobAnswerState {
   projectId: string
   step: number
   phase: 'ready' | 'model' | 'response' | 'tools'
-  initial: { briefing: unknown; catalog: unknown; drawingRequests: unknown; orientation?: ProjectOrientation; directory?: unknown; toolPick?: string[] | null }
+  initial: { briefing: unknown; catalog: unknown; drawingRequests: unknown; orientation?: ProjectOrientation; directory?: unknown; toolPick?: string[] | null; flexiblePhase?: string | null }
+  planRefreshPending?: 'focus' | 'details'
+  planRefreshed?: boolean
+  startingStep?: ReturnType<typeof planStepAtTurnStart>
   /** Tool-sheet manifests: tools whose details are already at the end of this conversation. */
   sheets?: string[]
   /** Tool-order manifests: the native tool names in the order sent; later loads are appended. */
@@ -338,6 +341,7 @@ export type ProjectAnswerOptions = {
   /** Production turns ask the small tool picker when the manifest publishes it;
    * offline callers keep the phase choice unless they opt in. */
   toolPicker?: boolean;
+  readPlanOrientation?: (view?: CurrentView) => Promise<ReturnType<typeof readPlanOrientationPacket>>;
   /** Pinned per execution (tool_pick_limit): how many tools the picker may name; four before the pin. */
   toolPickLimit?: number;
   /** Pinned per execution (workerFocusVersion): a worker with a catalog focus is
@@ -459,12 +463,14 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if(at>=0)drawingSources.splice(at,1);drawingSources.push(ref)
   }
   if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
-  const briefing = restored ? restored.initial.briefing as Awaited<ReturnType<typeof opts.lookup.search>> : await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
-  if (briefing.status !== 'ok') return { ok: false, error: briefing.status === 'denied' ? 'project_denied' : 'project_unavailable' }
   const contract = opts.aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
+  const livePlan = contract.plan_progress_version === 2 ? opts.readPlanOrientation : undefined
+  const initialPlan = !restored && livePlan ? await livePlan(opts.currentView) : undefined
+  let briefing = restored ? restored.initial.briefing as Awaited<ReturnType<typeof opts.lookup.search>> : initialPlan?.briefing ?? await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
+  if (briefing.status !== 'ok') return { ok: false, error: briefing.status === 'denied' ? 'project_denied' : 'project_unavailable' }
   const workpads = opts.workpads && contract.workpad_version === 1
     && opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.workpad_version === 1 ? opts.workpads : undefined
-  const planAwareTools = contract.plan_progress_version === 1
+  const planAwareTools = contract.plan_progress_version === 1 || contract.plan_progress_version === 2
   const contextStrategy = contract.context_strategy_version === 1
   const boundedOrientation = contextStrategy && contract.orientation_directory_version === 1
   if (boundedOrientation && !opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.read_project_orientation')) throw new Error('tool_catalog_unavailable')
@@ -479,7 +485,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // The flexible set is chosen at the turn's first tool step and kept, so the
   // offered tool list (and the provider cache) stays stable for the turn.
   // Pending drawing work counts as work in progress and wins over the phase.
-  let drawingWork = false, flexiblePhase: string | null | undefined
+  let drawingWork = false
+  let flexiblePhase = restored?.initial.flexiblePhase
   // Owner decision 2026-10-30: when the manifest publishes the tool picker, the
   // tools it named for this request replace the phase set; the phase set is the fallback.
   let toolPick: string[] | null = restored?.initial.toolPick ?? null
@@ -514,7 +521,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const turnTools = (phase: string | null) => {
     if (!phaseTools) return preloadTools
     if (toolPick) return [...preloadTools, ...toolPick]
-    if (flexiblePhase === undefined) flexiblePhase = drawingWork ? 'design' : planAtStart?.step.phase ?? phase
+    if (flexiblePhase === undefined) flexiblePhase = drawingWork && !planRefreshed ? 'design' : planStep?.step.phase ?? phase
     return [...preloadTools, ...(flexiblePhase ? phaseTools[flexiblePhase] ?? [] : [])]
   }
   const basePolicy: ToolPolicyReader = opts.readToolPolicy ?? (async () => {
@@ -859,7 +866,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       userId: opts.userId, catalogRoleKey: 'completion-gate', catalogSchemaKey: 'bob_completion_gate',
       messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, ...helperConversation(opts.context,opts.continuedWork),
         ...(opts.continuedWork?{available_capabilities:toolbox.toolbox.map(({name,state,description})=>({name,state,description}))}:{}),
-        ...(planAtStart ? { plan_at_turn_start: planAtStart } : {}),
+        ...(startingStep ? { plan_at_turn_start: startingStep } : {}),
+        ...(planRefreshed ? { current_plan: planStep ?? null } : {}),
         candidate_final_answer: answer }) }],
       timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, 30_000, deadline - Date.now()) })
     let verdict: unknown = result.data
@@ -876,7 +884,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       userId: opts.userId, catalogRoleKey: 'completion-gate', catalogSchemaKey: 'bob_completion_gate',
       messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, ...helperConversation(opts.context,opts.continuedWork),
         ...(opts.continuedWork?{available_capabilities:toolbox.toolbox.map(({name,state,description})=>({name,state,description}))}:{}),
-        ...(planAtStart ? { plan_at_turn_start: planAtStart } : {}),
+        ...(startingStep ? { plan_at_turn_start: startingStep } : {}),
+        ...(planRefreshed ? { current_plan: planStep ?? null } : {}),
         candidate_final_answer: answer,
         saved_work: compactReceipts(opts.writer?.executedReceipts ?? []).slice(-32).map(({ dataset, label, operation, revision }) =>
           ({ dataset, label, operation, ...(revision ? { revision } : {}) })),
@@ -895,11 +904,13 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   if (!coreTools && Array.isArray(drawingRequests) && drawingRequests.length) preloadTools = [...preloadTools, ...DRAWING_CONTINUATION_PRELOAD]
   if (phaseTools && Array.isArray(drawingRequests) && drawingRequests.length) drawingWork = true
   const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
-  let planAtStart: ReturnType<typeof planStepAtTurnStart>
-  const chooseTools = async () => {
-    if (!restored && opts.toolPicker && phaseTools && coreTools
+  let planStep: ReturnType<typeof planStepAtTurnStart>
+  let planRefreshed = restored?.planRefreshed ?? false
+  let planRefreshPending = restored?.planRefreshPending
+  const chooseTools = async (afterPlanChange = false) => {
+    if ((!restored || afterPlanChange) && opts.toolPicker && phaseTools && coreTools
       && opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.tool-picker')) {
-      toolPick = await pickTurnTools(opts, coreTools, drawingRequests, deadline, workerTools, opts.toolPickLimit ?? 4, planAtStart)
+      toolPick = await pickTurnTools(opts, coreTools, drawingRequests, deadline, workerTools, opts.toolPickLimit ?? 4, planStep, afterPlanChange)
     }
   }
   // Older jobs must replay their journaled reads and model calls in their original order.
@@ -908,16 +919,19 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     const directory = restoreOrientationDirectory(restored.initial.directory as Parameters<typeof restoreOrientationDirectory>[0], { projectId: opts.projectId, hasAccess: opts.hasAccess })
     orientationReader = directory.reader
   }
-  const orientation = restored ? restored.initial.orientation : contextStrategy ? await prepareProjectOrientation({ ...opts, briefing, deadline, includeSavedFocus: planAwareTools,
+  const orient = (view: CurrentView | undefined, packet?: ReturnType<typeof readPlanOrientationPacket>) =>
+    prepareProjectOrientation({ ...opts, briefing, ...packet, currentView: view, deadline, includeSavedFocus: planAwareTools,
     ...(opts.pureFacts ? { presentation: 'cut' as const } : {}),
     ...(boundedOrientation ? { directory: { maxTokens: Number(contract.orientation_max_tokens), pageMaxTokens: opts.resultReferences
       ? Math.min(2000, Number(contract.orientation_page_max_tokens)) : Number(contract.orientation_page_max_tokens),
       ready: (reader: OrientationDirectoryReader) => { orientationReader = reader } } } : {}),
-  }) : undefined
+  })
+  let orientation = restored ? restored.initial.orientation : contextStrategy ? await orient(opts.currentView, initialPlan) : undefined
   if (planAwareTools) {
-    planAtStart = planStepAtTurnStart(orientation)
+    planStep = planStepAtTurnStart(orientation)
     await chooseTools()
   }
+  const startingStep = planRefreshed ? restored?.startingStep : planStep
   const initialFooter = orientation ? { role: 'user' as const,
     content: opts.aiCatalog.text('bob.note.prefix') + JSON.stringify({ orientation: orientation.footer,
       ...(opts.buildingLinks ? { buildings: { linked: opts.buildingLinks.linked, owner_can_link: opts.buildingLinks.linkable } } : {}) }) } : undefined
@@ -951,11 +965,13 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const save = async (step: number) => {
     if (!opts.checkpoint) return
     await opts.checkpoint.save(structuredClone({ version: 1, projectId: opts.projectId, step, phase,
-      initial: { briefing, catalog, drawingRequests, orientation, directory: orientationReader?.exportState(), ...(toolPick ? { toolPick } : {}) },
+      initial: { briefing, catalog, drawingRequests, orientation, directory: orientationReader?.exportState(), ...(toolPick ? { toolPick } : {}),
+        ...(livePlan && flexiblePhase !== undefined ? { flexiblePhase } : {}) },
       ...(toolSheets ? { sheets: [...sheetsSent] } : {}),
       ...(toolOrder ? { native: [...nativeOrder] } : {}),
       ...(toolRepair ? { repairs: repairsUsed } : {}),
       ...(availabilitySent !== undefined ? { availability: availabilitySent } : {}),
+      ...(livePlan ? { planRefreshPending, planRefreshed, startingStep } : {}),
       messages, previousResponseId, preparedEpoch, observation, toolbox: toolbox.exportState(), workResults,
       completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
       ...(finalCall ? { finalCall } : {}),
@@ -1209,8 +1225,38 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           rejectionSignature = signature
           if (rejectionStreak >= 3) { observe('failed'); return { ok: false, error: 'tool_no_progress' } }
         } else { rejectionSignature = undefined; rejectionStreak = 0 }
+        if (livePlan && result?.status === 'saved') {
+          if (['change_plan_focus', 'set_project_plan_focus', 'decide_project_plan'].includes(toolName)) planRefreshPending = 'focus'
+          else if (['link_project_plan_evidence', 'change_plan_task_link', 'link_project_plan_task'].includes(toolName)) planRefreshPending ??= 'details'
+        }
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ ...result, ...(!unlimitedWork ? { execution_budget: { model_steps: steps - step - 1, project_reads: opts.lookup.remaining, writes: opts.writer?.remaining ?? 0, corrections: opts.writer?.correctionsRemaining ?? 0, cad_consultations: opts.cadAssistant?.remaining ?? 0, catalog_reads: opts.catalogReader?.remaining ?? 0, image_operations: opts.projectContext?.remaining ?? 0, history_reads: opts.context?.history.remaining ?? 0 } } : {}) }) })
         toolIndex = index + 1; await save(step)
+      }
+      if (planRefreshPending && livePlan) {
+        // Run at a complete native-tool batch boundary. A resumed partial batch
+        // keeps its original offered fence; this read and picker are journaled.
+        const view = planRefreshPending === 'details' && orientation?.focus.origin === 'screen' ? opts.currentView : undefined
+        const fresh = await livePlan(view)
+        briefing = fresh.briefing
+        const oldFocus = orientation?.focus.card
+        const oldPhase = planStep?.step.phase
+        orientation = await orient(view, fresh)
+        planStep = planStepAtTurnStart(orientation)
+        planRefreshed = true
+        const focusChanged = oldFocus?.id !== orientation.focus.card.id || oldPhase !== planStep?.step.phase
+        if (focusChanged) {
+          const oldSelection = toolPick ?? (flexiblePhase ? phaseTools?.[flexiblePhase] : undefined) ?? []
+          toolbox.releasePreloadedTools(oldSelection)
+          flexiblePhase = undefined
+          toolPick = null
+          sheetsSent.clear()
+          availabilitySent = undefined
+          await chooseTools(true)
+        }
+        messages.push({ role: 'user', content: opts.aiCatalog.text('bob.note.prefix') + JSON.stringify({
+          current_plan: planStep ?? null, orientation: focusChanged ? orientation : orientation.directory ?? orientation.footer,
+        }) })
+        planRefreshPending = undefined
       }
       await next(step)
       continue

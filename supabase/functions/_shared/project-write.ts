@@ -419,6 +419,8 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       if (payload.kind === 'lifecycle' || payload.kind === 'bound_work' && (payload.data.domain as WritePayload)?.kind === 'lifecycle') return { status: 'invalid', message: 'No change made. ' + (LIFECYCLE_REASON.exec(error.message ?? '')?.[0] ?? 'The project rejected this change; read the current record and check its state.') }
       const material = payload.kind === 'operational' ? MATERIAL_REFUSALS[(error.message ?? '').trim()] : undefined
       if (material) return { status: material[2] ? 'conflict' : 'invalid', reason: material[0], message: 'No change made. ' + material[1] }
+      if (payload.kind.startsWith('plan_') && error.message === 'plan_step_requirements_unmet')
+        return { status: 'invalid', reason: error.message, message: 'A step still has an unresolved completion requirement. Read its current checks and evidence before trying to complete it again.' }
       if (payload.kind.startsWith('plan_')) return { status: 'invalid', message: 'The living plan rejected this command. No canonical plan was silently changed. Read the current plan, reuse only exact Step/Requirement IDs from it, keep completed history, and use current project evidence IDs/revisions.' }
       const reason = options.rejectionReasons ? databaseRejectionReason(error) : undefined
       return { status: 'invalid', message: 'The database rejected this command. No change made; check fields, source, current revision and record state.', ...(reason ? { reason } : {}) }

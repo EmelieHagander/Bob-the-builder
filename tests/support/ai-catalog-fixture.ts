@@ -48,13 +48,14 @@ const publishAs=(row:any,publication:string)=>{const{seed_version,source_revisio
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
- const planProgress = source.match(/\$plan_progress_edits\$([\s\S]+?)\$plan_progress_edits\$/)
+ const planRefresh = source.match(/\$plan_refresh_edits\$([\s\S]+?)\$plan_refresh_edits\$/)
+ const planProgress = planRefresh ?? source.match(/\$plan_progress_edits\$([\s\S]+?)\$plan_progress_edits\$/)
  if (planProgress) {
   for (const edit of JSON.parse(planProgress[1])) {
    const row = seed.find(row => row.key === edit.key)
    if (edit.append) row.content += ' ' + edit.append
-   publishAs(row, 'bob-plan-progress-v1')
-   row.metadata.plan_progress_version = 1
+   publishAs(row, planRefresh ? 'bob-plan-progress-v2' : 'bob-plan-progress-v1')
+   row.metadata.plan_progress_version = planRefresh ? 2 : 1
    versions.set(row.key, versions.get(row.key)! + 1)
   }
  }
