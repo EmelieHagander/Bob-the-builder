@@ -178,6 +178,17 @@ export function latestObservations<T extends {artifact_id:string;revision:number
 /** A failed construction preparation keeps the model-facing status mapping.
  * The server's named write conflicts pass through so the repair can be
  * named; every other database detail stays behind the generic reason. */
+// A part several solid concept components hold is ambiguous only because the
+// Solution's components overlap (entré, 2026-11-10: "supports" over "floor").
+// That is a Solution fault, not this construction's; name it so Bob fixes the
+// concept instead of the builder trying construction edits in a circle.
+export function conceptOverlapRefusal(intent:any,issues:{code:string;ids:string[]}[],changed:string){
+ const overlaps=evaluateConcept(intent).issues.filter(i=>i.code==='component_overlap')
+ const hit=overlaps.filter(o=>issues.some(i=>i.code==='form_instance_ambiguous'&&o.ids.every(id=>i.ids.slice(1).includes(id))))
+ if(!hit.length)return null
+ return {status:'needs_data',reason:'solution_concept_overlap',overlapping:hit.map(o=>o.ids),
+  message:`No construction ${changed}. The selected Solution concept has solid components that take the same space (${hit.map(o=>o.ids.join('+')).join(', ')}). That is a Solution change: hand it back to Bob to move or resize one so they only touch, then edit this construction again.`}
+}
 const NAMED_PREPARATION_CONFLICTS=new Set(['construction_changed','construction_solution_changed','operation_reused'])
 export function constructionPreparationFailure(error:{code?:string|null;message?:string|null},fallback:string){
  const code=error.code??''
@@ -480,7 +491,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    // Lean writing: code completes the FORM mapping from the parts' places.
    if(lean&&v.form_refinement){
     const ext=extendFormMapping(readiness.design_intent,recipe,v.form_refinement,references)
-    if(ext.issues.length)return {error:{status:'needs_data',reason:'form_mapping_incomplete',issues:ext.issues,message:'No construction saved. Move a part no concept component holds inside one; for a part several hold, name its component in form_refinement.'}}
+    if(ext.issues.length)return {error:conceptOverlapRefusal(readiness.design_intent,ext.issues,'saved')??{status:'needs_data',reason:'form_mapping_incomplete',issues:ext.issues,message:'No construction saved. Move a part no concept component holds inside one; for a part several hold, name its component in form_refinement.'}}
     const scope=(r:FormRefinement)=>r.mappings.map(m=>m.component_id).sort().join(',')
     if(ext.changed&&scope(ext.refinement)!==scope(v.form_refinement)){
      const again=parseDesignReadiness((await opts.readConstructionReadiness!(v.target_revision,v.area_id,ext.refinement) as Record<string,unknown>|null)?.design_readiness)
@@ -621,7 +632,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(saved||partial){
    const references=new Set(policy.instances.filter(i=>i.role==='reference').map(i=>i.instance_id))
    const ext=extendFormMapping(read!.design_intent!,recipe,saved,references,(v.form_assign??[]) as FormAssignment[])
-   if(ext.issues.length)return {error:{status:'needs_data',reason:'form_mapping_incomplete',issues:ext.issues,message:'No construction changed. Move a part no concept component holds inside one; for a part several hold, name its component in form_assign.'}}
+   if(ext.issues.length)return {error:conceptOverlapRefusal(read!.design_intent,ext.issues,'changed')??{status:'needs_data',reason:'form_mapping_incomplete',issues:ext.issues,message:'No construction changed. Move a part no concept component holds inside one; for a part several hold, name its component in form_assign.'}}
    // A part in a concept component this construction did not cover yet brings
    // that component's open choices into scope; say so before the write.
    const scope=(r:FormRefinement|null)=>r?r.mappings.map(m=>m.component_id).sort().join(','):''
