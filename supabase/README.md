@@ -144,6 +144,26 @@ fingerprints so in-flight jobs replay unchanged. It changes no input, authority 
 price; other roles and apps omit it. Deployed 2026-10-22 (`ask-bob` v165,
 `bob-worker` v133); not yet measured ([conversation owner](../Docs/ask-bob-conversations.md)).
 
+**Bob cache observability — source implementation; hosted acceptance pending.**
+`bob.execution_events.counts` carries `cached_input_tokens` (cache reads) as
+before and, where Anthropic reports them, `cache_write_input_tokens` and
+`uncached_input_tokens`. These are counts only: the shared usage ledger keeps
+its existing pricing and schema. Old rows and GPT calls have no invented
+Anthropic cache-write count. No database migration is required.
+
+Anthropic's opt-in cache-miss diagnostics are **off by default**. Setting
+`BOB_CACHE_DIAGNOSTICS=1` in Bob's Edge environment sends `diagnostics` with
+the previous Claude message id (or `null` on a new chain/provider switch).
+The id is a comparison hint, never a provider conversation cursor, never
+part of the model journal fingerprint, and never stored in the execution
+event. The adapter accepts only Anthropic's known miss-reason codes and
+nonnegative integer token counts; prompt text, tool arguments and provider
+diagnostic details do not enter the metrics. `cache_miss_reason` may be absent
+even when a cache read misses, and it explains only the first divergence.
+Local fixture tests cover opt-in/out, checkpoint recovery, cache token counts,
+safe codes and cut-stream estimates. A real cache-hit and delivery comparison
+requires an owner-approved model run after an explicit Edge deployment.
+
 ## AI definition catalog and model tiers
 
 **Technical release — 2026-10-09, [PR #233](https://github.com/EmelieHagander/Bob-the-builder/pull/233).**
