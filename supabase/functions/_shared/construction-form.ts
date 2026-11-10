@@ -91,6 +91,20 @@ export type FormAssignment = { instance_id: string; component_id: string }
 export const FORM_ASSIGN_SCHEMA = { type: 'array', maxItems: 128,
   description: 'The concept component for a part that several components hold. Code maps every other part itself; empty for none.',
   items: object({ instance_id: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_.:-]{0,79}$' }, component_id: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_-]{0,31}$' } }) }
+// A part no component holds names the nearest component and by how many mm
+// it reaches past each face (entré, 2026-11-10: ground screws 3 mm into the
+// floor and 15.5 mm past the front; the builder could not see why).
+function outsideIssue(id: string, lo: number[], hi: number[], boxes: { id: string; min: number[]; size_mm: number[] }[]): ConceptIssue {
+  const axes = ['x', 'y', 'z'], mm = (n: number) => Math.round(n * 10) / 10
+  const past = (b: { min: number[]; size_mm: number[] }) => axes.flatMap((a, k) => [
+    ...(lo[k] < b.min[k] - 1e-7 ? [`${a} ${mm(b.min[k] - lo[k])} mm below ${mm(b.min[k])}`] : []),
+    ...(hi[k] > b.min[k] + b.size_mm[k] + 1e-7 ? [`${a} ${mm(hi[k] - b.min[k] - b.size_mm[k])} mm above ${mm(b.min[k] + b.size_mm[k])}`] : [])])
+  const over = (b: { min: number[]; size_mm: number[] }) => axes.reduce((t, _, k) => t + Math.max(0, b.min[k] - lo[k]) + Math.max(0, hi[k] - b.min[k] - b.size_mm[k]), 0)
+  const near = [...boxes].sort((a, b) => over(a) - over(b))[0]
+  if (!near) return { code: 'form_instance_outside', ids: [id], message: 'No concept component holds this part; move it inside one or revise the Solution concept.' }
+  return { code: 'form_instance_outside', ids: [id, near.id],
+    message: `No concept component holds this part. Nearest is ${near.id}; the part reaches past it: ${past(near).join(', ')}. Move the part inside, or have the Solution concept resize ${near.id}.` }
+}
 export function extendFormMapping(intent: DesignIntent, recipe: CadAssemblyRequest, raw: unknown, referenceIds: Set<string>, assign: FormAssignment[] = []): { refinement: FormRefinement; issues: ConceptIssue[]; changed: boolean } {
   // null: a construction without a saved scope; code derives its first one.
   const before: FormRefinement = raw == null ? { version: 1, mappings: [] } : parseFormRefinement(raw), issues: ConceptIssue[] = []
@@ -119,7 +133,7 @@ export function extendFormMapping(intent: DesignIntent, recipe: CadAssemblyReque
     if (holding.length === 1) mapping.set(i.id, holding[0].id)
     else issues.push(holding.length
       ? { code: 'form_instance_ambiguous', ids: [i.id, ...holding.map(b => b.id)], message: 'Several concept components hold this part; assign it to one.' }
-      : { code: 'form_instance_outside', ids: [i.id], message: 'No concept component holds this part; move it inside one or revise the Solution concept.' })
+      : outsideIssue(i.id, lo, hi, boxes.filter(b => (b.kind === 'solid') === solid)))
   }
   const grouped = new Map<string, string[]>()
   for (const i of recipe.instances) { const c = mapping.get(i.id); if (c) grouped.set(c, [...(grouped.get(c) ?? []), i.id]) }
