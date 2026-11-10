@@ -1024,6 +1024,8 @@ export async function answerWithOpenAi(opts: {
      if(error)throw new Error('guide_store_failed')
      return result.notes.pages
     },70000)
+    // The worker's visual check (2026-11-10): a page with overlapping or cut-off text is logged by key.
+    for(const page of notes as any[])if(page.layout_defects)console.warn('[Build guide layout]',page.key,page.layout_defects)
     pages.push(...notes)
    }
    return {version:1 as const,basis:'proposed_order' as const,store:'pages' as const,guide_id:guideId,pages:pages as any}
@@ -1106,7 +1108,12 @@ export async function answerWithOpenAi(opts: {
     // The owner's global switch (shared.ai_settings cad-build-guide; missing = off),
     // read once per job and only for catalogs that offer the order parameter.
     ...(buildGuideOffered?{buildGuide:{
-     enabled:()=>buildGuideOn(),readFasteners}}:{}),
+     enabled:()=>buildGuideOn(),readFasteners,
+     readItemName:async(id,revision)=>{
+      const {data,error}=await readRpc('catalog_read',{p_project:opts.projectId,p_input:{action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}})
+      const record=(data as any)?.record
+      return !error&&(data as any)?.status==='ok'&&record?.id===id&&record.revision===revision&&typeof record.name==='string'?record.name:null
+     }}}:{}),
     checkConstruction:async(id,revision,fresh)=>{
      // One check reads the same exact revision twice (the check itself and
      // the final pin comparison). Within one check those reads observe the

@@ -120,7 +120,7 @@ export function CadGuidePrint({ guide, files, title, pageLabel, loadPages, proje
       {pack.pages.map(({ page, label, src }, index) => <article className="box-print-page" key={page.key}>
         {index === 0 && pack.lists === 'none' && <h1>{title} · build guide</h1>}
         <h2>{page.section ? `${page.section} · ` : ''}{label}</h2>
-        {src ? <img src={src} alt={`${title} — build guide, ${label}`} style={{ display: 'block', width: '100%', height: 'auto' }} />
+        {src ? <img src={src} alt={`${title} — build guide, ${label}`} style={{ display: 'block', width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '235mm', margin: '0 auto' }} />
           : <p>This page is missing from the saved version.</p>}
       </article>)}
     </div>, document.body)}

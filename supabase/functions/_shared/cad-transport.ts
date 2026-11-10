@@ -22,7 +22,7 @@ export async function verifyCadFiles(files:Record<string,unknown>,views:readonly
  }
 }
 
-export type CadGuideRequest={recipe:CadAssemblyRequest;drawing_source:CadDrawingSource;joints:unknown[];steps:{joint_ids:string[];section?:string}[];fasteners:unknown|null;context_ids:string[]}
+export type CadGuideRequest={recipe:CadAssemblyRequest;drawing_source:CadDrawingSource;joints:unknown[];steps:{joint_ids:string[];section?:string}[];fasteners:unknown|null;context_ids:string[];/** '<item id>@<revision>' -> catalog name of chosen hardware (2026-11-10). */item_names?:Record<string,string>}
 /** Steps [first, last) drawn in one worker call (worker RANGE_STEPS is 24). */
 export const GUIDE_RANGE_STEPS=12
 /** A guide is drawn a section at a time: runs of steps with the same section,

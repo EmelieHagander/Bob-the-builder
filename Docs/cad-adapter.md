@@ -1177,8 +1177,14 @@ open questions.
 `bob_cad/guide.py` `render_guide(recipe, joints, steps, output_dir, fasteners,
 context_ids)` draws, from the exact saved construction:
 
-- **What is in the box:** one tile per part kind (count, P-numbers, plain size)
-  and one per fastener size, from the schedule.
+- **What is in the box** (2026-11-10, the page is the shopping list): a tile for
+  every part kind (count, P-numbers, plain size), a **Hardware** row for every
+  scheduled item and glue, and a **Tools** list. A chosen catalog item shows its
+  catalog name: the Edge sends `item_names` (`'<item id>@<revision>'` to name,
+  read with `catalog_read`); without a name the row shows kind and the known
+  sizes (`size_text` never prints "?"). Tools come from fixed rules over the
+  parts and hardware (`tools_needed`) and are labelled as suggestions. The page
+  grows taller than 750 instead of leaving anything out.
 - **One page per step:** a step is an ordered list of saved joint ids (Bob's
   proposed order, the stages of `derive_construction_lists`). Parts already in
   place are grey; the step's new parts are black, and parts that join existing
@@ -1381,8 +1387,16 @@ guide.
 - A part going into a frame or box is lifted clear of it (`_clear_lift`)
   instead of floating inside; its arrows run just inside its camera-facing edge
   (`_move_arrows`) so the part does not hide them.
-- The box page says "Fasteners: glue only" when every joint is glued, instead of
-  "none sized yet + glue" (`hardware_summary`).
+- Visual check (2026-11-10, owner feedback on Våningssäng 2: step box off the
+  page, labels on top of each other, hardware line cut off). Text is fitted to
+  its space when drawn (`_fit`: shrink, wrap, then ellipsis), the step's parts
+  box scales its rows to end on the page, part labels avoid each other
+  (`_part_labels`) and a run of more than six identical parts is named once in
+  the box. `layout_issues(svg)` measures a finished page: text off the page,
+  over other text or across a frame. It runs on every page drawn; defects are
+  counted in the page notes (`layout_defects`) and logged by the Edge, and
+  `test_guide` requires zero on the bench and the live bunk bed fixture
+  (`fixtures/bunk_bed_guide.json`; its hardware counts are stand-ins).
 - Every fastener in a step's parts box is drawn on the page (owner feedback: the
   bench's step 2 drew 1 of 2 screws). One that goes in from a face turned away
   from the camera is dashed, with "Dashed: put in from the other side." Heads
