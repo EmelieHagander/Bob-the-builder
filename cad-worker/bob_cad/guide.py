@@ -7,7 +7,7 @@ those joints. Nothing here invents geometry, order or hardware: unknowns are sho
 as unknown. Concept presentation only, like the drawing sheets."""
 from __future__ import annotations
 
-import hashlib, itertools, math, shutil, xml.etree.ElementTree as ET
+import hashlib, itertools, math, re, shutil, xml.etree.ElementTree as ET
 from pathlib import Path
 from cairosvg import svg2png
 from build123d import Align, Compound, Cone, Cylinder, ExportSVG, Location, Unit
@@ -24,12 +24,17 @@ RANGE_STEPS = 24
 _LAYERS = itertools.count()
 PAGE_W, PAGE_H = 1000, 750
 TOUCH_MM = 0.5
+ITEM_KEY = re.compile(r'[0-9a-fA-F-]{1,64}@[0-9]{1,9}')
 CAMERAS = {'isometric': (1, -1, 1), 'isometric_front_left': (-1, -1, 1),
            'isometric_back_left': (-1, 1, 1), 'isometric_back_right': (1, 1, 1)}
 KIND_NAMES = {'screw': 'Screw', 'nail': 'Nail', 'bolt': 'Bolt'}
 # 2026-11-01: hardware the designer adds (dowels, brackets ...) names itself.
 def kind_name(kind): return KIND_NAMES.get(kind) or kind.replace('_', ' ').capitalize()
-def size_text(d, l): return '' if d is None and l is None else f' {_number(d) if d is not None else "?"} × {_number(l) if l is not None else "?"}'
+def size_text(d, l):
+    """Only the sizes the schedule knows: '5 × 120', 'Ø 10 mm', '50 mm' (2026-11-10: never '?')."""
+    if d is not None and l is not None: return f' {_number(d)} × {_number(l)}'
+    return f' Ø {_number(d)} mm' if d is not None else f' {_number(l)} mm' if l is not None else ''
+def hardware_words(row): return row.get('name') or f'{kind_name(row["kind"])}{size_text(row["diameter_mm"], row["length_mm"])}'
 def counted(j): return j.get('counting') in ('along_contact', 'per_joint') if j.get('counting') else j['kind'] in KIND_NAMES
 INK, CONTEXT = '#111111', '#9a9a9a'
 
@@ -40,6 +45,13 @@ def _cross(a, b): return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[
 def _unit(a):
     n = math.sqrt(_dot(a, a))
     return [x / n for x in a]
+
+
+def validate_item_names(names):
+    """Catalog names of chosen hardware ('<item id>@<revision>' -> name), as the server read them."""
+    if names is not None and (not isinstance(names, dict) or len(names) > 256 or any(
+            not isinstance(k, str) or not ITEM_KEY.fullmatch(k) or not isinstance(v, str) or not 1 <= len(v.strip()) <= 200 for k, v in names.items())):
+        raise CadContractError('guide_item_names')
 
 
 def validate_guide(joints, steps, ids):
@@ -170,16 +182,101 @@ class _View:
             g.append(child)
 
 
-def _page():
-    page = ET.Element(f'{{{NS}}}svg', {'width': str(PAGE_W), 'height': str(PAGE_H), 'viewBox': f'0 0 {PAGE_W} {PAGE_H}'})
-    ET.SubElement(page, f'{{{NS}}}rect', {'width': str(PAGE_W), 'height': str(PAGE_H), 'fill': '#ffffff'})
+def _page(height=PAGE_H):
+    page = ET.Element(f'{{{NS}}}svg', {'width': str(PAGE_W), 'height': str(height), 'viewBox': f'0 0 {PAGE_W} {height}'})
+    ET.SubElement(page, f'{{{NS}}}rect', {'width': str(PAGE_W), 'height': str(height), 'fill': '#ffffff'})
     return page
 
 
 def _text(page, x, y, value, size=16, weight='400', anchor='start', fill=INK):
-    el = ET.SubElement(page, f'{{{NS}}}text', {'x': str(x), 'y': str(y), 'font-size': str(size), 'font-weight': weight,
+    el = ET.SubElement(page, f'{{{NS}}}text', {'x': _r(x), 'y': _r(y), 'font-size': _r(size), 'font-weight': weight,
                                                'text-anchor': anchor, 'fill': fill, 'font-family': 'sans-serif'})
     el.text = value
+
+
+def _r(v): return f'{v:.2f}'.rstrip('0').rstrip('.') if isinstance(v, float) else str(v)
+
+
+# Text layout (2026-11-10). Pages are read on phones whose sans-serif differs from
+# the renderer's, so widths come from Helvetica metrics with a margin. Every label is
+# fitted to its space when drawn, and layout_issues() measures the finished page the
+# same way: text that overlaps, leaves the page or crosses a frame is a defect.
+_HELVETICA = dict(zip(map(chr, range(32, 127)), [
+    278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556,
+    556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778,
+    667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556,
+    556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584]))
+TEXT_MARGIN = 1.08
+
+
+def text_width(value, size, weight='400'):
+    em = sum(_HELVETICA.get(c, 600) for c in value) / 1000
+    return em * size * TEXT_MARGIN * (1.07 if int(weight) >= 600 else 1)
+
+
+def _wrap(value, size, weight, width, lines):
+    """Words onto at most `lines` lines no wider than width, or None when they do not fit."""
+    out, words = [], value.split()
+    for word in words:
+        if out and text_width(out[-1] + ' ' + word, size, weight) <= width: out[-1] += ' ' + word
+        else: out.append(word)
+    return out if len(out) <= lines and all(text_width(l, size, weight) <= width for l in out) else None
+
+
+def _fit(page, x, y, value, size, width, weight='400', anchor='start', fill=INK, lines=1, smallest=None):
+    """Draw value inside `width`: the given size if it fits, else smaller, else over up
+    to `lines` lines (going down from y), else cut with an ellipsis at the smallest size."""
+    smallest = smallest or max(8, size * 0.7)
+    s = size
+    while True:
+        rows = _wrap(value, s, weight, width, 1) or (_wrap(value, s, weight, width, lines) if lines > 1 else None)
+        if rows or s <= smallest: break
+        s = max(smallest, s - 0.5)
+    if not rows:
+        cut = value
+        while cut and text_width(cut + '…', s, weight) > width: cut = cut[:-1]
+        rows = [cut.rstrip() + '…']
+    for n, row in enumerate(rows): _text(page, x, y + n * s * 1.2, row, s, weight, anchor, fill)
+    return s, len(rows)
+
+
+def _text_box(el):
+    """Estimated box (left, top, right, bottom) of an SVG text element."""
+    size = float(el.get('font-size')); w = text_width(el.text or '', size, el.get('font-weight', '400'))
+    x = float(el.get('x')); y = float(el.get('y'))
+    left = x - {'middle': w / 2, 'end': w}.get(el.get('text-anchor'), 0)
+    return (left, y - 0.78 * size, left + w, y + 0.22 * size)
+
+
+def layout_issues(svg):
+    """The visual check of one page: text off the page, text over other text, and text
+    crossing the edge of a frame. Returns readable defects; [] is a clean page."""
+    root = ET.fromstring(svg) if isinstance(svg, (bytes, str)) else svg
+    _, _, w, h = (float(v) for v in root.get('viewBox').split())
+    texts, frames, issues = [], [], []
+    def walk(el, transformed):
+        for child in el:
+            tag = child.tag.split('}')[-1]
+            moved = transformed or 'transform' in child.attrib
+            if tag == 'text':
+                if moved: issues.append(f'text "{child.text}" is transformed, so it cannot be measured')
+                else: texts.append((child.text or '', _text_box(child)))
+            elif tag == 'rect' and child.get('fill') == 'none' and not moved:
+                x, y = float(child.get('x', 0)), float(child.get('y', 0))
+                frames.append((x, y, x + float(child.get('width')), y + float(child.get('height'))))
+            walk(child, moved)
+    walk(root, False)
+    def overlap(a, b, pad=0.5):
+        return min(a[2], b[2]) - max(a[0], b[0]) > pad and min(a[3], b[3]) - max(a[1], b[1]) > pad
+    for value, b in texts:
+        if b[0] < -0.5 or b[1] < -0.5 or b[2] > w + 0.5 or b[3] > h + 0.5: issues.append(f'text "{value}" leaves the page')
+        for f in frames:
+            inside = b[0] >= f[0] - 0.5 and b[2] <= f[2] + 0.5 and b[1] >= f[1] - 0.5 and b[3] <= f[3] + 0.5
+            if overlap(b, f) and not inside: issues.append(f'text "{value}" crosses a frame')
+    for i, (va, a) in enumerate(texts):
+        for vb, b in texts[i + 1:]:
+            if overlap(a, b): issues.append(f'text "{va}" overlaps "{vb}"')
+    return issues
 
 
 def _line(page, a, b, width=2, colour=INK, dashed=False):
@@ -207,6 +304,22 @@ def _head(page, kind, cx, cy, hidden=False):
         ET.SubElement(g, f'{{{NS}}}circle', {'cx': str(cx), 'cy': str(cy), 'r': '6'})
 
 
+def _part_labels(page, wanted):
+    """Part numbers over the lifted parts: each at its part, moved the least distance that keeps
+    it clear of the labels already placed, on a white backing so drawing lines stay readable."""
+    placed = []
+    for (x, y), value in wanted:
+        w = text_width(value, 15, '700'); h = 18
+        for dy, dx in [(0, 0)] + [(d * sy, d * sx) for d in (20, 40, 60, 80, 100) for sy, sx in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1))]:
+            cx = min(max(x + dx * w / 20, 320 + w / 2), PAGE_W - 30 - w / 2); cy = min(max(y - 10 + dy, 60 + h), 690)
+            box = (cx - w / 2 - 3, cy - 0.78 * 15 - 2, cx + w / 2 + 3, cy + 0.22 * 15 + 2)
+            if all(min(box[2], o[2]) <= max(box[0], o[0]) or min(box[3], o[3]) <= max(box[1], o[1]) for o in placed): break
+        placed.append(box)
+        ET.SubElement(page, f'{{{NS}}}rect', {'x': _r(box[0]), 'y': _r(box[1]), 'width': _r(box[2] - box[0]), 'height': _r(box[3] - box[1]),
+                                              'rx': '3', 'fill': '#ffffff', 'fill-opacity': '0.85'})
+        _text(page, cx, cy, value, 15, '700', 'middle')
+
+
 def _glyph(page, kind, x, y):
     """Small pictograms for the parts box: screw, nail, bolt, glue."""
     g = ET.SubElement(page, f'{{{NS}}}g', {'fill': 'none', 'stroke': INK, 'stroke-width': '2.2', 'stroke-linecap': 'round'})
@@ -223,15 +336,7 @@ def _glyph(page, kind, x, y):
         for t in range(4): ET.SubElement(g, f'{{{NS}}}line', {'x1': str(x + 31), 'y1': str(y + 30 + t * 9), 'x2': str(x + 39), 'y2': str(y + 25 + t * 9)})
 
 
-def hardware_summary(hardware, glue, unsized, read=True):
-    """One line for the box page: what to have ready, without implying missing screws."""
-    if not read: return 'not read for this guide'
-    items = ([hardware] if hardware else []) + (['glue'] if glue else []) + ([f'{len(unsized)} joint(s) without a rule'] if unsized else [])
-    if items == ['glue']: return 'glue only'
-    return ' + '.join(items) if items else 'none'
-
-
-def fastener_rows(joint_ids, schedule):
+def fastener_rows(joint_ids, schedule, names=None):
     """Per-step hardware from the server's rule schedule, never guessed: grouped sized rows,
     glue, and joints without a rule or size (shown with '?')."""
     if schedule is None: return [], [], False
@@ -245,15 +350,39 @@ def fastener_rows(joint_ids, schedule):
             # No rule, nothing chosen yet, or a chosen item the catalog no longer resolves.
             if j['source'] in ('no_rule', 'none') or (j['source'] == 'chosen' and j['kind'] is None): unsized.append(jid); continue
             if j['kind'] == 'glue': glue = True; continue
-            if j.get('counting') == 'per_construction': packages.add((j['kind'], j['diameter_mm'], j['length_mm'])); continue
+            # A chosen catalog item keeps its own name (2026-11-10), so the box page reads as a shopping list.
+            name = (names or {}).get(f"{j.get('material_id')}@{j.get('material_revision')}")
+            if j.get('counting') == 'per_construction': packages.add((j['kind'], j['diameter_mm'], j['length_mm'], name)); continue
             if j['kind'] and counted(j):
                 if j['count'] is None or (j['kind'] in KIND_NAMES and None in (j['diameter_mm'], j['length_mm'])): unsized.append(jid); continue
-                key = (j['kind'], j['diameter_mm'], j['length_mm'])
+                key = (j['kind'], j['diameter_mm'], j['length_mm'], name)
                 groups[key] = groups.get(key, 0) + j['count']
     for key in packages: groups.setdefault(key, 1)
-    order = lambda item: (item[0][0], item[0][1] if item[0][1] is not None else -1, item[0][2] if item[0][2] is not None else -1)
-    rows = [{'kind': k, 'diameter_mm': d, 'length_mm': l, 'count': c} for (k, d, l), c in sorted(groups.items(), key=order)]
+    order = lambda item: (item[0][0], item[0][1] if item[0][1] is not None else -1, item[0][2] if item[0][2] is not None else -1, item[0][3] or '')
+    rows = [{'kind': k, 'diameter_mm': d, 'length_mm': l, 'count': c, **({'name': n} if n else {})} for (k, d, l, n), c in sorted(groups.items(), key=order)]
     return rows, sorted(set(unsized)), glue
+
+
+def glue_name(joint_ids, schedule, names):
+    """The chosen glue's catalog name, when the schedule names one item."""
+    found = {(names or {}).get(f"{j.get('material_id')}@{j.get('material_revision')}") for j in (schedule or {'joints': []})['joints']
+             if j['joint_id'] in set(joint_ids) and j['kind'] == 'glue'} - {None}
+    return found.pop() if len(found) == 1 else None
+
+
+def tools_needed(rows, glue, cut=True):
+    """Tools for the box page, from fixed rules over the parts and the scheduled hardware
+    (2026-11-10). A proposal like the fastener counts, never a claim about the build."""
+    kinds = {r['kind'] for r in rows}
+    tools = ['Tape measure', 'Pencil', 'Try square'] + (['Saw'] if cut else [])
+    if kinds - {'nail'}: tools.append('Drill driver with bits')
+    for kind in ('dowel', 'bolt'):
+        for d in sorted({r['diameter_mm'] for r in rows if r['kind'] == kind and r['diameter_mm'] is not None}):
+            tools.append(f'Drill bit Ø {_number(d)} mm ({kind} holes)')
+    if 'bolt' in kinds: tools.append('Spanner or hex key for the bolts')
+    if kinds & {'nail', 'dowel'}: tools.append('Hammer or mallet')
+    if glue: tools += ['Clamps', 'Damp cloth for glue']
+    return list(dict.fromkeys(tools))
 
 
 def _components(joint_ids, joints):
@@ -290,17 +419,18 @@ def _plan(steps, joint_ends, boxes, defs_of):
     return plan
 
 
-def render_guide(raw, joints, steps, output_dir, fasteners=None, context_ids=(), size=(1500, 1125), drawing_source=None, svg_only=False, step_range=None):
+def render_guide(raw, joints, steps, output_dir, fasteners=None, context_ids=(), size=(1500, 1125), drawing_source=None, svg_only=False, step_range=None, item_names=None):
     out = Path(output_dir); out.mkdir(parents=True, exist_ok=True)
     scratch = out / '.layers'; scratch.mkdir(exist_ok=True)
     try:
-        return _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size, drawing_source, svg_only, step_range)
+        return _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size, drawing_source, svg_only, step_range, item_names)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 
 
-def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size, drawing_source, svg_only, step_range):
+def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size, drawing_source, svg_only, step_range, item_names):
     req = validate_request(raw)
+    validate_item_names(item_names)
     validate_drawing_source(drawing_source)
     if not isinstance(context_ids, (list, tuple)) or len(set(context_ids)) != len(context_ids): raise CadContractError('guide_context')
     ids = [i['id'] for i in req['instances']]
@@ -334,53 +464,94 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
             # Every page names the exact construction it was drawn from.
             _text(page, PAGE_W - 30, 26, f'Construction version {drawing_source["revision"]} · ID {drawing_source["artifact_id"]}', 10, '400', 'end', '#555555')
         data = ET.tostring(page, encoding='utf-8', xml_declaration=False)
+        # The visual check runs on every page drawn; a defect is counted in the page's notes.
+        defects = layout_issues(page)
+        if defects: note = {**note, 'layout_defects': len(defects)}
         (out / f'{key}.svg').write_bytes(data)
         if not svg_only:
-            svg2png(bytestring=data, write_to=str(out / f'{key}.png'), output_width=size[0], output_height=size[1], background_color='white')
+            svg2png(bytestring=data, write_to=str(out / f'{key}.png'), output_width=size[0], output_height=round(size[1] * float(page.get('height')) / PAGE_H), background_color='white')
         pages.append({'key': key, 'sha256': hashlib.sha256(data).hexdigest(), **note})
 
-    def parts_box(page, items, hardware, unsized, glue, y0=140):
+    def parts_box(page, items, hardware, unsized, glue, y0=140, bottom=PAGE_H - 12):
+        """The step's parts and hardware, rows shrunk together so the box always ends on the page."""
         rows = len(items) + len(hardware) + (1 if glue else 0) + (1 if unsized else 0)
-        ET.SubElement(page, f'{{{NS}}}rect', {'x': '40', 'y': str(y0), 'width': '250', 'height': str(24 + rows * 84), 'rx': '10',
+        s = min(1.0, (bottom - y0 - 24) / max(rows * 84, 1)); rh = 84 * s
+        ET.SubElement(page, f'{{{NS}}}rect', {'x': '40', 'y': _r(y0), 'width': '250', 'height': _r(24 + rows * rh), 'rx': '10',
                                               'fill': 'none', 'stroke': INK, 'stroke-width': '2'})
-        y = y0 + 12
-        for count, part_ids in items:
-            view = _View([solids[part_ids[0]]], (1, -1, 1), (52, y, 80, 72), scratch); view.layer(page, [solids[part_ids[0]]], INK, 1.6)
-            _text(page, 146, y + 34, f'{count}×', 26, '700'); _text(page, 146, y + 58, f'{label(part_ids)} {part_name(defs_of[part_ids[0]])}', 13, fill='#333333'); y += 84
-        for h in hardware:
-            _glyph(page, h['kind'], 60, y); _head(page, h['kind'], 126, y + 22); _text(page, 146, y + 34, f'{h["count"]}×', 26, '700')
-            _text(page, 146, y + 58, f'{kind_name(h["kind"])}{size_text(h["diameter_mm"], h["length_mm"])}', 13, fill='#333333'); y += 84
-        if glue: _glyph(page, 'glue', 60, y); _text(page, 146, y + 34, 'Glue', 22, '700'); _text(page, 146, y + 58, 'on the joining faces', 13, fill='#333333'); y += 84
-        if unsized: _text(page, 60, y + 34, '?', 30, '700'); _text(page, 146, y + 34, 'No rule yet', 16, '700'); _text(page, 146, y + 58, f'{len(unsized)} joint(s): ask Bob', 13, fill='#333333')
+        y = y0 + 12; tx = 60 + 86 * s; tw = 280 - tx
 
-    # What is in the box: one tile per part kind, then the whole hardware list.
-    page = _page(); _text(page, 40, 70, 'What is in the box', 30, '700')
-    kinds = {}
-    for iid in sorted(ids, key=lambda i: numbers[i]):
-        if iid not in context_ids: kinds.setdefault(defs_of[iid], []).append(iid)
-    cols = max(1, min(4, len(kinds))); tile_w = (920 - (cols - 1) * 20) / cols
-    for n, (did, members) in enumerate(list(kinds.items())[:8]):
-        x = 40 + (n % cols) * (tile_w + 20); y = 100 + (n // cols) * 270
-        ET.SubElement(page, f'{{{NS}}}rect', {'x': str(x), 'y': str(y), 'width': str(tile_w), 'height': '250', 'rx': '12', 'fill': 'none', 'stroke': INK, 'stroke-width': '2'})
-        _View([solids[members[0]]], (1, -1, 1), (x + 16, y + 14, tile_w - 32, 140), scratch).layer(page, [solids[members[0]]], INK, 1.8)
-        _text(page, x + tile_w / 2, y + 190, f'{len(members)}×', 32, '700', 'middle')
-        _text(page, x + tile_w / 2, y + 216, f'{label(members)} {part_name(did)}', 15, '600', 'middle')
-        _text(page, x + tile_w / 2, y + 238, blank_text(definitions[did]), 12, '400', 'middle', '#333333')
-    if len(kinds) > 8: _text(page, 40, 650, f'{len(kinds) - 8} more kinds of part: see Parts and sizes.', 15, fill='#333333')
-    all_rows, all_unsized, all_glue = fastener_rows([j['id'] for j in joints], fasteners)
-    if len(kinds) <= 4:
-        tiles = [(r['kind'], f'{r["count"]}×', f'{kind_name(r["kind"])}{size_text(r["diameter_mm"], r["length_mm"])}') for r in all_rows]
-        if all_glue: tiles.append(('glue', 'Glue', 'on glued joints'))
-        for n, (kind, count, words) in enumerate(tiles[:4]):
-            x = 40 + n * 235
-            ET.SubElement(page, f'{{{NS}}}rect', {'x': str(x), 'y': '400', 'width': '215', 'height': '110', 'rx': '12', 'fill': 'none', 'stroke': INK, 'stroke-width': '2'})
-            _glyph(page, kind, x + 8, 416)
-            if kind in KIND_NAMES: _head(page, kind, x + 72, 438)
-            _text(page, x + 92, 450, count, 28, '700'); _text(page, x + 92, 478, words, 13, '400', 'start', '#333333')
-    hw = ', '.join(f'{r["count"]}× {kind_name(r["kind"]).lower()}{size_text(r["diameter_mm"], r["length_mm"])}' for r in all_rows)
-    _text(page, 40, 700, 'Fasteners: ' + hardware_summary(hw, all_glue, all_unsized, fasteners is not None), 15, '600')
-    _text(page, 40, 724, 'Fastener counts are rule-of-thumb proposals, not a strength check.', 12, fill='#333333')
-    save(page, 'guide-0', {'kind': 'parts'})
+        def symbol(kind, head=True):
+            g = ET.SubElement(page, f'{{{NS}}}g', {'transform': f'translate(60 {_r(y)}) scale({_r(s)})'})
+            _glyph(g, kind, 0, 0)
+            if head: _head(g, kind, 66, 22)
+
+        def words(big, small, big_size=26):
+            _fit(page, tx, y + 34 * s, big, big_size * s, tw, '700')
+            _fit(page, tx, y + 56 * s, small, 13 * s, tw, fill='#333333', lines=2, smallest=10 * s)
+        for count, part_ids in items:
+            _View([solids[part_ids[0]]], (1, -1, 1), (52, y, 80 * s, 72 * s), scratch).layer(page, [solids[part_ids[0]]], INK, 1.6)
+            words(f'{count}×', f'{label(part_ids)} {part_name(defs_of[part_ids[0]])}'); y += rh
+        for h in hardware:
+            symbol(h['kind'], h['kind'] in KIND_NAMES)
+            words(f'{h["count"]}×', f'{kind_name(h["kind"])}{size_text(h["diameter_mm"], h["length_mm"])}'); y += rh
+        if glue: symbol('glue', False); words('Glue', 'on the joining faces', 22); y += rh
+        if unsized: _text(page, 60, y + 34 * s, '?', 30 * s, '700'); words('No rule yet', f'{len(unsized)} joint(s): ask Bob', 16)
+
+    def box_page():
+        """What is in the box (2026-11-10): every part kind, every piece of hardware with its
+        catalog name, glue and the tools, so the page works as the shopping list. The page
+        grows taller instead of leaving anything out."""
+        page = ET.Element('g'); _text(page, 40, 70, 'What is in the box', 30, '700')
+        kinds = {}
+        for iid in sorted(ids, key=lambda i: numbers[i]):
+            if iid not in context_ids: kinds.setdefault(defs_of[iid], []).append(iid)
+        cols = 4 if len(kinds) <= 8 else 5 if len(kinds) <= 15 else 6
+        gap = 16; tile_w = (920 - (cols - 1) * gap) / cols; tile_h = 200
+        y = 96
+        for n, (did, members) in enumerate(kinds.items()):
+            x = 40 + (n % cols) * (tile_w + gap); ty = y + (n // cols) * (tile_h + gap)
+            ET.SubElement(page, f'{{{NS}}}rect', {'x': _r(x), 'y': _r(ty), 'width': _r(tile_w), 'height': str(tile_h), 'rx': '12', 'fill': 'none', 'stroke': INK, 'stroke-width': '2'})
+            _View([solids[members[0]]], (1, -1, 1), (x + 14, ty + 12, tile_w - 28, 92), scratch).layer(page, [solids[members[0]]], INK, 1.8)
+            _text(page, x + tile_w / 2, ty + 136, f'{len(members)}×', 28, '700', 'middle')
+            _fit(page, x + tile_w / 2, ty + 158, f'{label(members)} {part_name(did)}', 14, tile_w - 16, '600', 'middle', lines=2, smallest=11)
+            _fit(page, x + tile_w / 2, ty + 191, blank_text(definitions[did]), 12, tile_w - 16, '400', 'middle', '#333333', smallest=9)
+        y += ((len(kinds) + cols - 1) // cols) * (tile_h + gap) + 24
+
+        _text(page, 40, y + 20, 'Hardware', 22, '700'); y += 36
+        rows, unsized, glue = fastener_rows([j['id'] for j in joints], fasteners, item_names)
+        if fasteners is None:
+            _text(page, 40, y + 22, 'The hardware schedule was not read for this guide.', 15, fill='#333333'); y += 40
+        else:
+            entries = [(r['kind'], f'{r["count"]}×', hardware_words(r), r['kind'] in KIND_NAMES) for r in rows]
+            if glue: entries.append(('glue', '', glue_name([j['id'] for j in joints], fasteners, item_names) or 'Wood glue, for the glued joints', False))
+            if unsized: entries.append(('?', '?', f'{len(unsized)} joint(s) have no hardware yet: ask Bob', False))
+            if not entries: _text(page, 40, y + 22, 'No hardware.', 15, fill='#333333'); y += 40
+            cw, ch = 452, 76
+            for n, (kind, count, words, head) in enumerate(entries):
+                x = 40 + (n % 2) * (cw + 16); ty = y + (n // 2) * (ch + 12)
+                ET.SubElement(page, f'{{{NS}}}rect', {'x': str(x), 'y': _r(ty), 'width': str(cw), 'height': str(ch), 'rx': '10', 'fill': 'none', 'stroke': INK, 'stroke-width': '2'})
+                if kind == '?': _text(page, x + 24, ty + 50, '?', 32, '700')
+                else:
+                    g = ET.SubElement(page, f'{{{NS}}}g', {'transform': f'translate({x + 4} {_r(ty + 2)}) scale(0.85)'}); _glyph(g, kind, 0, 0)
+                    if head: _head(g, kind, 66, 22)
+                if count: _fit(page, x + 76, ty + 47, count, 26, 80, '700')
+                _fit(page, x + 162, ty + 32, words, 14, cw - 176, lines=3, smallest=11)
+            y += ((len(entries) + 1) // 2) * (ch + 12) + 12
+
+        _text(page, 40, y + 20, 'Tools', 22, '700'); y += 32
+        tools = tools_needed(rows, glue, cut=bool(kinds))
+        for n, tool in enumerate(tools):
+            x = 40 + (n % 3) * 310; ty = y + (n // 3) * 30
+            ET.SubElement(page, f'{{{NS}}}circle', {'cx': str(x + 6), 'cy': _r(ty + 17), 'r': '4', 'fill': INK})
+            _fit(page, x + 18, ty + 22, tool, 15, 284)
+        y += ((len(tools) + 2) // 3) * 30 + 16
+        _fit(page, 40, y + 14, 'Hardware counts are rule-of-thumb proposals, not a strength check. Tools are suggested from the parts and hardware: check before you start.', 12, 920, fill='#333333', lines=2)
+        height = max(PAGE_H, int(math.ceil(y + 44)))
+        full = _page(height)
+        for child in list(page): full.append(child)
+        return full
+
+    if first == 0: save(box_page(), 'guide-0', {'kind': 'parts'})
 
     placed = set(context_ids)
     number = 0
@@ -433,7 +604,7 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
             ET.SubElement(page, f'{{{NS}}}circle', {'cx': '76', 'cy': '76', 'r': '44', 'fill': 'none', 'stroke': INK, 'stroke-width': '3'})
             _text(page, 76, 99, str(number), 60, '700', 'middle')
             if len(g['copies']) > 1: _text(page, 136, 99, f'{len(g["copies"])}×', 42, '700')
-            if step.get('section'): _text(page, 136, 44, step['section'].strip(), 18, '700')
+            if step.get('section'): _fit(page, 136, 44, step['section'].strip(), 18, PAGE_W - 166, '700')
             view = _View(context + lifted + arrows, cam, (320, 60, 650, 630), scratch)
             view.layer(page, [solids[i] for i in sorted(placed)], CONTEXT, 1.6)
             view.layer(page, [solids[i] for i in bases if i not in placed], INK, 2.2)
@@ -444,20 +615,23 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
                 hidden = cam[n] * out_sign <= 0; hidden_heads += hidden
                 tip = view.point(p); q = list(p); q[n] += out_sign * size_mm * 0.07; tail = view.point(q)
                 _line(page, tail, tip, 3, dashed=hidden); _head(page, kind, tail[0], tail[1], hidden)
-            if hidden_heads: _text(page, 40, 700, 'Dashed: put in from the other side.', 13, '400', 'start', '#333333')
-            for m in movers:
-                b = boxes[m]; mid = [(b['min'][k] + b['max'][k]) / 2 + offsets[m][k] for k in range(3)]; at = view.point(mid)
-                _text(page, at[0], at[1] - 10, f'P{numbers[m]}', 15, '700', 'middle')
+            # Notes sit under the drawing, right of the parts box, so the box can use the full height.
+            if hidden_heads: _fit(page, 320, 714, 'Dashed: put in from the other side.', 13, PAGE_W - 350, fill='#333333')
+            # A run of more than six identical parts is named once, in the parts box, instead of as a cloud of labels.
+            same = {}
+            for m in movers: same[defs_of[m]] = same.get(defs_of[m], 0) + 1
+            _part_labels(page, [(view.point([(boxes[m]['min'][k] + boxes[m]['max'][k]) / 2 + offsets[m][k] for k in range(3)]), f'P{numbers[m]}')
+                                for m in movers if same[defs_of[m]] <= 6])
             fresh = [i for i in parts if i not in placed]
             kinds_here = {}
             for i in fresh or parts: kinds_here.setdefault(defs_of[i], []).append(i)
             parts_box(page, [(len(v), v) for v in kinds_here.values()], hardware, unsized, glue)
             notes = sorted({gap for j in (fasteners or {'joints': []})['joints'] if j['joint_id'] in comp for gap in j['gaps']})
-            if notes: _text(page, 40, 724, 'Rule notes: ' + ', '.join(n.replace('_', ' ') for n in notes) + '. Check before building.', 13, '400', 'start', '#333333')
+            if notes: _fit(page, 320, 736, 'Rule notes: ' + ', '.join(n.replace('_', ' ') for n in notes) + '. Check before building.', 13, PAGE_W - 350, fill='#333333', smallest=9)
             if len(g['copies']) > 1:
                 others = [sorted({i for jid in c for i in joint_ends[jid]}, key=lambda i: numbers[i]) for c in g['copies'][1:]]
                 _text(page, 240, 82, 'Build this again with', 15, '400', 'start', '#333333')
-                _text(page, 240, 104, '; '.join(', '.join(f'P{numbers[i]}' for i in o) for o in others), 15, '700', 'start')
+                _fit(page, 240, 104, '; '.join(', '.join(f'P{numbers[i]}' for i in o) for o in others), 15, PAGE_W - 270, '700', lines=2, smallest=11)
             save(page, f'guide-{number}', {'kind': 'step', 'step': number, **({'section': step['section'].strip()} if step.get('section') else {}), 'repeat': len(g['copies']), 'joint_ids': sorted(j for c in g['copies'] for j in c),
                                            'new_instance_ids': fresh, 'lifted_instance_ids': movers, 'camera': camera_name,
                                            'fasteners': hardware, 'glue': glue, 'unsized_joint_ids': unsized})
@@ -468,6 +642,6 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
     page = _page(); _text(page, 40, 80, 'Done', 36, '700')
     _View(list(solids.values()), (1, -1, 1), (120, 110, 760, 540), scratch).layer(page, list(solids.values()), INK, 2.2)
     _text(page, 500, 700, f'Total size: width {_number(round(hi[0]-lo[0],1))} × depth {_number(round(hi[1]-lo[1],1))} × height {_number(round(hi[2]-lo[2],1))} mm', 16, '600', 'middle')
-    if loose: _text(page, 500, 726, f'Not in any step: {", ".join(f"P{numbers[i]}" for i in sorted(loose, key=lambda i: numbers[i]))}. Ask Bob where they go.', 14, '400', 'middle', '#333333')
+    if loose: _fit(page, 500, 726, f'Not in any step: {", ".join(f"P{numbers[i]}" for i in sorted(loose, key=lambda i: numbers[i]))}. Ask Bob where they go.', 14, 920, '400', 'middle', '#333333', smallest=9)
     save(page, f'guide-{number + 1}', {'kind': 'done', 'loose_instance_ids': sorted(loose, key=lambda i: numbers[i])})
     return {'version': GUIDE_VERSION, 'basis': 'proposed_order', 'drawing_source': drawing_source, 'pages': pages}

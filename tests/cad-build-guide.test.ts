@@ -19,7 +19,7 @@ const schedule={status:'ok',artifact_id:fixtureConstructionId,revision:1,rule_ve
  totals:[{kind:'screw',diameter_mm:5,length_mm:120,count:2,joint_ids:['post_rail']}]}
 const pages=[{key:'guide-0',kind:'parts',sha256:'a'.repeat(64)},{key:'guide-1',kind:'step',sha256:'b'.repeat(64)},{key:'guide-2',kind:'done',sha256:'c'.repeat(64)}]
 
-function fixture({enabled=true,guide='ok' as 'ok'|'fail'}={}){
+function fixture({enabled=true,guide='ok' as 'ok'|'fail',chosen=false,readItemName=undefined as undefined|((id:string,revision:number)=>Promise<string|null>)}={}){
  const source=checkedCadFixture('A',recipe,{joints})
  const seen={guides:[] as any[],renders:0,models:0,fasteners:0,review:'' as string}
  const assistant=createCadAssistant({projectId:'A',userId:'owner',hasAccess:async()=>true,ownerRequest:'Draw the saved frame',deadline:Date.now()+200000,available:true,
@@ -31,7 +31,11 @@ function fixture({enabled=true,guide='ok' as 'ok'|'fail'}={}){
    return guide==='ok'?{...packet,files:{...packet.files,'guide-0':'PHN2Zz4=','guide-1':'PHN2Zz4=','guide-2':'PHN2Zz4='},build_guide:{notes:{pages}}}:{...packet,build_guide:{failure:'guide_too_many_pages'}}
   },
   callModel:async(o:any)=>{seen.models++;seen.review+=JSON.stringify(o.messages);return reviewReply()},
-  buildGuide:{enabled:async()=>enabled,readFasteners:async()=>{seen.fasteners++;return structuredClone(schedule)}}} as any)
+  buildGuide:{enabled:async()=>enabled,readFasteners:async()=>{seen.fasteners++;const out=structuredClone(schedule) as any
+   // A joint held by chosen catalog items carries the item on each row.
+   if(chosen)out.joints=[{...out.joints[0],source:'chosen',counting:'along_contact',material_id:'00000000-0000-4000-8000-0000000000a1',material_revision:3},
+    {...out.joints[0],source:'chosen',kind:'glue',diameter_mm:null,length_mm:null,count:null,counting:'per_construction',material_id:'00000000-0000-4000-8000-0000000000a2',material_revision:1}]
+   return out},...(readItemName?{readItemName}:{})}} as any)
  return {assistant,seen}
 }
 
@@ -55,6 +59,18 @@ test('with the switch on, Bob\'s order and the rule fasteners go with the render
   fasteners:{rule_version:'fastener-rules-v1',complete:true},pages})
  assert.equal(manifest.bob_construction.revision,manifest.build_guide.construction.revision)
  assert.equal(f.seen.models,1);assert.doesNotMatch(f.seen.review,/build_guide|guide-0/,'the reviewer never sees the guide')
+})
+
+test('chosen hardware goes to the guide with its catalog name; an unreadable name is left out',async()=>{
+ const asked:string[]=[]
+ const f=fixture({chosen:true,readItemName:async(id,revision)=>{asked.push(id+'@'+revision);if(id.endsWith('a2'))throw new Error('offline');return ' Träskruv 5 × 120 '}})
+ assert.equal((await f.assistant.consult({...request,assembly_dependencies:[{joint_id:'post_rail',depends_on:[]}]})).status,'ready')
+ assert.deepEqual(asked,['00000000-0000-4000-8000-0000000000a1@3','00000000-0000-4000-8000-0000000000a2@1'],'each item once')
+ assert.deepEqual(f.seen.guides[0].item_names,{'00000000-0000-4000-8000-0000000000a1@3':'Träskruv 5 × 120'})
+ // Rule hardware has no catalog item: nothing is read and the request keeps its former shape.
+ const plain=fixture({readItemName:async()=>{throw new Error('not asked')}})
+ assert.equal((await plain.assistant.consult({...request,assembly_dependencies:[{joint_id:'post_rail',depends_on:[]}]})).status,'ready')
+ assert.equal('item_names' in plain.seen.guides[0],false)
 })
 
 test('no order means no guide, never an invented one',async()=>{

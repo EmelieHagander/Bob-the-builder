@@ -5,7 +5,7 @@ from PIL import Image
 import hashlib, os
 from unittest.mock import patch
 from bob_cad import guide as guide_module
-from bob_cad.guide import fastener_rows, hardware_summary, render_guide, _clear_lift, _head, _lift_direction, _move_arrows
+from bob_cad.guide import fastener_rows, glue_name, layout_issues, render_guide, size_text, text_width, tools_needed, _fit, _clear_lift, _head, _lift_direction, _move_arrows
 from bob_cad.worker import CadContractError
 
 FIXTURE = json.loads((Path(__file__).parent / 'fixtures/bench_guide.json').read_text())
@@ -35,7 +35,9 @@ class GuideTest(unittest.TestCase):
                 self.assertTrue(Path(tmp, page['key'] + '.svg').read_bytes().startswith(b'<svg'))
             svg = Path(tmp, 'guide-3.svg').read_text()
             self.assertIn('30×', svg); self.assertIn('Screw 4.5 × 60', svg); self.assertIn('Rule notes: short penetration', svg)
-            self.assertIn('Fasteners: 30× screw 4.5 × 60, 8× screw 5 × 120', Path(tmp, 'guide-0.svg').read_text())
+            box = Path(tmp, 'guide-0.svg').read_text()
+            for words in ('>30×<', '>Screw 4.5 × 60<', '>8×<', '>Screw 5 × 120<', '>Drill driver with bits<'): self.assertIn(words, box)
+            for page in guide['pages']: self.assertEqual(layout_issues(Path(tmp, page['key'] + '.svg').read_bytes()), [], page['key'])
             # Every fastener in a step's box is drawn on the page (one more head is the box's own symbol);
             # one that goes in from a face turned away is dashed, with a note.
             for page in (s1, s2, s3):
@@ -82,12 +84,72 @@ class GuideTest(unittest.TestCase):
         self.assertEqual(len(bolt[0].get('points').split()), 6)
         self.assertTrue(back.get('stroke-dasharray'), 'from the far side: dashed')
 
-    def test_the_box_page_says_glue_only_instead_of_missing_screws(self):
-        self.assertEqual(hardware_summary('', True, []), 'glue only')
-        self.assertEqual(hardware_summary('8× screw 4 × 40', True, []), '8× screw 4 × 40 + glue')
-        self.assertEqual(hardware_summary('', False, ['j1']), '1 joint(s) without a rule')
-        self.assertEqual(hardware_summary('', False, []), 'none')
-        self.assertEqual(hardware_summary('', True, [], read=False), 'not read for this guide')
+    def test_sizes_show_only_what_is_known_never_a_question_mark(self):
+        self.assertEqual(size_text(5, 120), ' 5 × 120')
+        self.assertEqual(size_text(None, 50), ' 50 mm')
+        self.assertEqual(size_text(10, None), ' Ø 10 mm')
+        self.assertEqual(size_text(None, None), '')
+
+    def test_tools_follow_the_scheduled_hardware(self):
+        row = lambda kind, d=None, l=None: {'kind': kind, 'diameter_mm': d, 'length_mm': l, 'count': 1}
+        self.assertEqual(tools_needed([], False), ['Tape measure', 'Pencil', 'Try square', 'Saw'])
+        self.assertEqual(tools_needed([row('nail', 2.8, 50)], False)[4:], ['Hammer or mallet'])
+        tools = tools_needed([row('screw', 5, 70), row('bolt', 8, 140), row('dowel', 10, 60), row('bracket', None, 50)], True)
+        self.assertEqual(tools[4:], ['Drill driver with bits', 'Drill bit Ø 10 mm (dowel holes)', 'Drill bit Ø 8 mm (bolt holes)',
+                                     'Spanner or hex key for the bolts', 'Hammer or mallet', 'Clamps', 'Damp cloth for glue'])
+
+    def test_the_visual_check_finds_overlaps_cut_off_text_and_text_across_a_frame(self):
+        page = guide_module._page()
+        guide_module._text(page, 40, 100, 'P27', 15, '700'); guide_module._text(page, 44, 104, 'P5', 15, '700')
+        guide_module._text(page, 40, 700, 'Fasteners: ' + '20× angle bracket, ' * 12, 15, '600')
+        import xml.etree.ElementTree as ET
+        ET.SubElement(page, '{http://www.w3.org/2000/svg}rect', {'x': '40', 'y': '300', 'width': '100', 'height': '50', 'fill': 'none'})
+        guide_module._text(page, 60, 330, 'P15-P16 Guard lower removable', 15)
+        issues = layout_issues(page)
+        self.assertTrue(any('"P27" overlaps "P5"' in i for i in issues), issues)
+        self.assertTrue(any('leaves the page' in i for i in issues), issues)
+        self.assertTrue(any('crosses a frame' in i for i in issues), issues)
+        # The same words drawn with _fit stay inside their space.
+        clean = guide_module._page()
+        ET.SubElement(clean, '{http://www.w3.org/2000/svg}rect', {'x': '40', 'y': '300', 'width': '100', 'height': '50', 'fill': 'none'})
+        _fit(clean, 46, 318, 'P15-P16 Guard lower removable', 15, 88, lines=2)
+        _fit(clean, 40, 700, 'Fasteners: ' + '20× angle bracket, ' * 12, 15, 920)
+        self.assertEqual(layout_issues(clean), [])
+        self.assertGreater(text_width('Guard', 15, '700'), text_width('Guard', 15))
+
+    def test_the_live_bunk_bed_guide_passes_the_visual_check_and_lists_everything(self):
+        # Våningssäng 2, construction version 27 with Bob's seven sections (2026-11-10): the guide
+        # whose step box ran off the page, labels overlapped and hardware line was cut off.
+        f = json.loads((Path(__file__).parent / 'fixtures/bunk_bed_guide.json').read_text())
+        with tempfile.TemporaryDirectory() as tmp:
+            guide = render_guide(f['recipe'], f['joints'], f['steps'], tmp, f['fasteners'], f['context_ids'], svg_only=True,
+                                 drawing_source=SOURCE, item_names=f['item_names'])
+            self.assertEqual(len(guide['pages']), 9)
+            for page in guide['pages']:
+                self.assertEqual(layout_issues(Path(tmp, page['key'] + '.svg').read_bytes()), [], page['key'])
+                self.assertNotIn('layout_defects', page)
+            box = Path(tmp, 'guide-0.svg').read_text()
+            self.assertNotIn('?', box); self.assertNotIn('more kinds of part', box)
+            self.assertEqual(box.count('mm, length'), 13, 'every kind of part has its tile')
+            # Words may wrap, so compare the page's text as one string.
+            import re, xml.etree.ElementTree as ET
+            words = ' '.join(el.text for el in ET.fromstring(box).iter('{http://www.w3.org/2000/svg}text'))
+            for name in f['item_names'].values(): self.assertIn(re.sub(r'\s+', ' ', name), words)
+            for word in ('Hardware', 'Tools', 'Tape measure', 'Drill bit Ø 8 mm (bolt holes)', 'Clamps'): self.assertIn(word, words)
+            self.assertGreater(float(ET.fromstring(box).get('height')), 750, 'the page grows instead of leaving items out')
+            # A run of 28 slats is named once in the box, not as 28 labels over the drawing.
+            self.assertNotIn('>P40<', Path(tmp, 'guide-5.svg').read_text())
+            self.assertIn('>P27<', Path(tmp, 'guide-1.svg').read_text())
+
+    def test_chosen_items_keep_their_catalog_names_and_bad_names_are_refused(self):
+        f = bench()
+        row = {'joint_id': 'g', 'source': 'chosen', 'kind': 'glue', 'material_id': 'm', 'material_revision': 2}
+        self.assertEqual(glue_name(['g'], {'joints': [row]}, {'m@2': 'Trälim, inomhus'}), 'Trälim, inomhus')
+        self.assertIsNone(glue_name(['g'], {'joints': [row]}, None))
+        with tempfile.TemporaryDirectory() as tmp:
+            for bad in ([], {'x': 'Name'}, {'aa@1': ''}, {'aa@1': 5}):
+                with self.assertRaisesRegex(CadContractError, 'guide_item_names'):
+                    render_guide(f['recipe'], f['joints'], f['steps'], tmp, f['fasteners'], item_names=bad)
 
     def test_hardware_is_never_guessed(self):
         sched = {'joints': [
