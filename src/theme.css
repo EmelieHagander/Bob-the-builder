@@ -1240,3 +1240,12 @@ select {
 .stock-row-more ol { margin: 0; padding-left: 20px; }
 .stock-row-fields { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .stock-row-fields label { display: inline-flex; align-items: center; gap: 6px; }
+
+.task-instruction-disclosure > summary { cursor: pointer; list-style: none; }
+.task-instruction-disclosure > summary::-webkit-details-marker { display: none; }
+.task-instruction-preview { display: block; line-height: 1.6; overflow-wrap: anywhere; }
+.task-instruction-action { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 44px; font-weight: 700; color: var(--accent-2); }
+.task-instruction-disclosure:not([open]) .when-open,
+.task-instruction-disclosure[open] .when-closed,
+.task-instruction-disclosure[open] .task-instruction-preview { display: none; }
+.task-instruction-disclosure[open] .task-instruction-action > i { transform: rotate(180deg); }
