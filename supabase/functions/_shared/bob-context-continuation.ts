@@ -490,6 +490,11 @@ export function createBobContextContinuation(opts: {
         chain = { identity, seed: initialMessages(options), groups: [], compacted: false, pendingInternal: [], inputTokens: 0, outputTokens: 0, operations: new Map(),
           ...(references ? { resultReferences: 1 as const } : {}) }
       }
+      // Claude's diagnostic comparison id is separate from Bob's local
+      // continuation cursor. Never compare across a live provider switch;
+      // the first request on the new provider establishes its own baseline.
+      if (adapter === 'anthropic-messages-v1') options = { ...options,
+        cacheDiagnosticsPreviousMessageId: consumedResponseId && chain.adapter === adapter ? consumedResponseId : null }
       // History messages before the settled boundary are byte-stable between
       // compaction batches; the request marks that point for the prompt cache.
       let settledMessages = 0
