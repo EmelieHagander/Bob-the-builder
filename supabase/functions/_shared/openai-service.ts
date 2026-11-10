@@ -178,6 +178,10 @@ export interface OpenAIServiceOptions {
    * definition. A worker's core tools come first and are the same in every
    * job, so the next job reads them from cache (stable_tools_version 1). */
   cacheAfterTool?: string;
+  /** Bob-only, server-produced Anthropic response id for opt-in cache
+   * diagnostics. This is NOT a provider continuation pointer and must stay
+   * outside the model journal fingerprint. */
+  cacheDiagnosticsPreviousMessageId?: string | null;
   catalogToolParameters?: Record<string, Record<string, unknown>>;
   maxOutputTokens?: number;
   /** Explicit per-call ceiling for bounded internal routing. Does not alter app settings. */
@@ -259,7 +263,11 @@ export interface OpenAIServiceResponse<T = unknown> {
     total_tokens: number;
     reasoning_tokens?: number;
     cached_input_tokens?: number;
+    /** Anthropic cache writes, distinct from normal and cached input. */
+    cache_creation_input_tokens?: number;
   };
+  /** Only bounded provider-defined codes/counts; never prompt contents. */
+  cacheDiagnostics?: { missReason: string; missedInputTokens?: number };
   model: string;
   /** Effort actually sent to a reasoning-capable model; null when none was applied. */
   reasoningEffort?: string | null;
@@ -278,7 +286,7 @@ export interface OpenAIServiceResponse<T = unknown> {
   estimatedCostUsd?: number | null;
   /** A cut Claude answer's estimated cost (ledger cost_basis
    * streamed_output_estimate); spending, not a provider receipt. */
-  costEstimate?: { usd: number; basis: 'streamed_output_estimate'; input_tokens: number; cached_input_tokens: number; output_tokens: number };
+  costEstimate?: { usd: number; basis: 'streamed_output_estimate'; input_tokens: number; cached_input_tokens: number; cache_creation_input_tokens?: number; output_tokens: number };
 }
 
 // OpenAI strict mode refuses these keywords with a 400 for the whole request
@@ -555,6 +563,9 @@ export async function callOpenAIResponses<T = unknown>(
       maxOutputTokens: catalogRole.app === 'bob' && catalogRole.unlimitedWork === true ? anthropicModel.max_output_tokens : configuredMaxTokens,
       effort: catalogRole.reasoningEffort && anthropicModel.supports_reasoning ? catalogRole.reasoningEffort : null,
       timeoutMs, resolveImage: options.resolveImageInline ?? options.resolveImage,
+      // OFF unless explicitly enabled for Bob in the Edge environment. The
+      // provider stores only temporary request fingerprints when opted in.
+      cacheDiagnosticsEnabled: options.app === 'bob' && Deno.env.get('BOB_CACHE_DIAGNOSTICS') === '1',
       log: (r) => logAIUsage(aiClient, { app: options.app, module, aiFunction, userId, model: r.model,
         inputTokens: r.inputTokens, cachedInputTokens: r.cachedInputTokens, outputTokens: r.outputTokens,
         reasoningTokens: r.reasoningTokens, totalTokens: r.totalTokens, costUsd: r.costUsd, costBasis: r.costBasis,
