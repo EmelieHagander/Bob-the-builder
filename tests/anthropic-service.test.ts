@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
-import { anthropicCostUsd, anthropicRequestBody, callAnthropicMessages, nativeItems, strictSchema, type AnthropicCallContext } from '../supabase/functions/_shared/anthropic-service.ts'
+import { anthropicCostUsd, anthropicRequestBody, callAnthropicMessages, collectStream, nativeItems, strictSchema, type AnthropicCallContext } from '../supabase/functions/_shared/anthropic-service.ts'
 import { createExecutionMetrics } from '../supabase/functions/_shared/execution-metrics.ts'
 import { createBobModelBudget } from '../supabase/functions/_shared/bob-model-budget.ts'
 import { createAiCatalogSession, validateAiCall, type AiCatalogDefinition, type AiCatalogManifest, type AiCatalogModel } from '../supabase/functions/_shared/ai-catalog.ts'
@@ -69,10 +69,60 @@ test('streamed tool turn returns tool calls, replayable native items, usage, cos
   assert.deepEqual(result.toolCalls, [{ id: 'toolu_9', type: 'function', function: { name: 'save_note', arguments: '{"text":"hej"}' } }])
   assert.deepEqual(result.outputItems!.map(i => i.type), ['reasoning', 'function_call'])
   assert.deepEqual(JSON.parse(String(result.outputItems![0].encrypted_content)), { type: 'thinking', thinking: '', signature: 'abc' })
-  assert.deepEqual(result.usage, { input_tokens: 3100, output_tokens: 500, total_tokens: 3600, cached_input_tokens: 2000, reasoning_tokens: 0 })
+  assert.deepEqual(result.usage, { input_tokens: 3100, output_tokens: 500, total_tokens: 3600,
+    cached_input_tokens: 2000, cache_creation_input_tokens: 1000, reasoning_tokens: 0 })
   const cost = (100 * 4 + 1000 * 4 * 1.25 + 2000 * 0.2 + 500 * 20) / 1e6
   assert.ok(Math.abs(result.estimatedCostUsd! - cost) < 1e-12)
   assert.equal(ledger.length, 1); assert.equal(ledger[0].success, true)
+})
+
+test('cache diagnostics are opt-in, compare provider message ids and persist only bounded cache measurements', async () => {
+  const request = { ...base, prompt: 'PRIVATE PROMPT', cacheDiagnosticsPreviousMessageId: 'msg_previous' }
+  assert.equal((await anthropicRequestBody(request, ctx())).diagnostics, undefined, 'production default is unchanged')
+  assert.deepEqual((await anthropicRequestBody({ ...request, cacheDiagnosticsPreviousMessageId: null }, ctx({ cacheDiagnosticsEnabled: true }))).diagnostics,
+    { previous_message_id: null })
+  assert.deepEqual((await anthropicRequestBody(request, ctx({ cacheDiagnosticsEnabled: true }))).diagnostics,
+    { previous_message_id: 'msg_previous' })
+  assert.deepEqual((await anthropicRequestBody({ ...request, cacheDiagnosticsPreviousMessageId: 'PRIVATE id' }, ctx({ cacheDiagnosticsEnabled: true }))).diagnostics,
+    { previous_message_id: null }, 'only provider-issued message ids are eligible')
+
+  const sent: any[] = []
+  const result = await callAnthropicMessages(request, ctx({ cacheDiagnosticsEnabled: true,
+    fetch: (async (_url: string, init: RequestInit) => {
+      sent.push(JSON.parse(String(init.body)))
+      return sse(
+        { type: 'message_start', message: { id: 'msg_current', model: 'claude-opus-5-5', content: [],
+          usage: { input_tokens: 10, cache_creation_input_tokens: 100, cache_read_input_tokens: 900, output_tokens: 0 },
+          diagnostics: { cache_miss_reason: { type: 'tools_changed', cache_missed_input_tokens: 100, prompt: 'PRIVATE DIAGNOSTIC' } } } },
+        { type: 'content_block_start', index: 0, content_block: { type: 'text', text: 'Done' } },
+        { type: 'content_block_stop', index: 0 },
+        { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 2 } })
+    }) as typeof fetch }))
+  assert.deepEqual(sent[0].diagnostics, { previous_message_id: 'msg_previous' })
+  assert.equal(result.success, true)
+  assert.equal(result.responseId, 'msg_current')
+  assert.deepEqual(result.cacheDiagnostics, { missReason: 'tools_changed', missedInputTokens: 100 })
+  assert.equal(result.usage.cache_creation_input_tokens, 100)
+  assert.equal(result.usage.cached_input_tokens, 900)
+  const events: any[] = []
+  const metrics = createExecutionMetrics({ runId: 'r', turnId: 't', startedAt: 0, write: async e => { events.push(e) } })
+  await metrics.model({ aiFunction: 'structure-worker', prompt: 'PRIVATE PROMPT' } as any, result, 12)
+  assert.deepEqual([events[0].counts.cache_write_input_tokens, events[0].counts.uncached_input_tokens,
+    events[0].counts.cached_input_tokens, events[0].counts.cache_miss_reason, events[0].counts.cache_missed_input_tokens],
+    [100, 10, 900, 'tools_changed', 100])
+  assert.ok(!JSON.stringify(events).includes('PRIVATE'), 'diagnostics are content-free')
+
+  await metrics.model({ aiFunction: 'structure-worker' } as any,
+    { ...result, cacheDiagnostics: { missReason: 'PRIVATE arbitrary reason', missedInputTokens: 999 } }, 1)
+  assert.equal(events[1].counts.cache_miss_reason, undefined, 'only provider-defined codes survive')
+})
+
+test('streaming also accepts diagnostics on the message_start envelope', async () => {
+  const message = await collectStream(sse(
+    { type: 'message_start', message: { id: 'msg_first', model: 'claude-opus-5-5', content: [],
+      usage: { input_tokens: 1 } }, diagnostics: { cache_miss_reason: { type: 'messages_changed', cache_missed_input_tokens: 10 } } },
+    { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } }))
+  assert.deepEqual(message.diagnostics, { cache_miss_reason: { type: 'messages_changed', cache_missed_input_tokens: 10 } })
 })
 
 // Entry, 2026-11-06: Konrad thought in silence past our 120 s twice; the
@@ -143,12 +193,15 @@ test('an answer still streaming when our deadline closes is reported as too long
     assert.equal(costUsd, anthropicCostUsd(ctx({}).model, { input_tokens: 10, cache_read_input_tokens: 900, cache_creation_input_tokens: 90, output_tokens: outputTokens }))
     // The turn budget counts the estimate; it is not a provider receipt, so a
     // drawing reservation stays pending rather than storing a reusable failure.
-    assert.deepEqual((result as any).costEstimate, { usd: costUsd, basis: 'streamed_output_estimate', input_tokens: 1000, cached_input_tokens: 900, output_tokens: outputTokens })
+    assert.deepEqual((result as any).costEstimate, { usd: costUsd, basis: 'streamed_output_estimate',
+      input_tokens: 1000, cached_input_tokens: 900, cache_creation_input_tokens: 90, output_tokens: outputTokens })
     // Execution events see the estimate too (audit round 3: they showed it as free).
     const events: any[] = []
     const metrics = createExecutionMetrics({ runId: 'r', turnId: 't', startedAt: 0, write: async (e: any) => { events.push(e) } })
     await metrics.model({ aiFunction: 'structure-worker' } as any, result as any, 10)
     assert.deepEqual([events[0].input_tokens, events[0].output_tokens, events[0].cost_usd, events[0].counts.cost_basis], [1000, outputTokens, costUsd, 'streamed_output_estimate'])
+    assert.equal(events[0].counts.cache_write_input_tokens, 90)
+    assert.equal(events[0].counts.uncached_input_tokens, 10)
     // The turn budget counts it.
     const budget = createBobModelBudget(1)
     await budget.run(async () => result as any)
