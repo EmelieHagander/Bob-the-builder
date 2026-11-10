@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
-import type { ProjectWork, WorkStep, WorkTask } from '../data/projectWork'
+import { stepTasksInOrder, type ProjectWork, type WorkStep, type WorkTask } from '../data/projectWork'
 import { openBobForCurrentSurface, openBobWithDraft, useBobSurface } from '../lib/bobSurface'
 import { useAsync, useProjectVersion } from './ui'
 import { PhasePill } from './PhaseUI'
@@ -14,6 +14,11 @@ import { DrawingRequests } from './DrawingRequests'
 
 const taskState = { todo: 'To do', doing: 'In progress', blocked: 'Blocked', done: 'Done' }
 const stepState = { planned: 'Planned', active: 'In progress', blocked: 'Blocked', completed: 'Complete' }
+
+const criterionState: Record<string, string> = {
+  missing: 'Awaiting evidence', satisfied: 'Verified', stale: 'Needs rechecking',
+  conflicted: 'Conflicting evidence', waived: 'Waived', not_applicable: 'Not applicable',
+}
 
 function TaskLinks({ tasks, people }: { tasks: WorkTask[]; people: Map<string, string> }) {
   return <ul className="work-task-list">{tasks.map(task => <li key={task.id}>
@@ -38,7 +43,8 @@ function CurrentStep({ work, step, people, onAdd }: {
   const sequence = work.steps.filter(s => area?.archived_at ? s.area_id === area.id : !s.area_id || !archivedAreas.has(s.area_id))
   const index = sequence.findIndex(s => s.id === step.id)
   const page = (s?: WorkStep) => s ? `/project?step=${encodeURIComponent(s.id)}` : undefined
-  const nextTask = step.tasks.find(t => t.status === 'doing') ?? step.tasks.find(t => t.status === 'todo')
+  const tasks = stepTasksInOrder(step.tasks)
+  const nextTask = tasks.find(t => t.status === 'doing') ?? tasks.find(t => t.status === 'todo')
   const pending = step.requirements.filter(r => !['satisfied','waived','not_applicable'].includes(r.status.state))
   const need = pending.find(r => r.responsible_kind === 'person') ?? (step.state === 'blocked' ? pending[0] : undefined)
   return <article id={`step-${step.id}`} className="current-plan-step">
@@ -60,13 +66,20 @@ function CurrentStep({ work, step, people, onAdd }: {
       <summary>Step details</summary>
       {step.goal && <p>{step.goal}</p>}
       <p className="foundation-hint">{stepState[step.state]}{isFocus && ' · Bob’s focus'}</p>
-      <button className="btn" onClick={openBobForCurrentSurface}>Ask Bob about this step</button>
+      {!!step.requirements.length && <section className="work-criteria" aria-label="Finish criteria">
+        <h3>Finish criteria</h3>
+        <ul>{step.requirements.map(r => <li key={r.id}>
+          <strong>{r.title}</strong><span className="foundation-hint">{criterionState[r.status.state] ?? r.status.state.replace(/_/g, ' ')}</span>
+          {r.description && <p>{r.description}</p>}
+        </li>)}</ul>
+      </section>}
+      {!!tasks.length && <section aria-label="Step tasks"><h3>Tasks</h3><TaskLinks tasks={tasks} people={people} /></section>}
+      <div className="foundation-actions">
+        {step.state !== 'completed' && !area?.archived_at && <button className="btn" onClick={() => openBobWithDraft('Review the approved plan against the work saved in this project. Link matching evidence, update the steps it supports and move your focus to the next outstanding work. Tell me which checks still need someone on site.')}>Review plan progress with Bob</button>}
+        <button className="btn" onClick={openBobForCurrentSurface}>Ask Bob about this step</button>
+        {!area?.archived_at && <button className="btn" onClick={onAdd}>Add task</button>}
+      </div>
       {area && <p className="foundation-hint"><Link to={`/areas/${area.slug}`}>{area.name}</Link>{area.archived_at && ' · Archived area'}</p>}
-      {!!step.tasks.length && <TaskLinks tasks={step.tasks} people={people} />}
-      {!area?.archived_at && <button className="btn" onClick={onAdd}>Add task</button>}
-      {!!step.requirements.length && <details id={`criteria-${step.id}`} className="work-criteria"><summary>Finish criteria · {step.requirements.length}</summary>
-        <ul>{step.requirements.map(r => <li key={r.id}>{r.title} · {r.status.state.replace(/_/g, ' ')}</li>)}</ul>
-      </details>}
       {!!step.related_tasks.length && <details id={`related-${step.id}`}><summary>Related work</summary><TaskLinks tasks={step.related_tasks} people={people} /></details>}
       <details id={`work-images-${step.id}`} className="step-support" onToggle={event => setImagesOpen(event.currentTarget.open)}>
         <summary>Step images</summary>

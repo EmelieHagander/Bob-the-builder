@@ -21,7 +21,7 @@ export interface WorkStep {
   responsible_person_id: string | null
   tasks: WorkTask[]
   related_tasks: WorkTask[]
-  requirements: { id: string; title: string; responsible_kind?: WorkStep['responsible_kind']; responsible_person_id?: string | null; status: { state: string } }[]
+  requirements: { id: string; title: string; description?: string; responsible_kind?: WorkStep['responsible_kind']; responsible_person_id?: string | null; status: { state: string } }[]
 }
 export interface ProjectWork {
   project_id: string
@@ -41,4 +41,12 @@ export interface StepDrawing extends DrawingSourceStatus {
   status: string
   area_id: string | null
   isConstruction: boolean
+}
+
+// Older assembly tasks carry their sequence in their titles. Preserve the
+// saved order for mixed or unnumbered lists, which have no such sequence.
+export function stepTasksInOrder(tasks: WorkTask[]): WorkTask[] {
+  const number = (task: WorkTask) => task.name.match(/^\s*(\d+)[.)]\s+/)?.[1]
+  if (!tasks.every(task => number(task) !== undefined)) return tasks
+  return [...tasks].sort((a, b) => Number(number(a)) - Number(number(b)))
 }
