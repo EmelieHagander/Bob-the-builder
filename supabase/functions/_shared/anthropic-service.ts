@@ -44,6 +44,8 @@ const CLAUDE_ACTIVE_STREAM_MS = 10_000
 const cachePoint = (): Json => ({ type: 'ephemeral' })
 // 5-minute cache writes cost 1.25x the base input price.
 const CACHE_WRITE_MULTIPLIER = 1.25
+const CACHE_MISS_REASONS = new Set(['model_changed', 'system_changed', 'tools_changed', 'messages_changed',
+  'previous_message_not_found', 'unavailable'])
 /** Characters of streamed text, thinking or tool input per output token, for
  * a cut answer that never reported its usage. Bob's output is mostly JSON and
  * Swedish prose. */
@@ -77,6 +79,8 @@ export interface AnthropicCallContext {
   timeoutMs: number
   /** Must return pixels as a data: URL (provider file ids are OpenAI-only). */
   resolveImage?: (ref: string) => Promise<string>
+  /** Opt-in only; production requests are unchanged without this flag. */
+  cacheDiagnosticsEnabled?: boolean
   log: (record: AnthropicUsageRecord) => Promise<void>
   fetch?: typeof fetch
   sleep?: (ms: number) => Promise<void>
@@ -240,6 +244,11 @@ export async function anthropicRequestBody(options: OpenAIServiceOptions, ctx: A
     cache_control: cachePoint(),
     stream: true,
   }
+  if (ctx.cacheDiagnosticsEnabled === true) {
+    const previous = options.cacheDiagnosticsPreviousMessageId
+    body.diagnostics = { previous_message_id: typeof previous === 'string' && /^msg_[A-Za-z0-9_-]{1,100}$/.test(previous)
+      ? previous : null }
+  }
   // Tools render before the system prompt, so a point on the system prompt's
   // last block keeps tools and system readable whatever changes later in the
   // transcript (every compaction and job start paid for them again, 2026-11-06).
@@ -308,7 +317,10 @@ export async function collectStream(response: Response, onEvent?: (type: string,
   const handle = (event: Json) => {
     const content = message.content as Block[]
     switch (event.type) {
-      case 'message_start': Object.assign(message, event.message as Json, { content }); break
+      case 'message_start':
+        Object.assign(message, event.message as Json, { content })
+        if (message.diagnostics === undefined && event.diagnostics !== undefined) message.diagnostics = event.diagnostics
+        break
       case 'content_block_start': {
         const block = { ...(event.content_block as Block) }
         if (block.type === 'tool_use') partial.set(Number(event.index), '')
@@ -378,6 +390,18 @@ export function anthropicCostUsd(model: AnthropicModelRow, usage: Json): number 
   const cached = model.cached_input_cost_per_1m_tokens ?? model.input_cost_per_1m_tokens
   return input * rate(model.input_cost_per_1m_tokens) + write * rate(model.input_cost_per_1m_tokens) * CACHE_WRITE_MULTIPLIER
     + read * rate(cached) + output * rate(model.output_cost_per_1m_tokens)
+}
+
+/** The provider's diagnostic is advisory: only known codes and integer token
+ * counts enter Bob's service-only metrics, never arbitrary provider content. */
+function cacheDiagnostics(value: unknown): OpenAIServiceResponse['cacheDiagnostics'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const reason = (value as Json).cache_miss_reason
+  if (!reason || typeof reason !== 'object' || Array.isArray(reason)) return undefined
+  const code = (reason as Json).type
+  if (typeof code !== 'string' || !CACHE_MISS_REASONS.has(code)) return undefined
+  const missed = (reason as Json).cache_missed_input_tokens
+  return { missReason: code, ...(Number.isSafeInteger(missed) && Number(missed) >= 0 ? { missedInputTokens: Number(missed) } : {}) }
 }
 
 function retryDelayMs(response: Response, attempt: number): number {
@@ -453,15 +477,15 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
     // Thinking streams as a summary, so the estimate is a lower bound. A
     // network or provider error keeps an unknown cost, and so does a stream
     // that never reported its input.
-    let priced: { cost: number; input: number; read: number; output: number } | null = null
+    let priced: { cost: number; input: number; read: number; write: number; output: number } | null = null
     if (response?.ok) {
       const raw = ((streamed as Json | null)?.usage ?? {}) as Json
-      const read = Number(raw.cache_read_input_tokens ?? 0)
-      const input = Number(raw.input_tokens ?? 0) + Number(raw.cache_creation_input_tokens ?? 0) + read
+      const read = Number(raw.cache_read_input_tokens ?? 0), write = Number(raw.cache_creation_input_tokens ?? 0)
+      const input = Number(raw.input_tokens ?? 0) + write + read
       const output = Math.max(Number(raw.output_tokens ?? 0), Math.ceil(outputChars / STREAMED_CHARS_PER_TOKEN))
       const cost = controller.signal.aborted && firstEventAt !== null && Number.isFinite(Number(raw.input_tokens)) && typeof raw.input_tokens === 'number'
         ? anthropicCostUsd(ctx.model, { ...raw, output_tokens: output }) : null
-      if (cost !== null) priced = { cost, input, read, output }
+      if (cost !== null) priced = { cost, input, read, write, output }
       try { await ctx.log({ model, inputTokens: input, cachedInputTokens: read, outputTokens: priced ? output : 0, reasoningTokens: 0, totalTokens: input + (priced ? output : 0),
         costUsd: priced ? priced.cost : null, ...(priced ? { costBasis: 'streamed_output_estimate' as const } : {}), success: false, latencyMs: Date.now() - startedAt,
         errorCode: cut ? active ? 'model_output_window' : 'model_output_window_silent' : controller.signal.aborted ? 'local_timeout' : 'network_or_stream' }) }
@@ -470,7 +494,8 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
     // The turn budget counts the estimate. It is not a provider receipt:
     // estimatedCostUsd stays empty, so a drawing reservation stays pending
     // for reconciliation and is never stored as a finished, reusable result.
-    const spent = priced ? { costEstimate: { usd: priced.cost, basis: 'streamed_output_estimate' as const, input_tokens: priced.input, cached_input_tokens: priced.read, output_tokens: priced.output } } : {}
+    const spent = priced ? { costEstimate: { usd: priced.cost, basis: 'streamed_output_estimate' as const,
+      input_tokens: priced.input, cached_input_tokens: priced.read, cache_creation_input_tokens: priced.write, output_tokens: priced.output } } : {}
     if (cut) return { ...fail<T>(model, 'model_output_window'), ...spent, failure: { code: 'model_output_window' } }
     if (priced) return { ...fail<T>(model, `Network error: ${msg}`), ...spent }
     return fail(model, `Network error: ${msg}`)
@@ -479,12 +504,15 @@ export async function callAnthropicMessages<T = unknown>(options: OpenAIServiceO
   const raw = (message.usage ?? {}) as Json
   const write = Number(raw.cache_creation_input_tokens ?? 0), read = Number(raw.cache_read_input_tokens ?? 0)
   const inputTokens = Number(raw.input_tokens ?? 0) + write + read, outputTokens = Number(raw.output_tokens ?? 0)
-  const usage = { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: inputTokens + outputTokens, cached_input_tokens: read, reasoning_tokens: 0 }
+  const usage = { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: inputTokens + outputTokens,
+    cached_input_tokens: read, cache_creation_input_tokens: write, reasoning_tokens: 0 }
   const estimatedCostUsd = anthropicCostUsd(ctx.model, raw)
   const servedBy = typeof message.model === 'string' ? message.model : model
   const log = (success: boolean,errorCode?:string) => ctx.log({errorCode,latencyMs:Date.now()-startedAt, model: servedBy, inputTokens, cachedInputTokens: read, outputTokens, reasoningTokens: 0,
     totalTokens: usage.total_tokens, costUsd: estimatedCostUsd, success })
-  const base = { usage, model: servedBy, reasoningEffort: ctx.effort, estimatedCostUsd, responseId: typeof message.id === 'string' ? message.id : undefined }
+  const diagnostic = cacheDiagnostics(message.diagnostics)
+  const base = { usage, model: servedBy, reasoningEffort: ctx.effort, estimatedCostUsd,
+    responseId: typeof message.id === 'string' ? message.id : undefined, ...(diagnostic ? { cacheDiagnostics: diagnostic } : {}) }
   const phaseAware = options.responsePhaseMode === 'aware'
   const content = (message.content as Block[]).filter(Boolean)
   // Always returned: a stateless provider's caller must replay these items.
