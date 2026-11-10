@@ -9,7 +9,9 @@ import { createAiCatalogSession } from '../supabase/functions/_shared/ai-catalog
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
-import { seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
+import { catalogFixture } from './support/ai-catalog-fixture.ts'
+import { readPlanOrientationPacket } from '../supabase/functions/_shared/bob-project-orientation.ts'
+import { runProjectAnswer, seedToolPolicy, type BobAnswerState } from '../supabase/functions/_shared/project-answer.ts'
 
 const uid = '00000000-0000-4000-8000-000000000001', outsider = '00000000-0000-4000-8000-000000000002'
 const stepA = randomUUID(), stepB = randomUUID(), stepDone = randomUUID()
@@ -151,4 +153,65 @@ test('restart reconstructs refs and reuses exact transport receipts, with live a
   }
   assert.equal((await run()).status, 'saved'); assert.equal((await run()).status, 'saved'); assert.equal(reads, 1); assert.equal(writes, 1)
   allowed = false; assert.equal((await run()).status, 'denied'); assert.equal(writes, 1)
+})
+
+test('a saved focus change refreshes tools, directory and completion review across a checkpoint', async () => {
+  await claim()
+  await pg.query("update bob.project_plans set focus_step_id=$1 where project_id='A'", [stepA])
+  await pg.query("update bob.project_plan_steps set phase='build' where project_id='A' and step_id=$1", [stepB])
+  const {writer, tools: planLinks}=setup()
+  const aiCatalog=catalogFixture()
+  const lookup=createProjectLookup('A', async (_,input)=>{
+    assert.equal(input.dataset,'areas')
+    return {data:{records:[{id:'areaA',name:'Work area'}],related:[],truncated:false},error:null}
+  },1000,100)
+  const picks:string[]=[]
+  let main=0, checks=0, reads=0, stopped=false
+  let state:BobAnswerState|undefined
+  const run=()=>runProjectAnswer({
+    projectId:'A',userId:uid,message:quote,deadline:Infinity,unlimitedWork:true,hasAccess:async()=>true,
+    aiCatalog,lookup,writer,planLinks,toolPicker:true,
+    readPlanOrientation:async()=>{
+      reads++
+      const result=await asProjectUser(pg,uid,"select bob.read_plan_orientation('A',null,null) packet")
+      return readPlanOrientationPacket('A',result.rows[0].packet)
+    },
+    checkpoint:{state,save:async snapshot=>{
+      state=structuredClone(snapshot)
+      if(snapshot.planRefreshPending && !stopped){stopped=true;throw Error('simulated restart after committed focus')}
+    }},
+    callModel:async options=>{
+      const usage={input_tokens:1,output_tokens:1,total_tokens:2}
+      const base={success:true,model:'fixture',usage}
+      if(options.functionName==='tool-picker'){
+        const input=JSON.parse(String(options.messages![0].content))
+        const desk=input.current_plan ?? input.plan_at_turn_start
+        picks.push(desk.step.title)
+        return {...base,data:JSON.stringify({tools:desk.step.title==='Cut'?['read_plan_link_context','change_plan_focus']:['read_plan_link_context']})}
+      }
+      if(options.functionName==='completion-gate'){
+        const input=JSON.parse(String(options.messages![0].content))
+        assert.equal(input.plan_at_turn_start.step.title,'Cut')
+        assert.equal(input.current_plan.step.title,'Assemble')
+        assert.equal(input.current_plan.step.phase,'build')
+        checks++
+        return {...base,data:JSON.stringify({work_remaining:false,reason:''})}
+      }
+      main++
+      const result=options.messages?.find(m=>m.role==='tool')
+      const call=(name:string,args:unknown)=>({...base,responseId:'r'+main,data:null,
+        toolCalls:[{id:'call'+main,type:'function' as const,function:{name,arguments:JSON.stringify(args)}}]})
+      if(main===1)return call('read_plan_link_context',{resource:'steps',query:'Assemble',next_ref:null})
+      if(main===2)return call('change_plan_focus',focus(JSON.parse(String(result?.content)).entries[0].ref))
+      assert.equal(JSON.parse(String(result?.content)).status,'saved')
+      assert(options.messages?.some(m=>typeof m.content==='string' && m.content.includes('"current_plan"') && m.content.includes('Assemble')))
+      return {...base,responseId:'answer',outputPhase:'final_answer',data:'Monteringen är nu i fokus.'}
+    },
+  })
+  await assert.rejects(run(),/simulated restart/)
+  assert.equal((await run()).ok,true)
+  assert.deepEqual(picks,['Cut','Assemble'])
+  assert.equal(reads,2)
+  assert.equal(checks,1)
+  assert.equal((await pg.query("select focus_step_id from bob.project_plans where project_id='A'")).rows[0].focus_step_id,stepB)
 })

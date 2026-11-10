@@ -45,12 +45,12 @@ test('a build step reaches the picker and completion gate even when the project 
 test('the migrated catalog publishes the same plan instructions and pin used by the runtime', async () => {
   const { projectSchema } = await import('./support/project-schema.ts')
   const { createAiCatalogSession } = await import('../supabase/functions/_shared/ai-catalog.ts')
-  const pg = await projectSchema(undefined, '20261110123000_bob_plan_progress_catalog.sql')
+  const pg = await projectSchema(undefined, '20261110131100_plan_progress_v2_catalog.sql')
   try {
     const { rows } = await pg.query<any>("select shared.resolve_ai_catalog('bob') m")
     const actual = createAiCatalogSession({ rpc: async () => assert.fail('pinned') }, { app: 'bob', manifest: rows[0].m })
     const expected = catalogFixture()
-    assert.equal(actual.definition('agent-contract.ask-bob').metadata.plan_progress_version, 1)
+    assert.equal(actual.definition('agent-contract.ask-bob').metadata.plan_progress_version, 2)
     for (const role of ['ask-bob', 'completion-gate']) {
       assert.equal(actual.role(role).systemMessage, expected.role(role).systemMessage)
     }

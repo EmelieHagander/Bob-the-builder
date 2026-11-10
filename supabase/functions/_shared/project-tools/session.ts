@@ -235,6 +235,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
     get workflowInstructions() { return selective ? (opts.catalogWorkflows?.() ?? []).filter(w => workflows.has(w.name)).map(w => `${w.name}\n${w.method}`).join('\n\n') : '' },
     /** Context rollover releases schemas for the next prepare. Preserve the
      * fence of an already submitted model request and its in-flight results. */
+    releasePreloadedTools(names: string[]) { for (const name of names) { loaded.delete(name); carried.delete(name) } },
     resetInstructions() { if (!selective) { loaded.clear(); carried.clear() } },
     /** Rollover that keeps the loaded tools: each offered schema then includes
      * its manual, instead of Bob describing the same tools again. */

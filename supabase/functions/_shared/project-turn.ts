@@ -21,7 +21,7 @@ import type { WorkingContext } from './bob-working-context.ts'
 import type { ContextSurface } from './bob-context-continuation.ts'
 import type { CurrentView } from '../../../src/domain/bobScreen.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
-import { runProjectAnswer, type BobAnswerCheckpoint, type ModelCall, type ProjectAnswer, type TurnObservation, type TurnProgress } from './project-answer.ts'
+import { runProjectAnswer, type BobAnswerCheckpoint, type ModelCall, type ProjectAnswer, type ProjectAnswerOptions, type TurnObservation, type TurnProgress } from './project-answer.ts'
 import type { createProjectLookup } from './project-lookup.ts'
 import type { ProjectCalculator } from './project-calculator.ts'
 import { compactReceipts, type ProjectWriter } from './project-write.ts'
@@ -47,6 +47,7 @@ export async function runClaimedProjectTurn(opts: { continuedWork?:boolean;
   carryLoadedTools?: boolean;
   corePreload?: boolean;
   toolPicker?: boolean;
+  readPlanOrientation?: ProjectAnswerOptions['readPlanOrientation'];
   buildingLinks?: import('./project-building-scope.ts').BuildingLinks;
   pureFacts?: boolean; projectFacts?: import('./project-facts.ts').ProjectFacts;
   registerContextSurface?: (refresh: () => Promise<ContextSurface>) => void;

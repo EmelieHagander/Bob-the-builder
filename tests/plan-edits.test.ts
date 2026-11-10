@@ -45,6 +45,20 @@ test('focused edit prepares a valid exact save without compiler calls, and revoc
  assert.equal(assistant.canSave,false)
 })
 
+test('focused completion accepts a verified project task as evidence',async()=>{
+ const data:any=structuredClone(snapshot)
+ data.tasks[0].id=id(44)
+ data.tasks[0].status='done'
+ const check=data.plan[0].steps[0].requirements[0]
+ check.evidence_selector={kind:'task',id:id(44),subject:null,area_id:null}
+ check.status={state:'satisfied'}
+ const assistant=createPlanAssistant({projectId:'A',userId:'u',hasAccess:async()=>true,
+  makeLookup:()=>createProjectLookup('A',async(_p,i)=>({data:{records:data[i.dataset]??[],related:[],truncated:false},error:null}),1000,128),
+  callModel:async()=>{throw new Error('No model needed for a focused edit')}})
+ const result:any=await assistant.consult('edit_project_plan',edit([change('update_step',id(1),{values:{state:'completed'}})]))
+ assert.equal(result.proposal_ready,true,JSON.stringify(result))
+})
+
 let pg:PGlite
 const owner=id(901),outsider=id(902)
 const call=async(uid:string,fn:string,args:any[],root=false):Promise<any>=>(await asProjectUser(pg,uid,`select ${fn}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,root?'postgres':'authenticated')).rows[0].result
@@ -79,4 +93,58 @@ test('removal/reorder preserves evidence through proposal and approval; altered 
  assert.deepEqual(links,[{requirement_id:unchanged,evidence_revision:2}])
  const history=await call(owner,'bob.project_plan_read',[pid,1]);assert.equal(history.record.steps.length,3)
  await assert.rejects(call(owner,'bob_private.project_plan_propose',[pid,1,payload],true),/record_changed/)
+})
+
+test('parallel completion uses live checks on both save and approval, then permits another replan', async () => {
+ const pid = (await call(owner,'bob.create_project',[{name:'Volunteer lunch shifts'}])).id
+ const measure = id(951)
+ const evidence = (truth:string) => ({subject:'Serving table width',value:truth === 'unknown' ? null : '32',unit:'mm',truth,
+  source:'Tape measurement',notes:'',required:true,source_media_id:null,change_note:'Verified width'})
+ const second = step('Catering')
+ second.requirements[0].evidence_selector = {kind:'measurement',id:measure,subject:null,area_id:null} as any
+ const proposal = (rev:number, steps:any[]) => call(owner,'bob_private.project_plan_propose',[pid,rev,{summary:'Lunch',reason:'Update plan',steps}],true)
+ const approve = (rev:number,n:number) => call(owner,'bob_private.project_plan_decide',[pid,rev,n,'approve','Apply'],true)
+ await proposal(0,[step('Staffing'),second,step('Cleanup')])
+ const first = (await approve(0,1)).record
+ const closing = edit([change('update_step',first.steps[1].id,{values:{state:'completed'}})])
+ const transform = (record:any) => editPlanSnapshot({plan:[record],tasks:[]},closing).steps
+ assert.throws(()=>transform(first),/Open requirements/)
+ const unchanged = editPlanSnapshot({plan:[first],tasks:[]},edit([change('update_step',first.steps[0].id,{values:{notes:'Ready'}})])).steps
+ unchanged[1].state='completed'
+ await assert.rejects(proposal(1,unchanged),/plan_step_requirements_unmet/)
+ await assert.rejects(proposal(1,unchanged.map((s:any,i:number)=>i===1?{...s,requirements:[]}:s)),/plan_step_requirements_unmet/)
+ await call(owner,'bob.evidence_command',[pid,'measurement','create',measure,0,evidence('measured')])
+ const ready=(await call(owner,'bob.project_plan_read',[pid,null])).record
+ const draft=(await proposal(1,transform(ready))).record
+ await call(owner,'bob.evidence_command',[pid,'measurement','revise',measure,1,evidence('unknown')])
+ await assert.rejects(approve(1,draft.revision),/plan_step_requirements_unmet/)
+ assert.equal((await call(owner,'bob.project_plan_read',[pid,null])).record.revision,1)
+ await call(owner,'bob.evidence_command',[pid,'measurement','revise',measure,2,evidence('measured')])
+ const closed = (await approve(1,draft.revision)).record
+ assert.equal(closed.steps[1].state,'completed')
+ const move = editPlanSnapshot({plan:[closed],tasks:[]},edit([change('move_step',first.steps[2].id)])).steps
+ const next = (await proposal(closed.revision,move)).record
+ const live = (await approve(closed.revision,next.revision)).record
+ assert.deepEqual(live.steps.map((s:any)=>[s.id,s.position]),[[first.steps[1].id,1],[first.steps[2].id,2],[first.steps[0].id,3]])
+ assert.equal((await call(owner,'bob.project_plan_read',[pid,closed.revision])).record.steps[1].id,first.steps[1].id)
+})
+
+test('a 100-step plan serves the selected step and its exact checks independently of the tool byte limit',async()=>{
+ const pid=(await call(owner,'bob.create_project',[{name:'Large build'}])).id
+ const steps=Array.from({length:100},(_,i)=>({...step('Shift '+i),notes:'x'.repeat(400)}))
+ await call(owner,'bob_private.project_plan_propose',[pid,0,{summary:'Shift plan',reason:'Work days',steps}],true)
+ const current=(await call(owner,'bob_private.project_plan_decide',[pid,0,1,'approve','Apply'],true)).record
+ assert(Buffer.byteLength(JSON.stringify(current))>32768)
+ await call(owner,'bob_private.project_plan_set_focus',[pid,1,current.steps[19].id],true)
+ const read=(screen:string|null)=>call(owner,'bob.read_plan_orientation',[pid,screen,null])
+ const packet=await read(null)
+ assert.equal(packet.plan.focus_step_id,current.steps[19].id)
+ assert.equal(packet.plan.steps.length,100)
+ assert.deepEqual(packet.plan.steps[19].requirements,current.steps[19].requirements)
+ assert.deepEqual(packet.plan.steps[0].requirements,[])
+ const other=await read(current.steps[7].id)
+ assert.equal(other.plan.detail_step_id,current.steps[7].id)
+ assert.equal(other.plan.focus_step_id,current.steps[19].id)
+ assert.deepEqual(other.plan.steps[7].requirements,current.steps[7].requirements)
+ await assert.rejects(call(outsider,'bob.read_plan_orientation',[pid,null,null]),/project_denied/)
 })

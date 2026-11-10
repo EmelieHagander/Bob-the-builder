@@ -77,6 +77,23 @@ export function planStepAtTurnStart(orientation?: ProjectOrientation) {
   }
 }
 
+// Code-only source from read_plan_orientation. Ordinary model lookups retain
+// their own response limit. The orientation directory bounds model input.
+export function readPlanOrientationPacket(projectId: string, data: unknown) {
+  if (!object(data) || !object(data.project) || data.project.id !== projectId
+    || !(data.plan === null || object(data.plan) && data.plan.id === projectId && data.plan.project_id === projectId
+      && data.plan.status === 'approved' && revision(data.plan.revision) && Array.isArray(data.plan.steps))) {
+    throw new Error('context_unavailable')
+  }
+  const retrievedAt = text(data.project.updated_at)
+  const page = (dataset: 'project' | 'plan', record: unknown): LookupResult => ({
+    projectId, dataset, retrievedAt,
+    records: record ? [record as Row] : [], status: record ? 'ok' : 'empty', related: [],
+    truncated: false, partial: false, next_cursor: null, truth: 'unknown',
+  })
+  return { briefing: page('project', data.project), planRead: page('plan', data.plan) }
+}
+
 export async function prepareProjectOrientation(opts: {
   projectId: string; userId: string; briefing: LookupResult; currentView?: CurrentView;
   lookup: { search(value: LookupInput): Promise<LookupResult> }; context?: WorkingContext; message: string;
@@ -86,6 +103,7 @@ export async function prepareProjectOrientation(opts: {
    * longest original prefix, labelled cut, instead of a model presentation. */
   presentation?: 'model' | 'cut';
   includeSavedFocus?: boolean;
+  planRead?: LookupResult;
 }): Promise<ProjectOrientation> {
   if (!await opts.hasAccess()) throw new Error('project_denied')
   if (opts.briefing.projectId !== opts.projectId || opts.briefing.status !== 'ok'
@@ -127,7 +145,8 @@ export async function prepareProjectOrientation(opts: {
     return { records: all, complete: false }
   }
   const projectSource = source('project', project.id, null, undefined, project.updated_at)
-  const planResult = await search('plan')
+  const planResult = opts.planRead ?? await search('plan')
+  if (planResult.projectId !== opts.projectId) throw new Error('context_unavailable')
   const plan = planResult.status === 'ok' ? planResult.records.find(row => row.id === opts.projectId && row.status === 'approved') : undefined
   const planComplete = planResult.status === 'empty' || !!plan && !planResult.truncated
   if (!planComplete) warnings.push(`plan:${planResult.status === 'ok' ? 'unavailable_approved_revision' : planResult.status}`)
@@ -172,6 +191,7 @@ export async function prepareProjectOrientation(opts: {
     if (focusStep) { focusRow = focusStep; focus = card(focusStep, 'step'); focusArea = areas.records.find(area => area.id === focusStep!.area_id) }
     else { hierarchyComplete = false; warnings.push('saved_focus_unavailable') }
   }
+  if (opts.planRead && focusStep && plan?.detail_step_id !== focusStep.id) throw new Error('context_unavailable')
   if (focusRow.area_id && !focusArea) { hierarchyComplete = false; warnings.push('focus_area_unavailable') }
   const ancestors: OrientationCard[] = focus.level === 'project' ? [] : [projectCard]
   if (focusArea && focus.level !== 'area') ancestors.push(card(focusArea, 'area'))

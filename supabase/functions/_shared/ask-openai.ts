@@ -67,6 +67,7 @@ import { readWithStatementRetry, withStatementRetry } from './read-retry.ts'
 import { createMemoryRetrieval, journalMemoryStore } from './bob-memory-retrieval.ts'
 import { createJournalledMemoryEmbedder } from './bob-memory-embedding.ts'
 import { createBobConversationStore, type BobTurnClaim } from './bob-conversation.ts'
+import { readPlanOrientationPacket } from './bob-project-orientation.ts'
 import { createProjectLookup, type LookupInput } from './project-lookup.ts'
 import { createLookupReuse, createLookupTransport, lookupPin, type LookupPin } from './lookup-rpc.ts'
 import { createPlanAssistant } from './plan-assistant.ts'
@@ -1428,6 +1429,13 @@ export async function answerWithOpenAi(opts: {
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
     ...opts, continuedWork:execution.continuedWorkVersion===1, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? CLAUDE_BACKGROUND_TIMEOUT_MS : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
+    readPlanOrientation: async view => {
+      const focus = view?.status === 'ok' ? view.focus : undefined
+      const { data, error } = await readRpc('read_plan_orientation', { p_project: opts.projectId,
+        p_screen_step: focus?.planStep?.id ?? null, p_screen_task: focus?.task?.id ?? null })
+      if (error) throw new Error(error.code === '42501' ? 'project_denied' : 'context_unavailable')
+      return readPlanOrientationPacket(opts.projectId, data)
+    },
     readToolPolicy,
     boundDrawingWork:execution.drawingBindingVersion===1&&execution.operationPathsVersion===undefined,
     ...(workerOperations?{workerOperations}:{}),
