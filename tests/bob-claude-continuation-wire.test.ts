@@ -85,7 +85,7 @@ test('Bob replays complete Claude tool batches across a saved context checkpoint
     const create = () => createBobContextContinuation({ version: 1, aiCatalog: catalog, mainResultReferences: 1,
       callModel: async (options: OpenAIServiceOptions) => {
         assert.equal(options.previousResponseId, undefined, 'the local cursor must not enter the Claude request')
-        requests.push(await anthropicRequestBody(options, claude))
+        requests.push(await anthropicRequestBody(options, { ...claude, cacheDiagnosticsEnabled: true }))
         return requests.length === 1 ? toolReply('msg_a', 'read_construction_draft', ['call_a', 'call_b']) : finalReply('msg_b')
       } })
     let continuation = create()
@@ -105,6 +105,8 @@ test('Bob replays complete Claude tool batches across a saved context checkpoint
         { role: 'tool', tool_call_id: 'call_b', content: '{"status":"ok","revision":5}' }] })
     assert.equal(second.data, 'Readback complete.')
     assert.equal(requests.length, 2, 'checkpoint recovery never replays a paid model call')
+    assert.deepEqual(requests.map(r => r.diagnostics), [{ previous_message_id: null },
+      { previous_message_id: 'msg_a' }], 'the provider diagnostic id survives a checkpoint but never acts as a continuation cursor')
     const transcript = requests[1].messages as Array<{ role: string; content: Array<Record<string, unknown>> }>
     assert.deepEqual(transcript.map(m => m.role), ['user', 'assistant', 'user'])
     assert.deepEqual(transcript[1].content.map(b => b.type), ['thinking', 'tool_use', 'tool_use'])
