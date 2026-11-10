@@ -41,6 +41,7 @@ function workCounts(value:WorkDiagnostics|undefined):Record<string,number|boolea
 const roles=new Set(['ask-bob','cad-research','cad-designer','cad-reviewer','context-summary','plan-compiler','plan-reviewer','bob-delivery-language'])
 const outputPhases=new Set(['commentary','final_answer','legacy','tool_calls','refusal','incomplete'])
 const phaseCounts=(phase:unknown):Record<string,string>=>typeof phase==='string'&&outputPhases.has(phase)?{output_phase:phase}:{}
+const cacheMissReasons=new Set(['model_changed','system_changed','tools_changed','messages_changed','previous_message_not_found','unavailable'])
 const validationCodes=new Set<string>([...TASK_WORK_VALIDATION_CODES,'tool_shape','request_quote','field_value','task_location','domain_fields','human_text',
   // Rejection reasons recorded for new manifests (2026-10-29): typed tool codes and the content editor's fixed messages.
   ...TOOL_REJECTION_CODES,'stale_construction_text','parameter_unused_node','invalid_recipe','computed_geometry_invalid','unsupported_image_frame','request_quote_required'])
@@ -82,6 +83,10 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
     async model(options:OpenAIServiceOptions,result:OpenAIServiceResponse<unknown>,elapsed:number,call:{step:string|null;attempt:number;usageEventId?:string|null}={step:null,attempt:0}){
       // A cut Claude answer carries no usage, only code's estimate (audit round 3).
       const est=typeof result.estimatedCostUsd!=='number'&&result.costEstimate?result.costEstimate:null
+      const counted=est??result.usage
+      const cacheWrite=counted?.cache_creation_input_tokens
+      const cacheDiagnostic=result.cacheDiagnostics
+      const cacheMiss=cacheDiagnostic&&cacheMissReasons.has(cacheDiagnostic.missReason)?cacheDiagnostic:null
       await write({...base(),event_key:'model:'+crypto.randomUUID(),kind:'model',role:roles.has(options.aiFunction)?options.aiFunction:'other',status:result.success?'ok':'failed',
         duration_ms:Math.round(number(elapsed)),input_tokens:number((est??result.usage)?.input_tokens),output_tokens:number((est??result.usage)?.output_tokens),
         cost_usd:typeof result.estimatedCostUsd==='number'?number(result.estimatedCostUsd):est?number(est.usd):null,
@@ -95,6 +100,13 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
           ai_profile_version_id:label(options.aiDefinition?.profileVersionId),
           ai_tier:label(options.aiDefinition?.tier),
           cached_input_tokens:number((est??result.usage)?.cached_input_tokens),cost_basis:est?est.basis:null,reasoning_tokens:number(result.usage?.reasoning_tokens),
+          ...(Number.isSafeInteger(cacheWrite)&&Number(cacheWrite)>=0?{
+            cache_write_input_tokens:Number(cacheWrite),
+            uncached_input_tokens:Math.max(0,number(counted?.input_tokens)-number(counted?.cached_input_tokens)-Number(cacheWrite)),
+          }:{}),
+          ...(cacheMiss?{cache_miss_reason:cacheMiss.missReason,
+            ...(Number.isSafeInteger(cacheMiss.missedInputTokens)&&Number(cacheMiss.missedInputTokens)>=0?
+              {cache_missed_input_tokens:Number(cacheMiss.missedInputTokens)}:{})}:{}),
           step:label(call.step),attempt:number(call.attempt)}})
     },
     async internalTool(input:{name:string;status:string;callId:string;role:string;ms:number}){
