@@ -32,7 +32,7 @@ import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
 import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogPlanTools, catalogReportReadback, catalogConstructionAutoCheck, catalogHandoverReadiness, handoverReadinessBlock, readbackReads, workerOwnedTools, parseWorkerJob, runWorker, validWorkerProgress, type WorkerProgress, withOutputLimitNote } from './bob-workers.ts'
 import { focusedWorkerStep, savedFormPieceEvidence } from './worker-form-piece.ts'
 import type { WorkingContext } from './bob-working-context.ts'
-import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
+import { planStepAtTurnStart, prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
 import { restoreOrientationDirectory } from './bob-orientation-directory.ts'
 import { countContextTokens } from './bob-token-budget.ts'
@@ -188,7 +188,7 @@ export interface TurnProgress { stage: 'thinking' | 'tool' | 'finishing'; tool?:
  * reads the owner's latest instruction and the tool cards and names up to four
  * tools for the turn, so the offered list is right from the first step and
  * stays fixed. Any failure, invalid answer or empty choice keeps the phase set. */
-export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], drawingRequests: unknown, deadline: number, exclude: Set<string> = new Set(), limit = 4): Promise<string[] | null> {
+export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], drawingRequests: unknown, deadline: number, exclude: Set<string> = new Set(), limit = 4, plan?: ReturnType<typeof planStepAtTurnStart>): Promise<string[] | null> {
   const candidates = opts.aiCatalog.manifest().definitions.flatMap(row => {
     const name = row.prompt_key.startsWith('tools.') ? row.prompt_key.slice(6) : ''
     const card = row.definition.card_description
@@ -196,6 +196,7 @@ export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], 
   })
   if (!candidates.length) return null
   return pickFromCards(opts, { latest_instruction: opts.message, ...(opts.continuedWork?helperConversation(opts.context,true):{memory_summary:opts.context?.summary??null,recent_conversation:(opts.context?.recent??[]).slice(-4).map(({role,text})=>({role,text:text.slice(0,1000)}))}),
+    ...(plan ? { plan_at_turn_start: plan } : {}),
     pending_drawing_requests: Array.isArray(drawingRequests) ? drawingRequests.length : 0, always_loaded: core }, candidates, deadline, limit)
 }
 
@@ -463,6 +464,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const contract = opts.aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const workpads = opts.workpads && contract.workpad_version === 1
     && opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.workpad_version === 1 ? opts.workpads : undefined
+  const planAwareTools = contract.plan_progress_version === 1
   const contextStrategy = contract.context_strategy_version === 1
   const boundedOrientation = contextStrategy && contract.orientation_directory_version === 1
   if (boundedOrientation && !opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.read_project_orientation')) throw new Error('tool_catalog_unavailable')
@@ -512,7 +514,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const turnTools = (phase: string | null) => {
     if (!phaseTools) return preloadTools
     if (toolPick) return [...preloadTools, ...toolPick]
-    if (flexiblePhase === undefined) flexiblePhase = drawingWork ? 'design' : phase
+    if (flexiblePhase === undefined) flexiblePhase = drawingWork ? 'design' : planAtStart?.step.phase ?? phase
     return [...preloadTools, ...(flexiblePhase ? phaseTools[flexiblePhase] ?? [] : [])]
   }
   const basePolicy: ToolPolicyReader = opts.readToolPolicy ?? (async () => {
@@ -857,6 +859,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       userId: opts.userId, catalogRoleKey: 'completion-gate', catalogSchemaKey: 'bob_completion_gate',
       messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, ...helperConversation(opts.context,opts.continuedWork),
         ...(opts.continuedWork?{available_capabilities:toolbox.toolbox.map(({name,state,description})=>({name,state,description}))}:{}),
+        ...(planAtStart ? { plan_at_turn_start: planAtStart } : {}),
         candidate_final_answer: answer }) }],
       timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, 30_000, deadline - Date.now()) })
     let verdict: unknown = result.data
@@ -873,6 +876,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       userId: opts.userId, catalogRoleKey: 'completion-gate', catalogSchemaKey: 'bob_completion_gate',
       messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, ...helperConversation(opts.context,opts.continuedWork),
         ...(opts.continuedWork?{available_capabilities:toolbox.toolbox.map(({name,state,description})=>({name,state,description}))}:{}),
+        ...(planAtStart ? { plan_at_turn_start: planAtStart } : {}),
         candidate_final_answer: answer,
         saved_work: compactReceipts(opts.writer?.executedReceipts ?? []).slice(-32).map(({ dataset, label, operation, revision }) =>
           ({ dataset, label, operation, ...(revision ? { revision } : {}) })),
@@ -891,18 +895,29 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   if (!coreTools && Array.isArray(drawingRequests) && drawingRequests.length) preloadTools = [...preloadTools, ...DRAWING_CONTINUATION_PRELOAD]
   if (phaseTools && Array.isArray(drawingRequests) && drawingRequests.length) drawingWork = true
   const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
-  if (!restored && opts.toolPicker === true && phaseTools && coreTools
-    && opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.tool-picker')) toolPick = await pickTurnTools(opts, coreTools, drawingRequests, deadline, workerTools, opts.toolPickLimit ?? 4)
+  let planAtStart: ReturnType<typeof planStepAtTurnStart>
+  const chooseTools = async () => {
+    if (!restored && opts.toolPicker && phaseTools && coreTools
+      && opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.tool-picker')) {
+      toolPick = await pickTurnTools(opts, coreTools, drawingRequests, deadline, workerTools, opts.toolPickLimit ?? 4, planAtStart)
+    }
+  }
+  // Older jobs must replay their journaled reads and model calls in their original order.
+  if (!planAwareTools) await chooseTools()
   if (restored?.initial.directory) {
     const directory = restoreOrientationDirectory(restored.initial.directory as Parameters<typeof restoreOrientationDirectory>[0], { projectId: opts.projectId, hasAccess: opts.hasAccess })
     orientationReader = directory.reader
   }
-  const orientation = restored ? restored.initial.orientation : contextStrategy ? await prepareProjectOrientation({ ...opts, briefing, deadline,
+  const orientation = restored ? restored.initial.orientation : contextStrategy ? await prepareProjectOrientation({ ...opts, briefing, deadline, includeSavedFocus: planAwareTools,
     ...(opts.pureFacts ? { presentation: 'cut' as const } : {}),
     ...(boundedOrientation ? { directory: { maxTokens: Number(contract.orientation_max_tokens), pageMaxTokens: opts.resultReferences
       ? Math.min(2000, Number(contract.orientation_page_max_tokens)) : Number(contract.orientation_page_max_tokens),
       ready: (reader: OrientationDirectoryReader) => { orientationReader = reader } } } : {}),
   }) : undefined
+  if (planAwareTools) {
+    planAtStart = planStepAtTurnStart(orientation)
+    await chooseTools()
+  }
   const initialFooter = orientation ? { role: 'user' as const,
     content: opts.aiCatalog.text('bob.note.prefix') + JSON.stringify({ orientation: orientation.footer,
       ...(opts.buildingLinks ? { buildings: { linked: opts.buildingLinks.linked, owner_can_link: opts.buildingLinks.linkable } } : {}) }) } : undefined
