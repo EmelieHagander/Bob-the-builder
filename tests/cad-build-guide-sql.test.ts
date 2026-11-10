@@ -155,3 +155,21 @@ test('stored guide pages: written once by the service, required before save, rea
   const stranger = randomUUID(); await pg.query('insert into auth.users values($1,$2,now())', [stranger, 'stranger@example.test'])
   assert.equal((await asProjectUser(pg, stranger, 'select page_key from bob.cad_guide_pages where project_id=$1', [project], 'authenticated')).rows.length, 0)
 })
+
+test('a catalogue revision has one leased illustration and one accepted thumbnail', async()=>{
+  const {rows:[item]} = await pg.query<{id:string;revision:number}>('select r.item_id id,r.revision from bob.catalog_item_revisions r join bob.catalog_items i on i.id=r.item_id where i.project_id is null limit 1')
+  const a=randomUUID(), b=randomUUID()
+  const claim=(token:string,builtin=false,role='service_role')=>call('bob.claim_guide_item_art',['p',item.id,item.revision,token,builtin],role)
+  await assert.rejects(claim(a,false,'authenticated'),/permission denied/)
+  assert.equal((await claim(a,true)).status,'builtin')
+  assert.equal((await claim(a)).token,a)
+  assert.equal((await claim(b)).status,'unavailable')
+  await pg.query('update bob.guide_item_illustrations set retry_after=now() where item_id=$1',[item.id])
+  assert.equal((await claim(b)).token,b)
+  const png='iVBORw0KGgo='
+  const finish=(token:string)=>query('update bob.guide_item_illustrations set png=$1,claim_token=null where item_id=$2 and claim_token=$3 returning png',[png,item.id,token],owner,'service_role')
+  assert.equal((await finish(a)).rows.length,0)
+  assert.equal((await finish(b)).rows.length,1)
+  assert.deepEqual(await claim(a),{status:'ready',png})
+  assert.equal((await call('bob.claim_guide_item_art',['p',item.id,item.revision+999,a,false],'service_role')).status,'unavailable')
+})

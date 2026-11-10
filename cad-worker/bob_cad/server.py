@@ -51,13 +51,13 @@ def guide_to_pipe(request, connection):
     """Build-guide pages (SVG) for one exact construction revision and its proposed order."""
     try:
         from .guide import render_guide
-        if not isinstance(request, dict) or set(request) - {'range', 'item_names'} != GUIDE_KEYS or request['drawing_source'] is None:
+        if not isinstance(request, dict) or set(request) - {'range', 'item_names', 'item_art'} != GUIDE_KEYS or request['drawing_source'] is None:
             raise ValueError('guide_request')
         with TemporaryDirectory() as directory:
             guide = render_guide(request['recipe'], request['joints'], request['steps'], directory, request['fasteners'],
                                  request['context_ids'], drawing_source=request['drawing_source'], svg_only=True,
                                  step_range=request['range'] if 'range' in request else None,
-                                 item_names=request.get('item_names'))
+                                 item_names=request.get('item_names'), item_art=request.get('item_art'))
             files = {}
             for page in guide['pages']:
                 raw = (Path(directory) / (page['key'] + '.svg')).read_bytes()
@@ -73,6 +73,16 @@ def guide_to_pipe(request, connection):
         # the caller can record why no guide was made; anything else stays blank.
         code = str(error) if isinstance(error, ValueError) else ''
         connection.send_bytes(json.dumps({'error': code}).encode() if code.isidentifier() and len(code) <= 64 else b'')
+    finally:
+        connection.close()
+
+def thumbnail_to_pipe(request, connection):
+    try:
+        from .hardware_art import guide_thumbnail
+        png = guide_thumbnail(request['image'])
+        connection.send_bytes(json.dumps({'png': png}).encode())
+    except Exception:
+        connection.send_bytes(b'')
     finally:
         connection.close()
 
@@ -97,12 +107,13 @@ class Handler(BaseHTTPRequestHandler):
         if not token or not hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + token):
             self.send_error(401)
             return
-        if self.path not in ('/render', '/wireframe', '/guide'):
+        if self.path not in ('/render', '/wireframe', '/guide', '/guide-thumbnail'):
             self.send_error(404)
             return
         try:
             length = int(self.headers.get('Content-Length', '0'))
-            if not 0 < length <= (MAX_GUIDE_REQUEST if self.path == '/guide' else MAX_REQUEST):
+            limit = {'/guide': MAX_GUIDE_REQUEST, '/guide-thumbnail': 12 * 1024 * 1024}.get(self.path, MAX_REQUEST)
+            if not 0 < length <= limit:
                 raise ValueError()
             self.connection.settimeout(10)
             recipe = json.loads(self.rfile.read(length))
@@ -111,7 +122,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         context = multiprocessing.get_context('spawn')
         receive, send = context.Pipe(duplex=False)
-        target = {'/wireframe': wireframe_to_pipe, '/guide': guide_to_pipe}.get(self.path, render_to_pipe)
+        target = {'/wireframe': wireframe_to_pipe, '/guide': guide_to_pipe, '/guide-thumbnail': thumbnail_to_pipe}.get(self.path, render_to_pipe)
         worker = context.Process(target=target, args=(recipe, send))
         worker.start()
         send.close()

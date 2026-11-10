@@ -11,6 +11,7 @@ import hashlib, itertools, math, re, shutil, xml.etree.ElementTree as ET
 from pathlib import Path
 from cairosvg import svg2png
 from build123d import Align, Compound, Cone, Cylinder, ExportSVG, Location, Unit
+from .hardware_art import draw_item
 from .annotations import part_name, blank_text, marker_ranges, _number
 from .worker import CadContractError, ID, _location, _shape, validate_drawing_source, validate_fasteners, validate_request
 
@@ -351,15 +352,16 @@ def fastener_rows(joint_ids, schedule, names=None):
             if j['source'] in ('no_rule', 'none') or (j['source'] == 'chosen' and j['kind'] is None): unsized.append(jid); continue
             if j['kind'] == 'glue': glue = True; continue
             # A chosen catalog item keeps its own name (2026-11-10), so the box page reads as a shopping list.
-            name = (names or {}).get(f"{j.get('material_id')}@{j.get('material_revision')}")
-            if j.get('counting') == 'per_construction': packages.add((j['kind'], j['diameter_mm'], j['length_mm'], name)); continue
+            pin = f"{j['material_id']}@{j['material_revision']}" if j.get("material_id") and j.get("material_revision") else None
+            name = (names or {}).get(pin)
+            if j.get('counting') == 'per_construction': packages.add((j['kind'], j['diameter_mm'], j['length_mm'], name, pin)); continue
             if j['kind'] and counted(j):
                 if j['count'] is None or (j['kind'] in KIND_NAMES and None in (j['diameter_mm'], j['length_mm'])): unsized.append(jid); continue
-                key = (j['kind'], j['diameter_mm'], j['length_mm'], name)
+                key = (j['kind'], j['diameter_mm'], j['length_mm'], name, pin)
                 groups[key] = groups.get(key, 0) + j['count']
     for key in packages: groups.setdefault(key, 1)
-    order = lambda item: (item[0][0], item[0][1] if item[0][1] is not None else -1, item[0][2] if item[0][2] is not None else -1, item[0][3] or '')
-    rows = [{'kind': k, 'diameter_mm': d, 'length_mm': l, 'count': c, **({'name': n} if n else {})} for (k, d, l, n), c in sorted(groups.items(), key=order)]
+    order = lambda item: (item[0][0], item[0][1] if item[0][1] is not None else -1, item[0][2] if item[0][2] is not None else -1, item[0][3] or '', item[0][4] or '')
+    rows = [{'kind': k, 'diameter_mm': d, 'length_mm': l, 'count': c, **({'name': n} if n else {}), **({'item_key': pin} if pin else {})} for (k, d, l, n, pin), c in sorted(groups.items(), key=order)]
     return rows, sorted(set(unsized)), glue
 
 
@@ -419,18 +421,21 @@ def _plan(steps, joint_ends, boxes, defs_of):
     return plan
 
 
-def render_guide(raw, joints, steps, output_dir, fasteners=None, context_ids=(), size=(1500, 1125), drawing_source=None, svg_only=False, step_range=None, item_names=None):
+def render_guide(raw, joints, steps, output_dir, fasteners=None, context_ids=(), size=(1500, 1125), drawing_source=None, svg_only=False, step_range=None, item_names=None, item_art=None):
     out = Path(output_dir); out.mkdir(parents=True, exist_ok=True)
     scratch = out / '.layers'; scratch.mkdir(exist_ok=True)
     try:
-        return _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size, drawing_source, svg_only, step_range, item_names)
+        return _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size, drawing_source, svg_only, step_range, item_names, item_art)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 
 
-def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size, drawing_source, svg_only, step_range, item_names):
+def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size, drawing_source, svg_only, step_range, item_names, item_art):
     req = validate_request(raw)
     validate_item_names(item_names)
+    item_art = item_art or {}
+    if not isinstance(item_art, dict) or any(key not in (item_names or {}) or not isinstance(value, str) for key, value in item_art.items()):
+        raise CadContractError("guide_item_art")
     validate_drawing_source(drawing_source)
     if not isinstance(context_ids, (list, tuple)) or len(set(context_ids)) != len(context_ids): raise CadContractError('guide_context')
     ids = [i['id'] for i in req['instances']]
@@ -472,6 +477,14 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
             svg2png(bytestring=data, write_to=str(out / f'{key}.png'), output_width=size[0], output_height=round(size[1] * float(page.get('height')) / PAGE_H), background_color='white')
         pages.append({'key': key, 'sha256': hashlib.sha256(data).hexdigest(), **note})
 
+    def legend(group, kind, art):
+        if art == 'unavailable' or draw_item(group, art):
+            return
+        if kind in KIND_NAMES or kind == 'glue':
+            _glyph(group, kind, 0, 0)
+            if kind in KIND_NAMES:
+                _head(group, kind, 66, 22)
+
     def parts_box(page, items, hardware, unsized, glue, y0=140, bottom=PAGE_H - 12):
         """The step's parts and hardware, rows shrunk together so the box always ends on the page."""
         rows = len(items) + len(hardware) + (1 if glue else 0) + (1 if unsized else 0)
@@ -480,10 +493,9 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
                                               'fill': 'none', 'stroke': INK, 'stroke-width': '2'})
         y = y0 + 12; tx = 60 + 86 * s; tw = 280 - tx
 
-        def symbol(kind, head=True):
+        def symbol(kind, art=None):
             g = ET.SubElement(page, f'{{{NS}}}g', {'transform': f'translate(60 {_r(y)}) scale({_r(s)})'})
-            _glyph(g, kind, 0, 0)
-            if head: _head(g, kind, 66, 22)
+            legend(g, kind, art)
 
         def words(big, small, big_size=26):
             _fit(page, tx, y + 34 * s, big, big_size * s, tw, '700')
@@ -492,9 +504,9 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
             _View([solids[part_ids[0]]], (1, -1, 1), (52, y, 80 * s, 72 * s), scratch).layer(page, [solids[part_ids[0]]], INK, 1.6)
             words(f'{count}×', f'{label(part_ids)} {part_name(defs_of[part_ids[0]])}'); y += rh
         for h in hardware:
-            symbol(h['kind'], h['kind'] in KIND_NAMES)
-            words(f'{h["count"]}×', f'{kind_name(h["kind"])}{size_text(h["diameter_mm"], h["length_mm"])}'); y += rh
-        if glue: symbol('glue', False); words('Glue', 'on the joining faces', 22); y += rh
+            symbol(h['kind'], item_art.get(h.get('item_key')))
+            words(f'{h["count"]}×', hardware_words(h)); y += rh
+        if glue: symbol('glue'); words('Glue', 'on the joining faces', 22); y += rh
         if unsized: _text(page, 60, y + 34 * s, '?', 30 * s, '700'); words('No rule yet', f'{len(unsized)} joint(s): ask Bob', 16)
 
     def box_page():
@@ -522,18 +534,17 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
         if fasteners is None:
             _text(page, 40, y + 22, 'The hardware schedule was not read for this guide.', 15, fill='#333333'); y += 40
         else:
-            entries = [(r['kind'], f'{r["count"]}×', hardware_words(r), r['kind'] in KIND_NAMES) for r in rows]
-            if glue: entries.append(('glue', '', glue_name([j['id'] for j in joints], fasteners, item_names) or 'Wood glue, for the glued joints', False))
-            if unsized: entries.append(('?', '?', f'{len(unsized)} joint(s) have no hardware yet: ask Bob', False))
+            entries = [(r['kind'], f'{r["count"]}×', hardware_words(r), item_art.get(r.get('item_key'))) for r in rows]
+            if glue: entries.append(('glue', '', glue_name([j['id'] for j in joints], fasteners, item_names) or 'Wood glue, for the glued joints', None))
+            if unsized: entries.append(('?', '?', f'{len(unsized)} joint(s) have no hardware yet: ask Bob', None))
             if not entries: _text(page, 40, y + 22, 'No hardware.', 15, fill='#333333'); y += 40
             cw, ch = 452, 76
-            for n, (kind, count, words, head) in enumerate(entries):
+            for n, (kind, count, words, art) in enumerate(entries):
                 x = 40 + (n % 2) * (cw + 16); ty = y + (n // 2) * (ch + 12)
                 ET.SubElement(page, f'{{{NS}}}rect', {'x': str(x), 'y': _r(ty), 'width': str(cw), 'height': str(ch), 'rx': '10', 'fill': 'none', 'stroke': INK, 'stroke-width': '2'})
                 if kind == '?': _text(page, x + 24, ty + 50, '?', 32, '700')
                 else:
-                    g = ET.SubElement(page, f'{{{NS}}}g', {'transform': f'translate({x + 4} {_r(ty + 2)}) scale(0.85)'}); _glyph(g, kind, 0, 0)
-                    if head: _head(g, kind, 66, 22)
+                    g = ET.SubElement(page, f'{{{NS}}}g', {'transform': f'translate({x + 4} {_r(ty + 2)}) scale(0.85)'}); legend(g, kind, art)
                 if count: _fit(page, x + 76, ty + 47, count, 26, 80, '700')
                 _fit(page, x + 162, ty + 32, words, 14, cw - 176, lines=3, smallest=11)
             y += ((len(entries) + 1) // 2) * (ch + 12) + 12
@@ -575,7 +586,7 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
                 lift = _clear_lift(m, axis, sign, boxes, staying, lift_mm, max(size_mm * 0.08, 40))
                 off = [0, 0, 0]; off[axis] = sign * lift; offsets[m] = off; moves[m] = (axis, sign, lift)
                 lifted.append(Location(tuple(off)) * solids[m])
-            hardware, unsized, glue = fastener_rows(comp, fasteners)
+            hardware, unsized, glue = fastener_rows(comp, fasteners, item_names)
             # Choose the overview corner that shows the most screw heads, so fasteners are drawn on faces you can see.
             heads = []
             if fasteners is not None:

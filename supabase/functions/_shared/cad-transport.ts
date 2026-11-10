@@ -22,7 +22,7 @@ export async function verifyCadFiles(files:Record<string,unknown>,views:readonly
  }
 }
 
-export type CadGuideRequest={recipe:CadAssemblyRequest;drawing_source:CadDrawingSource;joints:unknown[];steps:{joint_ids:string[];section?:string}[];fasteners:unknown|null;context_ids:string[];/** '<item id>@<revision>' -> catalog name of chosen hardware (2026-11-10). */item_names?:Record<string,string>}
+export type CadGuideRequest={recipe:CadAssemblyRequest;drawing_source:CadDrawingSource;joints:unknown[];steps:{joint_ids:string[];section?:string}[];fasteners:unknown|null;context_ids:string[];/** '<item id>@<revision>' -> catalog name of chosen hardware (2026-11-10). */item_names?:Record<string,string>;item_art?:Record<string,string>}
 /** Steps [first, last) drawn in one worker call (worker RANGE_STEPS is 24). */
 export const GUIDE_RANGE_STEPS=12
 /** A guide is drawn a section at a time: runs of steps with the same section,
@@ -111,4 +111,18 @@ export function createCadTransport(endpoint:string|undefined,token:string|undefi
   const persistedManifest:Record<string,unknown>={...manifest};delete persistedManifest.previews
   return {recipe:structuredClone(recipe),manifest:{...persistedManifest,preview_metadata:previewMetadata},files:packet.files,previews:packet.previews}
  }
+}
+
+/** Normalize provider bytes outside the Edge isolate. Only a bounded PNG returns. */
+export async function guideThumbnail(endpoint:string|undefined, token:string|undefined, bytes:Uint8Array) {
+ if (!endpoint || !token || !bytes.length || bytes.length > 8*1024*1024) return null
+ const url = new URL('/guide-thumbnail', endpoint)
+ if (url.protocol !== 'https:') return null
+ let binary = ''
+ for (let i=0;i<bytes.length;i+=8192) binary += String.fromCharCode(...bytes.subarray(i,i+8192))
+ const response = await fetch(url,{method:'POST',redirect:'error',signal:AbortSignal.timeout(14000),
+  headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({image:btoa(binary)})})
+ if (!response.ok) return null
+ const {png} = await response.json()
+ return typeof png === 'string' && png.length <= 2400 && /^iVBORw0KGgo[A-Za-z0-9+/]*={0,2}$/.test(png) ? png : null
 }

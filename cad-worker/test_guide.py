@@ -141,6 +141,35 @@ class GuideTest(unittest.TestCase):
             self.assertNotIn('>P40<', Path(tmp, 'guide-5.svg').read_text())
             self.assertIn('>P27<', Path(tmp, 'guide-1.svg').read_text())
 
+    def test_bunk_bed_art_is_bound_to_the_same_item_on_box_and_steps(self):
+        from bob_cad.hardware_art import OUTLINES, guide_thumbnail
+        from PIL import Image, ImageDraw
+        import base64, io, xml.etree.ElementTree as ET
+        f = json.loads((Path(__file__).parent / 'fixtures/bunk_bed_guide.json').read_text())
+        shapes = {'angle_bracket':'reinforced-angle', 'bracket':'u-channel', 'flat_plate':'splice-plate',
+                  'hook_bracket':'hook-pair', 'bolt':'bed-bolt', 'dowel':'fluted-dowel'}
+        art = {f"{r['material_id']}@{r['material_revision']}":shapes[r['kind']] for r in f['fasteners']['joints'] if r['kind'] in shapes}
+        # Exercise the generated pixel path on an actual guide, including its step renders.
+        pin = next(key for key, shape in art.items() if shape == 'splice-plate')
+        pic = Image.new('RGB',(300,100),'white')
+        ImageDraw.Draw(pic).rectangle((10,10,290,90), outline='black', width=8)
+        buf = io.BytesIO(); pic.save(buf,format='PNG')
+        art[pin] = guide_thumbnail(base64.b64encode(buf.getvalue()).decode())
+        with tempfile.TemporaryDirectory() as tmp:
+            guide = render_guide(f['recipe'],f['joints'],f['steps'],tmp,f['fasteners'],f['context_ids'],
+                                 svg_only=True,item_names=f['item_names'],item_art=art)
+            def drawn(page):
+                root = ET.parse(Path(tmp,page['key']+'.svg'))
+                labels = {el.get('data-hardware-art') for el in root.iter() if el.get('data-hardware-art')}
+                images = {el.get('{http://www.w3.org/1999/xlink}href') for el in root.iter('{http://www.w3.org/2000/svg}image')}
+                self.assertFalse(layout_issues(root.getroot()))
+                return labels | images
+            expected = (set(OUTLINES) - {'splice-plate'}) | {'data:image/png;base64,'+art[pin]}
+            self.assertEqual(drawn(guide['pages'][0]),expected)
+            for step in guide['pages'][1:-1]:
+                pins = {r['item_key'] for r in step['fasteners'] if r.get('item_key') in art}
+                self.assertEqual(drawn(step),{art[k] if k!=pin else 'data:image/png;base64,'+art[k] for k in pins})
+
     def test_chosen_items_keep_their_catalog_names_and_bad_names_are_refused(self):
         f = bench()
         row = {'joint_id': 'g', 'source': 'chosen', 'kind': 'glue', 'material_id': 'm', 'material_revision': 2}

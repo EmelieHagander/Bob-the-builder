@@ -1,3 +1,5 @@
+import { guideItemArt, type ArtClaim } from './guide-item-art.ts'
+import { guideArtResolver } from './guide-item-runtime.ts'
 import {createConceptViewAdapter,resolveConceptViewImage} from './project-context/concepts.ts'
 import {createConceptViewTransport} from './project-context/concept-transport.ts'
 import {createDrawingViewAdapter,resolveDrawingViewImage} from './project-context/drawings.ts'
@@ -1008,15 +1010,55 @@ export async function answerWithOpenAi(opts: {
       },
     }) : undefined
 
+  const resolveGuideArt = guideArtResolver({
+    memo,catalog:aiCatalog,userId:opts.userId,authorize:readAccess,
+    claim:async(pin,builtin)=>{
+      if (!await readAccess()) return {status:'unavailable'}
+      const [id,revision] = pin.split('@')
+      const {data,error} = await internal.schema('bob').rpc('claim_guide_item_art',{
+        p_project:opts.projectId,p_item:id,p_revision:Number(revision),p_token:crypto.randomUUID(),p_builtin:builtin,
+      }).abortSignal(AbortSignal.timeout(5000))
+      if (error) return {status:builtin?'builtin':'unavailable'}
+      return data as ArtClaim
+    },
+    finish:async(pin,token,png)=>{
+      const [id,revision] = pin.split('@')
+      if (!await readAccess()) return false
+      const {data,error} = await internal.schema('bob').from('guide_item_illustrations')
+        .update({png,claim_token:null,retry_after:png?null:new Date(Date.now()+3600000).toISOString()})
+        .eq('item_id',id).eq('revision',Number(revision)).eq('claim_token',token).select('item_id')
+        .abortSignal(AbortSignal.timeout(5000))
+      return !error && data?.length === 1
+    },
+    renew:async(pin,token)=>{
+      const [id,revision] = pin.split('@')
+      const {data,error} = await internal.schema('bob').from('guide_item_illustrations')
+        .update({retry_after:new Date(Date.now()+300000).toISOString()})
+        .eq('item_id',id).eq('revision',Number(revision)).eq('claim_token',token).select('item_id')
+        .abortSignal(AbortSignal.timeout(5000))
+      return !error && data?.length === 1
+    },
+    reference:async(id)=>{
+      const opened = await createMediaAdapter(opts.projectId,mediaTransport).open('image:'+id,AbortSignal.timeout(10000))
+      const url = opened.image.image_url
+      const match = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(url)
+      if (!match) throw new Error('guide_reference_unavailable')
+      const raw = atob(match[2]), bytes = new Uint8Array(raw.length)
+      for (let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i)
+      return {url,bytes,contentType:match[1] as 'image/png'|'image/jpeg'|'image/webp'}
+    },
+  })
   // One guide, drawn range by range (a section, at most GUIDE_RANGE_STEPS steps)
   // and stored page by page under a content id unique to this job's guide.
   const renderGuidePages=async(guide:CadGuideRequest)=>{
    const guideId=await memo('cad:guide_id',guide,async()=>sha256Text(JSON.stringify(guide)+crypto.randomUUID()))
+   const art=await guideItemArt(guide, resolveGuideArt)
+   const illustrated=Object.keys(art).length?{...guide,item_art:art}:guide
    const transport=createCadGuideTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))
    const pages:Record<string,unknown>[]=[]
    for(const range of guideRanges(guide.steps)){
     const notes=await memo('cad:guide_range',{guide_id:guideId,range},async()=>{
-     const result=await transport({...guide,range})
+     const result=await transport({...illustrated,range})
      const decoder=new TextDecoder()
      const rows=result.notes.pages.map(page=>{const raw=atob(result.files[page.key]),bytes=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i)
       return {key:page.key,sha256:page.sha256,svg:decoder.decode(bytes)}})
@@ -1098,6 +1140,7 @@ export async function answerWithOpenAi(opts: {
      try{
       return {...packet,build_guide:{notes:await renderGuidePages(guide)}}
      }catch(error){
+      rethrowContinuation(error)
       console.error('[Build guide unavailable]',JSON.stringify({error:error instanceof Error?error.message.slice(0,120):'unknown'}))
       // A named refusal or transport check is kept as the reason; anything else stays generic.
       const code=error instanceof Error&&/^[a-z_]{1,64}$/.test(error.message)&&error.message!=='cad_guide_unavailable'?error.message

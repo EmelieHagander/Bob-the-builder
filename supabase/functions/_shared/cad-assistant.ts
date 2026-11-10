@@ -776,10 +776,10 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
     // page then shows the item's kind and size.
     const itemNames:Record<string,string>={}
     if(schedule&&opts.buildGuide!.readItemName){
-     const keys=[...new Set((schedule.joints as any[]).filter(j=>typeof j.material_id==='string'&&Number.isInteger(j.material_revision)).map(j=>j.material_id+'@'+j.material_revision))].sort().slice(0,64)
+     const keys=[...new Set((schedule.joints as any[]).filter(j=>typeof j.material_id==='string'&&Number.isInteger(j.material_revision)).map(j=>j.material_id+'@'+j.material_revision))].sort().slice(0,256)
      for(const key of keys){
       const [id,revision]=key.split('@')
-      const name=await opts.buildGuide!.readItemName(id,Number(revision)).catch(()=>null)
+      const name=await opts.buildGuide!.readItemName(id,Number(revision)).catch(error=>{rethrowContinuation(error);return null})
       if(typeof name==='string'&&name.trim())itemNames[key]=name.trim().slice(0,200)
      }
     }
