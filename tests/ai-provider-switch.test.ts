@@ -85,3 +85,31 @@ test('after a switch from Claude to GPT the chain is sent in full once instead o
   assert.equal(sent[1].messages?.[0].content, 'Read the construction.')
   assert.equal(sent[1].messages?.at(-1)?.content, '{"revision":4}')
 })
+
+test('after a switch from GPT to Claude diagnostics start a new comparison instead of using a GPT response id', async () => {
+  let adapter = 'openai-responses-v1'
+  const catalog = {
+    definition: () => ({ metadata: { continuation_input_tokens: 64000, context_input_ceiling_tokens: 96000,
+      continuation_summary_tokens: 1600, retained_tool_exchanges: 2, continuation_retention_version: 2 } }),
+    role: () => ({ systemMessage: 'Build carefully.', model: { provider: adapter.startsWith('anthropic') ? 'anthropic' : 'openai' }, providerAdapter: adapter }),
+    tool: (name: string) => ({ type: 'function', function: { name, description: name, parameters: { type: 'object' } } }),
+    text: (key: string) => key,
+  } as unknown as AiCatalogSession
+  const sent: OpenAIServiceOptions[] = []
+  const continuation = createBobContextContinuation({ version: 1, aiCatalog: catalog,
+    callModel: async options => {
+      sent.push(structuredClone(options))
+      return { success: true, data: null, model: 'm', responseId: sent.length === 1 ? 'resp_gpt' : 'msg_claude',
+        usage: { input_tokens: 100, output_tokens: 20, total_tokens: 120 },
+        ...(sent.length === 1 ? { outputPhase: 'tool_calls', toolCalls: [{ id: 'call_one', type: 'function',
+          function: { name: 'read_construction_draft', arguments: '{}' } }] } : {}) } as OpenAIServiceResponse<string>
+    } })
+  const request: OpenAIServiceOptions = { app: 'bob', module: 'global', coworkerId: 'bob', functionName: 'structure-worker',
+    aiFunction: 'structure-worker', catalogRoleKey: 'structure-worker', messages: [{ role: 'user', content: 'Read the construction.' }] }
+  const first = await continuation.call(request)
+  adapter = 'anthropic-messages-v1'
+  await continuation.call({ ...request, previousResponseId: first.responseId,
+    messages: [{ role: 'tool', tool_call_id: 'call_one', content: '{"revision":4}' }] })
+  assert.equal(sent[1].previousResponseId, undefined, 'the GPT cursor must not reach Claude')
+  assert.equal(sent[1].cacheDiagnosticsPreviousMessageId, null, 'the GPT response has no Claude fingerprint')
+})
