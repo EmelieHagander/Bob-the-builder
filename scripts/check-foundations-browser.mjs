@@ -270,7 +270,7 @@ try {
     assert.equal(await headerThumb.evaluate(img=>img.naturalWidth),120,'Pinned original persists after reload')
     await page.getByRole('button',{name:'Unpin thumbnail',exact:true}).click()
     await page.getByRole('button',{name:'Pin as thumbnail',exact:true}).waitFor()
-    await page.getByRole('button', { name: 'Open image: Entry before work' , exact: true }).click()
+    await page.getByRole('region', { name: 'Project images', exact: true }).getByRole('img', { name: 'Entry before work', exact: true }).click()
     const original = page.getByRole('dialog', { name: 'Entry before work', exact: true })
     await original.getByRole('img').waitFor()
     assert.deepEqual(await original.getByRole('img').evaluate(img => [img.naturalWidth, img.naturalHeight, getComputedStyle(img).objectFit]), [120, 240, 'contain'])

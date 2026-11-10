@@ -15,7 +15,7 @@ export const IMAGE_PURPOSES: Record<MediaPurpose, string> = {
 const message = (err: unknown) => userErrorMessage(err, 'Could not update project images. Try again.')
 
 /** Fetch only visible previews; an open original performs a new authorized read. */
-export function StoredImage({ projectId, image, original = false, allowRetry = true, zoomable = false }: { projectId: string; image: Pick<MediaAsset, 'id' | 'title'>; original?: boolean; allowRetry?: boolean; zoomable?: boolean }) {
+export function StoredImage({ projectId, image, original = false, allowRetry = true, zoomable = false, onOpen }: { projectId: string; image: Pick<MediaAsset, 'id' | 'title'>; original?: boolean; allowRetry?: boolean; zoomable?: boolean; onOpen?: () => void }) {
   const container = useRef<HTMLSpanElement>(null)
   const [url, setUrl] = useState('')
   const [error, setError] = useState('')
@@ -35,14 +35,20 @@ export function StoredImage({ projectId, image, original = false, allowRetry = t
     else download()
     return () => { active = false; observer?.disconnect(); if (objectUrl) URL.revokeObjectURL(objectUrl) }
   }, [projectId, image.id, original, attempt])
+  const openLabel = 'Open image: ' + image.title
+  const openOriginal = onOpen && <button type="button" className="btn" aria-label={openLabel} onClick={onOpen}>View original</button>
   if (error) return <span className="image-failure" role="alert">{error}
     {allowRetry && <button type="button" className="btn" onClick={e => { e.stopPropagation(); setAttempt(n => n + 1) }}>Retry image</button>}
+    {openOriginal}
   </span>
-  if (!url) return <span ref={container} className="image-loading" role="status">Loading image…</span>
+  if (!url) return <><span ref={container} className="image-loading" role="status">Loading image…</span>{openOriginal}</>
   const failed = () => setError('The stored image could not be displayed. Try loading it again.')
   if (original && zoomable) return <ZoomableImage src={url} alt={image.title} label={image.title} imgClassName="project-image-original" onError={failed} />
-  return <img src={url} alt={image.title} className={original ? 'project-image-original' : 'project-image-thumbnail'}
+  const img = <img src={url} alt={image.title} className={original ? 'project-image-original' : 'project-image-thumbnail'}
     decoding="async" onError={failed} />
+  return onOpen ? <button type="button" className="project-image-open" aria-label={openLabel} onClick={onOpen}>
+    {img}<span className="guide-expand" aria-hidden="true"><Icon name="arrows-out" size={18} /></span>
+  </button> : img
 }
 
 function UploadImage({ projectId, target, onClose, onSaved }: { projectId: string; target: MediaTarget; onClose: () => void; onSaved: () => void }) {
@@ -129,8 +135,7 @@ export function ProjectImages({ projectId, target, title = 'Images', selectImage
     <div className="project-image-grid">
       {shown.map(image => <article className="project-image-card" key={image.id}>
         {image.state === 'ready' ? <div className="project-image-preview">
-          <StoredImage projectId={projectId} image={image} />
-          <button type="button" className="image-open btn" aria-label={'Open image: ' + image.title} onClick={() => setDialog({ kind: 'view', image })}>View original</button>
+          <StoredImage projectId={projectId} image={image} onOpen={() => setDialog({ kind: 'view', image })} />
         </div> : <div className="image-loading" role="status">{image.state === 'pending' ? 'Upload incomplete' : 'Removal in progress'}</div>}
         <div className="project-image-caption"><strong>{image.title}</strong>
           <span className="image-purpose">{IMAGE_PURPOSES[image.purpose]}{image.sourceKind==='ai_generated' ? ' · AI illustration' : ''}</span>
