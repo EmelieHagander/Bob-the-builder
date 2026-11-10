@@ -108,7 +108,8 @@ function VersionDetails({ value, target, details = false, onShellChanged, onShel
       {value.generator && <span className="image-purpose">Generated</span>}
     </div>
     <DrawingSourceNotice source={value.sourceStatus} />
-    <p><strong>Assumptions / limits:</strong> {value.assumptions || 'Not recorded'}</p>
+    {value.cad && !details && value.assumptions ? <details className="cad-limits"><summary>Drawing assumptions and limits</summary>
+      <p>{value.assumptions}</p></details> : <p><strong>Assumptions / limits:</strong> {value.assumptions || 'Not recorded'}</p>}
     {targetChanged && <p className="solution-attention">The selected target changed after this drawing version. Review before building from it.</p>}
     {!comparable && <p className="foundation-hint">Target comparison is unavailable in this scope. Review this drawing’s recorded target in Details.</p>}
     {value.measurements.some(item => item.latestRevision !== item.revision || item.archived) && <p className="solution-attention">Linked measurements changed after this drawing version. Review the recorded values in Details before use.</p>}
@@ -142,7 +143,7 @@ function VersionDetails({ value, target, details = false, onShellChanged, onShel
       <figcaption>Saved drawing image · version {value.revision}</figcaption>
     </figure> : value.imageTitle && <p>Drawing image removed: {value.imageTitle}</p>}
     {!value.isConstruction && !value.cad && !value.shell && !value.parametricRecipe && !value.hasRoomLayout && !value.hasMultifloorPlan && !value.hasStairStudy && !value.generation && !value.imageId && <p>No viewable drawing is saved for this version. Its description and recorded evidence remain available in Details.</p>}
-    {value.description && <p>{value.description}</p>}
+    {!value.cad && value.description && <p>{value.description}</p>}
     </>}
   </div>
 }
