@@ -161,7 +161,7 @@ export function constructionFormIssues(intent: DesignIntent, recipe: CadAssembly
     }
     const exact = !min.some((v, k) => v !== box.min[k] || Math.abs(max[k] - (box.min[k] + box.size_mm[k])) > 1e-7)
     const inside = min.every((v, k) => v >= box.min[k] - 1e-7) && max.every((v, k) => v <= box.min[k] + box.size_mm[k] + 1e-7)
-    if (!exact && partial && inside) add('form_envelope_incomplete', [m.component_id], 'The parts of this component lie inside its concept envelope but do not fill it yet.')
+    if (!exact && partial && inside) add('form_envelope_incomplete', [m.component_id], 'The combined outer bounds of these parts do not yet reach all six faces of the concept envelope. Gaps between parts are allowed; this does not require a filled solid.')
     else if (!exact) {
       // Name the parts that reach past the envelope and the numbers (deep audit
       // 2026-11-08: a door beam was refused three times with no part named).
@@ -173,7 +173,7 @@ export function constructionFormIssues(intent: DesignIntent, recipe: CadAssembly
       const span = (lo: number[], up: number[]) => axes.map((a, k) => `${a} ${+lo[k].toFixed(3)}..${+up[k].toFixed(3)}`).join(', ')
       add('concept_geometry_changed', [m.component_id, ...outside.slice(0, 12)],
         `The refinement envelope differs from the exact selected concept. Component ${m.component_id} spans ${span(box.min, hi)} mm; its parts span ${span(min, max)} mm.`
-        + (outside.length ? ` Parts outside it: ${outside.slice(0, 12).join(', ')}.` : ' Its parts do not fill it.'))
+        + (outside.length ? ` Parts outside it: ${outside.slice(0, 12).join(', ')}.` : ' The combined outer bounds do not reach all six faces. Gaps between parts are allowed; do not fill the empty volume. Match the intended outer bounds or revise the selected Solution concept.'))
     }
   }
   if (!checkpoint) {

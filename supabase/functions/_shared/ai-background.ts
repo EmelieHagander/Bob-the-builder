@@ -16,6 +16,7 @@ export type AiRpc = (name: string, args: Record<string, unknown>) => Promise<any
 export interface BackgroundAccounting {
   user_id: string | null; module: string; ai_function: string; model: string
   input_price_per_1m: number; output_price_per_1m: number; cached_price_per_1m: number
+  native_search?: true
 }
 export async function providerRequest(apiKey: string, path: string, body?: unknown): Promise<any> {
   const response = await fetch('https://api.openai.com/v1/responses' + path, {

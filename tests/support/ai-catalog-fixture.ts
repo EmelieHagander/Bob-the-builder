@@ -48,6 +48,16 @@ const publishAs=(row:any,publication:string)=>{const{seed_version,source_revisio
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const storeResearch=source.match(/\$store_research_spec\$([\s\S]+?)\$store_research_spec\$/)
+ if(storeResearch){
+  const spec=JSON.parse(storeResearch[1])
+  for(const addition of spec.additions){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-store-research-v1'}});versions.set(addition.key,1)}
+  const box=seed.find(row=>row.key==='bob.tools')
+  box.definition={...box.definition,store_research_version:1,blocker_handoff_version:1,
+   contract_keys:[...box.definition.contract_keys,'tools.ask_store_worker'],catalog:[...box.definition.catalog,spec.policy],
+   shelves:box.definition.shelves.map((s:any)=>s.label==='Materials, stock and Shopping'?{...s,tools:[...s.tools,'ask_store_worker']}:s)}
+  publishAs(box,'bob-store-research-v1');versions.set(box.key,versions.get(box.key)!+1)
+ }
  const planRefresh = source.match(/\$plan_refresh_edits\$([\s\S]+?)\$plan_refresh_edits\$/)
  const planProgress = planRefresh ?? source.match(/\$plan_progress_edits\$([\s\S]+?)\$plan_progress_edits\$/)
  if (planProgress) {

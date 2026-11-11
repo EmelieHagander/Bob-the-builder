@@ -1329,3 +1329,28 @@ values; source/target IDs remain server-owned. This does not alter parameters
 or weaken identity/optimistic-concurrency validation. The publication changes
 only the named binding, preserving every other toolbox contract. See the
 [audit correction evidence](bob-runtime-path-audit-2026-11-04.md#three-project-corrections-2026-11-06).
+
+## Selected-shop research — source, 2026-11-11
+
+The ask_store_worker tool delegates a read-only purchase brief to Ines. Bob
+supplies the owner's selected shop URL, product requirements and a named branch
+or null. The server sends only that brief to a separate catalog role; no
+conversation, project identifiers, images or private source URLs are hydrated.
+Ines uses native Responses web search restricted to the selected shop domain.
+She has no project writes, checkout, contact, login or reservation tools.
+
+Returned product URLs must occur in the provider's consulted source list and
+belong to the selected shop. Unretrieved URLs and other shops are discarded.
+Specifications, packs, price units and availability remain source observations;
+unknowns stay explicit. A consulted page does not prove suitability, current
+branch stock or structural safety. Mattias owns material/Shopping changes and
+Konrad owns construction. An oversized sheet still needs a cut-fit check.
+
+The pinned bob.tools.store_research_version=1 exposes the handover; old manifests
+omit it. Deploy compatible ask-bob/bob-worker before the catalog migration.
+The role uses the catalog mini tier. If the live provider switch selects an
+adapter without native search, the call fails closed with store_search_unavailable;
+it does not search unrestricted or call outside the shared adapter. Native search
+fees have no catalog price yet: the total stays unknown, with token subtotal
+and search count reported separately. This is source implementation with local
+fixtures, not live retrieval acceptance.

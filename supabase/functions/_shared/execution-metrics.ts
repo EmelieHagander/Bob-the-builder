@@ -38,7 +38,7 @@ function workCounts(value:WorkDiagnostics|undefined):Record<string,number|boolea
  return counts
 }
 // Event attribution preserves historic role names; this is not a dispatch registry.
-const roles=new Set(['ask-bob','cad-research','cad-designer','cad-reviewer','context-summary','plan-compiler','plan-reviewer','bob-delivery-language'])
+const roles=new Set(['ask-bob','structure-worker','materials-worker','drawing-worker','store-worker','cad-research','cad-designer','cad-reviewer','context-summary','plan-compiler','plan-reviewer','bob-delivery-language'])
 const outputPhases=new Set(['commentary','final_answer','legacy','tool_calls','refusal','incomplete'])
 const phaseCounts=(phase:unknown):Record<string,string>=>typeof phase==='string'&&outputPhases.has(phase)?{output_phase:phase}:{}
 const validationCodes=new Set<string>([...TASK_WORK_VALIDATION_CODES,'tool_shape','request_quote','field_value','task_location','domain_fields','human_text',
@@ -95,6 +95,8 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
           ai_profile_version_id:label(options.aiDefinition?.profileVersionId),
           ai_tier:label(options.aiDefinition?.tier),
           cached_input_tokens:number((est??result.usage)?.cached_input_tokens),cost_basis:est?est.basis:null,reasoning_tokens:number(result.usage?.reasoning_tokens),
+          ...(result.webSearch ? { native_search_calls: number(result.webSearch.completedCalls), native_search_total_unknown: true,
+            native_search_token_cost_usd: result.webSearch.tokenCostUsd } : {}),
           step:label(call.step),attempt:number(call.attempt)}})
     },
     async internalTool(input:{name:string;status:string;callId:string;role:string;ms:number}){

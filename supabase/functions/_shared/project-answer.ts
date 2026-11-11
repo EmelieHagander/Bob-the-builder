@@ -39,6 +39,7 @@ import { countContextTokens } from './bob-token-budget.ts'
 import type { ContextSurface } from './bob-context-continuation.ts'
 import type { CurrentView } from '../../../src/domain/bobScreen.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
+import { storeResearchTool } from './store-research.ts'
 import { BOB_WRITE_LIMIT } from '../../../src/data/bobEvidence.ts'
 import { BUILDING_SCOPE_PRELOAD, createBobToolSession, catalogCoreTools, catalogPhaseTools, CORE_READ_PRELOAD, DRAWING_CONTINUATION_PRELOAD, sortToolbox } from './project-tools/bob-tools.ts'
 import type { BuildingLinks } from './project-building-scope.ts'
@@ -538,9 +539,13 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // Worker pilot (2026-10-30): a worker's tools are offered to the worker, not to Bob;
   // Bob hands the job over through the worker's tool. See bob-workers.ts.
   const workers = phaseTools && coreTools ? catalogWorkers(opts.aiCatalog) : null
+  const storeResearch = opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.store_research_version === 1
+    ? storeResearchTool({ catalog: opts.aiCatalog, callModel: opts.callModel, hasAccess: opts.hasAccess,
+      userId: opts.userId, timeoutMs: opts.modelTimeoutMs ?? 120000 }) : null
+  const blockerHandoff = opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.blocker_handoff_version === 1
   // The hand-over is loaded from the first step like a permanent tool; the
   // catalog's six permanent tools stay unchanged for runtimes without workers.
-  const workerHandOverNames = Object.values(workers ?? {}).map(worker => worker.tool)
+  const workerHandOverNames = [...Object.values(workers ?? {}).map(worker => worker.tool), ...(storeResearch ? ['ask_store_worker'] : [])]
   // The reads Bob checks a report with are loaded from the first step too.
   const checkReads = workers ? catalogCheckReads(opts.aiCatalog) : []
   // Bob's own plan tools are on hand from his first step (plan_tools_version 1).
@@ -652,6 +657,21 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       // With worker gates (owner decision 2026-11-07) only the identical request
       // is refused: after Bob changed the source or the request, a new job may start.
       const failedKey = (base: string) => opts.workerGates ? base + '_r_' + requestFingerprint(job) : base
+      let geometrySourceKey: string | undefined
+      if (blockerHandoff && key === 'structure') {
+        if (!opts.projectEdits) geometrySourceKey = 'structure_geometry_unknown'
+        else {
+          const area = opts.currentView?.status === 'ok' ? opts.currentView.focus.area?.id ?? null : null
+          let source = await opts.projectEdits.readSelected(area)
+          if (source?.status === 'empty' && area) source = await opts.projectEdits.readSelected(null)
+          if (source?.status !== 'ok' || !source.target)
+            return { status: 'needs_verification', reason: 'selected_solution_unavailable', calls: [] }
+          geometrySourceKey = 'structure_geometry_' + requestFingerprint({ job: JSON.stringify(source.target), findings: null })
+        }
+      }
+      if (geometrySourceKey && failedWorkers.has(geometrySourceKey))
+        return { status: 'needs_verification', reason: 'concept_geometry_changed', calls: [],
+          note: 'The selected Solution envelope blocked construction repeatedly. Reconcile the selected Solution through Bob’s Solution tools before another structure handoff. Rewording the brief does not change that source. Existing saved construction is not structural approval.' }
       if (opts.workerFormPiece && key === 'structure' && failedWorkers.has(failedKey('structure_piece')))
         return { status: 'needs_verification', worker: worker.role.replace(/^role\./, ''),
           reason: 'construction_piece_blocked_earlier_this_turn',
@@ -695,6 +715,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const workerWorkpad = !resume && workerPads
         ? await workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}`) : undefined
       const report = await runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
+        ...(blockerHandoff && key === 'structure' ? { blockerHandoff: true } : {}),
         ...(opts.workerStageContext ? { stageContext: true, registerContextSurface: opts.registerWorkerContextSurface } : {}),
         ...(workerPads ? { workpadEnabled: true, ...(workerWorkpad ? { workpad: workerWorkpad } : {}) } : {}),
         ...(opts.workerFocus && worker.focus && workerPads ? { focus: { pick: (candidates: string[]) => pickWorkerTools(opts, job.job, worker.focus!.core, candidates, deadline, worker.focus!.optional_limit) } } : {}),
@@ -825,6 +846,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       // twice more in one turn (three paid chains, no new revision). Use the
       // existing persisted per-turn failed-worker marker for this v4 boundary.
       if (report.status === 'unavailable') failedWorkers.add(failedKey(key))
+      if (geometrySourceKey && report.status === 'needs_verification' && report.reason === 'concept_geometry_changed')
+        failedWorkers.add(geometrySourceKey)
       if (materialFollowUp) report.material_follow_up = materialFollowUp
       if (opts.workerFormPiece && key === 'structure' && report.status === 'needs_verification'
         && report.reason === 'construction_piece_write_conflict') failedWorkers.add(failedKey('structure_piece'))
@@ -838,8 +861,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     }, exportState: () => {
       if (!orientationReader) throw new Error('context_unavailable')
       return orientationReader.exportState()
-    } } } : {}), readPolicy: bobPolicy, ...((workerHandOvers.length || workpads)
-      ? { extraTools: [...workerHandOvers, ...(workpads ? [workpadTool(workpads, 'bob')] : [])] } : {}) })
+    } } } : {}), readPolicy: bobPolicy, ...((workerHandOvers.length || workpads || storeResearch)
+      ? { extraTools: [...workerHandOvers, ...(storeResearch ? [storeResearch] : []), ...(workpads ? [workpadTool(workpads, 'bob')] : [])] } : {}) })
   if (restored) toolbox.restoreState(restored.toolbox)
   // The manifest is pinned before any journal operation. Do not add even an
   // undefined option or change the call sequence of an older running turn.
@@ -1184,7 +1207,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         // Its result carries the manual and parameters: that tool's sheet is in the conversation now.
         if (toolSheets && toolName === 'describe_tool' && result?.status === 'ok' && typeof result.name === 'string') sheetsSent.add(result.name)
         // Content-free reason for every rejected call: codes and field paths only.
-        const rejection = ['invalid', 'conflict'].includes(result?.status) ? toolRejection(result) : null
+        const rejection = ['invalid', 'conflict', ...(blockerHandoff ? ['needs_data'] : [])].includes(result?.status) ? toolRejection(result) : null
         if (rejection) console.warn('[Bob tool rejection]', JSON.stringify({ tool: /^[a-z][a-z0-9_]{0,63}$/.test(toolName) ? toolName : 'invalid_name',
           status: result.status, code: rejection.code, fields: rejection.fields }))
         const validationCode = completionV3 && rejection ? rejection.code

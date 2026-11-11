@@ -97,7 +97,7 @@ async function turn(catalog: AiCatalogSession, bobSteps: ((o: OpenAIServiceOptio
   }
   if(operationTest){cadAssistant.lifecycleTools=[PLAN_CAD_PIECES_TOOL];cadAssistant.lifecycleRemaining=Infinity;cadAssistant.lifecycle=async(name:string,args:any)=>{operationTest.seen.push({name,args});return {status:'queued',pieces:args.pieces.map((p:any)=>({piece_key:p.piece_key,status:'queued'}))}}}
   const bob: OpenAIServiceOptions[] = [], pickerInputs: any[] = [], ran: { name: string; status: string; rejection?: unknown }[] = []
-  const workers: Record<string, OpenAIServiceOptions[]> = { 'structure-worker': [], 'drawing-worker': [], 'materials-worker': [] }
+  const workers: Record<string, OpenAIServiceOptions[]> = { 'structure-worker': [], 'drawing-worker': [], 'materials-worker': [], 'store-worker': [] }
   const result = await runProjectAnswer({ projectId, userId: 'owner', message, lookup, writer, hasAccess, constructionTools, solutionActions, projectContext, cadAssistant,...(boundDrawing?{boundDrawingWork:true}:{}),...(operationTest?{workerOperations:operationTest.operations}:{}),
     ...(piecePreflight ? { workerPieceProgress: true, workerDesignReview: true,
       workerFormPiece: {
@@ -449,4 +449,41 @@ test('ordinary Bob handover reaches Rita piece planning through the final catalo
  assert.equal(seen.length,1);assert.deepEqual(seen[0].args.pieces.map((p:any)=>[p.artifact_id,p.construction_revision]),[['source-a',2],['source-b',5]])
  assert.equal(seen[0].args.area_id,null);assert.equal(result.workers['drawing-worker'].length,2)
  assert(!names(result.bob[0]).includes('plan_cad_pieces'),'the coordinator retains the same owner boundary')
+})
+
+test('Bob delegates a selected-shop search to Ines and receives consulted product links', async () => {
+  const url = 'https://byggmax.se/plywood-p123'
+  const { bob, workers, ran } = await turn(catalogFixture(),
+    [ask('ask_store_worker', { store_url: 'https://byggmax.se', branch: 'Vetlanda', request: 'Plywood 15 mm, minst 1540 mm lång.' })],
+    { 'store-worker': [o => {
+      assert.deepEqual(o.webSearch, { allowedDomains: ['byggmax.se'] })
+      assert.equal(o.tools, undefined)
+      return { success: true, usage, model: 'fixture', data: { products: [{ name: 'Plywood 15 mm', url,
+        article_number: null, variant: null, dimensions: '15 × 1220 × 2440 mm', pack: null, price: null,
+        availability: null, match: 'Kräver kapkontroll', uncertainties: 'Lager okänt' }], missing: [] },
+        webSearch: { completedCalls: 1, sources: [{ url, title: 'Plywood' }], tokenCostUsd: .01 } }
+    }] })
+  assert.equal(workers['store-worker'].length, 1)
+  assert.equal(toolOutput(bob[1]).products[0].url, url)
+  assert.equal(toolOutput(bob[1]).purchased, false)
+  assert(ran.some(e => e.name === 'ask_store_worker' && e.status === 'ok'))
+})
+
+test('rewording a blocked geometry brief cannot start another paid chain; an actually changed target can', async () => {
+  let revision = 1
+  const failed = () => ({ success: true, usage, model: 'fixture', responseId: 'geometry-' + Math.random(),
+    toolCalls: [call('g', 'edit_construction_parts', {})] })
+  const { bob, workers } = await turn(catalogFixture(), [
+    ask('ask_structure_worker', { request: 'Improve the underfloor.' }),
+    ask('ask_structure_worker', { request: 'Try as a fresh underfloor instead.' }),
+    () => { revision++; return { success: true, usage, model: 'fixture', responseId: 'new-source',
+      toolCalls: [call('again', 'ask_structure_worker', { request: 'Use the revised selected Solution.' })] } },
+  ], { 'structure-worker': [failed, failed, failed, () => ({ success: true, usage, model: 'fixture', responseId: 'done', data: 'I can now work from the revised source.' })] },
+  undefined, undefined, { status: 'needs_data', reason: 'concept_geometry_changed' }, undefined, undefined, {
+    projectEdits: { tools: [], readSelected: async () => ({ status: 'ok',
+      target: { revision, solution_id: 's', solution_revision: revision, area_id: null } }) },
+  })
+  assert.equal(workers['structure-worker'].length, 4)
+  assert.equal(toolOutput(bob[2]).reason, 'concept_geometry_changed')
+  assert.equal(toolOutput(bob[2]).calls.length, 0, 'second handoff is a code result, no specialist call')
 })

@@ -180,7 +180,8 @@ interface WorkerProgressBase {
 type WorkerTerminal =
   | { status: 'awaiting_design_review'; receiptIndex: number }
   | { status: 'needs_verification'; reason: string; receiptIndex: number }
-  | { status: 'needs_verification'; reason: 'construction_piece_write_conflict'; blockedTool: string }
+  | { status: 'needs_verification'; reason: 'construction_piece_write_conflict' | 'concept_geometry_changed'; blockedTool: string;
+      details?: { message: string | null; issues: { code: string; ids: string[]; message: string }[] } }
 export type WorkerProgress = WorkerProgressBase & (
   | { version: 1; previous: string }
   | { version: 2; previous: string | null; renewal: {
@@ -192,9 +193,16 @@ function validTerminal(value: unknown, receipts: unknown[]): value is WorkerTerm
   if (!value || typeof value !== 'object') return false
   const v = value as Record<string, unknown>
   const receipt = Number.isSafeInteger(v.receiptIndex) && Number(v.receiptIndex) >= 0 && Number(v.receiptIndex) < receipts.length
+  const details = v.details as { message?: unknown; issues?: unknown } | undefined
+  const boundedDetails = details === undefined || !!details && typeof details === 'object'
+    && (details.message === null || typeof details.message === 'string' && details.message.length <= 1500)
+    && Array.isArray(details.issues) && details.issues.length <= 12 && details.issues.every((i: any) =>
+      !!i && typeof i.code === 'string' && i.code.length <= 64 && typeof i.message === 'string' && i.message.length <= 1500
+      && Array.isArray(i.ids) && i.ids.length <= 12 && i.ids.every((id: unknown) => typeof id === 'string' && id.length <= 200))
   return v.status === 'awaiting_design_review' && receipt
     || v.status === 'needs_verification' && typeof v.reason === 'string' && NAME.test(v.reason)
-      && (v.reason === 'construction_piece_write_conflict' ? typeof v.blockedTool === 'string' && NAME.test(v.blockedTool) : receipt)
+      && boundedDetails && (v.blockedTool !== undefined ? ['construction_piece_write_conflict', 'concept_geometry_changed'].includes(v.reason)
+        && typeof v.blockedTool === 'string' && NAME.test(v.blockedTool) : receipt)
 }
 export function validWorkerProgress(value: unknown, maxSteps: number): value is WorkerProgress {
   const v = value as Partial<WorkerProgress> | null
@@ -321,6 +329,8 @@ export async function runWorker(opts: {
   stableTools?: boolean
   /** Pinned per job (refusal_guard_version 1): the third plan refusal asks for another approach. */
   refusalGuard?: boolean
+  /** New manifests: repeated concept-envelope failures return to Bob. */
+  blockerHandoff?: boolean
   /** Owner decision 2026-11-07 (sketchbook B): sketches still open when the job
    * ends are reported as not saved; null when they could not be read. */
   openSketches?: () => Promise<Record<string, unknown>[] | null>
@@ -416,7 +426,8 @@ export async function runWorker(opts: {
   }
   const terminalResult = (terminal: WorkerTerminal): Record<string, unknown> => ({
     status: terminal.status, worker: roleKey, calls,
-    ...('blockedTool' in terminal ? { reason: terminal.reason, blocked_tool: terminal.blockedTool }
+    ...('blockedTool' in terminal ? { reason: terminal.reason, blocked_tool: terminal.blockedTool,
+        ...(terminal.details ? { blocker_details: terminal.details } : {}) }
       : terminal.status === 'needs_verification' ? { reason: terminal.reason, saved_receipt: receipts[terminal.receiptIndex] }
       : { reason: 'show_saved_construction', saved_receipt: receipts[terminal.receiptIndex], user_feedback: 'not_recorded',
         note: 'A saved and technically checked piece is not user approval. Show this exact construction revision and its matching facade (if present), then ask naturally if the visible design matches before proceeding to the next piece. A spatial gate does not prove window count or FORM mapping.' }),
@@ -490,6 +501,8 @@ export async function runWorker(opts: {
     let rejectedBoundedPiece: string | null = null
     let pieceReviewReceipt: Record<string, unknown> | null = null
     let incompletePiece: { receipt: Record<string, unknown>; reason: string } | null = null
+    let geometryBlockedTool: string | null = null
+    let geometryDetails: Extract<WorkerTerminal, { blockedTool: string }>['details']
     for (const call of response.toolCalls.slice(0, 8)) {
       if (!await opts.hasAccess()) throw new Error('project_denied')
       let args: unknown = null
@@ -499,7 +512,8 @@ export async function runWorker(opts: {
       // A parallel tool batch cannot rely on a save it has not observed yet.
       // Answer every tool_call_id, but require Konrad to see the saved revision
       // before issuing any further calls, including an updated workpad note.
-      if (opts.pieceProgress && pieceWriteSeen) result = { status: 'deferred', reason: 'construction_piece_boundary',
+      if (geometryBlockedTool) result = { status: 'deferred', reason: 'geometry_blocker_handoff' }
+      else if (opts.pieceProgress && pieceWriteSeen) result = { status: 'deferred', reason: 'construction_piece_boundary',
         message: 'First read the preceding construction save and its verification. Reissue this call only if still needed.' }
       else if (!allowed.has(name)) result = { status: 'not_offered' }
       else if (opts.planGate && !planned && writes.has(name)) result = { status: 'invalid', reason: 'plan_required',
@@ -524,6 +538,14 @@ export async function runWorker(opts: {
         rejectedBoundedPiece = name
       const reason = typeof result?.reason === 'string' ? result.reason : result?.validation?.code
       calls.push({ tool: NAME.test(name) ? name : 'invalid_name', status, ...(BLOCKED.has(status) && typeof reason === 'string' && NAME.test(reason) ? { reason } : {}) })
+      if (opts.blockerHandoff && reason === 'concept_geometry_changed' && BLOCKED.has(status)
+        && calls.slice(calls.findLastIndex(c => c.status === 'saved') + 1).filter(c => c.reason === 'concept_geometry_changed').length >= 3) {
+        geometryBlockedTool = name
+        geometryDetails = { message: typeof result.message === 'string' ? result.message.slice(0, 1500) : null,
+          issues: (Array.isArray(result.issues) ? result.issues : []).slice(0, 12).flatMap((i: any) =>
+            typeof i?.code === 'string' && typeof i.message === 'string' ? [{ code: i.code.slice(0, 64),
+              ids: (Array.isArray(i.ids) ? i.ids : []).filter((id: unknown) => typeof id === 'string' && id.length <= 200).slice(0, 12), message: i.message.slice(0, 1500) }] : []) }
+      }
       // A check stores its result too, so it is reported (and read back) like a save.
       if (status === 'saved' || status === 'checked') {
         receipts.push(saveReceipt(name, result))
@@ -624,7 +646,7 @@ export async function runWorker(opts: {
         && renewal.savedReceiptIndex !== null && Number.isSafeInteger(result?.revision))
         renewal.notedRevision = result.revision
       if (name === 'update_workpad' && status === 'noted' && plannedNote((args as { note?: unknown } | null)?.note)) planned = true
-      const rejection = ['invalid', 'conflict'].includes(status) ? toolRejection(result) : undefined
+      const rejection = ['invalid', 'conflict', ...(opts.blockerHandoff ? ['needs_data'] : [])].includes(status) ? toolRejection(result) : undefined
       // Which construction page was read (2026-11-09): view name only, never content.
       const view = name === 'read_construction_draft' ? (args as { view?: unknown } | null)?.view : undefined
       try { opts.onTool?.({ name: NAME.test(name) ? name : 'invalid_name', status, ms: Date.now() - began, ...(rejection ? { rejection } : {}),
@@ -634,7 +656,9 @@ export async function runWorker(opts: {
     for (const call of response.toolCalls.slice(8)) messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ status: 'deferred' }) })
     // Persist the stop itself before finishing can yield. No pending tool
     // messages or completed provider chain belong in a terminal checkpoint.
-    const terminal: WorkerTerminal | null = rejectedBoundedPiece
+    const terminal: WorkerTerminal | null = geometryBlockedTool
+      ? { status: 'needs_verification', reason: 'concept_geometry_changed', blockedTool: geometryBlockedTool, details: geometryDetails }
+      : rejectedBoundedPiece
       ? { status: 'needs_verification', reason: 'construction_piece_write_conflict', blockedTool: rejectedBoundedPiece }
       : incompletePiece ? { status: 'needs_verification', reason: incompletePiece.reason, receiptIndex: receipts.indexOf(incompletePiece.receipt) }
       : opts.pieceProgress?.pauseForDesignReview && pieceReviewReceipt
