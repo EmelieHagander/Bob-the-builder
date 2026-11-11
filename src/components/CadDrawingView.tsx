@@ -4,6 +4,8 @@ import type { DrawingSourceStatus } from '../data/drawingSources'
 import { CadSourceMap } from './CadSourceMap'
 import { lazy, Suspense, useCallback, useState } from 'react'
 import './StorageBoxDrawing.css'
+import { useAsync } from './ui'
+import { drawingGeometryUrl } from '../lib/guideDrawing'
 import { ZoomableImage } from './ZoomableImage'
 import { CadBuildGuide, type BuildGuideNotes, type GuidePageLoader } from './CadBuildGuide'
 import * as db from '../data/database'
@@ -12,12 +14,38 @@ function WireframeUnavailable({onFallback}:{onFallback:(message:string)=>void}) 
  return <div role="alert"><p>The 3D viewer could not be loaded. Check the connection and try again.</p><button type="button" className="btn" onClick={()=>onFallback('')}>Show saved drawing</button></div>
 }
 
-/** One saved view. Sheets are 1000 px wide, so on a phone they need zoom to be read. */
-function CadSheet({src,label,title,file}:{src:string;label:string;title:string;file:string}){
+const viewNames: Record<string, string> = {
+ isometric: 'Overview', isometric_front_left: 'Overview front-left', isometric_back_left: 'Overview back-left',
+ isometric_back_right: 'Overview back-right', front: 'Front', back: 'Back', left: 'Left', right: 'Right', top: 'Top', bottom: 'Bottom',
+}
+
+function CadSheet({ encoded, label, title, file }: { encoded: string; label: string; title: string; file: string }) {
+ const [annotated, setAnnotated] = useState(false)
+ const { data, loading } = useAsync(async () => ({ encoded, url: await drawingGeometryUrl(encoded) }), [encoded])
+ const geometry = data?.encoded === encoded ? data.url : null
+ const original = 'data:image/svg+xml;base64,' + encoded
  return <figure className="cad-sheet">
-  <figcaption><strong>{label}</strong> · <a download={file} href={src}>download drawing</a></figcaption>
-  <ZoomableImage src={src} alt={`${title} — ${label}`} label={label} fit="width" />
+  <figcaption className="foundation-actions"><strong>{label}</strong>
+   {geometry && <label className="foundation-check"><input type="checkbox" checked={annotated} onChange={event => setAnnotated(event.target.checked)} />Dimensions &amp; part numbers</label>}
+   <a download={file} href={original}>Download drawing</a>
+  </figcaption>
+  {loading ? <p role="status">Loading drawing…</p> :
+   <ZoomableImage key={annotated ? 'sheet' : 'shape'} src={geometry && !annotated ? geometry : original} alt={`${title} — ${label}`} label={label} fit={geometry && !annotated ? 'contain' : 'width'} />}
  </figure>
+}
+
+function DrawingViews({ files, title }: { files: CadDrawing['files']; title: string }) {
+ const [selected, setSelected] = useState('')
+ const views = Object.entries(viewNames).filter(([key]) => files[key])
+ const current = views.find(([key]) => key === selected) ?? views[0]
+ if (!current) return null
+ const [key, label] = current
+ return <>
+  {views.length > 1 && <label className="cad-view-select">View <select value={key} onChange={event => setSelected(event.target.value)}>
+   {views.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+  </select></label>}
+  <CadSheet key={key} encoded={files[key]} label={label} title={title} file={key + '.svg'} />
+ </>
 }
 
 /** SVG is an image document, never injected into the page's DOM. */
@@ -25,8 +53,6 @@ export function CadDrawingView({value,title,projectId,artifactId,revision,source
  const [interactive,setInteractive]=useState(false),[notice,setNotice]=useState('')
  const memberPages=useCallback<GuidePageLoader>((guideId,keys)=>db.getCadGuidePages(projectId!,guideId,keys),[projectId])
  const fallback=useCallback((message:string)=>{setInteractive(false);setNotice(message)},[])
- // Overviews first: a flat side of a large build is mostly one panel, so it says little about what the build is.
- const names:Record<string,string>={isometric:'Overview',isometric_front_left:'Overview front-left',isometric_back_left:'Overview back-left',isometric_back_right:'Overview back-right',front:'Front',back:'Back',left:'Left',right:'Right',top:'Top',bottom:'Bottom'}
  const checks=value.manifest?.checks,markers=cadPartMarkers(value.manifest)
  if(sourceStatus?.source_state==='unavailable')return <section aria-label={`${title} CAD drawings`}>
   <p className="solution-attention">Current-use drawing preview is withheld until source access and freshness can be checked. This saved revision remains part of the project history.</p>
@@ -45,8 +71,7 @@ export function CadDrawingView({value,title,projectId,artifactId,revision,source
   {interactive&&projectId&&artifactId&&revision&&<Suspense fallback={<p role="status">Loading the 3D viewer…</p>}>
    <WireframeView projectId={projectId} artifactId={artifactId} revision={revision} title={title} onFallback={fallback}/>
   </Suspense>}
-  {Object.keys(names).some(key=>value.files[key])&&<p className="foundation-hint">Each view fits the screen. To read part numbers and sizes, pinch or press + to zoom (on a computer: Ctrl + scroll wheel), then drag to move around.</p>}
-  {Object.entries(names).filter(([key])=>value.files[key]).map(([key,label])=><CadSheet key={key} label={label} title={title} file={`${key}.svg`} src={`data:image/svg+xml;base64,${value.files[key]}`} />)}
+  <DrawingViews key={`${projectId}:${artifactId}:${revision}`} files={value.files} title={title} />
   <CadBuildGuide guide={(value.manifest?.build_guide??value.build_guide) as BuildGuideNotes|null|undefined} files={value.files} title={title} sourceChanged={value.source_changed} loadPages={loadGuidePages??(projectId?memberPages:undefined)} projectId={loadGuidePages?undefined:projectId} />
   {value.files.step&&<a className="btn" download="assembly.step" href={`data:application/step;base64,${value.files.step}`}>Download 3D model</a>}
   <details><summary>Parts and sizes</summary>

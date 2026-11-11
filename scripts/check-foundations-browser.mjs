@@ -270,7 +270,7 @@ try {
     assert.equal(await headerThumb.evaluate(img=>img.naturalWidth),120,'Pinned original persists after reload')
     await page.getByRole('button',{name:'Unpin thumbnail',exact:true}).click()
     await page.getByRole('button',{name:'Pin as thumbnail',exact:true}).waitFor()
-    await page.getByRole('button', { name: 'Open image: Entry before work' , exact: true }).click()
+    await page.getByRole('region', { name: 'Project images', exact: true }).getByRole('img', { name: 'Entry before work', exact: true }).click()
     const original = page.getByRole('dialog', { name: 'Entry before work', exact: true })
     await original.getByRole('img').waitFor()
     assert.deepEqual(await original.getByRole('img').evaluate(img => [img.naturalWidth, img.naturalHeight, getComputedStyle(img).objectFit]), [120, 240, 'contain'])
@@ -368,13 +368,30 @@ try {
     const cadId=randomUUID(), cadOriginal=[...artifacts.records.values()].find(r=>r.project_id==='A')
     const cadRow={...cadOriginal,id:cadId,artifact_id:cadId,title:'CAD shelf detail',revision:1,kind:'detail',status:'concept',generator:null,generator_version:null,parametric_recipe:null,has_room_layout:false,has_stair_study:false,has_multifloor_plan:false,area_id:null,archived:false,measurements:[],recorded_at:timestamp()}
     artifacts.records.set(cadId,cadRow);artifacts.histories.set(cadId,[cadRow])
-    artifacts.cad.set(`${cadId}:1`,{project_id:'A',artifact_id:cadId,artifact_revision:1,recipe:sourceGraph.recipe,manifest:{...sourceGraph.manifest,build_guide:{version:1,status:'not_generated',reason:'no_assembly_order',construction:{artifact_id:cadId,revision:1},reviewed:false},checks:{collisions:{status:'complete',tested_pairs:0,skipped_pairs:0,overlaps:[]},clearances:[],motions:[]}},files:{front:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><rect x="5" y="5" width="790" height="90" fill="none" stroke="black"/></svg>').toString('base64'),step:Buffer.from('ISO-10303-21;').toString('base64')},step_id:null,source_artifact_id:null,source_revision:null})
+    const labelledBack = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><defs><g id="ModelGeometry"><rect x="8" y="8" width="180" height="80" fill="none" stroke="black"/></g></defs><g id="DrawingPage1"><g id="Geometry"><use href="#ModelGeometry"/></g><g id="Annotations1"><text x="10" y="20">P38</text></g></g></svg>'
+    const backFile = Buffer.from(labelledBack).toString('base64')
+    artifacts.cad.set(`${cadId}:1`,{project_id:'A',artifact_id:cadId,artifact_revision:1,recipe:sourceGraph.recipe,manifest:{...sourceGraph.manifest,build_guide:{version:1,status:'not_generated',reason:'no_assembly_order',construction:{artifact_id:cadId,revision:1},reviewed:false},checks:{collisions:{status:'complete',tested_pairs:0,skipped_pairs:0,overlaps:[]},clearances:[],motions:[]}},files:{back:backFile,front:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><rect x="5" y="5" width="790" height="90" fill="none" stroke="black"/></svg>').toString('base64'),step:Buffer.from('ISO-10303-21;').toString('base64')},step_id:null,source_artifact_id:null,source_revision:null})
     await page.goto(base+`#/artifacts?drawing=${cadId}&revision=1`)
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
     // A guide that was not made says why, plainly (2026-10-30).
     await page.getByText('Bob did not propose a build order, so no build guide was made with this drawing version.',{exact:true}).waitFor()
     // Sheets are 1000 px wide; on a phone they are read by zooming inside their own viewport.
     const sheet=page.locator('.cad-sheet').first(), sheetImage=sheet.getByRole('img',{name:'CAD shelf detail — Front',exact:true})
+    const viewPicker = page.getByRole('combobox', {name:'View', exact:true})
+    const labels = sheet.getByRole('checkbox', {name:'Dimensions & part numbers'})
+    await viewPicker.selectOption('back')
+    await labels.waitFor()
+    assert.equal(await labels.isChecked(),false)
+    const back = sheet.getByRole('img', {name:'CAD shelf detail — Back',exact:true})
+    await back.evaluate(img => img.decode())
+    const preview = decodeURIComponent((await back.getAttribute('src')).split(',')[1])
+    assert(preview.includes('ModelGeometry') && !preview.includes('P38'))
+    await labels.check()
+    assert.equal(await back.getAttribute('src'),'data:image/svg+xml;base64,'+backFile)
+    assert.equal(await sheet.getByRole('link', {name:'Download drawing'}).getAttribute('href'),await back.getAttribute('src'))
+    await viewPicker.selectOption('front')
+    await sheetImage.waitFor()
+    assert.equal(await labels.count(),0,'A legacy sheet keeps its original image')
     const fitted=(await sheetImage.boundingBox()).width
     for (const name of ['Zoom Front in','Zoom Front out']) {
       const box=await sheet.getByRole('button',{name,exact:true}).boundingBox()
