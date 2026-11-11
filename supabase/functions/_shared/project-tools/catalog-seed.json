@@ -1056,5 +1056,14 @@
     "always_load": false,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "ask_store_worker",
+    "description": "Ask Ines to find product candidates on the owner's selected building shop website, with consulted product links, dimensions, packs, prices and uncertainties. Read-only internet research; no purchases, reservations or project writes.",
+    "how_to": "Give the selected shop's HTTPS URL and a short purchase brief with the required dimensions, material and quantity. Use the owner's chosen shop, not a substitute. branch is the chosen branch or null; missing local stock stays unknown. Send only product requirements, no private conversation, addresses or project URLs. Check the returned source links and specifications with Mattias and Konrad before saving or using them.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
   }
 ]

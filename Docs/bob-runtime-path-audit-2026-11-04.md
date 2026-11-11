@@ -3466,3 +3466,45 @@ pin and refuses to run unless version 1 is live. Order: Edge (ask-bob,
 bob-worker) first, then the migration. Test: `bob-build-workers` (version 1 does
 not follow before Mattias; version 2 reads `c1@3` and Mattias's knowledge holds
 the result).
+
+## Entrance stall and selected-shop access — readback, 2026-11-11
+
+Read-only production audit: entrance job c7478a89-b885-4779-a3e6-1e13204c08d1
+ran 09:05–17:11 Swedish time, with 88 model events costing USD 8.155070,
+150 worker claims and no saved construction. This wall time includes suspended
+authentication, not eight hours of continuous model work. All queried Bob jobs
+were terminal at audit time. Bunk-bed and shelf jobs completed earlier.
+
+Three structure handovers ended at their step budget. Telemetry names
+concept_geometry_changed; the selected Solution was revision 42 while the
+original underfloor remained tied to target 7. The run accumulated 25 invalid
+tool results and eight needs_data results. Its final response proposed nine
+ground screws and doubled 45×145 beams, but neither saved nor verified them.
+It described the guard as requiring filled solid volumes. Code instead checks
+the combined bounding envelope: gaps between framing parts are permitted.
+
+Source corrections: clarify envelope diagnostics; carry needs_data reason codes
+into telemetry; return repeated geometry blockers to Bob with a durable
+checkpoint and bind re-handover to the selected source revision. The existing
+twelve-screw draft is not a verified fallback design. The request to use stronger
+home-sawn beams needs an actual comparison of alternatives and the load path
+from floor, walls and roof before choosing a support count. No owner
+measurements, model records or private messages were rewritten by this audit.
+
+The material worker lacked web retrieval. The new Ines handover is owned by
+[the tool contract](ask-bob-tools.md#selected-shop-research--source-2026-11-11);
+repeated-blocker recovery is owned by
+[conversations](ask-bob-conversations.md#repeated-concept-blockers--source-2026-11-11).
+Local fixtures and migration application are separate from deployment and
+ordinary owner/model acceptance. No production migration, deployment or paid
+model call was performed.
+
+Local verification: 60 distinct focused tests passed (26 flow/tool tests,
+35 provider/worker/diagnostic regressions with two overlapping cases, and one
+database/catalog test). Frontend typecheck passed. Edge checks on this change
+and base 83e479d report the same six existing diagnostics; no new diagnostic.
+The check mapped the unreachable esm.sh Supabase import to installed npm
+2.110.2 in both checkouts, so it does not prove the original remote dependency
+resolves. Native search and its source citations were tested with provider
+fixtures only. All current server jobs were terminal (81 completed, six failed)
+at the final readback. Hosted state is unchanged.

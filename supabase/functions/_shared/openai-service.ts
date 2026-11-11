@@ -209,6 +209,9 @@ export interface OpenAIServiceOptions {
   responsePhaseMode?: 'aware';
   /** Opt-in native replay; existing callers retain their original wire/parser. */
   responseItemsMode?: 'preserve';
+  /** Server-only, read-only native search. Never accepted from an HTTP body.
+   * Requires a catalog role and the Responses adapter; no provider fallback. */
+  webSearch?: { allowedDomains: string[] };
   messages?: Array<{
     role: 'system' | 'user' | 'assistant' | 'tool';
     content: OpenAIMessageContent;
@@ -266,6 +269,7 @@ export interface OpenAIServiceResponse<T = unknown> {
   error?: string;
   responseId?: string;
   outputItems?: OpenAIResponseItem[];
+  webSearch?: { sources: { url: string; title: string }[]; completedCalls: number; tokenCostUsd: number | null };
   outputPhase?: 'commentary' | 'final_answer' | 'legacy' | 'tool_calls' | 'refusal' | 'incomplete';
   toolCalls?: Array<{
     id: string;
@@ -433,6 +437,12 @@ export async function callOpenAIResponses<T = unknown>(
   // Settings and catalogue in parallel; both live in the shared `ai` schema.
   const catalogRole = options.aiDefinition;
   try {
+    if (options.webSearch && (!catalogRole || catalogRole.providerAdapter !== 'openai-responses-v1'
+      || options.tools?.length || options.previousResponseId || options.responseItemsMode
+      || !Array.isArray(options.webSearch.allowedDomains) || !options.webSearch.allowedDomains.length
+      || options.webSearch.allowedDomains.length > 100
+      || !options.webSearch.allowedDomains.every(d => typeof d === 'string' && /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(d))))
+      throw new Error('ai_profile_incompatible: scoped web search');
     if (options.structuredToolOutput && (!schema || !schemaName)) {
       throw new Error('ai_profile_incompatible: structured tools require a response schema');
     }
@@ -752,6 +762,12 @@ export async function callOpenAIResponses<T = unknown>(
             : choice;
       }
     }
+    if (options.webSearch) {
+      requestBody.tools = [{ type: 'web_search', external_web_access: true,
+        filters: { allowed_domains: options.webSearch.allowedDomains } }];
+      requestBody.tool_choice = 'required';
+      requestBody.include = ['web_search_call.action.sources'];
+    }
     
     // Add structured output format
     if (schema && schemaName && (!options.tools || options.structuredToolOutput)) {
@@ -814,6 +830,7 @@ export async function callOpenAIResponses<T = unknown>(
       input_price_per_1m: modelRow.input_cost_per_1m_tokens,
       output_price_per_1m: modelRow.output_cost_per_1m_tokens,
       cached_price_per_1m: modelRow.cached_input_cost_per_1m_tokens ?? modelRow.input_cost_per_1m_tokens,
+      ...(options.webSearch ? { native_search: true as const } : {}),
     }, prepareRequest) : JSON.parse(responseText);
     const pinned = options.background ? responseData._shared_accounting : undefined;
     if (pinned) {
@@ -849,7 +866,9 @@ export async function callOpenAIResponses<T = unknown>(
       cached_input_tokens: cachedInputTokens,
       reasoning_tokens: reasoningTokens,
     };
-    const estimatedCostUsd = computeCostUsd(modelRow, usage);
+    const tokenCostUsd = computeCostUsd(modelRow, usage);
+    // Native search has a separate fee. A token subtotal is not a total cost.
+    const estimatedCostUsd = options.webSearch ? null : tokenCostUsd;
     console.log(`[OpenAI Service] Cost: ${estimatedCostUsd === null ? 'unknown (no price row)' : `$${estimatedCostUsd}`}`);
 
     /** Everything the usage ledger needs that is constant for this call. */
@@ -867,6 +886,7 @@ export async function callOpenAIResponses<T = unknown>(
       reasoningTokens,
       totalTokens: usage.total_tokens,
       costUsd: estimatedCostUsd,
+      ...(options.webSearch ? { costBasis: 'native_search_total_unknown' as const } : {}),
       inputPricePer1m: modelRow.input_cost_per_1m_tokens,
       outputPricePer1m: modelRow.output_cost_per_1m_tokens,
     };
@@ -882,7 +902,26 @@ export async function callOpenAIResponses<T = unknown>(
     }
 
     const phaseAware = options.responsePhaseMode === 'aware';
-    let nativeOutput: { outputItems?: OpenAIResponseItem[] } = {};
+    let nativeOutput: Pick<OpenAIServiceResponse<unknown>, 'outputItems' | 'webSearch'> = {};
+    if (options.webSearch) {
+      const sources = new Map<string, { url: string; title: string }>();
+      let completedCalls = 0;
+      const add = (s: any) => {
+        if (typeof s?.url !== 'string' || s.url.length > 3000) return;
+        try { const u = new URL(s.url); if (u.protocol !== 'https:' || u.username || u.password) return; }
+        catch { return; }
+        if (sources.size < 100) sources.set(s.url, { url: s.url, title: typeof s.title === 'string' ? s.title.slice(0, 500) : '' });
+      };
+      for (const item of responseData.output ?? []) {
+        if (item.type === 'web_search_call' && item.status === 'completed') {
+          completedCalls++;
+          for (const s of item.action?.sources ?? []) add(s);
+        }
+        if (item.type === 'message') for (const c of item.content ?? [])
+          for (const s of c.annotations ?? []) if (s.type === 'url_citation') add(s);
+      }
+      nativeOutput.webSearch = { sources: [...sources.values()], completedCalls, tokenCostUsd };
+    }
     if (options.responseItemsMode === 'preserve') {
       try { nativeOutput = { outputItems: readResponseItems(responseData.output) }; }
       catch (error) {
@@ -1266,7 +1305,7 @@ async function logAIUsage(
     reasoningTokens: number;
     totalTokens: number;
     costUsd: number | null;
-    costBasis?: 'streamed_output_estimate';
+    costBasis?: 'streamed_output_estimate' | 'native_search_total_unknown';
     inputPricePer1m: number;
     outputPricePer1m: number;
     success: boolean;
