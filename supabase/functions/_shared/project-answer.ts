@@ -201,7 +201,7 @@ export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], 
     pending_drawing_requests: Array.isArray(drawingRequests) ? drawingRequests.length : 0, always_loaded: core }, candidates, deadline, limit)
 }
 
-const WORKER_STOPS = new Set(['needs_verification', 'awaiting_design_review', 'unavailable', 'not_started'])
+const WORKER_STOPS = new Set(['needs_data', 'needs_verification', 'awaiting_design_review', 'unavailable', 'not_started'])
 
 /** A short, stable fingerprint of one hand-over (FNV-1a, 64 bit), so a failed
  * or blocked request is refused again only when Bob repeats it unchanged. */
