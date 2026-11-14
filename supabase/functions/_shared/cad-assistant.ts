@@ -25,6 +25,7 @@ import { parseDesignHandoff, CAD_REVIEW_SCOPE, parseCadReview, candidateFingerpr
 import { HANDOFF_INPUT_SCHEMA, REQUIREMENT_CHANGES_SCHEMA, prepareDesignHandoff } from './cad-handoff.ts'
 import { designIntentHandoff, parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
 import { verifyCadFiles, GUIDE_RANGE_STEPS, type CadGuideRequest } from './cad-transport.ts'
+import { guidePages } from './build-guide-pages.ts'
 import { assemblyStages } from './construction-lists.ts'
 import { BUILD_GUIDE_FIELDS } from './runtime-tool-surface.ts'
 import { constructionInstancePolicy } from './construction-instance-policy.ts'
@@ -783,9 +784,12 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
       if(typeof name==='string'&&name.trim())itemNames[key]=name.trim().slice(0,200)
      }
     }
-    guideInput={recipe,drawing_source:drawingSource,joints:structuredClone(ready.draft.joints),steps:guidePlan.steps,
+    const contextIds=policy.instances.filter(i=>i.role==='reference'||i.role==='existing_part').map(i=>i.instance_id)
+    // Bob's steps are drawn as pages that each add one kind of part (2026-11-14).
+    const steps=guidePages(guidePlan.steps,ready.draft.joints,Object.fromEntries(recipe.instances.map(i=>[i.id,i.definition_id])),contextIds)
+    guideInput={recipe,drawing_source:drawingSource,joints:structuredClone(ready.draft.joints),steps,
      fasteners:schedule?{rule_version:schedule.rule_version,complete:schedule.complete,joints:schedule.joints,totals:schedule.totals,glue_packages:schedule.glue_packages}:null,
-     context_ids:policy.instances.filter(i=>i.role==='reference'||i.role==='existing_part').map(i=>i.instance_id),
+     context_ids:contextIds,
      ...(Object.keys(itemNames).length?{item_names:itemNames}:{})}
    }
    try{packet=await opts.render(recipe,drawingSource,constructionDispatchGuard,guideInput)}catch(error){
