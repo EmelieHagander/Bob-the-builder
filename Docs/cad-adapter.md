@@ -1343,6 +1343,28 @@ from the drawing row).
   (`modal-cad.yml`), Edge (`ask-bob`, `bob-worker`) with no drawing job running,
   migration `20261109080000`, then Pages.
 
+#### Pages add one kind of part (2026-11-14)
+
+Live Våningssäng (construction rev 27, drawing rev 9, 2026-11-10) got one section
+"Montera hela konstruktionen" with one step of all 129 joints: one unreadable
+page. Every guide since sections arrived had one step per section (rev 8:
+seven sections, the slats page alone 58 joints). Root cause: the contract let
+Bob decide page size, and one huge step is always a valid answer. Page size is
+a rule, not judgement, so the Edge now decides it.
+
+- **Edge** (`build-guide-pages.ts`, `guidePages`): before the worker call every
+  step Bob gives is split into pages that each add the parts of one definition
+  to what is already built (earlier steps and context parts count as built). A
+  page that starts a new piece shows the two parts its first joint joins;
+  joints between parts already in place ride on the page that placed the last
+  of them. Identical pieces in one step keep shared pages, so the worker still
+  draws "N×". Pages only split steps: sections, step order and "every joint
+  once" are unchanged. The live bunk bed as one step becomes 17 pages; Bob's
+  seven sections become 18.
+- **Contract, worker, database:** unchanged. The catalog text still says a step
+  is one page; it is now at least one page. Release: Edge only (`ask-bob`,
+  `bob-worker`).
+
 #### Build guide installation and paid runs
 
 **Installed 2026-10-30** (owner OK), from main `03144da` (PR #383), after a check
