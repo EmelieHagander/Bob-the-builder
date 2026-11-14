@@ -189,9 +189,6 @@ export interface OpenAIServiceOptions {
   background?: BackgroundCall;
   /** Trusted caller-scoped loader; invoked only for a fresh provider submission. */
   resolveImage?: (ref: string) => Promise<string>;
-  /** Same images as pixels (data: URL). Needed by providers that cannot read
-   * an OpenAI file id; only used when the pinned model is not OpenAI. */
-  resolveImageInline?: (ref: string) => Promise<string>;
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   images?: Array<{
     type: 'base64' | 'url';
@@ -564,7 +561,7 @@ export async function callOpenAIResponses<T = unknown>(
       // Claude requires max_tokens; unlimited Bob work gets the model's own ceiling.
       maxOutputTokens: catalogRole.app === 'bob' && catalogRole.unlimitedWork === true ? anthropicModel.max_output_tokens : configuredMaxTokens,
       effort: catalogRole.reasoningEffort && anthropicModel.supports_reasoning ? catalogRole.reasoningEffort : null,
-      timeoutMs, resolveImage: options.resolveImageInline ?? options.resolveImage,
+      timeoutMs, resolveImage: options.resolveImage,
       log: (r) => logAIUsage(aiClient, { app: options.app, module, aiFunction, userId, model: r.model,
         inputTokens: r.inputTokens, cachedInputTokens: r.cachedInputTokens, outputTokens: r.outputTokens,
         reasoningTokens: r.reasoningTokens, totalTokens: r.totalTokens, costUsd: r.costUsd, costBasis: r.costBasis,
@@ -1641,22 +1638,3 @@ export async function generateImage(options: ImageCallOptions): Promise<ImageCal
   }
 }
 
-const VISION_FILE_SECONDS = 30 * 24 * 3600;
-/** Upload one image for vision input. The provider deletes it after 30 days;
- * callers keep their own copy as the source and store only the returned id. */
-export async function uploadOpenAIVisionFile(bytes: Uint8Array, contentType: 'image/png' | 'image/jpeg' | 'image/webp', signal: AbortSignal): Promise<{ fileId: string; expiresAt: string }> {
-  const apiKey = Deno.env.get('OPENAI_API_KEY');
-  if (!apiKey) throw new Error('Missing OpenAI API key');
-  const form = new FormData();
-  form.append('purpose', 'vision');
-  form.append('expires_after[anchor]', 'created_at');
-  form.append('expires_after[seconds]', String(VISION_FILE_SECONDS));
-  form.append('file', new Blob([new Uint8Array(bytes)], { type: contentType }), 'image.' + contentType.slice(6));
-  const response = await fetch('https://api.openai.com/v1/files', { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: form, signal });
-  if (!response.ok) { await response.body?.cancel(); throw new Error('vision_file_upload_failed'); }
-  const file = await response.json() as { id?: unknown; created_at?: unknown; expires_at?: unknown };
-  if (typeof file.id !== 'string') throw new Error('vision_file_upload_failed');
-  const created = typeof file.created_at === 'number' ? file.created_at * 1000 : Date.now();
-  const expires = typeof file.expires_at === 'number' ? file.expires_at * 1000 : created + VISION_FILE_SECONDS * 1000;
-  return { fileId: file.id, expiresAt: new Date(Math.min(expires, Date.now() + VISION_FILE_SECONDS * 1000)).toISOString() };
-}

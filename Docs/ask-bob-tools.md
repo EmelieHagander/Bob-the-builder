@@ -760,6 +760,14 @@ stays in bob storage as the source; the file id is derived metadata on it in
 claim-bound `bob_record_image_provider_file`. A changed or deleted image never
 reuses the old id. Every lookup, upload or save failure falls back to inline
 pixels; access and revision are still checked before each use.
+**Superseded 2026-11-14 (owner decision):** Bob never depends on a provider's
+copy of an image. The OpenAI file-id cache, its RPCs and upload are removed
+(migration `20261114160000_drop_bob_image_provider_files.sql`); every image
+goes as our own `private-image:` reference, resolved to pixels from bob storage
+just before the request that uses it, and after use only its reference and
+description stay (image release, 2026-11-06). Cause: after the OpenAI account
+switch, old-account ids got 404 "file not found" and killed the turn (job
+d8a24673).
 
 Live policy, membership, source revisions, prerequisites and the prepared-call fence
 are still checked at execution. Bob and specialist context renewal unloads detailed schemas
