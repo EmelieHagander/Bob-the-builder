@@ -1641,6 +1641,16 @@ export async function generateImage(options: ImageCallOptions): Promise<ImageCal
   }
 }
 
+/** One-way tag of the OpenAI account this runtime uploads to (2026-11-14):
+ * a stored file id is only valid in the account that made it, so the image
+ * file cache is keyed by it. First 32 hex of SHA-256 of the API key. */
+export async function openAIAccountTag(): Promise<string> {
+  const apiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!apiKey) throw new Error('Missing OpenAI API key');
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(apiKey)));
+  return Array.from(digest.slice(0, 16), b => b.toString(16).padStart(2, '0')).join('');
+}
+
 const VISION_FILE_SECONDS = 30 * 24 * 3600;
 /** Upload one image for vision input. The provider deletes it after 30 days;
  * callers keep their own copy as the source and store only the returned id. */

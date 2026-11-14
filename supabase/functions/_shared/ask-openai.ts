@@ -59,7 +59,7 @@ import { createMediaAdapter, imageDescriptionText, resolveMediaImage, resolveMed
 import { prepareChatImages } from './project-context/chat-images.ts'
 import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
-import { callOpenAIResponses, callOpenAIEmbeddings, generateImage, refreshLiveProvider, uploadOpenAIVisionFile } from './openai-service.ts'
+import { callOpenAIResponses, callOpenAIEmbeddings, generateImage, refreshLiveProvider, uploadOpenAIVisionFile, openAIAccountTag } from './openai-service.ts'
 import { createBobContextContinuation, type ContextSurface } from './bob-context-continuation.ts'
 import { BOB_RESULT_WINDOW_TOKENS, BOB_CONSTRUCTION_RESULT_TOKENS, BOB_COMPACTION_BATCH } from './bob-result-references.ts'
 import { CONSTRUCTION_VIEW_TOOL, constructionViewBudget } from './construction-views.ts'
@@ -205,14 +205,15 @@ export async function answerWithOpenAi(opts: {
   }
   const imageFiles: ProviderImageFiles = {
     async find(mediaId, revision, signal) {
-      const { data, error } = await client.rpc('bob_image_provider_file', { p_project: opts.projectId, p_media: mediaId, p_revision: revision }).abortSignal(signal)
+      // A file id is only valid in the OpenAI account that uploaded it (2026-11-14).
+      const { data, error } = await client.rpc('bob_image_provider_file', { p_project: opts.projectId, p_media: mediaId, p_revision: revision, p_account: await openAIAccountTag() }).abortSignal(signal)
       if (error) throw new Error('unavailable')
       return typeof data === 'string' ? data : null
     },
     upload: (bytes, contentType, signal) => uploadOpenAIVisionFile(bytes, contentType as 'image/png' | 'image/jpeg' | 'image/webp', signal),
     async save(entry, signal) {
       const { error } = await internal.rpc('bob_record_image_provider_file', { ...binding, p_user: opts.userId, p_media: entry.mediaId,
-        p_revision: entry.revision, p_updated_at: entry.updatedAt, p_sha256: entry.sha256, p_file_id: entry.fileId, p_expires_at: entry.expiresAt,
+        p_revision: entry.revision, p_updated_at: entry.updatedAt, p_sha256: entry.sha256, p_file_id: entry.fileId, p_expires_at: entry.expiresAt, p_account: await openAIAccountTag(),
       }).abortSignal(signal)
       if (error) throw new Error('unavailable')
     },
