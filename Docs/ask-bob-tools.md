@@ -760,11 +760,6 @@ stays in bob storage as the source; the file id is derived metadata on it in
 claim-bound `bob_record_image_provider_file`. A changed or deleted image never
 reuses the old id. Every lookup, upload or save failure falls back to inline
 pixels; access and revision are still checked before each use.
-Since 2026-11-14 the stored id is also bound to the OpenAI account that
-uploaded it (`account`, a one-way tag of the Edge API key): after the owner
-switched OpenAI accounts, old-account ids got 404 "file not found" and killed
-the turn (job d8a24673). A new key uploads again; migration
-`20261114140000_bob_image_provider_files_account.sql` cleared the old rows.
 
 Live policy, membership, source revisions, prerequisites and the prepared-call fence
 are still checked at execution. Bob and specialist context renewal unloads detailed schemas
