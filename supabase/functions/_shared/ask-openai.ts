@@ -55,11 +55,11 @@ import { createMaterialCatalogReader, materialFindResult, parseMaterialShortlist
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
 import { createProjectContext, type Item, type Opened } from './project-context/dispatcher.ts'
-import { createMediaAdapter, imageDescriptionText, resolveMediaImage, resolveMediaImageFile, type ProviderImageFiles } from './project-context/media.ts'
+import { createMediaAdapter, imageDescriptionText, resolveMediaImage } from './project-context/media.ts'
 import { prepareChatImages } from './project-context/chat-images.ts'
 import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
-import { callOpenAIResponses, callOpenAIEmbeddings, generateImage, refreshLiveProvider, uploadOpenAIVisionFile } from './openai-service.ts'
+import { callOpenAIResponses, callOpenAIEmbeddings, generateImage, refreshLiveProvider } from './openai-service.ts'
 import { createBobContextContinuation, type ContextSurface } from './bob-context-continuation.ts'
 import { BOB_RESULT_WINDOW_TOKENS, BOB_CONSTRUCTION_RESULT_TOKENS, BOB_COMPACTION_BATCH } from './bob-result-references.ts'
 import { CONSTRUCTION_VIEW_TOOL, constructionViewBudget } from './construction-views.ts'
@@ -185,37 +185,15 @@ export async function answerWithOpenAi(opts: {
   const conceptViewTransport=createConceptViewTransport(client,{...opts,url,key})
   const drawingViewTransport=createDrawingViewTransport(client,{...opts,url,key})
   const imageRefs = new Map<string, Opened>()
+  // Bob's images always go as our own reference, resolved to pixels from bob
+  // storage just before each fresh request. No provider-side copy or file id
+  // is kept (owner decision 2026-11-14): a provider id dies with its account.
   const resolveImage = async (ref: string) => {
     const record = imageRefs.get(ref)
     if (!record) throw new Error('image_not_opened')
     if(record.item.ref.startsWith('concept:'))return resolveConceptViewImage(opts.projectId,conceptViewTransport,record,AbortSignal.timeout(30000))
     if(record.item.ref.startsWith('drawing:'))return resolveDrawingViewImage(opts.projectId,drawingViewTransport,record,AbortSignal.timeout(30000))
-    // Claimed server turns reuse one stored provider file per image revision
-    // instead of re-sending pixels; the image itself stays in bob storage.
-    if (claimedServer) return resolveMediaImageFile(opts.projectId, mediaTransport, record, ref, imageFiles, AbortSignal.timeout(30000))
     return resolveMediaImage(opts.projectId, mediaTransport, record, AbortSignal.timeout(12000))
-  }
-  // Pixels only, for providers that cannot read an OpenAI file id (Claude).
-  const resolveImageInline = async (ref: string) => {
-    const record = imageRefs.get(ref)
-    if (!record) throw new Error('image_not_opened')
-    if(record.item.ref.startsWith('concept:'))return resolveConceptViewImage(opts.projectId,conceptViewTransport,record,AbortSignal.timeout(30000))
-    if(record.item.ref.startsWith('drawing:'))return resolveDrawingViewImage(opts.projectId,drawingViewTransport,record,AbortSignal.timeout(30000))
-    return resolveMediaImage(opts.projectId, mediaTransport, record, AbortSignal.timeout(12000))
-  }
-  const imageFiles: ProviderImageFiles = {
-    async find(mediaId, revision, signal) {
-      const { data, error } = await client.rpc('bob_image_provider_file', { p_project: opts.projectId, p_media: mediaId, p_revision: revision }).abortSignal(signal)
-      if (error) throw new Error('unavailable')
-      return typeof data === 'string' ? data : null
-    },
-    upload: (bytes, contentType, signal) => uploadOpenAIVisionFile(bytes, contentType as 'image/png' | 'image/jpeg' | 'image/webp', signal),
-    async save(entry, signal) {
-      const { error } = await internal.rpc('bob_record_image_provider_file', { ...binding, p_user: opts.userId, p_media: entry.mediaId,
-        p_revision: entry.revision, p_updated_at: entry.updatedAt, p_sha256: entry.sha256, p_file_id: entry.fileId, p_expires_at: entry.expiresAt,
-      }).abortSignal(signal)
-      if (error) throw new Error('unavailable')
-    },
   }
   // Background workers have a 140 s segment. Claude streams synchronously and
   // needs a longer reservation than OpenAI's durable background-job handoff.
@@ -268,7 +246,7 @@ export async function answerWithOpenAi(opts: {
       // context. Completed journal replays skip this factory. Pending async
       // recovery can enter again, so these are attempts, not billable-call counts.
       if(imageInputs)console.log('[Bob image input attempt]',JSON.stringify(imageInputs))
-      const invoke=(recovery?:{key?:string;context?:Record<string,unknown>;expiresAt?:string;fingerprint?:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage, resolveImageInline, onUsageLogged:(id:string)=>{usageEventId=id},
+      const invoke=(recovery?:{key?:string;context?:Record<string,unknown>;expiresAt?:string;fingerprint?:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage, onUsageLogged:(id:string)=>{usageEventId=id},
         // Routing hint only, added after the journal, job and drawing-budget
         // fingerprints so recorded steps of in-flight jobs still match.
         ...(promptCacheKey && (options.catalogRoleKey ?? options.functionName) === 'ask-bob' ? { promptCacheKey } : {}),
