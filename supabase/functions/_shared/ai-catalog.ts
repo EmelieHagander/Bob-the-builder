@@ -322,7 +322,9 @@ export function createAiCatalogSession(client: AiCatalogClient, options: { app: 
       if (roles.size >= 256) roles.clear()
       roles.set(cacheKey, role)
     }
-    return role
+    // The live provider switch (owner decision 2026-11-09) moves text tiers
+    // at call time; the cached role keeps the pinned model.
+    return withLiveModel(role)
   }
   return session
 }
@@ -355,3 +357,83 @@ export function validateAiCall(role: ResolvedAiRole, input: { app: string; image
   if (role.providerAdapter !== adapter || input.embeddings && (input.images || input.tools || input.schema || input.imageOutput)) fail('ai_profile_incompatible','provider adapter')
   if (input.images && !role.model.supports_images || input.tools && role.model.capabilities.supports_functions !== true || input.schema && role.model.capabilities.supports_json_schema !== true || input.imageOutput && !role.model.supports_image_output) fail('ai_profile_incompatible','call capability')
 }
+
+
+/** Owner decision 2026-11-09 ("en switch ska byta instantly"): one live value
+ * per app in shared.ai_provider_switch names the text provider. It is read
+ * at every model call (cached for LIVE_TTL_MS), never pinned in a job, so a
+ * running job moves with it. Only the text tiers move; image and embedding
+ * tiers keep their catalog binding. The row is changed by SQL from a thread;
+ * there is no UI. Without a row, the job's pinned catalog model is used. */
+
+export const LIVE_TTL_MS = 10_000
+const TEXT_TIERS = new Set(['nano', 'mini', 'standard'])
+const ADAPTERS: Record<string, ResolvedAiRole['providerAdapter']> = { openai: 'openai-responses-v1', anthropic: 'anthropic-messages-v1' }
+
+type SwitchRow = Record<string, any>
+export interface SwitchClient {
+  from(table: string): { select(columns: string): any }
+}
+type Live = { provider: string; models: Map<string, AiCatalogModel>; readAt: number }
+const cache = new Map<string, Live | null>()
+const readAt = new Map<string, number>()
+
+
+function validModel(row: unknown, provider: string, tier: string): row is AiCatalogModel {
+  return object(row) && row.provider === provider && row.is_active === true && row.model_type === tier
+    && object(row.capabilities) && row.capabilities.provider_adapter === ADAPTERS[provider]
+    && finite(row.max_output_tokens) && row.max_output_tokens > 0
+    && finite(row.input_cost_per_1m_tokens) && finite(row.output_cost_per_1m_tokens)
+}
+
+/** Reads the switch at most once per TTL. A failed read keeps the last good
+ * value; it never invents one. */
+export async function refreshProviderSwitch(client: SwitchClient, app: string, now = Date.now()): Promise<void> {
+  if (now - (readAt.get(app) ?? -Infinity) < LIVE_TTL_MS) return
+  try {
+    const { data: row, error } = await client.from('ai_provider_switch').select('provider,models').eq('app', app).maybeSingle()
+    if (error) throw error
+    readAt.set(app, now)
+    if (!row) { cache.set(app, null); return }
+    const provider = String(row.provider)
+    const names = object(row.models) && object(row.models[provider]) ? row.models[provider] as SwitchRow : null
+    if (!ADAPTERS[provider] || !names) throw new Error('ai_provider_switch_invalid')
+    const wanted = Object.entries(names).filter(([tier, name]) => TEXT_TIERS.has(tier) && typeof name === 'string')
+    const { data: rows, error: modelError } = await client.from('ai_models').select('*').in('model_name', wanted.map(([, name]) => name))
+    if (modelError) throw modelError
+    const models = new Map<string, AiCatalogModel>()
+    for (const [tier, name] of wanted) {
+      const model = (rows as SwitchRow[] ?? []).find(m => m.model_name === name)
+      if (!validModel(model, provider, tier)) throw new Error('ai_provider_switch_model_unavailable: ' + String(name))
+      models.set(tier, model)
+    }
+    cache.set(app, { provider, models, readAt: now })
+  } catch (error) {
+    readAt.set(app, now)
+    console.error('[AI provider switch] read failed; keeping the last value', error instanceof Error ? error.message : String(error))
+  }
+}
+
+export function providerSwitch(app: string): { provider: string; models: Map<string, AiCatalogModel> } | null {
+  return cache.get(app) ?? null
+}
+
+/** The role on the live provider's model for its tier. Every catalog check
+ * that depends on the model runs again; an incompatible profile fails. */
+export function withLiveModel(role: ResolvedAiRole): ResolvedAiRole {
+  if (!TEXT_TIERS.has(role.tier)) return role
+  const live = cache.get(role.app)?.models.get(role.tier)
+  if (!live || live.model_name === role.model.model_name) return role
+  const adapter = ADAPTERS[live.provider]
+  const fail = (detail: string): never => { throw new AiCatalogError('ai_profile_incompatible', 'provider switch ' + detail) }
+  const effort = role.reasoningEffort
+  if (effort !== null && (!live.supports_reasoning || !Array.isArray(live.capabilities.reasoning_efforts) || !live.capabilities.reasoning_efforts.includes(effort))) fail('reasoning effort')
+  const requirements = object(role.profile.definition.requirements) ? role.profile.definition.requirements : {}
+  if (requirements.images && !live.supports_images || requirements.functions && live.capabilities.supports_functions !== true || requirements.json_schema && live.capabilities.supports_json_schema !== true) fail('capability')
+  const allowed = adapter === 'anthropic-messages-v1' ? ['parallel_tool_calls'] : ['temperature', 'top_p', 'parallel_tool_calls', 'verbosity']
+  if (Object.keys(role.providerParameters).some(key => !allowed.includes(key))) fail('provider parameters')
+  return Object.freeze({ ...role, model: live, providerAdapter: adapter, maxOutputTokens: Math.min(role.maxOutputTokens, live.max_output_tokens) })
+}
+
+/** Test seam. */
+export function resetProviderSwitch() { cache.clear(); readAt.clear() }

@@ -7,7 +7,7 @@ import { parameterPacket } from './support/cad-parameter-fixture.ts'
 import { manufacturePolicy } from './support/construction-instance-policy-fixture.ts'
 import { constructionFormScope, constructionFormReadiness, constructionFormIssues, parseFormRefinement } from '../supabase/functions/_shared/construction-form.ts'
 import { parseDesignReadiness } from '../supabase/functions/_shared/project-design-intent.ts'
-import { createConstructionTools, checkedConstructionForDrawing } from '../supabase/functions/_shared/construction-draft.ts'
+import { createConstructionTools, checkedConstructionForDrawing, constructionFormCheckpoint } from '../supabase/functions/_shared/construction-draft.ts'
 import { createProjectWriter, type WritePayload } from '../supabase/functions/_shared/project-write.ts'
 import { compileCadParameters } from '../supabase/functions/_shared/cad-parameters.ts'
 import { createConstructionViews } from '../supabase/functions/_shared/construction-views.ts'
@@ -105,6 +105,21 @@ test('FORM checkpoints save, reopen and resume on the same artifact; whole deliv
     assert.equal(checked.status,'needs_data');assert(checked.checked.issues.some((i:any)=>i.code==='form_refinement_unverified'))
     const fake={version:1,project_id:project,artifact_id:saved.recordId,revision:1,check:{status:'checked',checker_version:'orthogonal-butt-role-v1',artifact_id:saved.recordId,revision:1,concept_ready:true,fabrication_ready:false,issue_count:0,issues:[],instance_policy:payload.data.instance_policy}}
     await assert.rejects(pg.query('insert into bob.artifact_cad_revisions(project_id,artifact_id,artifact_revision,recipe,manifest,files) values($1,$2,1,$3,$4,$5)',[project,saved.recordId,JSON.stringify(recipe),JSON.stringify({bob_parameters:parameters,bob_construction:fake}),JSON.stringify({front:'PHN2Zy8+'})]),/form_refinement_unverified/)
+    // Owner decision 2026-11-09: the same checkpoint may be drawn as a labelled partial drawing.
+    const partial=await checkedConstructionForDrawing({...options,readCatalog:(id,revision)=>call(owner,'bob.catalog_read',[project,JSON.stringify({action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}})])},saved.recordId,1,true)
+    // This fixture also has a disconnected part: still blocked, and the reply names it (not fabrication gaps).
+    assert.equal(partial.status,'needs_data');const codes=partial.blocking_issues.map((b:any)=>b.code)
+    assert(codes.includes('disconnected_parts'));assert(codes.includes('form_components_pending'));assert(!codes.includes('product_specification_unverified'))
+    const issues=partial.checked.issues.filter((i:any)=>i.code!=='disconnected_parts')
+    const label=constructionFormCheckpoint({...partial.checked,issues,issue_count:issues.length})!
+    assert.deepEqual(label,{version:1,pending_component_ids:constructionFormScope(intent,refinement).pending_component_ids})
+    const insertDrawing=(manifest:any)=>pg.query('insert into bob.artifact_cad_revisions(project_id,artifact_id,artifact_revision,recipe,manifest,files) values($1,$2,1,$3,$4,$5)',[project,saved.recordId,JSON.stringify(recipe),JSON.stringify({bob_parameters:parameters,...manifest}),JSON.stringify({front:'PHN2Zy8+'})])
+    const partialPin={version:1,project_id:project,artifact_id:saved.recordId,revision:1,check:{...partial.checked,issues,issue_count:issues.length}}
+    // Past every source/form gate, the labelled pin reaches the last check (this fixture has no annotations).
+    await assert.rejects(insertDrawing({bob_construction:partialPin,bob_form_checkpoint:label}),/construction_annotations_required/)
+    await assert.rejects(insertDrawing({bob_construction:partialPin}),/invalid_construction_check/)
+    await assert.rejects(insertDrawing({bob_construction:partialPin,bob_form_checkpoint:{version:1,pending_component_ids:[]}}),/form_refinement_unverified/)
+    await assert.rejects(insertDrawing({bob_construction:{...partialPin,check:partial.checked},bob_form_checkpoint:label}),/form_refinement_unverified/)
     await assert.rejects(asProjectUser(pg,owner,'select bob_private.construction_build_instances(c) from bob.artifact_construction_revisions c where artifact_id=$1 and artifact_revision=1',[saved.recordId]),/form_refinement_unverified/)
     for(const quantity_mode of ['pieces','fasteners','glue']) await assert.rejects(call(owner,'bob_private.material_requirement_cad_command',[project,'create',randomUUID(),0,JSON.stringify({artifact_id:saved.recordId,artifact_revision:1,quantity_mode})]),/form_refinement_unverified/)
   })

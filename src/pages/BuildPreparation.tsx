@@ -7,6 +7,8 @@ import { Icon, Loading, useAsync, useProjectVersion } from '../components/ui'
 import { inputStyle } from '../components/form'
 import { SavedCutPlan } from '../components/SavedCutPlan'
 import { Modal } from '../components/Modal'
+import { StockCountRow } from '../components/StockCount'
+import { stockGroups } from '../domain/stockCount'
 import { savedOutputPointer, savedOutputSourcePointer, savedOutputUrl } from '../lib/savedOutputNavigation'
 import '../components/StorageBoxDrawing.css'
 
@@ -66,14 +68,8 @@ export function BuildPreparation() {
   const linkedNeeds = (data?.needs.items ?? []).filter(item => chosen && item.artifactId === chosen.id
     && item.artifactRevision === chosen.revision && !item.artifactChanged && !item.targetChanged
     && !item.stockChanged && !item.componentChanged)
-  const provisionalMaterials = validPreview ? [...validPreview.parts.reduce((groups, part) => {
-    const key = part.materialId + '@' + part.materialRevision
-    const existing = groups.get(key)
-    if (existing) existing.blanks += part.quantity
-    else groups.set(key, { key, name: part.materialName, revision: part.materialRevision, blanks: part.quantity })
-    return groups
-  }, new Map<string, { key: string; name: string; revision: number; blanks: number }>()).values()]
-    .sort((a, b) => a.name.localeCompare(b.name) || a.revision - b.revision) : []
+  const provisionalMaterials = validPreview && source ? [...stockGroups(validPreview.parts, source.catalog).values()]
+    .sort((a, b) => a.name.localeCompare(b.name) || a.materialRevision - b.materialRevision) : []
   const currentPlans = (data?.cutPlans.items ?? []).filter(item => chosen && item.artifact_id === chosen.id
     && item.artifact_revision === chosen.revision && item.source_state === 'current')
   const currentPlan = currentPlans[0]
@@ -191,17 +187,13 @@ export function BuildPreparation() {
 
       <section className="card" style={{ ...pageCard, marginTop: 'var(--section-gap)' }} aria-label="Material and purchasing">
         <h2>Material &amp; purchasing</h2>
-        <p className="foundation-hint">Raw material to buy is counted from a verified cut plan, not by adding up part sizes.</p>
-        {provisionalMaterials.length > 0 && <details>
-          <summary>Materials in the construction · {provisionalMaterials.length} {provisionalMaterials.length === 1 ? 'material' : 'materials'}</summary>
-          <p className="foundation-hint">These are parts to make, not sheets or metres to buy. Stock format, saw kerf, offcuts and stock on hand are decided in the saved cut plan.</p>
-          <div className="box-parts" tabIndex={0} aria-label="Materials in the construction"><table>
-            <thead><tr><th>Material</th><th>Blanks in the drawing</th></tr></thead>
-            <tbody>{provisionalMaterials.map(group => <tr key={group.key}>
-              <td>{group.name} · v{group.revision}</td><td>{group.blanks}</td>
-            </tr>)}</tbody>
-          </table></div>
-        </details>}
+        <p className="foundation-hint">Boards and sheets are counted from the parts and the raw size you enter, not by adding up lengths or areas.</p>
+        {provisionalMaterials.length > 0 && <>
+          <h3>Boards and sheets to buy</h3>
+          <div className="stock-count-list">
+            {provisionalMaterials.map(group => <StockCountRow key={group.key} group={group} />)}
+          </div>
+        </>}
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--layout-gap)' }}>
           <div>
             <strong>Material needs</strong>

@@ -319,6 +319,16 @@ export function createArtifacts(
       return {...result,view,svg:row?.preview??null}
     },
     generation,
+    /** Build-guide pages kept in their own store (2026-11-09), as SVG text by page key.
+     * Read through project RLS; a key that is not stored is simply absent. */
+    async guidePages(projectId: string, guideId: string, keys: string[]): Promise<Record<string, string>> {
+      if (!/^[0-9a-f]{64}$/.test(guideId) || !keys.length || keys.some(key => !/^guide-[0-9]{1,3}$/.test(key))) throw new Error('Invalid build guide page reference.')
+      const { db, guard } = connection(projectId)
+      const read = await db.from('cad_guide_pages').select('page_key,svg').eq('project_id', projectId).eq('guide_id', guideId).in('page_key', keys)
+      guard()
+      const rows = checked(read) as { page_key: string; svg: string }[] | null
+      return Object.fromEntries((rows ?? []).map(row => [row.page_key, row.svg]))
+    },
     async wireframe(projectId: string, id: string, revision: number, signal: AbortSignal, retry = false): Promise<CadViewerResult> {
       const { db, guard } = connection(projectId)
       const pin = parseCadViewerPin({ project_id: projectId, artifact_id: id, revision })

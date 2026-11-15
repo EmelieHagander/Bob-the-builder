@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { prepareProjectOrientation } from '../supabase/functions/_shared/bob-project-orientation.ts'
+import { planStepAtTurnStart, prepareProjectOrientation } from '../supabase/functions/_shared/bob-project-orientation.ts'
 import { countContextTokens } from '../supabase/functions/_shared/bob-token-budget.ts'
 import { ORIENTATION_DIRECTORY_LIMITS, type OrientationDirectoryReader } from '../supabase/functions/_shared/bob-orientation-directory.ts'
 import type { LookupInput, LookupResult } from '../supabase/functions/_shared/project-lookup.ts'
@@ -64,6 +64,19 @@ test('orientation follows saved focus, all paginated peers, children and exact r
   assert.equal(area.siblings.at(-1)?.status, 'archived')
   assert.deepEqual(area.children.map(card => card.id), ['s1', 's2'])
   assert(area.completeness.areas)
+})
+
+test('helpers distinguish the screen step from saved focus and mark partial criteria', async () => {
+  const f = fixture()
+  f.steps[0].requirements = Array.from({ length: 7 }, (_, i) => ({ id: 'r' + i, title: 'Check ' + i, status: { state: 'missing' } }))
+  const packet = await prepareProjectOrientation({ ...f.opts, includeSavedFocus: true,
+    currentView: view({ task: { id: 't1', name: 'Mät takhöjd', status: 'todo', instructions: '' } }) })
+  const desk = planStepAtTurnStart(packet)!
+  assert.equal(desk.origin, 'screen')
+  assert.equal(desk.step.title, f.steps[0].title)
+  assert.equal(desk.saved_focus?.id, f.plan.focus_step_id)
+  assert.equal(desk.all_requirements_listed, false)
+  assert.equal(desk.requirements.length, 6)
 })
 
 test('screen task overrides saved focus and receives its parent requirements without changing plan focus', async () => {

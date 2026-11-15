@@ -63,8 +63,8 @@ test('no fastener schedule is read for a drawing render',async()=>{
  const transport=await import('../supabase/functions/_shared/cad-transport.ts')
  assert.equal('readConstructionFasteners' in transport,false)
  const code=await readFile(new URL('../supabase/functions/_shared/ask-openai.ts',import.meta.url),'utf8')
- const start=code.indexOf("memo('cad:render'"),render=code.slice(start,code.indexOf('},guide?90000:45000)',start)).replace(/\/\/[^\n]*/g,'')
- assert(start>0&&code.indexOf('},guide?90000:45000)',start)>start)
+ const start=code.indexOf("memo('cad:render'"),render=code.slice(start,code.indexOf('},45000)',start)).replace(/\/\/[^\n]*/g,'')
+ assert(start>0&&code.indexOf('},45000)',start)>start)
  assert.match(render,/createCadTransport\(Deno\.env\.get\('BOB_CAD_URL'\),Deno\.env\.get\('BOB_CAD_TOKEN'\)\)\(recipe,source\)/)
  assert.doesNotMatch(render,/fastener/i)
  // The one schedule read serves derive_construction_lists and, behind the
@@ -123,6 +123,24 @@ test('build guide transport posts to /guide and returns pages bound to their not
   const f=(async()=>new Response(JSON.stringify(guidePacket(change))))as unknown as typeof fetch
   await assert.rejects(createCadGuideTransport('https://fixture.invalid/render','fixture',f)(guideRequest),error,name)
  }
+})
+test('a guide refusal keeps the worker\'s named code; anything else stays generic',async()=>{
+ const answer=(status:number,body:string)=>(async()=>new Response(body,{status}))as unknown as typeof fetch
+ const call=(f:typeof fetch)=>createCadGuideTransport('https://fixture.invalid/render','fixture',f)(guideRequest)
+ await assert.rejects(call(answer(422,'{"error": "guide_too_many_pages"}')),/^Error: guide_too_many_pages$/)
+ await assert.rejects(call(answer(422,'{"error": "Not A Code"}')),/cad_guide_unavailable/)
+ await assert.rejects(call(answer(422,'')),/cad_guide_unavailable/)
+ await assert.rejects(call(answer(504,'{"error": "guide_steps"}')),/cad_guide_unavailable/,'only a 422 names a refusal')
+})
+test('a guide is drawn a section at a time, at most twelve steps per call',async()=>{
+ const {guideRanges}=await import('../supabase/functions/_shared/cad-transport.ts')
+ const steps=(...sections:(string|undefined)[])=>sections.map(section=>({joint_ids:['a'],...(section?{section}:{})}))
+ assert.deepEqual(guideRanges(steps('A','A','B','A')),[[0,2],[2,3],[3,4]])
+ assert.deepEqual(guideRanges(steps(...Array(25).fill(undefined))),[[0,12],[12,24],[24,25]])
+ const {verifyCadFiles:verify}=await import('../supabase/functions/_shared/cad-transport.ts')
+ const step=Buffer.from('ISO-10303-21;').toString('base64')
+ await verify({step},[],{step:{sha256:sha256Of(step)}},{status:'generated',store:'pages',pages:[{key:'guide-0',sha256:'a'.repeat(64)}]})
+ await assert.rejects(verify({step,'guide-0':page(0)},[],{step:{sha256:sha256Of(step)}},{status:'generated',store:'pages',pages:[{key:'guide-0',sha256:sha256Of(page(0))}]}),/invalid_cad_files/,'stored pages never ride in the row')
 })
 test('saved drawing files accept guide pages only when their notes list them with matching hashes',async()=>{
  const step=Buffer.from('ISO-10303-21;').toString('base64'),front=page(9)

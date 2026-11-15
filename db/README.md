@@ -1853,6 +1853,19 @@ applied; [hosted verification](../Docs/foundation-verification.md#form-delivery-
 records its managed version, exact function readback and rollback-only caller
 probe. This does not close browser or ordinary model/CAD acceptance.
 
+## Build guide pages in their own store — in PR, 2026-11-09
+
+Migration `20261109075000_cad_build_guide_pages.sql`
+([contract](../Docs/cad-adapter.md#build-guides-in-sections-pages-in-their-own-store--2026-11-09)):
+`bob.cad_guide_pages` (project, guide id, page key `guide-0…999`, sha256, SVG
+text; immutable; members read through `has_project_access`),
+`bob.store_cad_guide_pages` (service role; same bytes again is a no-op, another
+body under a key is refused), the save trigger accepting notes with
+`store: 'pages'` only when every noted page is stored with its hash and no
+`guide-*` file is in the row, and `bob.volunteer_guide_pages` (a volunteer reads
+pages only of a drawing their task's drawing scope returns). Earlier guides keep
+their pages in the row.
+
 ## Build guides with the drawing revision — applied 2026-10-30
 
 Migration `20261030170000_cad_build_guide.sql`

@@ -180,3 +180,18 @@ test('a reservation with no provider response ID expires after two minutes, not 
   assert.deepEqual(await one('select status,response from shared_private.ai_jobs where id=$1', [stale.id]), { status: 'expired', response: null })
   assert.equal((await one('select count(*)::int n from shared.ai_usage_events where background_job_id=$1', [stale.id])).n, 1)
 })
+
+test('a young unfinished response is checked again within seconds, an old one each minute', async () => {
+  const young = await reserve(), old = await reserve()
+  await pg.query("update shared_private.ai_jobs set created_at=now()-interval '20 minutes' where id=$1", [old.id])
+  const wait = async (id: string) => (await one("select extract(epoch from next_check_at-clock_timestamp())::float s from shared_private.ai_jobs where id=$1", [id])).s
+  for (const job of [young, old]) {
+    await invoke('shared.ai_job_accept', [job.id, JSON.stringify(response(job.id, 'in_progress'))])
+  }
+  assert(await wait(young.id) <= 5); assert(await wait(old.id) > 30)
+  for (const job of [young, old]) {
+    await invoke('shared.ai_work_claim', ['job', job.id, (await one('select capability from shared_private.ai_jobs where id=$1', [job.id])).capability])
+    await invoke('shared.ai_work_finish', ['job', job.id])
+  }
+  assert(await wait(young.id) <= 5); assert(await wait(old.id) > 30)
+})

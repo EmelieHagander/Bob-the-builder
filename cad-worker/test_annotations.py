@@ -275,4 +275,22 @@ class PositionScaleTest(unittest.TestCase):
                 # 60 slat starts on X plus the single 0 on Z: each is numbered or counted.
                 self.assertEqual(len(marks)+int(hidden[0].split()[0]),60)
 
+    def test_crowded_heights_stay_in_one_column_with_a_leader(self):
+        # Entré walls 2026-11-09: starts at 0/45 and 2095/2131 printed a second column of stray numbers.
+        req={'definitions':[{'id':'stud','primitive':'box','x_mm':45,'y_mm':95,'z_mm':100}]}
+        rows=[{'id':f's{z}','definition_id':'stud','bounding_box_mm':{'min':[0,0,z],'max':[45,95,z+100],'size':[45,95,100]}} for z in (0,45,2095,2131,2140)]
+        bounds={'min':[0,0,0],'max':[3650,95,2285],'size':[3650,95,2285]}
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp,'front.svg')
+            path.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1825 -1142.5 3650 2285"><g id="Visible"><path d="M-1825 -1142.5 L1825 1142.5"/></g></svg>')
+            annotate(path,req,rows,bounds,'front',[1825,-5000,1142.5],[0,0,1],[1825,47.5,1142.5])
+            marks=[el for el in ET.parse(path).getroot().iter(NS+'text') if el.get('font-size')=='11' and el.get('text-anchor')=='start' and (el.text or '').isdigit()]
+            self.assertEqual(len({el.get('x') for el in marks}),1,'one column of heights')
+            ys=sorted(float(el.get('y')) for el in marks)
+            self.assertTrue(all(b-a>=12 for a,b in zip(ys,ys[1:])),'height labels never overlap')
+            leaders=[el for el in ET.parse(path).getroot().iter(NS+'line') if el.get('stroke')=='#999']
+            self.assertGreaterEqual(len(leaders),1)
+            texts=texts_of(path)
+            self.assertEqual(len(marks)+sum(int(t.split()[0]) for t in texts if 'too close together' in t),5)
+
 if __name__=='__main__': unittest.main()

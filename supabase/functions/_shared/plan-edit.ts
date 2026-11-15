@@ -28,7 +28,11 @@ export function editPlanSnapshot(snapshot:Record<string,any>,input:unknown){
   const index=steps.findIndex((s:any)=>s.step_id===c.step_id),s=steps[index]
   if(c.action!=='add_step'&&(!s||c.step_id===null))fail('Step not found in the current unfinished plan; read its exact ID. Completed history cannot be edited.')
   if(c.action==='update_step'){
-   if(c.values.state==='completed')fail('An edit cannot certify completion. Keep the Step open or explicitly remove obsolete work.')
+   if(c.values.state==='completed'){
+    const existing=current.steps.find((row:any)=>row.id===c.step_id)
+    if(!Array.isArray(existing?.requirements)||existing.requirements.some((q:any)=>!['satisfied','waived','not_applicable'].includes(q.status?.state)))
+     fail('Open requirements cannot certify completion. Resolve the current checks first.')
+   }
    Object.assign(s,fields(c.values,STEP_FIELDS))
   }else if(c.action==='remove_step'){
    fields(c.values,[]);steps.splice(index,1)

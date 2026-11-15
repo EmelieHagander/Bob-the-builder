@@ -1550,3 +1550,23 @@ without claiming a main-chat preview. Original assignments, uncertainty,
 code-derived receipt identities and exact history reopening survive restart.
 An absent pin retains the previous worker protocol. Installation and ordinary
 behavior acceptance are tracked in the [audit correction evidence](bob-runtime-path-audit-2026-11-04.md#three-project-corrections-2026-11-06).
+
+## Repeated concept blockers — source, 2026-11-11
+
+New manifests with bob.tools.blocker_handoff_version=1 return a construction
+handover to Bob after three concept_geometry_changed refusals without a
+successful save. Remaining calls in the same batch are deferred. The terminal
+worker checkpoint retains the blocker and exact envelope diagnostics, so
+resuming it does not call the specialist again.
+
+Bob's persisted failed-worker markers bind this blocker to the caller-read
+selected target identity and revision. Rewording the brief cannot start another
+structure chain against that target. Bob can reconcile the selected Solution
+with his existing tools; a changed selected target permits a new handover.
+This ends the specialist attempt, not the owner's delegated work. It neither
+changes geometry automatically nor substitutes a new owner approval request.
+An inaccessible selected source stays an explicit technical blocker.
+
+FORM compares the combined outer bounds of mapped parts to the concept
+envelope. Hollow framing is permitted. A save establishes persistence and
+source alignment; load capacity and whole-build suitability remain separate.

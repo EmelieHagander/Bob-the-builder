@@ -399,6 +399,13 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
         construction_edit_compilation_mismatch:'The compiled result did not match the requested change. No revision was saved.'}
       if(error.message&&Object.hasOwn(reasons,error.message))return {status:'invalid',message:'No construction changed. '+reasons[error.message]}
     }
+    const overlap = /^concept_components_overlap:([A-Za-z0-9_+,-]{1,600})$/.exec(error.message ?? '')
+    if (overlap) return { status: 'invalid', reason: 'concept_components_overlap', overlapping: overlap[1].split(',').map(p => p.split('+')),
+      message: 'No solution saved. Two solid concept components take the same space (listed in overlapping). Move or resize one so they only touch; openings, spaces and references may overlap solids.',
+      validation: { code: 'domain_fields', fields: ['/design_intent/model/components'] } }
+    // Entré floor, 2026-11-09: this read as a format error. It is a scope
+    // gap: the construction builds only some of the concept's components.
+    if (error.message === 'concept_part_missing' && ['construction', 'construction_edit', 'construction_parameters', 'construction_work'].includes(payload.kind)) return { status: 'invalid', reason: 'concept_part_missing', message: 'No construction changed. The selected Solution concept has components this construction has no parts for. A construction that builds only some components declares them in form_refinement (a part edit derives it from where the parts lie); the other components stay pending for their own constructions.', validation: { code: 'domain_fields', fields: ['form_refinement'] } }
     if (/^concept_(reconciliation_required|part_missing|mapping_unsupported|geometry_changed|identity_required)$/.test(error.message ?? '')) return { status: 'invalid', reason: error.message, message: 'No change saved. Read the selected concept and preserve its component identities, dimensions, views and constraints. Missing or unsupported geometry must be reconciled explicitly before construction.', validation: { code: 'field_value', fields: ['design_intent.model'] } }
     if (error.code === '40001' || error.code === 'PT409' || (payload.kind === 'catalog' && error.code === '23505') || error.message?.includes('Record changed')) return { status: 'conflict', message: 'Record changed or an equivalent catalog definition exists. Read the current record and do not overwrite unrelated changes.' }
     if (['22023', '22P02', '22007', '22008', '23502', '23503', '23514', 'P0001'].includes(error.code ?? '')) {
@@ -413,6 +420,8 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       if (payload.kind === 'lifecycle' || payload.kind === 'bound_work' && (payload.data.domain as WritePayload)?.kind === 'lifecycle') return { status: 'invalid', message: 'No change made. ' + (LIFECYCLE_REASON.exec(error.message ?? '')?.[0] ?? 'The project rejected this change; read the current record and check its state.') }
       const material = payload.kind === 'operational' ? MATERIAL_REFUSALS[(error.message ?? '').trim()] : undefined
       if (material) return { status: material[2] ? 'conflict' : 'invalid', reason: material[0], message: 'No change made. ' + material[1] }
+      if (payload.kind.startsWith('plan_') && error.message === 'plan_step_requirements_unmet')
+        return { status: 'invalid', reason: error.message, message: 'A step still has an unresolved completion requirement. Read its current checks and evidence before trying to complete it again.' }
       if (payload.kind.startsWith('plan_')) return { status: 'invalid', message: 'The living plan rejected this command. No canonical plan was silently changed. Read the current plan, reuse only exact Step/Requirement IDs from it, keep completed history, and use current project evidence IDs/revisions.' }
       const reason = options.rejectionReasons ? databaseRejectionReason(error) : undefined
       return { status: 'invalid', message: 'The database rejected this command. No change made; check fields, source, current revision and record state.', ...(reason ? { reason } : {}) }

@@ -5,7 +5,9 @@ import { CadSourceMap } from './CadSourceMap'
 import { lazy, Suspense, useCallback, useState } from 'react'
 import './StorageBoxDrawing.css'
 import { ZoomableImage } from './ZoomableImage'
-import { CadBuildGuide, type BuildGuideNotes } from './CadBuildGuide'
+import { CadBuildGuide, type BuildGuideNotes, type GuidePageLoader } from './CadBuildGuide'
+import { CadDrawingPrint } from './CadDrawingPrint'
+import * as db from '../data/database'
 const WireframeView = lazy(() => import('./CadWireframeView').catch(() => ({ default: WireframeUnavailable })))
 function WireframeUnavailable({onFallback}:{onFallback:(message:string)=>void}) {
  return <div role="alert"><p>The 3D viewer could not be loaded. Check the connection and try again.</p><button type="button" className="btn" onClick={()=>onFallback('')}>Show saved drawing</button></div>
@@ -20,30 +22,34 @@ function CadSheet({src,label,title,file}:{src:string;label:string;title:string;f
 }
 
 /** SVG is an image document, never injected into the page's DOM. */
-export function CadDrawingView({value,title,projectId,artifactId,revision,sourceStatus}:{value:Pick<CadDrawing,'files'|'recipe'|'source_changed'> & Partial<Pick<CadDrawing,'manifest'>> & {build_guide?:Record<string,any>|null};title:string;projectId?:string;artifactId?:string;revision?:number;sourceStatus?:DrawingSourceStatus}){
+export function CadDrawingView({value,title,projectId,artifactId,revision,sourceStatus,loadGuidePages}:{value:Pick<CadDrawing,'files'|'recipe'|'source_changed'> & Partial<Pick<CadDrawing,'manifest'>> & {build_guide?:Record<string,any>|null};title:string;projectId?:string;artifactId?:string;revision?:number;sourceStatus?:DrawingSourceStatus;/** Volunteers pass their own scoped reader; members read through project RLS. */loadGuidePages?:GuidePageLoader}){
  const [interactive,setInteractive]=useState(false),[notice,setNotice]=useState('')
+ const memberPages=useCallback<GuidePageLoader>((guideId,keys)=>db.getCadGuidePages(projectId!,guideId,keys),[projectId])
  const fallback=useCallback((message:string)=>{setInteractive(false);setNotice(message)},[])
  // Overviews first: a flat side of a large build is mostly one panel, so it says little about what the build is.
  const names:Record<string,string>={isometric:'Overview',isometric_front_left:'Overview front-left',isometric_back_left:'Overview back-left',isometric_back_right:'Overview back-right',front:'Front',back:'Back',left:'Left',right:'Right',top:'Top',bottom:'Bottom'}
- const checks=value.manifest?.checks,markers=cadPartMarkers(value.manifest)
+ const checks=value.manifest?.checks,markers=cadPartMarkers(value.manifest),views=Object.entries(names).filter(([key])=>value.files[key])
  if(sourceStatus?.source_state==='unavailable')return <section aria-label={`${title} CAD drawings`}>
   <p className="solution-attention">Current-use drawing preview is withheld until source access and freshness can be checked. This saved revision remains part of the project history.</p>
   <CadSourceMap recipe={value.recipe} manifest={value.manifest} projectId={projectId} sourceStatus={sourceStatus} />
  </section>
  return <section aria-label={`${title} CAD drawings`}>
-  <p className="foundation-hint">Concept · dimensions in mm. Site fit and construction checks remain as stated in the drawing assumptions.</p>
+  {value.manifest?.bob_form_checkpoint
+   ?<p className="solution-attention">Partial drawing · dimensions in mm. Part of the build is not drawn yet.</p>
+   :<p className="foundation-hint">Concept · dimensions in mm. Site fit and construction checks remain as stated in the drawing assumptions.</p>}
   {value.source_changed&&<p role="alert" className="solution-attention">The source construction has changed. This detail still shows its recorded revision.</p>}
   <CadSourceMap recipe={value.recipe} manifest={value.manifest} projectId={projectId} sourceStatus={sourceStatus} />
-  {projectId&&artifactId&&revision&&<div className="foundation-actions">
-   <button type="button" className="btn" aria-pressed={interactive} onClick={()=>{setNotice('');setInteractive(v=>!v)}}>{interactive?'Close 3D view':'View in 3D'}</button>
+  {(projectId&&artifactId&&revision||views.length>0)&&<div className="foundation-actions">
+   {projectId&&artifactId&&revision&&<button type="button" className="btn" aria-pressed={interactive} onClick={()=>{setNotice('');setInteractive(v=>!v)}}>{interactive?'Close 3D view':'View in 3D'}</button>}
+   {views.length>0&&<CadDrawingPrint views={views} files={value.files} recipe={value.recipe} manifest={value.manifest} title={title} />}
   </div>}
   {notice&&<p role="status" className="foundation-hint">{notice}</p>}
   {interactive&&projectId&&artifactId&&revision&&<Suspense fallback={<p role="status">Loading the 3D viewer…</p>}>
    <WireframeView projectId={projectId} artifactId={artifactId} revision={revision} title={title} onFallback={fallback}/>
   </Suspense>}
-  {Object.keys(names).some(key=>value.files[key])&&<p className="foundation-hint">Each view fits the screen. To read part numbers and sizes, pinch or press + to zoom (on a computer: Ctrl + scroll wheel), then drag to move around.</p>}
-  {Object.entries(names).filter(([key])=>value.files[key]).map(([key,label])=><CadSheet key={key} label={label} title={title} file={`${key}.svg`} src={`data:image/svg+xml;base64,${value.files[key]}`} />)}
-  <CadBuildGuide guide={(value.manifest?.build_guide??value.build_guide) as BuildGuideNotes|null|undefined} files={value.files} title={title} sourceChanged={value.source_changed} />
+  {views.length>0&&<p className="foundation-hint">Each view fits the screen. To read part numbers and sizes, pinch or press + to zoom (on a computer: Ctrl + scroll wheel), then drag to move around.</p>}
+  {views.map(([key,label])=><CadSheet key={key} label={label} title={title} file={`${key}.svg`} src={`data:image/svg+xml;base64,${value.files[key]}`} />)}
+  <CadBuildGuide guide={(value.manifest?.build_guide??value.build_guide) as BuildGuideNotes|null|undefined} files={value.files} title={title} sourceChanged={value.source_changed} loadPages={loadGuidePages??(projectId?memberPages:undefined)} projectId={loadGuidePages?undefined:projectId} />
   {value.files.step&&<a className="btn" download="assembly.step" href={`data:application/step;base64,${value.files.step}`}>Download 3D model</a>}
   <details><summary>Parts and sizes</summary>
    <p>Sizes are before notches and holes, with nothing added for saw cuts. Check grain and joints before cutting.</p>

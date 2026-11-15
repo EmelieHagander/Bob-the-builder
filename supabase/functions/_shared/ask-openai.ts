@@ -1,3 +1,5 @@
+import { guideItemArt, type ArtClaim } from './guide-item-art.ts'
+import { guideArtResolver } from './guide-item-runtime.ts'
 import {createConceptViewAdapter,resolveConceptViewImage} from './project-context/concepts.ts'
 import {createConceptViewTransport} from './project-context/concept-transport.ts'
 import {createDrawingViewAdapter,resolveDrawingViewImage} from './project-context/drawings.ts'
@@ -46,16 +48,18 @@ import type { OpenAIServiceOptions } from './openai-service.ts'
 import { createRecordDetailReader } from './project-record-detail.ts'
 import { createProjectImageTools } from './project-image-tools.ts'
 import { createCadAssistant, cadRenderInput } from './cad-assistant.ts'
+import { BUILD_GUIDE_FIELDS } from './runtime-tool-surface.ts'
+import { guideRanges, sha256Text, type CadGuideRequest } from './cad-transport.ts'
 import { createCadGuideTransport, createCadTransport } from './cad-transport.ts'
 import { createMaterialCatalogReader, materialFindResult, parseMaterialShortlist, shortlistLine, shortlistRef } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
 import { createProjectContext, type Item, type Opened } from './project-context/dispatcher.ts'
-import { createMediaAdapter, imageDescriptionText, resolveMediaImage, resolveMediaImageFile, type ProviderImageFiles } from './project-context/media.ts'
+import { createMediaAdapter, imageDescriptionText, resolveMediaImage } from './project-context/media.ts'
 import { prepareChatImages } from './project-context/chat-images.ts'
 import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
-import { callOpenAIResponses, callOpenAIEmbeddings, generateImage, uploadOpenAIVisionFile } from './openai-service.ts'
+import { callOpenAIResponses, callOpenAIEmbeddings, generateImage, refreshLiveProvider } from './openai-service.ts'
 import { createBobContextContinuation, type ContextSurface } from './bob-context-continuation.ts'
 import { BOB_RESULT_WINDOW_TOKENS, BOB_CONSTRUCTION_RESULT_TOKENS, BOB_COMPACTION_BATCH } from './bob-result-references.ts'
 import { CONSTRUCTION_VIEW_TOOL, constructionViewBudget } from './construction-views.ts'
@@ -63,6 +67,7 @@ import { readWithStatementRetry, withStatementRetry } from './read-retry.ts'
 import { createMemoryRetrieval, journalMemoryStore } from './bob-memory-retrieval.ts'
 import { createJournalledMemoryEmbedder } from './bob-memory-embedding.ts'
 import { createBobConversationStore, type BobTurnClaim } from './bob-conversation.ts'
+import { readPlanOrientationPacket } from './bob-project-orientation.ts'
 import { createProjectLookup, type LookupInput } from './project-lookup.ts'
 import { createLookupReuse, createLookupTransport, lookupPin, type LookupPin } from './lookup-rpc.ts'
 import { createPlanAssistant } from './plan-assistant.ts'
@@ -181,37 +186,15 @@ export async function answerWithOpenAi(opts: {
   const conceptViewTransport=createConceptViewTransport(client,{...opts,url,key})
   const drawingViewTransport=createDrawingViewTransport(client,{...opts,url,key})
   const imageRefs = new Map<string, Opened>()
+  // Bob's images always go as our own reference, resolved to pixels from bob
+  // storage just before each fresh request. No provider-side copy or file id
+  // is kept (owner decision 2026-11-14): a provider id dies with its account.
   const resolveImage = async (ref: string) => {
     const record = imageRefs.get(ref)
     if (!record) throw new Error('image_not_opened')
     if(record.item.ref.startsWith('concept:'))return resolveConceptViewImage(opts.projectId,conceptViewTransport,record,AbortSignal.timeout(30000))
     if(record.item.ref.startsWith('drawing:'))return resolveDrawingViewImage(opts.projectId,drawingViewTransport,record,AbortSignal.timeout(30000))
-    // Claimed server turns reuse one stored provider file per image revision
-    // instead of re-sending pixels; the image itself stays in bob storage.
-    if (claimedServer) return resolveMediaImageFile(opts.projectId, mediaTransport, record, ref, imageFiles, AbortSignal.timeout(30000))
     return resolveMediaImage(opts.projectId, mediaTransport, record, AbortSignal.timeout(12000))
-  }
-  // Pixels only, for providers that cannot read an OpenAI file id (Claude).
-  const resolveImageInline = async (ref: string) => {
-    const record = imageRefs.get(ref)
-    if (!record) throw new Error('image_not_opened')
-    if(record.item.ref.startsWith('concept:'))return resolveConceptViewImage(opts.projectId,conceptViewTransport,record,AbortSignal.timeout(30000))
-    if(record.item.ref.startsWith('drawing:'))return resolveDrawingViewImage(opts.projectId,drawingViewTransport,record,AbortSignal.timeout(30000))
-    return resolveMediaImage(opts.projectId, mediaTransport, record, AbortSignal.timeout(12000))
-  }
-  const imageFiles: ProviderImageFiles = {
-    async find(mediaId, revision, signal) {
-      const { data, error } = await client.rpc('bob_image_provider_file', { p_project: opts.projectId, p_media: mediaId, p_revision: revision }).abortSignal(signal)
-      if (error) throw new Error('unavailable')
-      return typeof data === 'string' ? data : null
-    },
-    upload: (bytes, contentType, signal) => uploadOpenAIVisionFile(bytes, contentType as 'image/png' | 'image/jpeg' | 'image/webp', signal),
-    async save(entry, signal) {
-      const { error } = await internal.rpc('bob_record_image_provider_file', { ...binding, p_user: opts.userId, p_media: entry.mediaId,
-        p_revision: entry.revision, p_updated_at: entry.updatedAt, p_sha256: entry.sha256, p_file_id: entry.fileId, p_expires_at: entry.expiresAt,
-      }).abortSignal(signal)
-      if (error) throw new Error('unavailable')
-    },
   }
   // Background workers have a 140 s segment. Claude streams synchronously and
   // needs a longer reservation than OpenAI's durable background-job handoff.
@@ -247,8 +230,10 @@ export async function answerWithOpenAi(opts: {
     const expiresAt = opts.background?.workAllowanceVersion === 1 ? opts.background.authorityExpiresAt! : new Date(opts.background?.deadline ?? 0).toISOString()
     // A refreshed owner JWT must not alter an already accepted model job's
     // immutable reservation. Old execution manifests retain their call order.
+    // A renewed attempt is its own AI job with its own deadline; attempt 0 keeps the old key.
+    const attemptKey = identity && execution.modelRenewalVersion === 1 && identity.attempt > 0 ? identity.key + ':attempt:' + identity.attempt : identity?.key
     const modelExpiresAt = asyncModels && identity && execution.modelDeadlineVersion === 1
-      ? await pinBobModelDeadline(memo, identity, expiresAt) : expiresAt
+      ? await pinBobModelDeadline(memo, { ...identity, key: attemptKey! }, expiresAt) : expiresAt
     const started = performance.now()
     // Do not spend money on a Claude request whose stream cannot finish before
     // the next worker segment. Check again *after* contextual pre-dispatch work.
@@ -262,7 +247,7 @@ export async function answerWithOpenAi(opts: {
       // context. Completed journal replays skip this factory. Pending async
       // recovery can enter again, so these are attempts, not billable-call counts.
       if(imageInputs)console.log('[Bob image input attempt]',JSON.stringify(imageInputs))
-      const invoke=(recovery?:{key?:string;context?:Record<string,unknown>;expiresAt?:string;fingerprint?:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage, resolveImageInline, onUsageLogged:(id:string)=>{usageEventId=id},
+      const invoke=(recovery?:{key?:string;context?:Record<string,unknown>;expiresAt?:string;fingerprint?:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage, onUsageLogged:(id:string)=>{usageEventId=id},
         // Routing hint only, added after the journal, job and drawing-budget
         // fingerprints so recorded steps of in-flight jobs still match.
         ...(promptCacheKey && (options.catalogRoleKey ?? options.functionName) === 'ask-bob' ? { promptCacheKey } : {}),
@@ -271,7 +256,7 @@ export async function answerWithOpenAi(opts: {
         // calls often missed the cache (Konrad's second call read nothing from it).
         ...(promptCacheKey && WORKER_ROLES.has(options.catalogRoleKey ?? options.functionName) ? { promptCacheKey: workerCacheKey(promptCacheKey, options.catalogRoleKey ?? options.functionName) } : {}),
         ...(asyncModels && identity ? { background: {
-          key: opts.background!.jobId + '/' + identity.key, fingerprint: identity.fingerprint, receiver: 'bob',
+          key: opts.background!.jobId + '/' + attemptKey, fingerprint: identity.fingerprint, receiver: 'bob',
           context: { jobId: opts.background!.jobId, role: options.aiFunction },
           expiresAt: modelExpiresAt,
           ...recovery,
@@ -289,6 +274,9 @@ export async function answerWithOpenAi(opts: {
     // connection may have been billed, so the journal re-sends it once and reports it.
     if (journal && !result.success && /OpenAI API error: (429|5[0-9]{2})/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_retry')
     if (journal && !result.success && /Network error/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_uncertain')
+    // The reservation lapsed with the old sign-in; the owner has since reconnected.
+    if (journal && !result.success && result.error === 'ai_background_expired' && execution.modelRenewalVersion === 1
+      && Date.parse(modelExpiresAt) < Date.parse(expiresAt)) throw new BobContinuation('yield', 'model_deadline_renewed')
     return result
    }, synchronousClaude ? claudeJournalReserveMs(timeout) : asyncModels ? (options.images?.length || hasImageContent(options.messages) ? 45000 : 25000)
      : Math.min(timeout, RESERVE_MS[options.aiFunction] ?? 45000))}catch(error){
@@ -406,7 +394,7 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; toolSchemaDedupVersion?: 1; promptCachePointsVersion?: 1; workerFocusVersion?: 1; workerPlanVersion?: 1; workerGatesVersion?: 1; writeCheckVersion?: 1; constructionSketchVersion?: 1 | 2; stableToolsVersion?: 1; serverTargetVersion?: 1; serverRevisionsVersion?: 1; refusalGuardVersion?: 1; materialFollowVersion?: 1; toolPickLimit?: number; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; workingStateVersion?: 1; drawingBindingVersion?:1; operationPathsVersion?:1|2; solutionWorkVersion?:1; continuedWorkVersion?:1; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; modelRenewalVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; imageInputDedupVersion?: 1; stageContextVersion?: 1; workerStageContextVersion?: 1; imageReleaseVersion?: 1; imageDescriptionVersion?: 1; toolSchemaDedupVersion?: 1; promptCachePointsVersion?: 1; workerFocusVersion?: 1; workerPlanVersion?: 1; workerGatesVersion?: 1; writeCheckVersion?: 1; constructionSketchVersion?: 1 | 2; stableToolsVersion?: 1; serverTargetVersion?: 1; serverRevisionsVersion?: 1; refusalGuardVersion?: 1; materialFollowVersion?: 1 | 2; toolPickLimit?: number; resultWindowVersion?: 1 | 2; constructionPageVersion?: 1; corePreloadVersion?: 1; buildingLinkVersion?: 1; roomDimensionsVersion?: 1; projectFactsVersion?: 1; exactLookupVersion?: 1; lookupReuseVersion?: 1; turnUsdStop?: number; finalAnswerVersion?: 1; specialistContinuationTokens?: number; workerCheckpointVersion?: 1; workerStartPacketVersion?: 1; formCheckpointDrawingVersion?: 1; checkFindingsVersion?: 1; workpadVersion?: 1; workerVerifiedRenewalVersion?: 1; workerPieceProgressVersion?: 1 | 2 | 3 | 4; memoryStairVersion?: 1; promptTiersVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
       // Larger construction pages (decision A). Jobs without this pin keep 2,000.
@@ -426,6 +414,16 @@ export async function answerWithOpenAi(opts: {
       // Identical reads reused within the turn until it writes (2026-10-29). Jobs without this pin read every time.
       lookupReuseVersion: 1 as const,
       ...(checkpoint ? { groundingReadOrderVersion: 1 as const, modelDeadlineVersion: 1 as const } : {}),
+      // A model step whose reservation lapsed while the sign-in expired is sent again
+      // after Reconnect (2026-11-09). Jobs without this pin fail that step as before.
+      ...(checkpoint ? { modelRenewalVersion: 1 as const } : {}),
+      // Konrad gets the construction he is handed in his first message (owner decision
+      // 2026-11-09). Jobs without this pin let him read it himself.
+      workerStartPacketVersion: 1 as const,
+      // Owner decision 2026-11-09: a FORM checkpoint may be drawn as a labelled partial drawing.
+      formCheckpointDrawingVersion: 1 as const,
+      // 2026-11-09: check replies carry findings inline, so workers stop paging 146 kB results.
+      checkFindingsVersion: 1 as const,
       ...bobCompleteRequestVersions(!!checkpoint, contract),
       ...bobStageContextVersion(!!checkpoint, contract),
       // Opened pixels leave after use (owner decision 2026-11-06). Jobs without this pin keep every opened image.
@@ -467,7 +465,7 @@ export async function answerWithOpenAi(opts: {
       // Owner feedback 2026-11-07: a refused call does not run again unchanged; a third refusal for one reason asks for another approach.
       ...(checkpoint && claimedServer && contract.refusal_guard_version === 1 ? { refusalGuardVersion: 1 as const } : {}),
       // Owner runs 2026-11-08: after Konrad's job, code recalculates the material rows of the construction he saved. New claimed jobs only.
-      ...(checkpoint && claimedServer && contract.material_follow_version === 1 ? { materialFollowVersion: 1 as const } : {}),
+      ...(checkpoint && claimedServer && (contract.material_follow_version === 1 || contract.material_follow_version === 2) ? { materialFollowVersion: contract.material_follow_version as 1 | 2 } : {}),
       ...(checkpoint && Number.isInteger(contract.tool_pick_limit) && Number(contract.tool_pick_limit) >= 1 && Number(contract.tool_pick_limit) <= 8 ? { toolPickLimit: Number(contract.tool_pick_limit) } : {}),
       ...(checkpoint && claimedServer && contract.workpad_version === 1 && contract.worker_checkpoint_version === 1
         && contract.worker_verified_renewal_version === 1 ? { workerVerifiedRenewalVersion: 1 as const } : {}),
@@ -495,7 +493,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.serverTargetVersion !== undefined && execution.serverTargetVersion !== 1) throw new Error('server_target_version_invalid')
   if (execution.serverRevisionsVersion !== undefined && execution.serverRevisionsVersion !== 1) throw new Error('server_revisions_version_invalid')
   if (execution.refusalGuardVersion !== undefined && execution.refusalGuardVersion !== 1) throw new Error('refusal_guard_version_invalid')
-  if (execution.materialFollowVersion !== undefined && execution.materialFollowVersion !== 1) throw new Error('material_follow_version_invalid')
+  if (execution.materialFollowVersion !== undefined && execution.materialFollowVersion !== 1 && execution.materialFollowVersion !== 2) throw new Error('material_follow_version_invalid')
   if (execution.toolPickLimit !== undefined && !(Number.isInteger(execution.toolPickLimit) && execution.toolPickLimit >= 1 && execution.toolPickLimit <= 8)) throw new Error('tool_pick_limit_invalid')
   if (execution.workerVerifiedRenewalVersion !== undefined
     && (execution.workerVerifiedRenewalVersion !== 1 || execution.workpadVersion !== 1 || execution.workerCheckpointVersion !== 1))
@@ -509,6 +507,10 @@ export async function answerWithOpenAi(opts: {
   if (execution.rolloverVersion !== undefined && execution.rolloverVersion !== 1) throw new Error('rollover_version_invalid')
   if (execution.groundingReadOrderVersion !== undefined && execution.groundingReadOrderVersion !== 1) throw new Error('grounding_read_order_version_invalid')
   if (execution.modelDeadlineVersion !== undefined && execution.modelDeadlineVersion !== 1) throw new Error('model_deadline_version_invalid')
+  if (execution.workerStartPacketVersion !== undefined && execution.workerStartPacketVersion !== 1) throw new Error('worker_start_packet_version_invalid')
+  if (execution.formCheckpointDrawingVersion !== undefined && execution.formCheckpointDrawingVersion !== 1) throw new Error('form_checkpoint_drawing_version_invalid')
+  if (execution.checkFindingsVersion !== undefined && execution.checkFindingsVersion !== 1) throw new Error('check_findings_version_invalid')
+  if (execution.modelRenewalVersion !== undefined && (execution.modelRenewalVersion !== 1 || execution.modelDeadlineVersion !== 1)) throw new Error('model_renewal_version_invalid')
   if (execution.completeRequestVersion !== undefined && execution.completeRequestVersion !== 1) throw new Error('complete_request_version_invalid')
   if (execution.resultReferenceVersion !== undefined && (execution.resultReferenceVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('result_reference_version_invalid')
   if (execution.resultWindowVersion !== undefined && (![1, 2].includes(execution.resultWindowVersion) || execution.resultReferenceVersion !== 1)) throw new Error('result_window_version_invalid')
@@ -546,7 +548,7 @@ export async function answerWithOpenAi(opts: {
     return result
   } }
   const contextStrategy = execution.contextStrategyVersion === 1 && contract.context_strategy_version === 1
-  if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel,onInternalTool:value=>metrics?.internalTool(value)??Promise.resolve(),
+  if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel, refreshProvider: refreshLiveProvider,onInternalTool:value=>metrics?.internalTool(value)??Promise.resolve(),
     ...(execution.resultReferenceVersion === 1 ? { mainResultReferences: 1 } : {}),
     ...(execution.imageInputDedupVersion === 1 ? { imageInputDedupVersion: 1 as const } : {}),
     ...(execution.workerStageContextVersion === 1 ? { workerStageContextVersion: 1 as const } : {}),
@@ -763,6 +765,7 @@ export async function answerWithOpenAi(opts: {
   const constructionNewSketches = execution.constructionSketchVersion === 2 ? createConstructionSketchStore(async (action, key, expected, sketch) =>
     await rpc('construction_new_sketch', { ...binding, p_action: action, p_key: key, p_expected_revision: expected, p_sketch: sketch }, AbortSignal.timeout(12000)) as { data: any; error: { code?: string } | null }) : undefined
   const constructionOptions = {unlimitedWork,projectId:opts.projectId,message:opts.message,writer,hasAccess,
+    ...(execution.checkFindingsVersion === 1 ? { inlineCheckFindings: true } : {}),
     ...(execution.workingStateVersion === 1 ? { fastPageFit: true, readSummary: async (id:string,revision:number) => {
       const {data,error}=await readRpc('read_construction_summary',{p_project:opts.projectId,p_artifact:id,p_revision:revision})
       if(error)throw new Error('construction_read_unavailable');return data
@@ -782,7 +785,7 @@ export async function answerWithOpenAi(opts: {
     prepareSolutionEdit:projectEdits.prepare,
     prepareWork:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_work',{...binding,p_payload:payload},AbortSignal.timeout(12000))
-      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_work_preparation_failed'}
+      if(error)return constructionPreparationFailure(error,'construction_work_preparation_failed')
       return data
     },
     readWorkSources:async(draft:Record<string,any>|null,stepId:string|null)=>{
@@ -987,7 +990,69 @@ export async function answerWithOpenAi(opts: {
       },
     }) : undefined
 
-  const buildGuideOffered=aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.design_project_cad'&&(row.definition as any)?.parameters?.properties?.assembly_dependencies!==undefined)
+  const resolveGuideArt = guideArtResolver({
+    memo,catalog:aiCatalog,userId:opts.userId,authorize:readAccess,
+    claim:async(pin,builtin)=>{
+      if (!await readAccess()) return {status:'unavailable'}
+      const [id,revision] = pin.split('@')
+      const {data,error} = await internal.schema('bob').rpc('claim_guide_item_art',{
+        p_project:opts.projectId,p_item:id,p_revision:Number(revision),p_token:crypto.randomUUID(),p_builtin:builtin,
+      }).abortSignal(AbortSignal.timeout(5000))
+      if (error) return {status:builtin?'builtin':'unavailable'}
+      return data as ArtClaim
+    },
+    finish:async(pin,token,png)=>{
+      const [id,revision] = pin.split('@')
+      if (!await readAccess()) return false
+      const {data,error} = await internal.schema('bob').from('guide_item_illustrations')
+        .update({png,claim_token:null,retry_after:png?null:new Date(Date.now()+3600000).toISOString()})
+        .eq('item_id',id).eq('revision',Number(revision)).eq('claim_token',token).select('item_id')
+        .abortSignal(AbortSignal.timeout(5000))
+      return !error && data?.length === 1
+    },
+    renew:async(pin,token)=>{
+      const [id,revision] = pin.split('@')
+      const {data,error} = await internal.schema('bob').from('guide_item_illustrations')
+        .update({retry_after:new Date(Date.now()+300000).toISOString()})
+        .eq('item_id',id).eq('revision',Number(revision)).eq('claim_token',token).select('item_id')
+        .abortSignal(AbortSignal.timeout(5000))
+      return !error && data?.length === 1
+    },
+    reference:async(id)=>{
+      const opened = await createMediaAdapter(opts.projectId,mediaTransport).open('image:'+id,AbortSignal.timeout(10000))
+      const url = opened.image.image_url
+      const match = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(url)
+      if (!match) throw new Error('guide_reference_unavailable')
+      const raw = atob(match[2]), bytes = new Uint8Array(raw.length)
+      for (let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i)
+      return {url,bytes,contentType:match[1] as 'image/png'|'image/jpeg'|'image/webp'}
+    },
+  })
+  // One guide, drawn range by range (a section, at most GUIDE_RANGE_STEPS steps)
+  // and stored page by page under a content id unique to this job's guide.
+  const renderGuidePages=async(guide:CadGuideRequest)=>{
+   const guideId=await memo('cad:guide_id',guide,async()=>sha256Text(JSON.stringify(guide)+crypto.randomUUID()))
+   const art=await guideItemArt(guide, resolveGuideArt)
+   const illustrated=Object.keys(art).length?{...guide,item_art:art}:guide
+   const transport=createCadGuideTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))
+   const pages:Record<string,unknown>[]=[]
+   for(const range of guideRanges(guide.steps)){
+    const notes=await memo('cad:guide_range',{guide_id:guideId,range},async()=>{
+     const result=await transport({...illustrated,range})
+     const decoder=new TextDecoder()
+     const rows=result.notes.pages.map(page=>{const raw=atob(result.files[page.key]),bytes=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i)
+      return {key:page.key,sha256:page.sha256,svg:decoder.decode(bytes)}})
+     const {error}=await internal.schema('bob').rpc('store_cad_guide_pages',{p_project:opts.projectId,p_guide:guideId,p_pages:rows}).abortSignal(AbortSignal.timeout(20000))
+     if(error)throw new Error('guide_store_failed')
+     return result.notes.pages
+    },70000)
+    // The worker's visual check (2026-11-10): a page with overlapping or cut-off text is logged by key.
+    for(const page of notes as any[])if(page.layout_defects)console.warn('[Build guide layout]',page.key,page.layout_defects)
+    pages.push(...notes)
+   }
+   return {version:1 as const,basis:'proposed_order' as const,store:'pages' as const,guide_id:guideId,pages:pages as any}
+  }
+  const buildGuideOffered=aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.design_project_cad'&&BUILD_GUIDE_FIELDS.some(field=>(row.definition as any)?.parameters?.properties?.[field]!==undefined))
   // Read at most once per job: the first call's journal entry serves every later one.
   let buildGuideSwitch:Promise<boolean>|null=null
   const buildGuideOn=()=>buildGuideSwitch??=buildGuideOffered?memo('cad:build_guide_switch',{},async()=>{
@@ -1039,30 +1104,39 @@ export async function answerWithOpenAi(opts: {
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
     makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,lookupPinned.timeoutMs,40,undefined,lookupOptions),
     callModel,
-    render:(recipe,source,beforeDispatch,guide)=>{
+    render:async(recipe,source,beforeDispatch,guide)=>{
      if(!source)throw new Error('checked_construction_source_required')
-     return memo('cad:render',cadRenderInput(recipe,source,guide),async()=>{
+     const packet=await memo('cad:render',cadRenderInput(recipe,source,guide),async()=>{
       await beforeDispatch?.()
       // Drawings carry no fasteners (owner decision 2026-10-26): they live in
       // Bob's construction lists and the material list only.
-      const packet=await createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source)
-      if(!guide)return packet
-      // Build guide (2026-10-30), same step as its drawing: a failed or oversized
-      // guide is recorded and never blocks the drawing.
-      try{
-       const result=await createCadGuideTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(guide)
-       if(JSON.stringify({...packet.files,...result.files}).length>5_500_000)return {...packet,build_guide:{failure:'guide_too_large'}}
-       return {...packet,files:{...packet.files,...result.files},build_guide:{notes:result.notes}}
-      }catch(error){
-       console.error('[Build guide unavailable]',JSON.stringify({error:error instanceof Error?error.message.slice(0,120):'unknown'}))
-       return {...packet,build_guide:{failure:'guide_unavailable'}}
-      }
-     },guide?90000:45000)
+      return await createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source)
+     },45000)
+     if(!guide)return packet
+     // Build guide (2026-10-30; own page store 2026-11-09): drawn one section at
+     // a time, each range its own journaled step, and its pages stored in
+     // bob.cad_guide_pages before the drawing is saved, so a guide of any length
+     // never rides in the drawing row. A failure is recorded and never blocks the drawing.
+     try{
+      return {...packet,build_guide:{notes:await renderGuidePages(guide)}}
+     }catch(error){
+      rethrowContinuation(error)
+      console.error('[Build guide unavailable]',JSON.stringify({error:error instanceof Error?error.message.slice(0,120):'unknown'}))
+      // A named refusal or transport check is kept as the reason; anything else stays generic.
+      const code=error instanceof Error&&/^[a-z_]{1,64}$/.test(error.message)&&error.message!=='cad_guide_unavailable'?error.message
+       :error instanceof Error&&error.name==='TimeoutError'?'guide_timeout':'guide_unavailable'
+      return {...packet,build_guide:{failure:code}}
+     }
     },
     // The owner's global switch (shared.ai_settings cad-build-guide; missing = off),
     // read once per job and only for catalogs that offer the order parameter.
     ...(buildGuideOffered?{buildGuide:{
-     enabled:()=>buildGuideOn(),readFasteners}}:{}),
+     enabled:()=>buildGuideOn(),readFasteners,
+     readItemName:async(id,revision)=>{
+      const {data,error}=await readRpc('catalog_read',{p_project:opts.projectId,p_input:{action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}})
+      const record=(data as any)?.record
+      return !error&&(data as any)?.status==='ok'&&record?.id===id&&record.revision===revision&&typeof record.name==='string'?record.name:null
+     }}}:{}),
     checkConstruction:async(id,revision,fresh)=>{
      // One check reads the same exact revision twice (the check itself and
      // the final pin comparison). Within one check those reads observe the
@@ -1088,7 +1162,7 @@ export async function answerWithOpenAi(opts: {
         const {data,error}=await readWithRetry('catalog_read',{p_project:opts.projectId,p_input:{action:'read',id:artifact,revision:rev,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}})
         if(error)throw new Error('construction_source_unavailable');return data
       },
-     },id,revision)
+     },id,revision,execution.formCheckpointDrawingVersion===1)
      return fresh?check():memo('cad:construction_check',{id,revision},check)
     },
     readShell:async(id,revision)=>{
@@ -1351,6 +1425,13 @@ export async function answerWithOpenAi(opts: {
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
     ...opts, continuedWork:execution.continuedWorkVersion===1, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, ...(weighDescription ? { weighDescription } : {}), beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? CLAUDE_BACKGROUND_TIMEOUT_MS : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
+    readPlanOrientation: async view => {
+      const focus = view?.status === 'ok' ? view.focus : undefined
+      const { data, error } = await readRpc('read_plan_orientation', { p_project: opts.projectId,
+        p_screen_step: focus?.planStep?.id ?? null, p_screen_task: focus?.task?.id ?? null })
+      if (error) throw new Error(error.code === '42501' ? 'project_denied' : 'context_unavailable')
+      return readPlanOrientationPacket(opts.projectId, data)
+    },
     readToolPolicy,
     boundDrawingWork:execution.drawingBindingVersion===1&&execution.operationPathsVersion===undefined,
     ...(workerOperations?{workerOperations}:{}),
@@ -1359,6 +1440,7 @@ export async function answerWithOpenAi(opts: {
     // Older in-flight journals keep their recorded post-rollover requests.
     carryLoadedTools: execution.toolCarryVersion === 1,
     ...(execution.corePreloadVersion === 1 ? { corePreload: true } : {}),
+    ...(execution.workerStartPacketVersion === 1 ? { workerStartPacket: true } : {}),
     // Used only when the pinned manifest publishes role.tool-picker (2026-10-30).
     toolPicker: true,
     ...(buildingLinks ? { buildingLinks } : {}),
@@ -1374,7 +1456,8 @@ export async function answerWithOpenAi(opts: {
     ...(execution.workerGatesVersion === 1 ? { workerGates: true } : {}),
     ...(execution.stableToolsVersion === 1 ? { stableTools: true } : {}),
     ...(execution.refusalGuardVersion === 1 ? { refusalGuard: true } : {}),
-    ...(execution.materialFollowVersion === 1 ? { materialFollow: true } : {}),
+    ...(execution.materialFollowVersion !== undefined ? { materialFollow: true } : {}),
+    ...(execution.materialFollowVersion === 2 ? { materialFollowBeforeMaterials: true } : {}),
     // Owner decision 2026-11-07: the server's current revisions, read through this turn's journal.
     ...(execution.serverRevisionsVersion === 1 ? { serverRevisions: { readers: {
       catalog: async (id: string) => {

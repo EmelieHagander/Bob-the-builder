@@ -17,7 +17,7 @@ import { schemaIssues, withOmittedNulls } from './schema-issues.ts'
 import { fingerprint, rethrowContinuation, type BobJournal } from './bob-job-journal.ts'
 import type { ProjectWriter,WritePayload } from './project-write.ts'
 import { parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
-import { conceptConstructionIssues } from './solution-concept.ts'
+import { conceptConstructionIssues, evaluateConcept } from './solution-concept.ts'
 import { FORM_REFINEMENT_SCHEMA, constructionFormReadiness, constructionFormIssues, type FormRefinement } from './construction-form.ts'
 import { REQUIREMENT_PROBES_SCHEMA, EVIDENCE_COMPONENTS_SCHEMA, checkConstructionEvidence, constructionEvidenceReuse, constructionEvidenceContract } from './construction-evidence.ts'
 import { withConstructionWorkRead, withConstructionWorkWrite, withConstructionWorkCheck, createConstructionWorkPackets, checkConstructionWorkOutputs, type ConstructionWorkSources } from './construction-work.ts'
@@ -176,9 +176,20 @@ export function latestObservations<T extends {artifact_id:string;revision:number
  return rows.filter(o=>o.revision===latest.get(o.artifact_id))
 }
 /** A failed construction preparation keeps the model-facing status mapping.
- * The server's two named write conflicts pass through so the repair can be
+ * The server's named write conflicts pass through so the repair can be
  * named; every other database detail stays behind the generic reason. */
-const NAMED_PREPARATION_CONFLICTS=new Set(['construction_changed','operation_reused'])
+// A part several solid concept components hold is ambiguous only because the
+// Solution's components overlap (entré, 2026-11-10: "supports" over "floor").
+// That is a Solution fault, not this construction's; name it so Bob fixes the
+// concept instead of the builder trying construction edits in a circle.
+export function conceptOverlapRefusal(intent:any,issues:{code:string;ids:string[]}[],changed:string){
+ const overlaps=evaluateConcept(intent).issues.filter(i=>i.code==='component_overlap')
+ const hit=overlaps.filter(o=>issues.some(i=>i.code==='form_instance_ambiguous'&&o.ids.every(id=>i.ids.slice(1).includes(id))))
+ if(!hit.length)return null
+ return {status:'needs_data',reason:'solution_concept_overlap',overlapping:hit.map(o=>o.ids),
+  message:`No construction ${changed}. The selected Solution concept has solid components that take the same space (${hit.map(o=>o.ids.join('+')).join(', ')}). That is a Solution change: hand it back to Bob to move or resize one so they only touch, then edit this construction again.`}
+}
+const NAMED_PREPARATION_CONFLICTS=new Set(['construction_changed','construction_solution_changed','operation_reused'])
 export function constructionPreparationFailure(error:{code?:string|null;message?:string|null},fallback:string){
  const code=error.code??''
  return {status:code==='42501'?'denied':['PT409','40001'].includes(code)?'conflict':code==='22023'?'invalid':'unavailable',
@@ -189,6 +200,8 @@ export type ConstructionToolsState = { version:1; used:number } | { version:2; u
  | {version:3;used:number;observations:ConstructionObservation[];savedResults:SavedConstructionResult[]}
 export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;unlimitedWork?:boolean;
  fastPageFit?:boolean;
+ /** Pinned per job (2026-11-09): check replies carry their findings inline. */
+ inlineCheckFindings?:boolean;
  readSummary?:(id:string,revision:number)=>Promise<unknown>;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
  readCurrent?:(id:string)=>Promise<unknown>;
@@ -272,7 +285,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  storedJointRules?:boolean;
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
- const views=createConstructionViews(opts.projectId,opts.now,opts.fastPageFit)
+ const views=createConstructionViews(opts.projectId,opts.now,opts.fastPageFit,opts.inlineCheckFindings)
  const targetless=<T extends {function:{parameters:any}}>(tool:T):T=>opts.serverTarget?withoutTargetRevision(tool):tool
  const workPackets=createConstructionWorkPackets(opts.projectId,opts.fastPageFit)
  const baseReadTool=opts.constructionViews?(opts.formEvidence?CONSTRUCTION_EVIDENCE_VIEW_TOOL:CONSTRUCTION_VIEW_TOOL):CONSTRUCTION_READ_TOOL
@@ -309,6 +322,22 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    payload={...domain,kind:'construction_work',data:{key:v.key,solution:solution.payload,construction:domain}}
   }
   return {payload,domain,prepared:await (payload.kind==='construction_work'?opts.prepareWork!(payload):prepare(payload))}
+ }
+ // A joint Solution/Construction change needs a construction that already
+ // follows the selected Solution. On a stale one the server refuses with
+ // construction_changed; that is a missing step, not a write race, so name it
+ // (entré floor, 2026-11-09: two unnamed refusals, then a new construction).
+ const staleWorkRefusal=async(v:Record<string,any>,payload:WritePayload,prepared:Record<string,any>)=>{
+  if(payload.kind!=='construction_work'||prepared.status!=='conflict'||prepared.reason!=='construction_changed')return null
+  const current=await (opts.readCurrent?.(v.record_id)??opts.read(v.record_id,null,null)) as Record<string,any>
+  if(!await opts.hasAccess())return {status:'denied'}
+  if(current?.projectId!==opts.projectId||current.status!=='ok'||current.artifact_id!==v.record_id
+   ||current.revision!==v.expected_revision||current.archived!==false||current.source_state!=='changed')return null
+  return {status:'invalid',reason:'construction_not_current',source_state:current.source_state,
+   message:'Nothing changed. This construction still follows an older selected Solution or changed sources, so a joint Solution/Construction change is refused. '
+    +(opts.serverTarget?'First send this construction change alone with solution_edit:null; code binds it to the current selected Solution. '
+     :'First send this construction change alone with solution_edit:null and the current target_revision from view=work. ')
+    +'Then send the Solution change against the new construction revision.'}
  }
  const changed=(result:Record<string,any>,prepared:Record<string,any>,revision:number)=>opts.coherentWork?{...result,work_operation:'changed',
   diagnostics:{operation:'work_change',reused:prepared.status==='saved',revision,new_revision:result.receipt?.revision??null}}:result
@@ -462,7 +491,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    // Lean writing: code completes the FORM mapping from the parts' places.
    if(lean&&v.form_refinement){
     const ext=extendFormMapping(readiness.design_intent,recipe,v.form_refinement,references)
-    if(ext.issues.length)return {error:{status:'needs_data',reason:'form_mapping_incomplete',issues:ext.issues,message:'No construction saved. Move a part no concept component holds inside one; for a part several hold, name its component in form_refinement.'}}
+    if(ext.issues.length)return {error:conceptOverlapRefusal(readiness.design_intent,ext.issues,'saved')??{status:'needs_data',reason:'form_mapping_incomplete',issues:ext.issues,message:'No construction saved. Move a part no concept component holds inside one; for a part several hold, name its component in form_refinement.'}}
     const scope=(r:FormRefinement)=>r.mappings.map(m=>m.component_id).sort().join(',')
     if(ext.changed&&scope(ext.refinement)!==scope(v.form_refinement)){
      const again=parseDesignReadiness((await opts.readConstructionReadiness!(v.target_revision,v.area_id,ext.refinement) as Record<string,unknown>|null)?.design_readiness)
@@ -584,20 +613,30 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   // that Solution's concept; the saved pin is refused once the target moved
   // (Entrén, 2026-11-08: every part edit after Bob's Solution edit failed).
   const target=Number.isSafeInteger(v.target_revision)?v.target_revision as number:draft?.target_revision
-  if(draft?.form_refinement&&Number.isSafeInteger(target)&&opts.readConstructionReadiness){
-   const raw=await opts.readConstructionReadiness(target,draft.area_id??null,draft.form_refinement) as Record<string,unknown>|null
+  // A construction that covers only part of the Solution concept (a floor in
+  // the entré, 2026-11-09) declares which concept components it covers; the
+  // database then checks only those. Code derives that scope from where the
+  // parts lie, exactly as it extends a saved scope (owner decision 2026-11-09).
+  if(draft&&Number.isSafeInteger(target)&&opts.readConstructionReadiness){
+   const saved=draft.form_refinement??null
+   const raw=await opts.readConstructionReadiness(target,draft.area_id??null,saved) as Record<string,unknown>|null
    if(!await opts.hasAccess())return {error:{status:'denied'}}
-   if(raw?.status==='conflict')return {error:{status:'conflict',reason:'construction_target_changed',
-    message:'No construction changed. The selected Solution changed while this edit was prepared; send the same edit again.'}}
    const read=parseDesignReadiness(raw?.design_readiness)
-   if(!read?.design_intent?.model)return {error:{status:'unavailable',message:'Could not read the concept this construction is mapped to; nothing changed.'}}
+   if(raw?.status==='conflict'&&(saved||read?.design_intent?.model))return {error:{status:'conflict',reason:'construction_target_changed',
+    message:'No construction changed. The selected Solution changed while this edit was prepared; send the same edit again.'}}
+   if(saved&&!read?.design_intent?.model)return {error:{status:'unavailable',message:'Could not read the concept this construction is mapped to; nothing changed.'}}
+   const partial=!saved&&!!read?.design_intent?.model&&(()=>{
+    const ids=new Set(recipe.instances.map(i=>i.id)),active=new Set(read.design_intent.model!.components.filter(c=>c.active).map(c=>c.id))
+    return evaluateConcept(read.design_intent).boxes.some(b=>active.has(b.id)&&!ids.has(b.id))
+   })()
+   if(saved||partial){
    const references=new Set(policy.instances.filter(i=>i.role==='reference').map(i=>i.instance_id))
-   const ext=extendFormMapping(read.design_intent,recipe,draft.form_refinement,references,(v.form_assign??[]) as FormAssignment[])
-   if(ext.issues.length)return {error:{status:'needs_data',reason:'form_mapping_incomplete',issues:ext.issues,message:'No construction changed. Move a part no concept component holds inside one; for a part several hold, name its component in form_assign.'}}
+   const ext=extendFormMapping(read!.design_intent!,recipe,saved,references,(v.form_assign??[]) as FormAssignment[])
+   if(ext.issues.length)return {error:conceptOverlapRefusal(read!.design_intent,ext.issues,'changed')??{status:'needs_data',reason:'form_mapping_incomplete',issues:ext.issues,message:'No construction changed. Move a part no concept component holds inside one; for a part several hold, name its component in form_assign.'}}
    // A part in a concept component this construction did not cover yet brings
    // that component's open choices into scope; say so before the write.
-   const scope=(r:FormRefinement)=>r.mappings.map(m=>m.component_id).sort().join(',')
-   if(ext.changed&&scope(ext.refinement)!==scope(draft.form_refinement)){
+   const scope=(r:FormRefinement|null)=>r?r.mappings.map(m=>m.component_id).sort().join(','):''
+   if(ext.changed&&scope(ext.refinement)!==scope(saved)){
     const again=parseDesignReadiness((await opts.readConstructionReadiness(target,draft.area_id??null,ext.refinement) as Record<string,unknown>|null)?.design_readiness)
     if(!await opts.hasAccess())return {error:{status:'denied'}}
     if(!again)return {error:{status:'unavailable',message:'Could not verify advice for the completed mapping; nothing changed.'}}
@@ -606,6 +645,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
      message:'No construction changed. A part sits in a concept component whose choices are still open; resolve them or move the part.'}}
    }
    if(ext.changed)formRefinement=ext.refinement
+   }
   }
   return {unused,staleBindings,joints:ruled.joints,stale:ruled.stale,made:ruled.made,formRefinement,cascade,recomputed,deferred,ruleSet}
  }
@@ -736,6 +776,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     return {error:{status:'invalid',reason:'target_revision_required',source_state:current.source_state,
      message:'No construction changed. This revision still uses an older selected Solution or changed sources, so target_revision:null (keep the old pin) is refused. Read view=work for the current selected Solution and resend this same edit with its current target_revision. Changed measurements use change_construction_parameters with their newer revisions.'}}
   }
+  const stale=await staleWorkRefusal(v,payload,prepared)
+  if(stale)return {error:stale}
   if(prepared.status!=='ready'&&prepared.status!=='saved')return {error:prepared}
   if(prepared.status==='ready'){
    const draft=prepared.draft,next=prepared.next
@@ -1269,7 +1311,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
      if(!checked.concept_ready)return {status:'needs_data',checked}
      const lists=constructionLists(draft,catalog,[])
      if(lists.status!=='derived')return lists
-     if(lists.bom.some((b:any)=>b.material_id&&catalog.get(`${b.material_id}@${b.material_revision}`)?.profile_code!=='sheet_stock'))return {status:'unsupported',message:'Saved sheet cutting requires sheet_stock manufacturing blanks.'}
+     if(lists.bom.some((b:any)=>b.material_id&&catalog.get(`${b.material_id}@${b.material_revision}`)?.profile_code!=='sheet_stock'))return {status:'unsupported',message:'Saved sheet cutting requires sheet_stock manufacturing blanks. Boards and other profile stock are counted by code in the project\'s shopping list (Boards and sheets), from each part\'s length and the raw length, kerf and margin the owner enters in the shop. A count made here would be a second, unchecked one.'}
      const fit=constructionCutFit(lists,prepared.domain.data.candidates,prepared.domain.data.blank_grain)
      if(fit.status!=='feasible')return {...fit,message:'The saved cutting inputs do not produce a new feasible layout. Revise the explicit candidate/grain choices with the ordinary cutting tool; existing purchases and reservations remain recorded.'}
      payload.data.computed=Object.fromEntries(['placements','cuts','offcuts','used_sheets'].map(k=>[k,(fit as any)[k]]))
@@ -1330,6 +1372,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(change.error)return change.error
     const {payload,domain,prepared}=change
     if(!await opts.hasAccess())return {status:'denied'}
+    const stale=await staleWorkRefusal(v,payload,prepared)
+    if(stale)return stale
     if(prepared.status!=='ready'&&prepared.status!=='saved')return prepared
     if(prepared.status==='ready'){
      const draft=prepared.draft
@@ -1492,7 +1536,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if((name===CONSTRUCTION_CUT_FIT_TOOL.function.name||name===CONSTRUCTION_CUT_SAVE_TOOL.function.name)){
      const lists=constructionLists(draft,catalog,[])
      if(lists.status!=='derived')return await present('cut_fit',v.artifact_id,v.revision,{projectId:opts.projectId,...lists,checked},observedAt)
-     if(lists.bom.some((b:any)=>b.material_id&&catalog.get(`${b.material_id}@${b.material_revision}`)?.profile_code!=='sheet_stock'))return {status:'unsupported',message:'This cutting assessment supports sheet_stock manufacturing blanks only; profile/bar cutting needs a separate capability.'}
+     if(lists.bom.some((b:any)=>b.material_id&&catalog.get(`${b.material_id}@${b.material_revision}`)?.profile_code!=='sheet_stock'))return {status:'unsupported',message:'This cutting assessment supports sheet_stock manufacturing blanks only. Boards and other profile stock are counted by code in the project\'s shopping list (Boards and sheets), from each part\'s length and the raw length, kerf and margin the owner enters in the shop. A count made here would be a second, unchecked one.'}
      const fit=constructionCutFit(lists,v.candidates,v.blank_grain)
      if(name===CONSTRUCTION_CUT_FIT_TOOL.function.name)return await present('cut_fit',v.artifact_id,v.revision,{projectId:opts.projectId,...fit,checked},observedAt)
      if(!opts.writer)return {status:'denied'}
@@ -1593,15 +1637,40 @@ export type ConstructionTools=ReturnType<typeof createConstructionTools>
 
 /** The drawing desk uses the same checker and exact caller reads, without
  * trusting a model's earlier assertion that a checkpoint passed. */
-export async function checkedConstructionForDrawing(opts:Parameters<typeof createConstructionTools>[0],id:string,revision:number) {
+/** A FORM checkpoint (owner decision 2026-11-09: "Ja, märkt som delritning")
+ * may be drawn as a labelled partial drawing when its only whole-check issues
+ * say that the refinement is unverified and named components are still out.
+ * Lists, cut plans and purchases keep requiring concept_ready. */
+const FORM_CHECKPOINT_CODES=new Set(['form_components_pending','form_refinement_unverified'])
+export function constructionFormCheckpoint(checked:any):{version:1;pending_component_ids:string[]}|null {
+ if(checked?.status!=='checked'||checked.concept_ready!==false||!Array.isArray(checked.issues)||checked.issues.length!==checked.issue_count)return null
+ if(checked.issues.some((i:any)=>!FORM_CHECKPOINT_CODES.has(i?.code))||checked.issues.filter((i:any)=>i.code==='form_refinement_unverified').length!==1)return null
+ const pending=checked.issues.filter((i:any)=>i.code==='form_components_pending')
+ if(pending.length>1||pending.some((i:any)=>!Array.isArray(i.ids)||!i.ids.length||i.ids.some((id:unknown)=>typeof id!=='string')))return null
+ return {version:1,pending_component_ids:pending[0]?.ids??[]}
+}
+/** What actually stops a drawing: whole-check issues only. Fabrication gaps
+ * never block a drawing (entré run 2026-11-09 blamed 141 gaps instead). */
+export function constructionBlockingIssues(checked:any){
+ const byCode=new Map<string,{code:string;count:number;ids:string[]}>()
+ for(const issue of Array.isArray(checked?.issues)?checked.issues:[]){
+  const row=byCode.get(issue.code)??{code:issue.code,count:0,ids:[]}
+  row.count++;for(const id of issue.ids??[])if(row.ids.length<12&&!row.ids.includes(id))row.ids.push(id)
+  byCode.set(issue.code,row)
+ }
+ return [...byCode.values()]
+}
+export async function checkedConstructionForDrawing(opts:Parameters<typeof createConstructionTools>[0],id:string,revision:number,formCheckpoint=false) {
  // CAD performs a fresh whole-construction check, not the interactive work
  // packet/output interface. Keep its schema and arguments on the same contract.
  const tools=createConstructionTools({...opts,constructionViews:false,formEvidence:false,coherentWork:false})
  const checked=await tools.execute('check_construction_draft',{artifact_id:id,revision})
- if(checked.status!=='checked'||!checked.concept_ready)return {status:checked.status==='checked'?'needs_data':checked.status,checked}
+ const form=formCheckpoint?constructionFormCheckpoint(checked):null
+ if(checked.status!=='checked'||(!checked.concept_ready&&!form))return {status:checked.status==='checked'?'needs_data':checked.status,checked,
+  ...(formCheckpoint&&checked.status==='checked'?{blocking_issues:constructionBlockingIssues(checked)}:{})}
  const draft=await opts.read(id,revision,null) as Record<string,any>
  if(!await opts.hasAccess())return {status:'denied',checked}
  if(draft?.projectId!==opts.projectId||draft.status!=='ok'||draft.artifact_id!==id||draft.revision!==revision
   ||draft.current_revision!==revision||draft.source_state!=='current'||draft.archived)return {status:'conflict',checked}
- return {status:'ready',draft,checked}
+ return {status:'ready',draft,checked,...(form?{form_checkpoint:form}:{})}
 }

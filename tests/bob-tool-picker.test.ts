@@ -23,9 +23,11 @@ const WITHOUT_ADAPTER = new Set(['read_work_context', 'edit_work_record', 'chang
 const expect = (names: string[]) => names.filter(n => !WITHOUT_ADAPTER.has(n)).sort()
 const ok = (data: unknown) => ({ success: true, model: 'fixture', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 }, data: JSON.stringify(data) })
 
-async function turn(catalog: AiCatalogSession, opts: { pick?: (input: any) => unknown; toolPicker?: boolean; phase?: string; checkpoint?: { state?: BobAnswerState; saved: BobAnswerState[] } } = {}) {
+async function turn(catalog: AiCatalogSession, opts: { pick?: (input: any) => unknown; toolPicker?: boolean; phase?: string; stepPhase?: string; checkpoint?: { state?: BobAnswerState; saved: BobAnswerState[] } } = {}) {
   const projectId = 'p', message = 'Gör en slutlig ritning av lådan', hasAccess = async () => true
-  const lookup = createProjectLookup(projectId, async (_project, input) => ({ data: { records: input.dataset === 'project' ? [{ id: projectId, name: 'Fixture', description: 'Saved project' }] : [], related: [], truncated: false }, error: null }) as any, undefined, undefined, undefined, { unlimitedWork: true })
+  const lookup = createProjectLookup(projectId, async (_project, input) => ({ data: { records: input.dataset === 'project' ? [{ id: projectId, name: 'Fixture', description: 'Saved project' }]
+    : input.dataset === 'plan' && opts.stepPhase ? [{ id: projectId, revision: 2, status: 'approved', focus_step_id: 's',
+      steps: [{ id: 's', title: 'Assembly', phase: opts.stepPhase, state: 'active', requirements: [], tasks: [] }] }] : [], related: [], truncated: false }, error: null }) as any, undefined, undefined, undefined, { unlimitedWork: true })
   const writer = createProjectWriter(projectId, message, async () => { throw Error('No write requested') }, async () => ({ data: [], error: null }), async () => ({ data: [], error: null }))
   const constructionTools = createConstructionTools({ projectId, message, writer, constructionSourceRefresh: true, hasAccess, read: async () => ({}), readSources: async () => ({ project: new Map(), physical: new Map() }) })
   const solutionActions = createSolutionActions({ projectId, writer, hasAccess, read: async () => ({ data: [], error: null }) })
@@ -43,7 +45,7 @@ async function turn(catalog: AiCatalogSession, opts: { pick?: (input: any) => un
   const result = await runProjectAnswer({ projectId, userId: 'owner', message, lookup, writer, hasAccess, constructionTools, solutionActions, projectContext, aiCatalog: catalog,
     corePreload: true, readToolPolicy, ...(opts.toolPicker === false ? {} : { toolPicker: true }),
     ...(opts.checkpoint ? { checkpoint: { state: opts.checkpoint.state, save: async (state: BobAnswerState) => { opts.checkpoint!.saved.push(structuredClone(state)) } } } : {}),
-    cadAssistant: { pending: async () => [], tools: [DESIGN_CAD_TOOL], lifecycleTools: [], remaining: 1, lifecycleRemaining: 0,
+    cadAssistant: { pending: async () => [], tools: [DESIGN_CAD_TOOL], lifecycleTools: [catalog.tool('read_drawing_requests')], remaining: 1, lifecycleRemaining: 1,
       candidate: null, partial: false, failure: null, sources: [], consult: async () => ({ status: 'invalid' }), lifecycle: async () => ({ status: 'invalid' }) } as any,
     callModel: catalogCall(async options => {
       if (options.functionName === 'completion-gate') return ok({ work_remaining: false, reason: '' })
@@ -102,12 +104,24 @@ test('a resumed turn keeps its picked tools without asking again; pinned manifes
   assert.deepEqual(offline.offered[0], expect([...core, ...phases.design]))
 })
 
+test('fallback loads the focused step phase when the picker names no tools', async () => {
+  // Use the native-tool harness to inspect exactly which phase tools were offered.
+  const pinned = preToolSheetsCatalogFixture(manifest => {
+    manifest.definitions.find(row => row.prompt_key === 'agent-contract.ask-bob')!.metadata.plan_progress_version = 1
+  })
+  const core = catalogCoreTools(pinned)!, phases = catalogPhaseTools(pinned, core)!
+  const { offered, picks } = await turn(pinned, { phase: 'concept', stepPhase: 'build' })
+  assert.equal(picks[0].plan_at_turn_start.step.phase, 'build')
+  assert.deepEqual(offered[0], expect([...core, ...phases.build]))
+  assert.notDeepEqual(offered[0], expect([...core, ...phases.concept]))
+})
+
 test('the picker is a small read-only role with its own schema and no tools', () => {
   const catalog = catalogFixture(), role = catalog.definition('role.tool-picker', 'role').definition
   assert.equal(role.function_name, 'tool-picker'); assert.equal(role.profile_key, 'profile.context-summary'); assert.deepEqual(role.tool_keys, [])
   assert.equal(catalog.definition('profile.context-summary').definition.tier, 'mini')
   const schema = catalog.definition('schema.bob_tool_pick').definition as any
-  assert.equal(schema.properties.tools.maxItems, 4); assert.deepEqual(schema.required, ['tools'])
+  assert.equal(schema.properties.tools.maxItems, catalog.definition('agent-contract.ask-bob').metadata.tool_pick_limit); assert.deepEqual(schema.required, ['tools'])
   assert.equal(catalog.definition('agent-contract.tool-picker').definition.writes, 'none')
   assert.equal(preToolPickerCatalogFixture().manifest().definitions.some(row => row.prompt_key === 'role.tool-picker'), false)
 })

@@ -212,6 +212,7 @@ export const editProjectArtifact = artifacts.edit
 export const commandCadShell = artifacts.shellCommand
 export const getCadShellPieceRecipes = artifacts.shellPieceRecipes
 export const getCadWireframe = artifacts.wireframe
+export const getCadGuidePages = artifacts.guidePages
 export const getBuildConstructions = buildPreparation.constructions
 export const getBuildConstructionSource = buildPreparation.source
 export const getBuildConstructionFasteners = buildPreparation.fasteners

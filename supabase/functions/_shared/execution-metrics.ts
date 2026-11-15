@@ -38,7 +38,7 @@ function workCounts(value:WorkDiagnostics|undefined):Record<string,number|boolea
  return counts
 }
 // Event attribution preserves historic role names; this is not a dispatch registry.
-const roles=new Set(['ask-bob','cad-research','cad-designer','cad-reviewer','context-summary','plan-compiler','plan-reviewer','bob-delivery-language'])
+const roles=new Set(['ask-bob','structure-worker','materials-worker','drawing-worker','store-worker','cad-research','cad-designer','cad-reviewer','context-summary','plan-compiler','plan-reviewer','bob-delivery-language'])
 const outputPhases=new Set(['commentary','final_answer','legacy','tool_calls','refusal','incomplete'])
 const phaseCounts=(phase:unknown):Record<string,string>=>typeof phase==='string'&&outputPhases.has(phase)?{output_phase:phase}:{}
 const validationCodes=new Set<string>([...TASK_WORK_VALIDATION_CODES,'tool_shape','request_quote','field_value','task_location','domain_fields','human_text',
@@ -95,6 +95,8 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
           ai_profile_version_id:label(options.aiDefinition?.profileVersionId),
           ai_tier:label(options.aiDefinition?.tier),
           cached_input_tokens:number((est??result.usage)?.cached_input_tokens),cost_basis:est?est.basis:null,reasoning_tokens:number(result.usage?.reasoning_tokens),
+          ...(result.webSearch ? { native_search_calls: number(result.webSearch.completedCalls), native_search_total_unknown: true,
+            native_search_token_cost_usd: result.webSearch.tokenCostUsd } : {}),
           step:label(call.step),attempt:number(call.attempt)}})
     },
     async internalTool(input:{name:string;status:string;callId:string;role:string;ms:number}){
@@ -102,10 +104,10 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
       await write({...base(),event_key:'internal:'+key,kind:'tool',role:'tool',status:code(input.status,'returned'),duration_ms:Math.round(number(input.ms)),input_tokens:null,output_tokens:null,cost_usd:null,counts:{tool:code(input.name,'invalid_name'),internal:true,function_name:label(input.role)}})
     },
     /** One row per executed tool call: which tool, its status and the step. */
-    tool(input:{name:string;status:string;step:number;index:number;ms:number;validation_code?:string;diagnostics?:WorkDiagnostics;rejection?:{code:string;fields:string[];message_id?:string}}){
+    tool(input:{name:string;status:string;step:number;index:number;ms:number;view?:string;validation_code?:string;diagnostics?:WorkDiagnostics;rejection?:{code:string;fields:string[];message_id?:string}}){
       void write({...base(),event_key:`tool:${input.step}:${input.index}`.slice(0,80),kind:'tool',role:'tool',status:code(input.status,'returned'),
         duration_ms:Math.round(number(input.ms)),input_tokens:null,output_tokens:null,cost_usd:null,
-        counts:{tool:code(input.name,'invalid_name'),step:number(input.step),...validationCounts(input.validation_code),...workCounts(input.diagnostics),
+        counts:{tool:code(input.name,'invalid_name'),step:number(input.step),...(input.view?{read_view:code(input.view,'invalid_name')}:{}),...validationCounts(input.validation_code),...workCounts(input.diagnostics),
           // Why a call was rejected (2026-10-31): a code and field paths only, never content.
           ...(input.rejection?{rejection_code:code(input.rejection.code,'unspecified'),rejection_fields:input.rejection.fields.filter(f=>typeof f==='string'&&f.length<=120).slice(0,8),
             ...(typeof input.rejection.message_id==='string'&&/^m[0-9a-f]{8}$/.test(input.rejection.message_id)?{rejection_message:input.rejection.message_id}:{})}:{})}})

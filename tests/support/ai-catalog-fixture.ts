@@ -48,6 +48,27 @@ const publishAs=(row:any,publication:string)=>{const{seed_version,source_revisio
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const storeResearch=source.match(/\$store_research_spec\$([\s\S]+?)\$store_research_spec\$/)
+ if(storeResearch){
+  const spec=JSON.parse(storeResearch[1])
+  for(const addition of spec.additions){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-store-research-v1'}});versions.set(addition.key,1)}
+  const box=seed.find(row=>row.key==='bob.tools')
+  box.definition={...box.definition,store_research_version:1,blocker_handoff_version:1,
+   contract_keys:[...box.definition.contract_keys,'tools.ask_store_worker'],catalog:[...box.definition.catalog,spec.policy],
+   shelves:box.definition.shelves.map((s:any)=>s.label==='Materials, stock and Shopping'?{...s,tools:[...s.tools,'ask_store_worker']}:s)}
+  publishAs(box,'bob-store-research-v1');versions.set(box.key,versions.get(box.key)!+1)
+ }
+ const planRefresh = source.match(/\$plan_refresh_edits\$([\s\S]+?)\$plan_refresh_edits\$/)
+ const planProgress = planRefresh ?? source.match(/\$plan_progress_edits\$([\s\S]+?)\$plan_progress_edits\$/)
+ if (planProgress) {
+  for (const edit of JSON.parse(planProgress[1])) {
+   const row = seed.find(row => row.key === edit.key)
+   if (edit.append) row.content += ' ' + edit.append
+   publishAs(row, planRefresh ? 'bob-plan-progress-v2' : 'bob-plan-progress-v1')
+   row.metadata.plan_progress_version = planRefresh ? 2 : 1
+   versions.set(row.key, versions.get(row.key)! + 1)
+  }
+ }
  const auditFollowup=source.match(/\$audit_followup_spec\$([\s\S]+?)\$audit_followup_spec\$/)
  if(auditFollowup){
   for(const edit of JSON.parse(auditFollowup[1])){
@@ -839,6 +860,13 @@ for(const migration of migrations){
   if(contract.metadata.refusal_guard_version!==1||contract.metadata.material_follow_version!==undefined)throw new Error('material_follow_contract_unexpected')
   publishAs(contract,'bob-material-follow-v1');contract.metadata={...contract.metadata,...tagged('material_follow_contract')};versions.set(contract.key,versions.get(contract.key)!+1)
  }
+ // Owner run 2026-11-08 16:06: code also follows pending rows before Mattias's job.
+ const materialFollow2=source.match(/\$material_follow_2_contract\$([\s\S]+?)\$material_follow_2_contract\$/)
+ if(materialFollow2){
+  const contract=seed.find(r=>r.key==='agent-contract.ask-bob')
+  if(contract.metadata.material_follow_version!==1)throw new Error('material_follow_2_contract_unexpected')
+  publishAs(contract,'bob-material-follow-v2');contract.metadata={...contract.metadata,...JSON.parse(materialFollow2[1])};versions.set(contract.key,versions.get(contract.key)!+1)
+ }
  // Owner decision 2026-11-07: worker gates (chat answer is the review, gate facts in-job, identical-request refusal).
  const workerGates=source.match(/\$worker_gates_contract\$([\s\S]+?)\$worker_gates_contract\$/)
  if(workerGates){
@@ -1254,6 +1282,18 @@ for(const migration of migrations){
   if(order&&order.description===spec.old){
    row.definition=structuredClone(row.definition);row.definition.parameters.properties.assembly_dependencies.description=spec.description
    const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'cad-build-guide-v2'};versions.set(row.key,versions.get(row.key)!+1)
+  }
+ }
+ // Build guide steps (cad-build-guide-v3): the same field swap as the migration.
+ const buildSteps=source.match(/\$cad_build_sections_spec\$([\s\S]+?)\$cad_build_sections_spec\$/)
+ if(buildSteps){
+  const spec=JSON.parse(buildSteps[1]),row=seed.find(row=>row.key===spec.key),properties=row?.definition.parameters.properties
+  if(properties&&!(spec.field in properties)&&spec.replaces in properties){
+   row.definition=structuredClone(row.definition)
+   const {[spec.replaces]:_old,...rest}=row.definition.parameters.properties
+   row.definition.parameters.properties={...rest,[spec.field]:structuredClone(spec.property)}
+   row.definition.parameters.required=row.definition.parameters.required.map((key:string)=>key===spec.replaces?spec.field:key)
+   const{seed_version,source_revision,...meta}=row.metadata??{};row.metadata={...meta,publication:'cad-build-guide-v3'};versions.set(row.key,versions.get(row.key)!+1)
   }
  }
  const stageCard=source.match(/\$stage_context_card_spec\$([\s\S]+?)\$stage_context_card_spec\$/)

@@ -186,6 +186,8 @@ def annotate(path, req, rows, bounds, view, camera, up, center, source=None, fas
             rows_of_text=wrap_marks(marker_ranges(numbers),LABEL_CHARS)
             width=max(len(t) for t in rows_of_text)*9+8;height=20+18*(len(rows_of_text)-1)
             def free(a):
+                # Keep labels off the height dimension and its title left of the geometry.
+                if view in view_axes and a[0]-width/2<x0-20: return False
                 return all(abs(a[0]-x)>=max(48,(width+w)/2+4) or (abs(a[1]-y)>=22 and (a[1]-14>=y-14+h+2 or y-14>=a[1]-14+height+2)) for x,y,w,h in placed)
             right,bottom=(620,570) if view in view_axes else (660,610)
             near=[min(right,max(100,target[0])),min(bottom,max(110,target[1]-5))]
@@ -211,10 +213,18 @@ def annotate(path, req, rows, bounds, view, camera, up, center, source=None, fas
             taken=[[],[]]
             for value in values:
                 label=_number(value);spot=at(axis,value)[0 if kind=='h' else 1];half=len(label)*3.3+2
-                slot=next((i for i in (0,1) if all(abs(spot-q)>=(half+w+4 if kind=='h' else 12) for q,w in taken[i])),None)
+                if kind=='h':
+                    slot=next((i for i in (0,1) if all(abs(spot-q)>=half+w+4 for q,w in taken[i])),None)
+                    place=spot
+                else:
+                    # Heights stay in one column (2026-11-09: a second column read as
+                    # stray numbers). A crowded label moves up or down, tied to its
+                    # tick by a short leader; with no room it is counted instead.
+                    place=next((spot+d for d in (0,-12,12,-24,24) if all(abs(spot+d-q)>=12 for q,_ in taken[0])),None)
+                    slot=None if place is None else 0
                 if slot is None: hidden+=1
-                else: taken[slot].append((spot,half))
-                marks.append((kind,spot,slot,label))
+                else: taken[slot].append((place,half))
+                marks.append((kind,spot,slot,label,place))
     dimensions=[{'axis':'xyz'[axis],'mm':bounds['size'][axis]} for axis in view_axes.get(view,[])]
     def sized(axis): return f'{AXIS_WORDS[axis]} {_number(bounds["size"][axis])} mm ({"XYZ"[axis]})'
     parts=[]
@@ -236,13 +246,15 @@ def annotate(path, req, rows, bounds, view, camera, up, center, source=None, fas
                 horizontal,vertical=view_axes[view]
                 ys,xs=y1+14,x1+16
                 line([x0,ys],[x1,ys]);line([xs,y0],[xs,y1])
-                for kind,spot,slot,label in marks:
+                for kind,spot,slot,label,place in marks:
                     if kind=='h':
                         line([spot,ys-4],[spot,ys+4])
                         if slot is not None: text(spot,ys+15+slot*12,label,11,'middle')
                     else:
                         line([xs-4,spot],[xs+4,spot])
-                        if slot is not None: text(xs+8+slot*42,spot+4,label,11)
+                        if slot is None: continue
+                        if abs(place-spot)>0.5: line([xs+4,spot],[xs+12,place],stroke='#999',width=0.75)
+                        text(xs+14,place+4,label,11)
                 # Extension lines stop around the scale numbers so a 0 is never crossed out.
                 y=y1+48
                 for x in (x0,x1): line([x,y1],[x,ys]);line([x,ys+31],[x,y+7])

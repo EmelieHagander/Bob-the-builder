@@ -121,3 +121,18 @@ The user configured the signing secret and sent OpenAI's `response.completed` te
 The sample event references `resp_abc123`, not a real model response. Its exact inbox row was marked finished after verifying receipt, preventing pointless retrieval retries against the sample ID. No real model job was marked complete.
 
 With zero active Bob jobs, `(bob,bob)` was enabled and read back as true. No other app receiver was enabled. New authenticated background turns now use the durable provider transport. Full real-model/CAD acceptance remains the next check; the signed sample proves webhook authentication and receipt only. PR #153's additional synchronous retry bound is separate and not yet deployed. Never paste the signing secret into chat, source code, a PR, or logs.
+
+## Native search accounting — source, 2026-11-11
+
+The optional server-owned webSearch.allowedDomains request uses native Responses
+search and returns consulted URLs and completed search-call count. Only a
+catalog role on the Responses adapter can opt in; unrelated callers retain
+their wire shape. Search cannot be mixed with app function tools, provider
+continuation or native-output replay in this one-shot path.
+
+The native_search accounting marker travels through the durable reservation.
+Both synchronous and background usage retain token counts but record
+cost_usd=null and cost_basis=native_search_total_unknown, because catalog token
+prices exclude the native search fee. The response separately exposes its
+known token subtotal. Replaying completion does not create another usage row.
+Other callers retain existing token cost calculation.

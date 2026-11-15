@@ -1,13 +1,19 @@
 .box-drawing { min-width: 0; max-width: 100%; }
 .box-drawing .btn { min-height: 44px; min-width: 44px; }
 .box-drawing-controls { margin: 12px 0; align-items: center; }
-.box-drawing-viewport { width: 100%; max-width: 100%; max-height: 72vh; overflow: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); overscroll-behavior: contain; }
+.box-drawing-viewport { width: 100%; max-width: 100%; max-height: 72vh; overflow: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
 .box-drawing-sheet { line-height: 0; }
 .box-drawing-sheet svg { display: block; width: 100%; height: auto; }
 .box-drawing-sheet img { display: block; width: 100%; height: auto; background: white; }
 .cad-sheet { margin: 16px 0; min-width: 0; max-width: 100%; }
 .cad-build-guide { margin: 16px 0; min-width: 0; max-width: 100%; }
 .cad-build-guide > summary { min-height: 44px; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
+.cad-guide-viewer { min-width: 0; max-width: 100%; }
+.cad-guide-nav { align-items: center; justify-content: space-between; flex-wrap: nowrap; }
+.cad-guide-nav .btn { min-width: 96px; }
+.cad-guide-nav span { font-weight: 600; text-align: center; }
+.cad-guide-jump { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-weight: 600; min-width: 0; }
+.cad-guide-jump select { flex: 1; min-width: 0; min-height: 44px; }
 .sheet-pan { cursor: grab; user-select: none; -webkit-user-select: none; }
 .sheet-pan.is-panning { cursor: grabbing; }
 /* Zoom sets the size of an opened original; its fixed preview cap would fight it. */

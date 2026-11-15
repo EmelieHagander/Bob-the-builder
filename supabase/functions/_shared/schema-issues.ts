@@ -12,6 +12,7 @@ export function schemaIssues(schema:Record<string,any>, value:unknown, path='$',
   if(typeof value==='string'&&(schema.maxLength!==undefined&&value.length>schema.maxLength||schema.minLength!==undefined&&value.length<schema.minLength||schema.pattern&&!new RegExp(schema.pattern).test(value)))return fail('string matching declared length/pattern')
   if(Array.isArray(value)){
     if(schema.maxItems!==undefined&&value.length>schema.maxItems||schema.minItems!==undefined&&value.length<schema.minItems)return fail(`array of ${schema.minItems??0}–${schema.maxItems??'bounded'} items`)
+    if(schema.uniqueItems===true&&new Set(value.map(v=>JSON.stringify(v))).size!==value.length)return fail('array without duplicate items')
     return schema.items?value.slice(0,512).flatMap((v,i)=>schemaIssues(schema.items,v,`${path}[${i}]`,depth+1)).slice(0,12):[]
   }
   if(value&&typeof value==='object'){

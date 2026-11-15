@@ -254,7 +254,29 @@ async function page(query:ConstructionViewQuery,header:Row,rows:Item[],budget:nu
  return envelope(records,next,offset)
 }
 
-export function createConstructionViews(projectId:string,now:()=>Date=()=>new Date(),fastFit=false){
+/** The findings of a check, compact enough to sit in the check reply itself
+ * (owner request 2026-11-09, "Konrad måste sluta läsa"): an entré check was
+ * 146 kB, of which 2 kB were issues, so Konrad paged through joint checks and
+ * 139 repeated gap texts to find 9 issues. One row per code; gaps by count. */
+export function constructionCheckFindings(output:Row){
+ const checked=(output?.checked??output) as Row
+ const group=(list:unknown,withText:boolean)=>{
+  const byCode=new Map<string,Row>()
+  for(const item of Array.isArray(list)?list:[]){
+   if(!item||typeof item.code!=='string')continue
+   const row=byCode.get(item.code)??{code:item.code,count:0,ids:[] as string[],...(withText&&typeof item.message==='string'?{message:item.message.slice(0,400)}:{})}
+   row.count++
+   for(const id of Array.isArray(item.ids)?item.ids:[])if(typeof id==='string'&&row.ids.length<20&&!row.ids.includes(id))row.ids.push(id)
+   byCode.set(item.code,row)
+  }
+  return [...byCode.values()].slice(0,40).map(r=>withText?r:{code:r.code,count:r.count})
+ }
+ const local=checked?.form_evidence?.local_geometry
+ return {issues:group(checked?.issues,true),fabrication_gaps:group(checked?.fabrication_gaps,false),
+  ...(local&&Array.isArray(local.issues)&&JSON.stringify(local.issues)!==JSON.stringify(checked.issues)?{local_issues:group(local.issues,true)}:{}),
+  note:'Fabrication gaps never block a drawing. Open result sections only for joint or fastener detail.'}
+}
+export function createConstructionViews(projectId:string,now:()=>Date=()=>new Date(),fastFit=false,inlineFindings=false){
  const fittedPage=(query:ConstructionViewQuery,header:Row,rows:Item[],budget:number,layout:PageLayout={})=>page(query,header,rows,budget,{...layout,fastFit})
  let observations:ConstructionObservation[]=[]
  const seen=new Map<string,ConstructionObservation>()
@@ -284,7 +306,8 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
    issue_count:checked.issue_count??0,fabrication_gap_count:checked.fabrication_gap_count??0,
    bounds_mm:checked.bounds_mm??null,part_count:checked.part_count??null,
    reason:output.reason??null,sections:sections(resultItems(output)),
-   details_omitted:true,message:'Open the exact result sections for findings and constraints before relying on this assessment. A construction result is not a drawing or manufacturing approval.'}
+   ...(inlineFindings?{findings:constructionCheckFindings(output),message:'A construction result is not a drawing or manufacturing approval.'}
+    :{details_omitted:true,message:'Open the exact result sections for findings and constraints before relying on this assessment. A construction result is not a drawing or manufacturing approval.'})}
  }
  function sections(rows:Item[]){const counts=new Map<string,number>();for(const row of rows)counts.set(row.collection,(counts.get(row.collection)??0)+1);return [...counts].map(([name,count])=>({name,count}))}
  /** table (pinned per job) adds the compact construction table to the overview;
@@ -298,7 +321,8 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
    if(query.section&&!selected.length)return {status:'not_found',projectId,sections:sections(rows)}
    return fittedPage(query,{projectId,status:'ok',artifact_id:o.artifact_id,revision:o.revision,result_id:o.id,observed_at:o.observed_at,
     observation:'historical',current_revision:draft.current_revision??draft.revision,source_state:draft.source_state,archived:draft.archived,
-    sections:sections(rows),message:'Exact earlier observation. Current source status is shown separately; this does not rerun the check or renew approval.',...extraHeader},selected,budget)
+    sections:sections(rows),...(inlineFindings&&!query.section&&!query.after?{findings:constructionCheckFindings(o.output)}:{}),
+    message:'Exact earlier observation. Current source status is shown separately; this does not rerun the check or renew approval.',...extraHeader},selected,budget)
   }
   if(query.result_id!==null||query.section!==null)return {status:'invalid',message:'result_id and section are only used with view=result.'}
   if(query.view==='notes'&&query.ids.length)return {status:'invalid',message:'Read notes without an ID filter; all original questions remain available.'}

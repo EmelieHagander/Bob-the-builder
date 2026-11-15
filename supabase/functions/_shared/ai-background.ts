@@ -16,6 +16,7 @@ export type AiRpc = (name: string, args: Record<string, unknown>) => Promise<any
 export interface BackgroundAccounting {
   user_id: string | null; module: string; ai_function: string; model: string
   input_price_per_1m: number; output_price_per_1m: number; cached_price_per_1m: number
+  native_search?: true
 }
 export async function providerRequest(apiKey: string, path: string, body?: unknown): Promise<any> {
   const response = await fetch('https://api.openai.com/v1/responses' + path, {
@@ -114,7 +115,14 @@ export async function reconcileAiWork(rpc: AiRpc, apiKey: string, kind: 'job' | 
     const path = '/' + encodeURIComponent(work.response_id)
     let response: any
     try { response = work.cancel ? await providerRequest(apiKey, path + '/cancel', {}) : await providerRequest(apiKey, path) }
-    catch (error) { await recordAiFailure(rpc, kind, id, work.cancel ? 'cancel' : 'retrieve', error, started, work.response_id); throw error }
+    catch (error) {
+      await recordAiFailure(rpc, kind, id, work.cancel ? 'cancel' : 'retrieve', error, started, work.response_id)
+      // A response that already finished cannot be cancelled (400, 2026-11-09: an hour
+      // of refused cancels). Read its final state instead, so it is accounted for once.
+      if (!(work.cancel && error instanceof AIProviderHttpError && error.status === 400)) throw error
+      try { response = await providerRequest(apiKey, path) }
+      catch (retrieveError) { await recordAiFailure(rpc, kind, id, 'retrieve', retrieveError, started, work.response_id); throw retrieveError }
+    }
     // Native replay jobs need complete output items. A persisted response
     // carries its reasoning by item id; the provider refuses encrypted content
     // for it (2026-10-20), so the plain retrieval is the complete payload.

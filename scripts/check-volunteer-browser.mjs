@@ -87,12 +87,17 @@ async function fixture(viewport) {
       const index=drawingIds.indexOf(body.p_drawing);assert(index>=0)
       if (!state.drawingsLinked || body.p_revision!==state.drawingRevision) return respond({status:403,json:{message:'Drawing unavailable or changed. Refresh the task to see its current drawings.'}})
       const content={imageId:null,cad:null,parametricRecipe:null,generation:null,roomLayout:null,multifloorPlan:null,stairStudy:null}
-      // Build guide pages ride with the drawing version (2026-10-30).
-      if(index===0)content.cad={recipe:{definitions:[{id:'seat',primitive:'box',x_mm:800,y_mm:200,z_mm:18}]},files:{front:savedSvg,'guide-0':savedSvg,'guide-1':savedSvg},source_changed:state.drawingSource==='changed',
-       build_guide:{version:1,status:'generated',basis:'proposed_order',construction:{artifact_id:'11111111-1111-4111-8111-111111111111',revision:1},reviewed:false,pages:[{key:'guide-0',kind:'parts',sha256:'0'.repeat(64)},{key:'guide-1',kind:'step',step:1,repeat:2,sha256:'1'.repeat(64)}]}}
+      // Build guide pages in their own store, by section (2026-11-09): read through volunteer_guide_pages.
+      if(index===0)content.cad={recipe:{definitions:[{id:'seat',primitive:'box',x_mm:800,y_mm:200,z_mm:18}]},files:{front:savedSvg},source_changed:state.drawingSource==='changed',
+       build_guide:{version:1,status:'generated',basis:'proposed_order',store:'pages',guide_id:'a'.repeat(64),construction:{artifact_id:'11111111-1111-4111-8111-111111111111',revision:1},reviewed:false,pages:[{key:'guide-0',kind:'parts',sha256:'0'.repeat(64)},{key:'guide-1',kind:'step',step:1,repeat:2,section:'Bench frame',sha256:'1'.repeat(64)}]}}
       if(index===1)content.parametricRecipe={generator:'storage_box_v1',version:1,width_mm:800,height_mm:350,depth_mm:600,thickness_mm:18}
       if(index===2)content.imageId='80000000-0000-4000-8000-000000000001'
       return respond({json:{...drawingSummary(index),projectId:'A',taskId:'T',kind:'detail',description:'Saved construction for this work step.',assumptions:'Confirm site fit with the organiser.',content:state.drawingSource==='unavailable'?null:content}})
+    }
+    if (name === 'volunteer_guide_pages') {
+      assert.equal(body.p_task, 'T'); assert.equal(body.p_drawing, drawingIds[0]); assert(body.p_keys.length >= 1 && body.p_keys.length <= 30)
+      const svg = Buffer.from(savedSvg, 'base64').toString('utf8')
+      return respond({json:{projectId:'A',taskId:'T',id:body.p_drawing,revision:body.p_revision,pages:Object.fromEntries(body.p_keys.map(key=>[key,svg]))}})
     }
     if (name === 'volunteer_task') { assert.equal(body.p_task, 'T'); return respond({ json: task() }) }
     if (name === 'volunteer_task_action') {
@@ -176,8 +181,33 @@ try {
     await cad.waitFor();assert(await cad.evaluate(img=>img.complete&&img.naturalWidth>0),'Saved CAD SVG renders as an image')
     assert.equal(await reader.getByRole('link',{name:'Download 3D model',exact:true}).count(),0)
     await reader.getByText('Build guide · 2 pages',{exact:true}).waitFor()
+    // One viewer for the whole guide (2026-11-15): all pages read together, flipped one at a time.
+    await reader.getByRole('img',{name:'Bench assembly CAD — build guide, What is in the box',exact:true}).waitFor()
+    await reader.getByText('Page 1 of 2',{exact:true}).waitFor()
+    assert(await reader.getByRole('button',{name:'Previous',exact:true}).isDisabled(),'The first page has no previous page')
+    await reader.getByRole('button',{name:'Next',exact:true}).click()
+    await reader.getByText('Page 2 of 2',{exact:true}).waitFor()
     const step=reader.getByRole('img',{name:'Bench assembly CAD — build guide, Step 1 (build 2×)',exact:true})
     await step.waitFor();assert(await step.evaluate(img=>img.complete&&img.naturalWidth>0),'Build guide pages render for volunteers')
+    assert(await reader.getByRole('button',{name:'Next',exact:true}).isDisabled(),'The last page has no next page')
+    await reader.getByLabel('Go to section',{exact:true}).selectOption({label:'What is in the box'})
+    await reader.getByText('Page 1 of 2',{exact:true}).waitFor()
+    await reader.getByLabel('Go to section',{exact:true}).selectOption({label:'Bench frame'})
+    await reader.getByText('Page 2 of 2',{exact:true}).waitFor()
+    for (const name of ['Previous','Next','Print guide / PDF','Print drawing / PDF']) {
+      const box=await reader.getByRole('button',{name,exact:true}).boundingBox()
+      assert(box&&box.height>=44,`${name} is a readable touch target`)
+    }
+    // The whole real drawing prints: every saved view on its own page, then the parts (2026-11-15).
+    await page.evaluate(()=>{window.__drawingPrinted=false;window.print=()=>{window.__drawingPrinted=true}})
+    await reader.getByRole('button',{name:'Print drawing / PDF',exact:true}).click()
+    await page.waitForFunction(()=>window.__drawingPrinted&&document.body.classList.contains('printing-box-drawing'))
+    const views=await page.locator('.box-print-pack img').count()
+    assert(views>=1,'Every saved view is printed')
+    assert.equal(await page.locator('.box-print-page').count(),views+1,'One page per view plus the parts page')
+    await page.locator('.box-print-pack').getByText('Parts and sizes',{exact:true}).waitFor({state:'attached'})
+    await page.evaluate(()=>window.dispatchEvent(new Event('afterprint')))
+    await page.locator('.box-print-pack').waitFor({state:'detached'})
     await reader.getByRole('button',{name:'Zoom Step 1 (build 2×) in',exact:true}).waitFor()
     await cad.scrollIntoViewIfNeeded()
     await layout(page,viewport,'drawing-cad')

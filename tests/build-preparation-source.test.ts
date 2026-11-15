@@ -13,7 +13,7 @@ test('construction source reads only exact material pins in bounded requests, pr
     from:(table:string) => {
       assert.equal(table,'catalog_item_revisions')
       return {select:(columns:string) => {
-        assert.equal(columns,'item_id,revision,name,properties')
+        assert.equal(columns,'item_id,revision,name,profile_code,properties')
         return {or:(filter:string) => ({limit:async (limit:number) => {
           reads.push({filter,limit})
           const exact = materials.filter(p => filter.includes(`and(item_id.eq.${p.material_id},revision.eq.${p.material_revision})`))

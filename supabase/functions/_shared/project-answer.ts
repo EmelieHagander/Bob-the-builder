@@ -32,13 +32,14 @@ import { repairToolArguments, TOOL_REPAIR_LIMIT } from './bob-tool-repair.ts'
 import { catalogWorkers, catalogRetiredTools, catalogCheckReads, catalogPlanTools, catalogReportReadback, catalogConstructionAutoCheck, catalogHandoverReadiness, handoverReadinessBlock, readbackReads, workerOwnedTools, parseWorkerJob, runWorker, validWorkerProgress, type WorkerProgress, withOutputLimitNote } from './bob-workers.ts'
 import { focusedWorkerStep, savedFormPieceEvidence } from './worker-form-piece.ts'
 import type { WorkingContext } from './bob-working-context.ts'
-import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
+import { readPlanOrientationPacket, planStepAtTurnStart, prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
 import { restoreOrientationDirectory } from './bob-orientation-directory.ts'
 import { countContextTokens } from './bob-token-budget.ts'
 import type { ContextSurface } from './bob-context-continuation.ts'
 import type { CurrentView } from '../../../src/domain/bobScreen.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
+import { storeResearchTool } from './store-research.ts'
 import { BOB_WRITE_LIMIT } from '../../../src/data/bobEvidence.ts'
 import { BUILDING_SCOPE_PRELOAD, createBobToolSession, catalogCoreTools, catalogPhaseTools, CORE_READ_PRELOAD, DRAWING_CONTINUATION_PRELOAD, sortToolbox } from './project-tools/bob-tools.ts'
 import type { BuildingLinks } from './project-building-scope.ts'
@@ -60,6 +61,21 @@ export function buildBobSystemMessage(aiCatalog: AiCatalogSession, tools: OpenAI
 /** Owner decision 2026-10-30 (tool sheets): a provider call to use_tool runs the
  * named tool; anything else is the call itself. */
 export const USE_TOOL = 'use_tool'
+
+/** Konrad's start packet: what he read first in every job, read once by code.
+ * Each part is kept only when small enough; otherwise he pages it himself. */
+export async function constructionStartPacket(read: (args: Record<string, unknown>) => Promise<unknown>, ref: string): Promise<Record<string, unknown>> {
+  const base = { source_ref: ref, ids: [], after: null, section: null, result_id: null, work_kind: null, step_id: null }
+  const packet: Record<string, unknown> = {}
+  for (const [label, args] of [['overview', { view: 'overview' }], ['work', { view: 'work', work_kind: 'parts' }], ['checks', { view: 'results' }]] as const) {
+    let value: unknown
+    try { value = await read({ ...base, ...args }) }
+    catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; value = { status: 'unavailable' } }
+    packet[label] = (JSON.stringify(value) ?? '').length <= START_PACKET_PART_CHARS ? value : { status: 'too_large', note: 'Read it with your own tools.' }
+  }
+  return packet
+}
+const START_PACKET_PART_CHARS = 30000
 function unwrapToolCall(call: { function: { name: string; arguments: string } }, toolSheets: boolean): { name: string; args: unknown } {
   let args: unknown = null
   try { args = JSON.parse(call.function.arguments) } catch { /* the handler reports invalid input */ }
@@ -173,7 +189,7 @@ export interface TurnProgress { stage: 'thinking' | 'tool' | 'finishing'; tool?:
  * reads the owner's latest instruction and the tool cards and names up to four
  * tools for the turn, so the offered list is right from the first step and
  * stays fixed. Any failure, invalid answer or empty choice keeps the phase set. */
-export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], drawingRequests: unknown, deadline: number, exclude: Set<string> = new Set(), limit = 4): Promise<string[] | null> {
+export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], drawingRequests: unknown, deadline: number, exclude: Set<string> = new Set(), limit = 4, plan?: ReturnType<typeof planStepAtTurnStart>, afterPlanChange = false): Promise<string[] | null> {
   const candidates = opts.aiCatalog.manifest().definitions.flatMap(row => {
     const name = row.prompt_key.startsWith('tools.') ? row.prompt_key.slice(6) : ''
     const card = row.definition.card_description
@@ -181,6 +197,7 @@ export async function pickTurnTools(opts: ProjectAnswerOptions, core: string[], 
   })
   if (!candidates.length) return null
   return pickFromCards(opts, { latest_instruction: opts.message, ...(opts.continuedWork?helperConversation(opts.context,true):{memory_summary:opts.context?.summary??null,recent_conversation:(opts.context?.recent??[]).slice(-4).map(({role,text})=>({role,text:text.slice(0,1000)}))}),
+    ...(plan ? { [afterPlanChange ? 'current_plan' : 'plan_at_turn_start']: plan } : {}),
     pending_drawing_requests: Array.isArray(drawingRequests) ? drawingRequests.length : 0, always_loaded: core }, candidates, deadline, limit)
 }
 
@@ -250,7 +267,10 @@ export interface BobAnswerState {
   projectId: string
   step: number
   phase: 'ready' | 'model' | 'response' | 'tools'
-  initial: { briefing: unknown; catalog: unknown; drawingRequests: unknown; orientation?: ProjectOrientation; directory?: unknown; toolPick?: string[] | null }
+  initial: { briefing: unknown; catalog: unknown; drawingRequests: unknown; orientation?: ProjectOrientation; directory?: unknown; toolPick?: string[] | null; flexiblePhase?: string | null }
+  planRefreshPending?: 'focus' | 'details'
+  planRefreshed?: boolean
+  startingStep?: ReturnType<typeof planStepAtTurnStart>
   /** Tool-sheet manifests: tools whose details are already at the end of this conversation. */
   sheets?: string[]
   /** Tool-order manifests: the native tool names in the order sent; later loads are appended. */
@@ -305,7 +325,7 @@ export type ProjectAnswerOptions = {
   hasAccess: () => Promise<boolean>; previousResponseId?: string;
   writer?: ProjectWriter; context?: WorkingContext; deadline?: number; modelTimeoutMs?: number; unlimitedWork?: boolean;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;
-  onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string; diagnostics?:import('./execution-metrics.ts').WorkDiagnostics; rejection?: { code: string; fields: string[]; message_id?: string } }) => void;
+  onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; view?: string; validation_code?: string; diagnostics?:import('./execution-metrics.ts').WorkDiagnostics; rejection?: { code: string; fields: string[]; message_id?: string } }) => void;
   /** Names of the calls this model step will execute, before the first runs.
    * Called again with the same names when a checkpointed step resumes. */
   onToolBatch?: (names: string[]) => void;
@@ -317,9 +337,12 @@ export type ProjectAnswerOptions = {
   carryLoadedTools?: boolean;
   /** Pinned per execution: the core reading tools are loaded from the first step. */
   corePreload?: boolean;
+  /** Konrad's start packet (owner decision 2026-11-09): pinned per job. */
+  workerStartPacket?: boolean;
   /** Production turns ask the small tool picker when the manifest publishes it;
    * offline callers keep the phase choice unless they opt in. */
   toolPicker?: boolean;
+  readPlanOrientation?: (view?: CurrentView) => Promise<ReturnType<typeof readPlanOrientationPacket>>;
   /** Pinned per execution (tool_pick_limit): how many tools the picker may name; four before the pin. */
   toolPickLimit?: number;
   /** Pinned per execution (workerFocusVersion): a worker with a catalog focus is
@@ -328,6 +351,11 @@ export type ProjectAnswerOptions = {
   /** Pinned per execution (materialFollowVersion 1): after Konrad's job, code
    * recalculates the material rows of each construction revision it saved. */
   materialFollow?: boolean;
+  /** Pinned per execution (materialFollowVersion 2): before Mattias's job, code
+   * also recalculates the material rows still pending on the bound construction,
+   * whoever changed it (Våningssäng 2, 2026-11-08: rows left from an earlier
+   * turn were redone by hand, 25 rows, USD 6.91). */
+  materialFollowBeforeMaterials?: boolean;
   /** Pinned per execution (workerPlanVersion): Konrad's construction write
    * before a plan note in his workpad is refused with plan_required. */
   workerPlan?: boolean;
@@ -436,11 +464,14 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if(at>=0)drawingSources.splice(at,1);drawingSources.push(ref)
   }
   if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
-  const briefing = restored ? restored.initial.briefing as Awaited<ReturnType<typeof opts.lookup.search>> : await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
-  if (briefing.status !== 'ok') return { ok: false, error: briefing.status === 'denied' ? 'project_denied' : 'project_unavailable' }
   const contract = opts.aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
+  const livePlan = contract.plan_progress_version === 2 ? opts.readPlanOrientation : undefined
+  const initialPlan = !restored && livePlan ? await livePlan(opts.currentView) : undefined
+  let briefing = restored ? restored.initial.briefing as Awaited<ReturnType<typeof opts.lookup.search>> : initialPlan?.briefing ?? await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
+  if (briefing.status !== 'ok') return { ok: false, error: briefing.status === 'denied' ? 'project_denied' : 'project_unavailable' }
   const workpads = opts.workpads && contract.workpad_version === 1
     && opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.workpad_version === 1 ? opts.workpads : undefined
+  const planAwareTools = contract.plan_progress_version === 1 || contract.plan_progress_version === 2
   const contextStrategy = contract.context_strategy_version === 1
   const boundedOrientation = contextStrategy && contract.orientation_directory_version === 1
   if (boundedOrientation && !opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.read_project_orientation')) throw new Error('tool_catalog_unavailable')
@@ -455,7 +486,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // The flexible set is chosen at the turn's first tool step and kept, so the
   // offered tool list (and the provider cache) stays stable for the turn.
   // Pending drawing work counts as work in progress and wins over the phase.
-  let drawingWork = false, flexiblePhase: string | null | undefined
+  let drawingWork = false
+  let flexiblePhase = restored?.initial.flexiblePhase
   // Owner decision 2026-10-30: when the manifest publishes the tool picker, the
   // tools it named for this request replace the phase set; the phase set is the fallback.
   let toolPick: string[] | null = restored?.initial.toolPick ?? null
@@ -490,7 +522,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const turnTools = (phase: string | null) => {
     if (!phaseTools) return preloadTools
     if (toolPick) return [...preloadTools, ...toolPick]
-    if (flexiblePhase === undefined) flexiblePhase = drawingWork ? 'design' : phase
+    if (flexiblePhase === undefined) flexiblePhase = drawingWork && !planRefreshed ? 'design' : planStep?.step.phase ?? phase
     return [...preloadTools, ...(flexiblePhase ? phaseTools[flexiblePhase] ?? [] : [])]
   }
   const basePolicy: ToolPolicyReader = opts.readToolPolicy ?? (async () => {
@@ -507,9 +539,13 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   // Worker pilot (2026-10-30): a worker's tools are offered to the worker, not to Bob;
   // Bob hands the job over through the worker's tool. See bob-workers.ts.
   const workers = phaseTools && coreTools ? catalogWorkers(opts.aiCatalog) : null
+  const storeResearch = opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.store_research_version === 1
+    ? storeResearchTool({ catalog: opts.aiCatalog, callModel: opts.callModel, hasAccess: opts.hasAccess,
+      userId: opts.userId, timeoutMs: opts.modelTimeoutMs ?? 120000 }) : null
+  const blockerHandoff = opts.aiCatalog.definition('bob.tools', 'tool_contract').definition.blocker_handoff_version === 1
   // The hand-over is loaded from the first step like a permanent tool; the
   // catalog's six permanent tools stay unchanged for runtimes without workers.
-  const workerHandOverNames = Object.values(workers ?? {}).map(worker => worker.tool)
+  const workerHandOverNames = [...Object.values(workers ?? {}).map(worker => worker.tool), ...(storeResearch ? ['ask_store_worker'] : [])]
   // The reads Bob checks a report with are loaded from the first step too.
   const checkReads = workers ? catalogCheckReads(opts.aiCatalog) : []
   // Bob's own plan tools are on hand from his first step (plan_tools_version 1).
@@ -542,6 +578,44 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     const found = await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null }) as { records?: { name?: unknown }[] }
     const name = found?.records?.[0]?.name
     return projectName = typeof name === 'string' && name.trim() ? name.trim() : 'utan namn'
+  }
+  type CatalogWorker = NonNullable<typeof workers>[string]
+  const openWorkerSession = (key: string, worker: CatalogWorker, workpadAgent: WorkpadAgent | null) => {
+    const workerPads = workpadAgent ? workpads : undefined
+    return createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}),
+      drawingWorker: key==='drawing'&&opts.boundDrawingWork,
+      ...(opts.workerOperations&&workpadAgent?{workerOperation:{role:workpadAgent,operations:opts.workerOperations},
+        runtimeSurface:()=>({version:1 as const,buildGuides:!!opts.buildGuideTools,operation:opts.workerOperations!.surface(workpadAgent)})}:{}),
+      preloadTools: () => [...worker.tools, ...worker.reads, ...(workerPads ? ['update_workpad'] : [])], offerWaiting: true, readPolicy: basePolicy,
+      ...(workerPads ? { extraTools: [workpadTool(workerPads, workpadAgent!)] } : {}) })
+  }
+  /** Before Mattias's job (materialFollowVersion 2): the server recalculation of
+   * pending material rows runs through Konrad's tool path, which owns
+   * continue_construction_change, for the construction Konrad's scope binds.
+   * No model is called. Returns what was done and what is left, or null when
+   * there is no bound construction. */
+  const followBeforeMaterials = async (): Promise<Record<string, unknown> | null> => {
+    const structure = workers?.structure
+    if (!opts.materialFollowBeforeMaterials || !opts.workerOperations || !structure?.tools.includes('continue_construction_change')) return null
+    const drawing = opts.currentView?.status === 'ok' ? opts.currentView.focus.drawing : undefined
+    const prepared = await opts.workerOperations.prepare('structure', drawingSources, drawing ? { artifact_id: drawing.id, revision: drawing.revision } : undefined)
+    if (prepared.status !== 'ready') return null
+    const bound = opts.workerOperations.exportState().scopes.find(scope => scope.role === 'structure')?.source
+    if (!bound) return null
+    let session = workerSessions.get('structure')
+    if (!session) { session = openWorkerSession('structure', structure, 'structure'); workerSessions.set('structure', session) }
+    // The step's offered set is the fence execute checks; prepare it like a worker step.
+    await session.prepare()
+    const run = async (name: string, args: Record<string, unknown>) => {
+      const result = withoutDiagnostics(await session!.execute(name, opts.workerOperations!.serverArgs('structure', name, args)))
+      try { opts.onTool?.({ name, status: String(result?.status ?? 'returned'), step: currentStep + 1, index: 100 + workerToolEvents++, ms: 0 }) } catch { /* diagnostics only */ }
+      return result
+    }
+    const results = await followConstructionChanges({ targets: [{ artifact_id: bound.artifact_id, revision: bound.revision }], hasAccess: opts.hasAccess, deadline,
+      read: (target, after) => run('read_construction_changes', { artifact_id: target.artifact_id, revision: target.revision, after }),
+      recalculate: (target, item, rowKey) => run('continue_construction_change', { artifact_id: target.artifact_id, revision: target.revision,
+        key: rowKey, item_id: item.id, action: 'recalculate', review_note: null, output_revision: null, change_note: FOLLOW_UP_CHANGE_NOTE }) })
+    return { by: 'code', constructions: results, note: followUpNote(results) }
   }
   const workerHandOvers = Object.entries(workers ?? {}).map(([key, worker]) => ({ spec: opts.aiCatalog.tool(worker.tool),
     // The hand-over's schema version is the pinned catalog's (Mattias's request-only hand-over is v2).
@@ -583,6 +657,21 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       // With worker gates (owner decision 2026-11-07) only the identical request
       // is refused: after Bob changed the source or the request, a new job may start.
       const failedKey = (base: string) => opts.workerGates ? base + '_r_' + requestFingerprint(job) : base
+      let geometrySourceKey: string | undefined
+      if (blockerHandoff && key === 'structure') {
+        if (!opts.projectEdits) geometrySourceKey = 'structure_geometry_unknown'
+        else {
+          const area = opts.currentView?.status === 'ok' ? opts.currentView.focus.area?.id ?? null : null
+          let source = await opts.projectEdits.readSelected(area)
+          if (source?.status === 'empty' && area) source = await opts.projectEdits.readSelected(null)
+          if (source?.status !== 'ok' || !source.target)
+            return { status: 'needs_verification', reason: 'selected_solution_unavailable', calls: [] }
+          geometrySourceKey = 'structure_geometry_' + requestFingerprint({ job: JSON.stringify(source.target), findings: null })
+        }
+      }
+      if (geometrySourceKey && failedWorkers.has(geometrySourceKey))
+        return { status: 'needs_verification', reason: 'concept_geometry_changed', calls: [],
+          note: 'The selected Solution envelope blocked construction repeatedly. Reconcile the selected Solution through Bob’s Solution tools before another structure handoff. Rewording the brief does not change that source. Existing saved construction is not structural approval.' }
       if (opts.workerFormPiece && key === 'structure' && failedWorkers.has(failedKey('structure_piece')))
         return { status: 'needs_verification', worker: worker.role.replace(/^role\./, ''),
           reason: 'construction_piece_blocked_earlier_this_turn',
@@ -602,15 +691,13 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       }
       let session = workerSessions.get(key)
       if (!session || resume) {
-        session = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}),
-          drawingWorker: key==='drawing'&&opts.boundDrawingWork,
-          ...(opts.workerOperations&&workpadAgent?{workerOperation:{role:workpadAgent,operations:opts.workerOperations},
-            runtimeSurface:()=>({version:1 as const,buildGuides:!!opts.buildGuideTools,operation:opts.workerOperations!.surface(workpadAgent)})}:{}),
-          preloadTools: () => [...worker.tools, ...worker.reads, ...(workerPads ? ['update_workpad'] : [])], offerWaiting: true, readPolicy: basePolicy,
-          ...(workerPads ? { extraTools: [workpadTool(workerPads, workpadAgent!)] } : {}) })
+        session = openWorkerSession(key, worker, workpadAgent)
         if (resume) session.restoreState(structuredClone(resume.session) as Parameters<typeof session.restoreState>[0])
         workerSessions.set(key, session)
       }
+      // materialFollowVersion 2: rows still pending on the bound construction are
+      // recalculated by code before Mattias starts; he is told what is left.
+      const materialFollowUp = key === 'materials' && !resume ? await followBeforeMaterials() : null
       if (resume?.projectName !== undefined) projectName = resume.projectName
       if (!resume && handoverReadiness && worker.tools.includes('save_construction_draft')) {
         const blocked = await handoverReadinessBlock(opts.workerOperations&&workpadAgent?{prepare:()=>session!.prepare(),execute:(name,args)=>session!.execute(name,opts.workerOperations!.serverArgs(workpadAgent,name,args as Record<string,unknown>))}:session)
@@ -628,6 +715,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       const workerWorkpad = !resume && workerPads
         ? await workerPads.load(workpadAgent!, `worker:${workerStep}:${workerIndex}`) : undefined
       const report = await runWorker({ aiCatalog: opts.aiCatalog, worker, callModel: opts.callModel, userId: opts.userId, job, context: opts.context, history,
+        ...(blockerHandoff && key === 'structure' ? { blockerHandoff: true } : {}),
         ...(opts.workerStageContext ? { stageContext: true, registerContextSurface: opts.registerWorkerContextSurface } : {}),
         ...(workerPads ? { workpadEnabled: true, ...(workerWorkpad ? { workpad: workerWorkpad } : {}) } : {}),
         ...(opts.workerFocus && worker.focus && workerPads ? { focus: { pick: (candidates: string[]) => pickWorkerTools(opts, job.job, worker.focus!.core, candidates, deadline, worker.focus!.optional_limit) } } : {}),
@@ -733,14 +821,23 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
               knowledge.focused_plan_step = { status: 'unavailable' } }
           }
           if(opts.workerOperations&&workpadAgent)knowledge.operation_context=opts.workerOperations.describe(workpadAgent)
+          // Owner decision 2026-11-09: half of Konrad's steps in the entrance job only
+          // re-read the construction he was handed (overview, parts, checks) at the
+          // start of each job. Code reads them once, before his first step.
+          if (opts.workerStartPacket && key === 'structure' && opts.workerOperations && workpadAgent) {
+            const ref = opts.workerOperations.startRef(workpadAgent)
+            if (ref) knowledge.construction_start = await constructionStartPacket(async read => withoutDiagnostics(await session!.execute('read_construction_draft', read)), ref)
+          }
           if(key==='drawing'&&opts.boundDrawingWork)knowledge.drawing_work=opts.cadAssistant?.drawingWork
           if (constructionPiece) knowledge.construction_piece_boundary = constructionPiece
+          // Read by code before this job: rows already recalculated, and what is left for Mattias.
+          if (materialFollowUp) knowledge.material_follow_up = materialFollowUp
           return knowledge
         } } : {}),
-        onTool: ({ name, status, ms, rejection }) => {
+        onTool: ({ name, status, ms, rejection, view }) => {
           if (completionAware && writeTools.has(name)) workResults.push({ tool: name, status })
           // Distinct event keys: Bob's own calls use index 0..n of the step.
-          opts.onTool?.({ name, status, step: workerStep + 1, index: 100 + workerToolEvents++, ms, ...(rejection ? { rejection } : {}) })
+          opts.onTool?.({ name, status, step: workerStep + 1, index: 100 + workerToolEvents++, ms, ...(rejection ? { rejection } : {}), ...(view ? { view } : {}) })
         } })
       // The job is over: Bob's next save records its result, not a place inside it.
       workerState = undefined
@@ -749,6 +846,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       // twice more in one turn (three paid chains, no new revision). Use the
       // existing persisted per-turn failed-worker marker for this v4 boundary.
       if (report.status === 'unavailable') failedWorkers.add(failedKey(key))
+      if (geometrySourceKey && report.status === 'needs_verification' && report.reason === 'concept_geometry_changed')
+        failedWorkers.add(geometrySourceKey)
+      if (materialFollowUp) report.material_follow_up = materialFollowUp
       if (opts.workerFormPiece && key === 'structure' && report.status === 'needs_verification'
         && report.reason === 'construction_piece_write_conflict') failedWorkers.add(failedKey('structure_piece'))
       return report
@@ -761,8 +861,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     }, exportState: () => {
       if (!orientationReader) throw new Error('context_unavailable')
       return orientationReader.exportState()
-    } } } : {}), readPolicy: bobPolicy, ...((workerHandOvers.length || workpads)
-      ? { extraTools: [...workerHandOvers, ...(workpads ? [workpadTool(workpads, 'bob')] : [])] } : {}) })
+    } } } : {}), readPolicy: bobPolicy, ...((workerHandOvers.length || workpads || storeResearch)
+      ? { extraTools: [...workerHandOvers, ...(storeResearch ? [storeResearch] : []), ...(workpads ? [workpadTool(workpads, 'bob')] : [])] } : {}) })
   if (restored) toolbox.restoreState(restored.toolbox)
   // The manifest is pinned before any journal operation. Do not add even an
   // undefined option or change the call sequence of an older running turn.
@@ -789,6 +889,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       userId: opts.userId, catalogRoleKey: 'completion-gate', catalogSchemaKey: 'bob_completion_gate',
       messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, ...helperConversation(opts.context,opts.continuedWork),
         ...(opts.continuedWork?{available_capabilities:toolbox.toolbox.map(({name,state,description})=>({name,state,description}))}:{}),
+        ...(startingStep ? { plan_at_turn_start: startingStep } : {}),
+        ...(planRefreshed ? { current_plan: planStep ?? null } : {}),
         candidate_final_answer: answer }) }],
       timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, 30_000, deadline - Date.now()) })
     let verdict: unknown = result.data
@@ -805,6 +907,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       userId: opts.userId, catalogRoleKey: 'completion-gate', catalogSchemaKey: 'bob_completion_gate',
       messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, ...helperConversation(opts.context,opts.continuedWork),
         ...(opts.continuedWork?{available_capabilities:toolbox.toolbox.map(({name,state,description})=>({name,state,description}))}:{}),
+        ...(startingStep ? { plan_at_turn_start: startingStep } : {}),
+        ...(planRefreshed ? { current_plan: planStep ?? null } : {}),
         candidate_final_answer: answer,
         saved_work: compactReceipts(opts.writer?.executedReceipts ?? []).slice(-32).map(({ dataset, label, operation, revision }) =>
           ({ dataset, label, operation, ...(revision ? { revision } : {}) })),
@@ -823,18 +927,34 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   if (!coreTools && Array.isArray(drawingRequests) && drawingRequests.length) preloadTools = [...preloadTools, ...DRAWING_CONTINUATION_PRELOAD]
   if (phaseTools && Array.isArray(drawingRequests) && drawingRequests.length) drawingWork = true
   const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
-  if (!restored && opts.toolPicker === true && phaseTools && coreTools
-    && opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.tool-picker')) toolPick = await pickTurnTools(opts, coreTools, drawingRequests, deadline, workerTools, opts.toolPickLimit ?? 4)
+  let planStep: ReturnType<typeof planStepAtTurnStart>
+  let planRefreshed = restored?.planRefreshed ?? false
+  let planRefreshPending = restored?.planRefreshPending
+  const chooseTools = async (afterPlanChange = false) => {
+    if ((!restored || afterPlanChange) && opts.toolPicker && phaseTools && coreTools
+      && opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.tool-picker')) {
+      toolPick = await pickTurnTools(opts, coreTools, drawingRequests, deadline, workerTools, opts.toolPickLimit ?? 4, planStep, afterPlanChange)
+    }
+  }
+  // Older jobs must replay their journaled reads and model calls in their original order.
+  if (!planAwareTools) await chooseTools()
   if (restored?.initial.directory) {
     const directory = restoreOrientationDirectory(restored.initial.directory as Parameters<typeof restoreOrientationDirectory>[0], { projectId: opts.projectId, hasAccess: opts.hasAccess })
     orientationReader = directory.reader
   }
-  const orientation = restored ? restored.initial.orientation : contextStrategy ? await prepareProjectOrientation({ ...opts, briefing, deadline,
+  const orient = (view: CurrentView | undefined, packet?: ReturnType<typeof readPlanOrientationPacket>) =>
+    prepareProjectOrientation({ ...opts, briefing, ...packet, currentView: view, deadline, includeSavedFocus: planAwareTools,
     ...(opts.pureFacts ? { presentation: 'cut' as const } : {}),
     ...(boundedOrientation ? { directory: { maxTokens: Number(contract.orientation_max_tokens), pageMaxTokens: opts.resultReferences
       ? Math.min(2000, Number(contract.orientation_page_max_tokens)) : Number(contract.orientation_page_max_tokens),
       ready: (reader: OrientationDirectoryReader) => { orientationReader = reader } } } : {}),
-  }) : undefined
+  })
+  let orientation = restored ? restored.initial.orientation : contextStrategy ? await orient(opts.currentView, initialPlan) : undefined
+  if (planAwareTools) {
+    planStep = planStepAtTurnStart(orientation)
+    await chooseTools()
+  }
+  const startingStep = planRefreshed ? restored?.startingStep : planStep
   const initialFooter = orientation ? { role: 'user' as const,
     content: opts.aiCatalog.text('bob.note.prefix') + JSON.stringify({ orientation: orientation.footer,
       ...(opts.buildingLinks ? { buildings: { linked: opts.buildingLinks.linked, owner_can_link: opts.buildingLinks.linkable } } : {}) }) } : undefined
@@ -868,11 +988,13 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const save = async (step: number) => {
     if (!opts.checkpoint) return
     await opts.checkpoint.save(structuredClone({ version: 1, projectId: opts.projectId, step, phase,
-      initial: { briefing, catalog, drawingRequests, orientation, directory: orientationReader?.exportState(), ...(toolPick ? { toolPick } : {}) },
+      initial: { briefing, catalog, drawingRequests, orientation, directory: orientationReader?.exportState(), ...(toolPick ? { toolPick } : {}),
+        ...(livePlan && flexiblePhase !== undefined ? { flexiblePhase } : {}) },
       ...(toolSheets ? { sheets: [...sheetsSent] } : {}),
       ...(toolOrder ? { native: [...nativeOrder] } : {}),
       ...(toolRepair ? { repairs: repairsUsed } : {}),
       ...(availabilitySent !== undefined ? { availability: availabilitySent } : {}),
+      ...(livePlan ? { planRefreshPending, planRefreshed, startingStep } : {}),
       messages, previousResponseId, preparedEpoch, observation, toolbox: toolbox.exportState(), workResults,
       completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
       ...(finalCall ? { finalCall } : {}),
@@ -1085,12 +1207,14 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         // Its result carries the manual and parameters: that tool's sheet is in the conversation now.
         if (toolSheets && toolName === 'describe_tool' && result?.status === 'ok' && typeof result.name === 'string') sheetsSent.add(result.name)
         // Content-free reason for every rejected call: codes and field paths only.
-        const rejection = ['invalid', 'conflict'].includes(result?.status) ? toolRejection(result) : null
+        const rejection = ['invalid', 'conflict', ...(blockerHandoff ? ['needs_data'] : [])].includes(result?.status) ? toolRejection(result) : null
         if (rejection) console.warn('[Bob tool rejection]', JSON.stringify({ tool: /^[a-z][a-z0-9_]{0,63}$/.test(toolName) ? toolName : 'invalid_name',
           status: result.status, code: rejection.code, fields: rejection.fields }))
         const validationCode = completionV3 && rejection ? rejection.code
           : completionAware && typeof result?.validation?.code === 'string' ? result.validation.code : undefined
+        const readView = toolName === 'read_construction_draft' && args && typeof args === 'object' ? (args as { view?: unknown }).view : undefined
         try { opts.onTool?.({ name: toolName, status: String(result?.status ?? 'returned'), step: step + 1, index, ms: Date.now() - began,
+          ...(typeof readView === 'string' ? { view: readView } : {}),
           ...(result?.diagnostics?{diagnostics:result.diagnostics}:workerHandOverNames.includes(toolName)&&result?.outcome&&typeof result.outcome==='object'
             ?{diagnostics:{operation:'worker_outcome',deliverable:result.outcome.deliverable,product:result.outcome.product,saved:result.outcome.saved,
               blocker:result.outcome.blocker?.reason??result.outcome.blocker?.status}}:{}),
@@ -1124,8 +1248,38 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
           rejectionSignature = signature
           if (rejectionStreak >= 3) { observe('failed'); return { ok: false, error: 'tool_no_progress' } }
         } else { rejectionSignature = undefined; rejectionStreak = 0 }
+        if (livePlan && result?.status === 'saved') {
+          if (['change_plan_focus', 'set_project_plan_focus', 'decide_project_plan'].includes(toolName)) planRefreshPending = 'focus'
+          else if (['link_project_plan_evidence', 'change_plan_task_link', 'link_project_plan_task'].includes(toolName)) planRefreshPending ??= 'details'
+        }
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ ...result, ...(!unlimitedWork ? { execution_budget: { model_steps: steps - step - 1, project_reads: opts.lookup.remaining, writes: opts.writer?.remaining ?? 0, corrections: opts.writer?.correctionsRemaining ?? 0, cad_consultations: opts.cadAssistant?.remaining ?? 0, catalog_reads: opts.catalogReader?.remaining ?? 0, image_operations: opts.projectContext?.remaining ?? 0, history_reads: opts.context?.history.remaining ?? 0 } } : {}) }) })
         toolIndex = index + 1; await save(step)
+      }
+      if (planRefreshPending && livePlan) {
+        // Run at a complete native-tool batch boundary. A resumed partial batch
+        // keeps its original offered fence; this read and picker are journaled.
+        const view = planRefreshPending === 'details' && orientation?.focus.origin === 'screen' ? opts.currentView : undefined
+        const fresh = await livePlan(view)
+        briefing = fresh.briefing
+        const oldFocus = orientation?.focus.card
+        const oldPhase = planStep?.step.phase
+        orientation = await orient(view, fresh)
+        planStep = planStepAtTurnStart(orientation)
+        planRefreshed = true
+        const focusChanged = oldFocus?.id !== orientation.focus.card.id || oldPhase !== planStep?.step.phase
+        if (focusChanged) {
+          const oldSelection = toolPick ?? (flexiblePhase ? phaseTools?.[flexiblePhase] : undefined) ?? []
+          toolbox.releasePreloadedTools(oldSelection)
+          flexiblePhase = undefined
+          toolPick = null
+          sheetsSent.clear()
+          availabilitySent = undefined
+          await chooseTools(true)
+        }
+        messages.push({ role: 'user', content: opts.aiCatalog.text('bob.note.prefix') + JSON.stringify({
+          current_plan: planStep ?? null, orientation: focusChanged ? orientation : orientation.directory ?? orientation.footer,
+        }) })
+        planRefreshPending = undefined
       }
       await next(step)
       continue

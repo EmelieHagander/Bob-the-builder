@@ -1177,8 +1177,14 @@ open questions.
 `bob_cad/guide.py` `render_guide(recipe, joints, steps, output_dir, fasteners,
 context_ids)` draws, from the exact saved construction:
 
-- **What is in the box:** one tile per part kind (count, P-numbers, plain size)
-  and one per fastener size, from the schedule.
+- **What is in the box** (2026-11-10, the page is the shopping list): a tile for
+  every part kind (count, P-numbers, plain size), a **Hardware** row for every
+  scheduled item and glue, and a **Tools** list. A chosen catalog item shows its
+  catalog name: the Edge sends `item_names` (`'<item id>@<revision>'` to name,
+  read with `catalog_read`); without a name the row shows kind and the known
+  sizes (`size_text` never prints "?"). Tools come from fixed rules over the
+  parts and hardware (`tools_needed`) and are labelled as suggestions. The page
+  grows taller than 750 instead of leaving anything out.
 - **One page per step:** a step is an ordered list of saved joint ids (Bob's
   proposed order, the stages of `derive_construction_lists`). Parts already in
   place are grey; the step's new parts are black, and parts that join existing
@@ -1191,6 +1197,22 @@ context_ids)` draws, from the exact saved construction:
   is the overview corner that shows the most of them. Rule notes from the
   schedule (short contact, short screw) are printed for the step.
 - **Done:** the whole assembly with its total size; parts in no step are named.
+
+Hardware artwork is selected once for the guide and reused on its box and step pages.
+The catalogue item ID and revision distinguish otherwise identical names and dimensions.
+Six starter outlines cover the bunk-bed fittings. Other named fittings go through
+the existing project-image provider, then the CAD worker reduces the result to a
+96 px PNG. The image-describer model checks that thumbnail against the item name,
+notes and any product photo before it can enter the cache. These pictures identify
+parts. The construction owns dimensions and quantities.
+
+The service-only `bob.guide_item_illustrations` row holds the accepted thumbnail and
+a short generation lease. An optional `reference_media_id` links an uploaded product
+photo from the item's own project. Changing the link invalidates the thumbnail and
+claim. Global items use catalogue descriptions. Review or provider failure leaves
+the row labelled by name. Another guide can retry after the cooldown.
+For release, install the illustration migration, update the Modal worker, then deploy
+`ask-bob` and `bob-worker`. Saved pages retain their original bytes until a new guide is produced.
 
 It returns notes (`version`, `basis: proposed_order`, per page the joints, new
 and lifted parts, camera, hardware, unsized joints). Fasteners come only from
@@ -1277,6 +1299,87 @@ Browser checks: `check-volunteer-browser.mjs` (pages, labels, zoom at
 
 Release order, continued: deploy Pages after the Edge.
 
+#### Build guides in sections, pages in their own store — 2026-11-09
+
+**Status: in PR, not deployed.** Våningssäng 2 (2026-11-08 20:35, GPT) saved its
+drawing with `build_guide.status: failed`. Bob had sent `assembly_dependencies`
+as a near-serial chain over 129 joints; `assemblyStages` made 51 levels and the
+worker drew one page per sub-assembly per level, more than its 60 pages, so it
+refused (`guide_too_many_pages`). The refusal reached the drawing only as
+`guide_unavailable`. Root cause: the page count was the depth of a dependency
+graph, which Bob cannot see. Owner decisions the same day: Bob names the steps;
+guides may be long, in reasonable pieces; pages get their own store (no ceiling
+from the drawing row).
+
+- **Contract.** Publication `cad-build-guide-v3`
+  (`20261109080000_cad_build_sections_catalog.sql`) replaces the order field with
+  `build_sections`: titled sections (1–40), each with its steps in build order
+  (1–12), a step being the joints done together on one page; every saved joint
+  in exactly one step. The Edge checks shape and joint coverage before any
+  render or review. Jobs pinned to an earlier catalog still send
+  `assembly_dependencies` and keep the old path.
+- **Worker.** One page per step; identical sub-assemblies in a step are drawn
+  once ("N×"), different ones together. A step's section title is printed on its
+  page and returned in its notes. `/guide` takes an optional `range` [first,
+  last) of at most 24 steps with global page numbers (box page with the first
+  range, done page with the last), and answers a refusal as 422 `{"error": code}`.
+- **Edge.** The drawing render step no longer carries the guide. Each section
+  (at most 12 steps, `guideRanges`) is its own journaled step
+  (`cad:guide_range`): one worker call, then its pages go to
+  `bob.store_cad_guide_pages` under a content id unique to the job's guide
+  (`cad:guide_id`). Notes get `store: 'pages'` and `guide_id`; no `guide-*` file
+  rides in the drawing. A failure keeps its named code (or `guide_timeout`) as
+  `build_guide.reason`.
+- **Database** (`20261109075000_cad_build_guide_pages.sql`):
+  `bob.cad_guide_pages` (one immutable row per page, member read through
+  project access), `bob.store_cad_guide_pages` (service role), the save trigger
+  requiring every noted page stored with its hash, and
+  `bob.volunteer_guide_pages` (only for a drawing the task already shows).
+  Guides saved earlier keep their pages in the row and read as before.
+- **App.** Sections are inline expands; their pages load when opened
+  (members through `db.getCadGuidePages`, volunteers through
+  `volunteers.guidePages`, at most 30 pages per read).
+- **Release order.** Migration `20261109075000`, Modal worker
+  (`modal-cad.yml`), Edge (`ask-bob`, `bob-worker`) with no drawing job running,
+  migration `20261109080000`, then Pages.
+
+#### Pages add one kind of part (2026-11-14)
+
+Live Våningssäng (construction rev 27, drawing rev 9, 2026-11-10) got one section
+"Montera hela konstruktionen" with one step of all 129 joints: one unreadable
+page. Every guide since sections arrived had one step per section (rev 8:
+seven sections, the slats page alone 58 joints). Root cause: the contract let
+Bob decide page size, and one huge step is always a valid answer. Page size is
+a rule, not judgement, so the Edge now decides it.
+
+- **Edge** (`build-guide-pages.ts`, `guidePages`): before the worker call every
+  step Bob gives is split into pages that each add the parts of one definition
+  to what is already built (earlier steps and context parts count as built). A
+  page that starts a new piece shows the two parts its first joint joins;
+  joints between parts already in place ride on the page that placed the last
+  of them. Identical pieces in one step keep shared pages, so the worker still
+  draws "N×". Pages only split steps: sections, step order and "every joint
+  once" are unchanged. The live bunk bed as one step becomes 17 pages; Bob's
+  seven sections become 18.
+- **Contract, worker, database:** unchanged. The catalog text still says a step
+  is one page; it is now at least one page. Release: Edge only (`ask-bob`,
+  `bob-worker`).
+
+#### Guide viewer, part sizes and drawing print (2026-11-15)
+
+Owner ask after the first split guide worked: names with the P numbers, one
+viewer instead of a list of expands, and print for both guide and drawing.
+
+- **Worker.** Each step's parts box shows the P numbers, the part name and its
+  blank size (`P24-P25 Post` / `45 x 70 mm, length 1540 mm`), the same words as
+  the box page; the layout check still passes on the live bunk bed.
+- **App.** `CadBuildGuide` reads every page together and shows one page at a
+  time with Previous/Next (arrow keys too), "Page n of N" and a section menu.
+  The guide print button is "Print guide / PDF"; `CadDrawingPrint` adds "Print
+  drawing / PDF": every saved view on its own page, then the parts and sizes.
+- **Release:** Modal worker (`modal-cad.yml`) and Pages. No Edge or database
+  change. Guides made earlier keep their pages until redrawn.
+
 #### Build guide installation and paid runs
 
 **Installed 2026-10-30** (owner OK), from main `03144da` (PR #383), after a check
@@ -1337,8 +1440,16 @@ guide.
 - A part going into a frame or box is lifted clear of it (`_clear_lift`)
   instead of floating inside; its arrows run just inside its camera-facing edge
   (`_move_arrows`) so the part does not hide them.
-- The box page says "Fasteners: glue only" when every joint is glued, instead of
-  "none sized yet + glue" (`hardware_summary`).
+- Visual check (2026-11-10, owner feedback on Våningssäng 2: step box off the
+  page, labels on top of each other, hardware line cut off). Text is fitted to
+  its space when drawn (`_fit`: shrink, wrap, then ellipsis), the step's parts
+  box scales its rows to end on the page, part labels avoid each other
+  (`_part_labels`) and a run of more than six identical parts is named once in
+  the box. `layout_issues(svg)` measures a finished page: text off the page,
+  over other text or across a frame. It runs on every page drawn; defects are
+  counted in the page notes (`layout_defects`) and logged by the Edge, and
+  `test_guide` requires zero on the bench and the live bunk bed fixture
+  (`fixtures/bunk_bed_guide.json`; its hardware counts are stand-ins).
 - Every fastener in a step's parts box is drawn on the page (owner feedback: the
   bench's step 2 drew 1 of 2 screws). One that goes in from a face turned away
   from the camera is dashed, with "Dashed: put in from the other side." Heads

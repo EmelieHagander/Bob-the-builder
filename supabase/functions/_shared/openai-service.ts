@@ -1,6 +1,6 @@
 import { responseMessageContent, hasImageContent, prepareResponseImages, readResponseItems, type OpenAIResponseItem, type OpenAIMessageContent } from './openai-content.ts';
 import { AIBackgroundPending, AIBackgroundStorageError, backgroundResponse, type BackgroundCall } from './ai-background.ts';
-import { validateAiCall, type ResolvedAiRole, type AiVariables } from './ai-catalog.ts';
+import { refreshProviderSwitch, validateAiCall, withLiveModel, type ResolvedAiRole, type AiVariables, type SwitchClient } from './ai-catalog.ts';
 import { schemaIssues } from './schema-issues.ts';
 import { ANTHROPIC_ENABLED, callAnthropicMessages } from './anthropic-service.ts';
 /**
@@ -189,9 +189,6 @@ export interface OpenAIServiceOptions {
   background?: BackgroundCall;
   /** Trusted caller-scoped loader; invoked only for a fresh provider submission. */
   resolveImage?: (ref: string) => Promise<string>;
-  /** Same images as pixels (data: URL). Needed by providers that cannot read
-   * an OpenAI file id; only used when the pinned model is not OpenAI. */
-  resolveImageInline?: (ref: string) => Promise<string>;
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   images?: Array<{
     type: 'base64' | 'url';
@@ -209,6 +206,9 @@ export interface OpenAIServiceOptions {
   responsePhaseMode?: 'aware';
   /** Opt-in native replay; existing callers retain their original wire/parser. */
   responseItemsMode?: 'preserve';
+  /** Server-only, read-only native search. Never accepted from an HTTP body.
+   * Requires a catalog role and the Responses adapter; no provider fallback. */
+  webSearch?: { allowedDomains: string[] };
   messages?: Array<{
     role: 'system' | 'user' | 'assistant' | 'tool';
     content: OpenAIMessageContent;
@@ -266,6 +266,7 @@ export interface OpenAIServiceResponse<T = unknown> {
   error?: string;
   responseId?: string;
   outputItems?: OpenAIResponseItem[];
+  webSearch?: { sources: { url: string; title: string }[]; completedCalls: number; tokenCostUsd: number | null };
   outputPhase?: 'commentary' | 'final_answer' | 'legacy' | 'tool_calls' | 'refusal' | 'incomplete';
   toolCalls?: Array<{
     id: string;
@@ -281,10 +282,21 @@ export interface OpenAIServiceResponse<T = unknown> {
   costEstimate?: { usd: number; basis: 'streamed_output_estimate'; input_tokens: number; cached_input_tokens: number; output_tokens: number };
 }
 
-function sanitizeJsonSchema(schema: Record<string, unknown>, strict: boolean = false): Record<string, unknown> {
+// OpenAI strict mode refuses these keywords with a 400 for the whole request
+// (live 2026-11-09 17:29: uniqueItems in edit_project_record ended a Bob turn
+// after 2.6 USD of work). The wire schema drops them; the original schema keeps
+// them for Bob's own validators (schemaIssues), as on the Claude path.
+const OPENAI_STRICT_UNSUPPORTED = new Set(['uniqueItems','contains','minContains','maxContains','minProperties','maxProperties',
+  'patternProperties','propertyNames','dependentRequired','dependentSchemas','if','then','else','not','unevaluatedProperties','unevaluatedItems'])
+
+export function sanitizeJsonSchema(schema: Record<string, unknown>, strict: boolean = false): Record<string, unknown> {
   if (!schema || typeof schema !== 'object') return schema;
   
-  const sanitized = { ...schema };
+  const sanitized = strict ? Object.fromEntries(Object.entries(schema).filter(([key]) => !OPENAI_STRICT_UNSUPPORTED.has(key))) : { ...schema };
+  if (strict) for (const key of ['anyOf', 'allOf', 'oneOf'] as const)
+    if (Array.isArray(sanitized[key])) sanitized[key] = (sanitized[key] as Record<string, unknown>[]).map(s => sanitizeJsonSchema(s, strict));
+  if (strict) for (const key of ['$defs', 'definitions'] as const)
+    if (sanitized[key] && typeof sanitized[key] === 'object') sanitized[key] = Object.fromEntries(Object.entries(sanitized[key] as Record<string, Record<string, unknown>>).map(([k, v]) => [k, sanitizeJsonSchema(v, strict)]));
   
   const isObjectType =
     sanitized.type === 'object' ||
@@ -314,7 +326,7 @@ function sanitizeJsonSchema(schema: Record<string, unknown>, strict: boolean = f
     );
   }
   
-  if (sanitized.type === 'array' && sanitized.items) {
+  if ((sanitized.type === 'array' || (Array.isArray(sanitized.type) && sanitized.type.includes('array'))) && sanitized.items) {
     sanitized.items = sanitizeJsonSchema(sanitized.items as Record<string, unknown>, strict);
   }
   
@@ -362,9 +374,26 @@ async function fetchWithRetry(
   throw new Error('Max retries exceeded');
 }
 
+/** Reads the live text-provider switch (owner decision 2026-11-09). */
+export async function refreshLiveProvider(app: string): Promise<void> {
+  if (typeof Deno === 'undefined') return;
+  try { await refreshProviderSwitch(createAiClient() as unknown as SwitchClient, app) }
+  catch (error) { console.error('[AI provider switch] unavailable', error instanceof Error ? error.message : String(error)) }
+}
+
 export async function callOpenAIResponses<T = unknown>(
   options: OpenAIServiceOptions
 ): Promise<OpenAIServiceResponse<T>> {
+  // The live provider switch moves text tiers at every call. A call that
+  // continues a provider cursor uses the value its caller already read, so
+  // the continuation decision and this dispatch agree.
+  if (options.aiDefinition) {
+    if (!options.previousResponseId) await refreshLiveProvider(options.app);
+    try { options = { ...options, aiDefinition: withLiveModel(options.aiDefinition) }; }
+    catch (error) {
+      return { success: false, data: null, usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, model: options.aiDefinition.model.model_name, error: error instanceof Error ? error.message : 'ai_profile_incompatible' };
+    }
+  }
   const {
     prompt,
     systemMessage,
@@ -405,6 +434,12 @@ export async function callOpenAIResponses<T = unknown>(
   // Settings and catalogue in parallel; both live in the shared `ai` schema.
   const catalogRole = options.aiDefinition;
   try {
+    if (options.webSearch && (!catalogRole || catalogRole.providerAdapter !== 'openai-responses-v1'
+      || options.tools?.length || options.previousResponseId || options.responseItemsMode
+      || !Array.isArray(options.webSearch.allowedDomains) || !options.webSearch.allowedDomains.length
+      || options.webSearch.allowedDomains.length > 100
+      || !options.webSearch.allowedDomains.every(d => typeof d === 'string' && /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(d))))
+      throw new Error('ai_profile_incompatible: scoped web search');
     if (options.structuredToolOutput && (!schema || !schemaName)) {
       throw new Error('ai_profile_incompatible: structured tools require a response schema');
     }
@@ -526,7 +561,7 @@ export async function callOpenAIResponses<T = unknown>(
       // Claude requires max_tokens; unlimited Bob work gets the model's own ceiling.
       maxOutputTokens: catalogRole.app === 'bob' && catalogRole.unlimitedWork === true ? anthropicModel.max_output_tokens : configuredMaxTokens,
       effort: catalogRole.reasoningEffort && anthropicModel.supports_reasoning ? catalogRole.reasoningEffort : null,
-      timeoutMs, resolveImage: options.resolveImageInline ?? options.resolveImage,
+      timeoutMs, resolveImage: options.resolveImage,
       log: (r) => logAIUsage(aiClient, { app: options.app, module, aiFunction, userId, model: r.model,
         inputTokens: r.inputTokens, cachedInputTokens: r.cachedInputTokens, outputTokens: r.outputTokens,
         reasoningTokens: r.reasoningTokens, totalTokens: r.totalTokens, costUsd: r.costUsd, costBasis: r.costBasis,
@@ -724,6 +759,12 @@ export async function callOpenAIResponses<T = unknown>(
             : choice;
       }
     }
+    if (options.webSearch) {
+      requestBody.tools = [{ type: 'web_search', external_web_access: true,
+        filters: { allowed_domains: options.webSearch.allowedDomains } }];
+      requestBody.tool_choice = 'required';
+      requestBody.include = ['web_search_call.action.sources'];
+    }
     
     // Add structured output format
     if (schema && schemaName && (!options.tools || options.structuredToolOutput)) {
@@ -786,6 +827,7 @@ export async function callOpenAIResponses<T = unknown>(
       input_price_per_1m: modelRow.input_cost_per_1m_tokens,
       output_price_per_1m: modelRow.output_cost_per_1m_tokens,
       cached_price_per_1m: modelRow.cached_input_cost_per_1m_tokens ?? modelRow.input_cost_per_1m_tokens,
+      ...(options.webSearch ? { native_search: true as const } : {}),
     }, prepareRequest) : JSON.parse(responseText);
     const pinned = options.background ? responseData._shared_accounting : undefined;
     if (pinned) {
@@ -821,7 +863,9 @@ export async function callOpenAIResponses<T = unknown>(
       cached_input_tokens: cachedInputTokens,
       reasoning_tokens: reasoningTokens,
     };
-    const estimatedCostUsd = computeCostUsd(modelRow, usage);
+    const tokenCostUsd = computeCostUsd(modelRow, usage);
+    // Native search has a separate fee. A token subtotal is not a total cost.
+    const estimatedCostUsd = options.webSearch ? null : tokenCostUsd;
     console.log(`[OpenAI Service] Cost: ${estimatedCostUsd === null ? 'unknown (no price row)' : `$${estimatedCostUsd}`}`);
 
     /** Everything the usage ledger needs that is constant for this call. */
@@ -839,6 +883,7 @@ export async function callOpenAIResponses<T = unknown>(
       reasoningTokens,
       totalTokens: usage.total_tokens,
       costUsd: estimatedCostUsd,
+      ...(options.webSearch ? { costBasis: 'native_search_total_unknown' as const } : {}),
       inputPricePer1m: modelRow.input_cost_per_1m_tokens,
       outputPricePer1m: modelRow.output_cost_per_1m_tokens,
     };
@@ -854,7 +899,26 @@ export async function callOpenAIResponses<T = unknown>(
     }
 
     const phaseAware = options.responsePhaseMode === 'aware';
-    let nativeOutput: { outputItems?: OpenAIResponseItem[] } = {};
+    let nativeOutput: Pick<OpenAIServiceResponse<unknown>, 'outputItems' | 'webSearch'> = {};
+    if (options.webSearch) {
+      const sources = new Map<string, { url: string; title: string }>();
+      let completedCalls = 0;
+      const add = (s: any) => {
+        if (typeof s?.url !== 'string' || s.url.length > 3000) return;
+        try { const u = new URL(s.url); if (u.protocol !== 'https:' || u.username || u.password) return; }
+        catch { return; }
+        if (sources.size < 100) sources.set(s.url, { url: s.url, title: typeof s.title === 'string' ? s.title.slice(0, 500) : '' });
+      };
+      for (const item of responseData.output ?? []) {
+        if (item.type === 'web_search_call' && item.status === 'completed') {
+          completedCalls++;
+          for (const s of item.action?.sources ?? []) add(s);
+        }
+        if (item.type === 'message') for (const c of item.content ?? [])
+          for (const s of c.annotations ?? []) if (s.type === 'url_citation') add(s);
+      }
+      nativeOutput.webSearch = { sources: [...sources.values()], completedCalls, tokenCostUsd };
+    }
     if (options.responseItemsMode === 'preserve') {
       try { nativeOutput = { outputItems: readResponseItems(responseData.output) }; }
       catch (error) {
@@ -1197,7 +1261,8 @@ export async function callOpenAIResponses<T = unknown>(
       data: null,
       usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
       model: currentModel,
-      error: options.background ? 'ai_background_unavailable' : `Network error: ${errorMessage}`
+      // An expired reservation is named so a resumed job can send the step again.
+      error: options.background ? (errorMessage === 'ai_background_expired' ? 'ai_background_expired' : 'ai_background_unavailable') : `Network error: ${errorMessage}`
     };
   }
 }
@@ -1237,7 +1302,7 @@ async function logAIUsage(
     reasoningTokens: number;
     totalTokens: number;
     costUsd: number | null;
-    costBasis?: 'streamed_output_estimate';
+    costBasis?: 'streamed_output_estimate' | 'native_search_total_unknown';
     inputPricePer1m: number;
     outputPricePer1m: number;
     success: boolean;
@@ -1573,22 +1638,3 @@ export async function generateImage(options: ImageCallOptions): Promise<ImageCal
   }
 }
 
-const VISION_FILE_SECONDS = 30 * 24 * 3600;
-/** Upload one image for vision input. The provider deletes it after 30 days;
- * callers keep their own copy as the source and store only the returned id. */
-export async function uploadOpenAIVisionFile(bytes: Uint8Array, contentType: 'image/png' | 'image/jpeg' | 'image/webp', signal: AbortSignal): Promise<{ fileId: string; expiresAt: string }> {
-  const apiKey = Deno.env.get('OPENAI_API_KEY');
-  if (!apiKey) throw new Error('Missing OpenAI API key');
-  const form = new FormData();
-  form.append('purpose', 'vision');
-  form.append('expires_after[anchor]', 'created_at');
-  form.append('expires_after[seconds]', String(VISION_FILE_SECONDS));
-  form.append('file', new Blob([new Uint8Array(bytes)], { type: contentType }), 'image.' + contentType.slice(6));
-  const response = await fetch('https://api.openai.com/v1/files', { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: form, signal });
-  if (!response.ok) { await response.body?.cancel(); throw new Error('vision_file_upload_failed'); }
-  const file = await response.json() as { id?: unknown; created_at?: unknown; expires_at?: unknown };
-  if (typeof file.id !== 'string') throw new Error('vision_file_upload_failed');
-  const created = typeof file.created_at === 'number' ? file.created_at * 1000 : Date.now();
-  const expires = typeof file.expires_at === 'number' ? file.expires_at * 1000 : created + VISION_FILE_SECONDS * 1000;
-  return { fileId: file.id, expiresAt: new Date(Math.min(expires, Date.now() + VISION_FILE_SECONDS * 1000)).toISOString() };
-}

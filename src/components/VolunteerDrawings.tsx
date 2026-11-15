@@ -1,5 +1,5 @@
 import { ZoomableImage } from './ZoomableImage'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as db from '../data/database'
 import type { VolunteerDrawing, VolunteerDrawingSummary } from '../data/volunteers'
 import { Loading } from './ui'
@@ -28,6 +28,9 @@ export function VolunteerDrawings({ secret, projectId, taskId, onDenied }: {
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState('')
   const mounted = useRef(false), imageUrl = useRef('')
+  const drawingId = drawing?.id, drawingRevision = drawing?.revision
+  const guidePages = useCallback((_guideId: string, keys: string[]) => drawingId && drawingRevision
+    ? db.volunteers.guidePages(secret, projectId, taskId, drawingId, drawingRevision, keys) : Promise.reject(new Error('no_drawing')), [secret, projectId, taskId, drawingId, drawingRevision])
   const clearDrawing = () => {
     if (imageUrl.current) URL.revokeObjectURL(imageUrl.current)
     imageUrl.current = ''; setImage(''); setDrawing(null)
@@ -85,7 +88,7 @@ export function VolunteerDrawings({ secret, projectId, taskId, onDenied }: {
       <p className="volunteer-text">{drawing.description}</p>
       <p className="volunteer-text"><strong>Assumptions:</strong> {drawing.assumptions || 'None recorded. Check with the organiser before starting.'}</p>
       {content && <>
-        {content.cad && <CadDrawingView value={content.cad} title={drawing.title} />}
+        {content.cad && <CadDrawingView value={content.cad} title={drawing.title} loadGuidePages={guidePages} />}
         {content.parametricRecipe && <StorageBoxDrawing recipe={content.parametricRecipe} stamp={{ title: drawing.title, artifactId: drawing.id, revision: drawing.revision, status: statusName[drawing.status], source: `${sourceName[drawing.sourceState]}. ${drawing.assumptions}` }} />}
         {geometry && <StudWallPreview geometry={geometry} />}
         {content.roomLayout && <RoomLayoutDrawing value={content.roomLayout} title={drawing.title} source={`v${drawing.revision} · ${statusName[drawing.status]}`} lineageChanged={drawing.sourceState === 'changed'} participant />}
