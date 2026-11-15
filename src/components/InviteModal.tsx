@@ -31,6 +31,8 @@ export function InviteModal({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [invited, setInvited] = useState<string[]>([])
+  // Opened from a project: invite to that project, no picker.
+  const fixedProject = projects.some(project => project.id === defaultProjectId)
 
   useEffect(() => {
     if (!projects.some(project => project.id === projectId)) setProjectId(projects.some(project => project.id === defaultProjectId) ? defaultProjectId : '')
@@ -63,7 +65,7 @@ export function InviteModal({
   return (
     <Modal title="Invite to the crew" onClose={() => { if (!busy) onClose() }}>
       <div className="foundation-form sharing-invite">
-        <Field label="Project">
+        {!fixedProject && <Field label="Project">
           <select style={{ ...inputStyle, appearance: 'auto' }} value={projectId} onChange={(e) => chooseProject(e.target.value)} disabled={busy}>
             <option value="">Choose a project</option>
             {projects.map((p) => (
@@ -72,14 +74,14 @@ export function InviteModal({
               </option>
             ))}
           </select>
-        </Field>
+        </Field>}
         <div className="foundation-actions" role="group" aria-label="Invitation method">
-          <button type="button" className={`btn${method === 'volunteer' ? ' btn-primary' : ''}`} aria-pressed={method === 'volunteer'} disabled={busy} onClick={() => { setMethod('volunteer'); setError(null) }}>Volunteer link</button>
-          <button type="button" className={`btn${method === 'friend' ? ' btn-primary' : ''}`} aria-pressed={method === 'friend'} disabled={busy} onClick={() => { setMethod('friend'); setError(null) }}>Existing friend</button>
-          <button type="button" className={`btn${method === 'email' ? ' btn-primary' : ''}`} aria-pressed={method === 'email'} disabled={busy} onClick={() => { setMethod('email'); setError(null) }}>Crew by email</button>
+          <button type="button" className={`btn${method === 'volunteer' ? ' btn-primary' : ''}`} aria-pressed={method === 'volunteer'} disabled={busy} onClick={() => { setMethod('volunteer'); setError(null) }}>Share link</button>
+          <button type="button" className={`btn${method === 'friend' ? ' btn-primary' : ''}`} aria-pressed={method === 'friend'} disabled={busy} onClick={() => { setMethod('friend'); setError(null) }}>Friend</button>
+          <button type="button" className={`btn${method === 'email' ? ' btn-primary' : ''}`} aria-pressed={method === 'email'} disabled={busy} onClick={() => { setMethod('email'); setError(null) }}>Email</button>
         </div>
         {!projectId ? <p className="foundation-hint">Choose the project you want to invite someone to.</p> : method === 'volunteer' ? <VolunteerLinks key={projectId} projectId={projectId} onBusyChange={setBusy} /> : method === 'friend' ? <FriendInviteForm key={projectId} projectId={projectId} onInvited={onInvited} onBusyChange={setBusy} /> : <form onSubmit={submit} className="foundation-form">
-        <p className="foundation-hint">Save a crew profile linked to an email address. They claim it when they sign in with that address. This does not send an email.</p>
+        <p className="foundation-hint">They join when they sign in to Bob with this email. No email is sent.</p>
         <Field label="Name *">
           <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="Henrik Lund" disabled={busy} required />
         </Field>
@@ -89,12 +91,12 @@ export function InviteModal({
         {error && <div role="alert"><FormError>{error}</FormError></div>}
         {invited.length > 0 && (
           <div className="sharing-status" role="status">
-            Crew profiles saved: {invited.join(', ')}
+            Added: {invited.join(', ')}
           </div>
         )}
         <div className="cluster" style={{ justifyContent: 'flex-end' }}>
           <button type="submit" className="btn btn-primary" disabled={!projectId || !name.trim() || !email.trim() || busy}>
-            {busy ? 'Saving…' : 'Add crew profile'}
+            {busy ? 'Saving…' : 'Add'}
           </button>
         </div>
       </form>}

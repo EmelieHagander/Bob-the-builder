@@ -28,7 +28,7 @@ export function VolunteerLinks({ projectId, onBusyChange }: { projectId: string;
       setCreated({ url: window.location.origin + window.location.pathname + '#/volunteer/' + secret, expiresAt: receipt.expiresAt })
       pendingSecret.current = null
       setVersion(value => value + 1)
-      setNotice('Volunteer link created. Copy it and share it with your volunteers.')
+      setNotice('')
     } catch (reason) { setError(userErrorMessage(reason, 'Could not create the volunteer link. Try again.')) }
     finally { pending(false) }
   }
@@ -43,30 +43,34 @@ export function VolunteerLinks({ projectId, onBusyChange }: { projectId: string;
     finally { pending(false) }
   }
   return <section className="volunteer-link-manager" aria-label="Volunteer links">
-    <p className="foundation-hint">Volunteers open your link and enter their name. No email, password or account. They can read project tasks, instructions and build days, join tasks and update their own work.</p>
-    <p className="foundation-hint">When food is planned, volunteers may share allergies with the project crew. Volunteer links never show other participants’ allergy notes.</p>
+    <p className="foundation-hint">Anyone with the link enters their name and joins. No account needed.</p>
     {loading ? <Loading label="Loading volunteer links…" /> : loadError ? <div role="alert"><FormError>{userErrorMessage(loadError, 'Could not load volunteer links.')}</FormError><button className="btn" onClick={() => setVersion(value => value + 1)}>Refresh volunteer links</button></div> : data && <>
       <form onSubmit={create} className="foundation-form">
-        <Field label="Volunteer link name"><input style={inputStyle} maxLength={120} value={label} disabled={busy} onChange={event => setLabel(event.target.value)} required /></Field>
+        <Field label="Link name"><input style={inputStyle} maxLength={120} value={label} disabled={busy} onChange={event => setLabel(event.target.value)} required /></Field>
         <Field label="Link expires after"><select style={inputStyle} value={days} disabled={busy} onChange={event => setDays(Number(event.target.value))}><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option></select></Field>
-        <button className="btn btn-primary" disabled={busy || !label.trim()}>{busy ? 'Saving…' : 'Create volunteer link'}</button>
+        <button className="btn btn-primary" disabled={busy || !label.trim()}>{busy ? 'Saving…' : 'Create link'}</button>
       </form>
       {created && <div className="volunteer-created">
         <Field label="Link to share"><input style={inputStyle} value={created.url} readOnly onFocus={event => event.target.select()} /></Field>
-        <button className="btn" type="button" onClick={async () => {
-          try { await navigator.clipboard.writeText(created.url); setNotice('Volunteer link copied.') }
-          catch { setError('Copy the link from the field above. Automatic copying is unavailable.') }
-        }}>Copy volunteer link</button>
-        <p className="foundation-hint">Save this link now; its full address is shown only here. It expires {formatDate(created.expiresAt)}.</p>
+        <div className="foundation-actions">
+          {typeof navigator.share === 'function' && <button className="btn btn-primary" type="button" onClick={async () => {
+            try { await navigator.share({ title: label.trim(), url: created.url }) }
+            catch (reason) { if ((reason as Error)?.name !== 'AbortError') setError('Sharing is unavailable. Copy the link instead.') }
+          }}>Share link</button>}
+          <button className="btn" type="button" onClick={async () => {
+            try { await navigator.clipboard.writeText(created.url); setNotice('Link copied.') }
+            catch { setError('Copy the link from the field above. Automatic copying is unavailable.') }
+          }}>Copy link</button>
+        </div>
+        <p className="foundation-hint">Shown only now. Expires {formatDate(created.expiresAt)}.</p>
       </div>}
-      <div className="sharing-divider"><h3>Existing volunteer links</h3>
-        <p className="foundation-hint">Anyone you give a link to can register a name in this project. Revoking a link also ends access for everyone who joined through it.</p>
-        {!data.links.length ? <p className="foundation-hint">No volunteer links yet.</p> : <ul className="sharing-list">{data.links.map(link => <li key={link.id} className="sharing-row">
+      {data.links.length > 0 && <div className="sharing-divider"><h3>Links</h3>
+        <ul className="sharing-list">{data.links.map(link => <li key={link.id} className="sharing-row">
           <div><strong>{link.label}</strong><p className="foundation-hint">{link.participants} participants · {link.revokedAt ? 'Revoked' : new Date(link.expiresAt).getTime() <= Date.now() ? 'Expired' : 'Expires ' + formatDate(link.expiresAt)}</p></div>
           {!link.revokedAt && new Date(link.expiresAt).getTime() > Date.now() && <button type="button" className="btn" disabled={busy} onClick={() => setRemoving({ linkId: link.id, sessionId: null })}>Revoke link</button>}
-        </li>)}</ul>}
-      </div>
-      {data.participants.length > 0 && <div className="sharing-divider"><h3>Volunteers using these links</h3><p className="foundation-hint">A participant’s access belongs to their browser. Names are not verified. Revoke the shared link to prevent new registrations.</p><ul className="sharing-list">{data.participants.map(person => {
+        </li>)}</ul>
+      </div>}
+      {data.participants.length > 0 && <div className="sharing-divider"><h3>Joined by link</h3><ul className="sharing-list">{data.participants.map(person => {
         const link = data.links.find(link => link.id === person.linkId)
         const ended = person.revokedAt || !link || link.revokedAt || new Date(link.expiresAt).getTime() <= Date.now()
         return <li key={person.id} className="sharing-row"><div><strong>{person.name}</strong><p className="foundation-hint">{ended ? 'Access ended' : link.label}</p></div>{!ended && <button type="button" className="btn" disabled={busy} onClick={() => setRemoving({ linkId: null, sessionId: person.id })}>Revoke participant</button>}</li>
