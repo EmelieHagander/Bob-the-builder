@@ -497,12 +497,16 @@ def _render_guide(raw, joints, steps, out, scratch, fasteners, context_ids, size
             g = ET.SubElement(page, f'{{{NS}}}g', {'transform': f'translate(60 {_r(y)}) scale({_r(s)})'})
             legend(g, kind, art)
 
-        def words(big, small, big_size=26):
+        def words(big, small, big_size=26, size=None):
             _fit(page, tx, y + 34 * s, big, big_size * s, tw, '700')
-            _fit(page, tx, y + 56 * s, small, 13 * s, tw, fill='#333333', lines=2, smallest=10 * s)
+            if size is None: _fit(page, tx, y + 56 * s, small, 13 * s, tw, fill='#333333', lines=2, smallest=10 * s); return
+            # A part names its P numbers, what it is and its blank size (owner ask 2026-11-15).
+            _fit(page, tx, y + 54 * s, small, 13 * s, tw, '600', smallest=10 * s)
+            _fit(page, tx, y + 72 * s, size, 12 * s, tw, fill='#333333', smallest=9 * s)
         for count, part_ids in items:
             _View([solids[part_ids[0]]], (1, -1, 1), (52, y, 80 * s, 72 * s), scratch).layer(page, [solids[part_ids[0]]], INK, 1.6)
-            words(f'{count}×', f'{label(part_ids)} {part_name(defs_of[part_ids[0]])}'); y += rh
+            did = defs_of[part_ids[0]]
+            words(f'{count}×', f'{label(part_ids)} {part_name(did)}', size=blank_text(definitions[did])); y += rh
         for h in hardware:
             symbol(h['kind'], item_art.get(h.get('item_key')))
             words(f'{h["count"]}×', hardware_words(h)); y += rh

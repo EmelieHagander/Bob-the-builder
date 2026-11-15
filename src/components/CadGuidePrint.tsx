@@ -108,7 +108,7 @@ export function CadGuidePrint({ guide, files, title, pageLabel, loadPages, proje
   }, [pack])
   return <>
     <div className="foundation-actions">
-      <button type="button" className="btn" disabled={state === 'reading' || !!pack} onClick={() => void start()}>Print / PDF</button>
+      <button type="button" className="btn" disabled={state === 'reading' || !!pack} onClick={() => void start()}>Print guide / PDF</button>
     </div>
     {state === 'reading' && <p role="status" className="foundation-hint">Preparing the print…</p>}
     {state === 'failed' && <p role="alert" className="solution-attention">The guide pages could not be read for printing. Try again.</p>}

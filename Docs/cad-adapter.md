@@ -1365,6 +1365,21 @@ a rule, not judgement, so the Edge now decides it.
   is one page; it is now at least one page. Release: Edge only (`ask-bob`,
   `bob-worker`).
 
+#### Guide viewer, part sizes and drawing print (2026-11-15)
+
+Owner ask after the first split guide worked: names with the P numbers, one
+viewer instead of a list of expands, and print for both guide and drawing.
+
+- **Worker.** Each step's parts box shows the P numbers, the part name and its
+  blank size (`P24-P25 Post` / `45 x 70 mm, length 1540 mm`), the same words as
+  the box page; the layout check still passes on the live bunk bed.
+- **App.** `CadBuildGuide` reads every page together and shows one page at a
+  time with Previous/Next (arrow keys too), "Page n of N" and a section menu.
+  The guide print button is "Print guide / PDF"; `CadDrawingPrint` adds "Print
+  drawing / PDF": every saved view on its own page, then the parts and sizes.
+- **Release:** Modal worker (`modal-cad.yml`) and Pages. No Edge or database
+  change. Guides made earlier keep their pages until redrawn.
+
 #### Build guide installation and paid runs
 
 **Installed 2026-10-30** (owner OK), from main `03144da` (PR #383), after a check
