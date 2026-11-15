@@ -15,6 +15,7 @@ import { scheduleStatus, type ScheduleStatus } from '../../lib/calendarGrid'
 import { formatDateRange } from '../../lib/format'
 import { PhasePill } from '../../components/PhaseUI'
 import { userErrorMessage } from '../../lib/userErrors'
+import { PROJECT_DESCRIPTION_MAX } from '../../domain/projectDescription'
 
 const THEMES: { name: ThemeName; label: string }[] = [
   { name: 'birch', label: 'Birch' },
@@ -153,7 +154,7 @@ export function ProjectModal({
             <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </Field>
           <Field label="What are you building?">
-            <input style={inputStyle} value={description} onChange={(e) => setDescription(e.target.value)} />
+            <input style={inputStyle} value={description} maxLength={PROJECT_DESCRIPTION_MAX} onChange={(e) => setDescription(e.target.value)} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--layout-gap)' }}>
             <Field label="Location">

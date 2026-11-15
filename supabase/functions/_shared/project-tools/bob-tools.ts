@@ -185,7 +185,8 @@ export function createBobToolSession(opts: { continuedWork?:boolean;
         : boundPlanLinks && SUPERSEDED_PLAN_LINK_TOOLS.includes(spec.function.name) ? 'not_allowed'
         : boundWork && SUPERSEDED_WORK_TOOLS.includes(spec.function.name) ? 'not_allowed'
         : boundSolutions && ['save_project_solution', 'select_project_target'].includes(spec.function.name) ? 'not_allowed'
-        : boundEdits && spec.function.name === 'save_project_description' ? 'not_allowed'
+        // Owner decision 2026-11-08: the description weigher is the description's only author.
+        : (boundEdits || !!opts.aiCatalog?.manifest().definitions.some(row => row.prompt_key === 'role.description-weigher')) && spec.function.name === 'save_project_description' ? 'not_allowed'
         : boundEdits && spec.function.name === 'save_project_solution' && opts.writer.unresolvedTools.includes('edit_project_record') ? 'missing_context'
         : spec.function.name==='propose_project_plan'&&opts.planAssistant?.compilationAttempted ? 'missing_context'
         : writeGate(),

@@ -8,6 +8,7 @@ import { constructionPurpose, constructionReadiness } from './write-state.ts'
 import { SOLUTION_PROSE, type ProjectWriter, type WritePayload, type WriteResult } from './project-write.ts'
 import { humanTextRejection, proseFields, type HumanTextRejection } from './human-text.ts'
 import type { ProjectSource } from '../../../src/data/provenance.ts'
+import { PROJECT_DESCRIPTION_MAX } from '../../../src/domain/projectDescription.ts'
 
 const object = (properties: Record<string, unknown>) => ({ type: 'object', additionalProperties: false, properties, required: Object.keys(properties) })
 const text = { type: 'string' }
@@ -281,7 +282,7 @@ export async function applyProjectDelta(snapshot: EditSnapshot, changes: unknown
       parent[key] += value
     } else parent[key] = value
   }
-  for (const [field, max] of Object.entries(snapshot.resource === 'project_description' ? { description: 12000 } : { title: 200, description: 6000, assumptions: 4000, tradeoffs: 4000 })) {
+  for (const [field, max] of Object.entries(snapshot.resource === 'project_description' ? { description: PROJECT_DESCRIPTION_MAX } : { title: 200, description: 6000, assumptions: 4000, tradeoffs: 4000 })) {
     if (!safeText(record[field], max, field !== 'title')) throw new Error('Invalid or oversized ' + field + '.')
   }
   if (record.design_intent != null) {
@@ -330,7 +331,10 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
   writeState?: { readiness?: (targetRevision: number, areaId: string | null) => Promise<DesignReadiness> };
   /** Pinned per execution (write_check_version 1): edit_project_record takes
    * mode check|save; a check runs the same write in the database and rolls it back. */
-  writeCheck?: boolean }) {
+  writeCheck?: boolean
+  /** Owner decision 2026-11-08: once the description weigher is published, it
+   * is the only author of the project description; Bob cannot edit it here. */
+  descriptionWeigher?: boolean }) {
   const sectionPages = new Map<string,{edit_ref:string;section:string;offset:number}>()
   const contexts = new Map<string, EditSnapshot>()
   const pages = new Map<string, { resource: Resource; query: string | null; after: string }>()
@@ -431,7 +435,7 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
         return {status:'ok',edit_ref:page.edit_ref,section:v.query,items,next_ref}
       }
       if (name === 'read_project_edit_context') {
-        if (!exact(value, ['resource', 'query', 'next_ref']) || !['project_description', 'selected_solutions', 'solutions'].includes(value.resource)
+        if (!exact(value, ['resource', 'query', 'next_ref']) || !(opts.descriptionWeigher ? ['selected_solutions', 'solutions'] : ['project_description', 'selected_solutions', 'solutions']).includes(value.resource)
           || !(value.query === null || safeText(value.query, 200)) || !(value.next_ref === null || typeof value.next_ref === 'string')) return fail('Invalid read selection.')
         if (!opts.unlimitedWork && reads >= 16) return { status: 'budget_exhausted' }
         const input = value.next_ref === null ? { resource: value.resource as Resource, query: value.query, after: null } : pages.get(value.next_ref)

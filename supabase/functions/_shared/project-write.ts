@@ -14,6 +14,7 @@ import { ROOM_LAYOUT_TOOLS, parseRoomLayoutWrite } from './project-room-layout.t
 import { withDerivedRoomLayout } from '../../../src/lib/roomLayout.ts'
 import type { ProjectWriteReceipt } from '../../../src/data/provenance.ts'
 import { isProjectWriteReceipt } from '../../../src/data/bobEvidence.ts'
+import { PROJECT_DESCRIPTION_MAX } from '../../../src/domain/projectDescription.ts'
 import { DRAWING_PROPERTIES, DRAWING_DESCRIPTION, parseDrawingWrite } from './project-drawing-write.ts'
 import { COMPOSE_CAD_SHELL_TOOL, LINK_CAD_SHELL_STEPS_TOOL, parseCadShellWrite, parseCadShellStepsWrite } from './cad-shell.ts'
 import { LIFECYCLE_TOOLS, LIFECYCLE_TOOL_NAMES, parseLifecycleWrite } from './project-lifecycle.ts'
@@ -212,7 +213,7 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   const base = { kind: 'project' as WritePayload['kind'], record_id: projectId as string | null, expected_updated_at: null as string | null,
     expected_revision: null as number | null, request_quote: v.request_quote, data: {} as Record<string, unknown> }
   if (name === 'save_project_description') {
-    if (!isText(v.description, 12000, true) || !isTime(v.expected_updated_at)) return null
+    if (!isText(v.description, PROJECT_DESCRIPTION_MAX, true) || !isTime(v.expected_updated_at)) return null
     return { ...base, expected_updated_at: v.expected_updated_at as string, data: { description: v.description } }
   }
   if (v.record_id !== null && !isText(v.record_id, 200)) return invalid('field_value', ['record_id'], 'Use the exact current record ID when editing, or null when creating.')
