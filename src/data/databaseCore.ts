@@ -791,40 +791,6 @@ export async function signInAsGuest(): Promise<void> {
   if (error) throw toDataError(error)
 }
 
-/**
- * Register an invite: creates the person on the project's crew and records
- * their email server-side (bob.invite_person, security definer — the invite
- * email is never readable through the API). When they sign in with that
- * email they claim the person row.
- */
-const AVATAR_COLORS = ['#7E9B52', '#5E87A6', '#B5675A', '#C98B2E', '#8A6FA8', '#B07F4F', '#5E9C68', '#C07A4E']
-
-export async function invitePerson(projectId: string, name: string, email: string): Promise<void> {
-  if (!db) {
-    // Demo mode: no real emails, but the person still joins the crew so the
-    // flow feels like the live one. (Content lives on the sample project.)
-    const person: Person = {
-      id: newId('i'),
-      name: name.trim(),
-      initials: name.trim().slice(0, 2).toUpperCase(),
-      color: AVATAR_COLORS[mock.people.length % AVATAR_COLORS.length],
-      role: 'Volunteer',
-      diet: 'No restrictions',
-      skills: [],
-    }
-    mock.people.push(person)
-    mock.dietMatrix.push({ personId: person.id, flags: mock.dietColumns.map(() => false) })
-    await read(null)
-    return
-  }
-  const res = await db.rpc('invite_person', {
-    p_project_id: projectId,
-    p_name: name.trim(),
-    p_email: email.trim(),
-  })
-  if (res.error) throw toDataError(res.error)
-}
-
 /** Returns true when the account is ready, false when email confirmation is pending. */
 export async function signUpWithPassword(email: string, password: string): Promise<boolean> {
   if (!db) throw new UserError('Running on demo data — sign-up needs the live database.')

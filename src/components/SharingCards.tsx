@@ -215,40 +215,32 @@ export function FriendInviteForm({ projectId, onInvited, onBusyChange }: { proje
     return { sharing, directory }
   }, [projectId])
   const { data, loading, error, reload } = useSharingResource(read)
-  const [friendId, setFriendId] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState('')
   const [writeError, setWriteError] = useState('')
-  const [notice, setNotice] = useState('')
 
-  async function invite(event: FormEvent) {
-    event.preventDefault()
-    if (!friendId || busy || !data?.sharing.canManage) return
-    setBusy(true); onBusyChange(true); setWriteError(''); setNotice('')
+  async function invite(friendId: string) {
+    if (busy || !data?.sharing.canManage) return
+    setBusy(friendId); onBusyChange(true); setWriteError('')
     try {
-      const invitation = await db.sharing.inviteFriend(projectId, friendId)
-      const verified = await reload()
-      setNotice(verified ? `${invitation.name}: ${invitation.status === 'accepted' ? 'already accepted' : 'invitation pending'}. They can find project invitations in Bob.` : 'The invitation was saved, but its status could not be refreshed. Refresh sharing to check it.')
-      setFriendId('')
+      await db.sharing.inviteFriend(projectId, friendId)
+      await reload()
       onInvited?.()
     } catch (reason) { setWriteError(message(reason)) }
-    finally { setBusy(false); onBusyChange(false) }
+    finally { setBusy(''); onBusyChange(false) }
   }
 
   return <div className="sharing-invite">
-    <p className="foundation-hint">Choose an existing friend. They decide whether to join from their project invitations in Bob.</p>
-    {loading ? <Loading label="Loading friends…" /> : error ? <SharingError error={error} retry={() => void reload()} /> : data && (!data.sharing.canManage ? <p className="foundation-hint">A project member can invite friends to this project.</p> : <form className="foundation-form" onSubmit={invite}>
-      <Field label="Friend"><select style={inputStyle} value={friendId} onChange={event => setFriendId(event.target.value)} disabled={busy}>
-        <option value="">Choose a friend</option>{data.directory.friends.map(friend => {
-          const invitation = data.sharing.invitations.find(item => item.inviteeId === friend.id && (item.status === 'pending' || item.status === 'accepted'))
-          return <option key={friend.id} value={friend.id} disabled={Boolean(invitation)}>{friend.name}{invitation ? invitation.status === 'pending' ? ' — invitation pending' : ' — accepted' : ''}</option>
-        })}
-      </select></Field>
-      {data.directory.friends.length === 0 && <p className="foundation-hint">No existing friends are available. Add a friend in Hearth &amp; Larder, then refresh sharing here.</p>}
-      <p className="foundation-hint">The invitation covers this whole project and read access to its building context. Other projects and building editing require their own access.</p>
-      <div className="foundation-actions"><button type="submit" className="btn btn-primary" disabled={busy || !friendId}>{busy ? 'Inviting…' : 'Invite friend'}</button><button type="button" className="btn" onClick={() => void reload()} disabled={busy}>Refresh sharing</button></div>
-    </form>)}
+    {loading ? <Loading label="Loading friends…" /> : error ? <SharingError error={error} retry={() => void reload()} /> : data && (!data.sharing.canManage ? <p className="foundation-hint">A project member can invite friends to this project.</p>
+      : data.directory.friends.length === 0 ? <p className="foundation-hint">No friends yet. Add a friend in Hearth &amp; Larder.</p>
+      : <ul className="sharing-list" aria-label="Friends">{data.directory.friends.map(friend => {
+        const invitation = data.sharing.invitations.find(item => item.inviteeId === friend.id && (item.status === 'pending' || item.status === 'accepted'))
+        return <li key={friend.id} className="sharing-row">
+          <strong>{friend.name}</strong>
+          {invitation ? <span className="image-purpose">{invitation.status === 'pending' ? 'Invited' : 'Joined'}</span>
+            : <button type="button" className="btn btn-primary" disabled={Boolean(busy)} onClick={() => void invite(friend.id)}>{busy === friend.id ? 'Inviting…' : 'Invite'}</button>}
+        </li>
+      })}</ul>)}
     {writeError && <SharingError error={writeError} />}
-    {notice && <p className="sharing-status" role="status">{notice}</p>}
   </div>
 }
 

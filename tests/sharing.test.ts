@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from './support/pglite.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
+import { isSyntheticSchemaMigration } from './support/project-schema.ts'
 
 const pg = new PGlite()
 const owner = '90000000-0000-0000-0000-000000000001'
@@ -70,7 +71,7 @@ before(async () => {
   for(const f of (await readdir(legacy)).filter(f=>f.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(f,legacy),'utf8'))
   await setupSharedSocial(pg)
   const dir=new URL('../supabase/migrations/',import.meta.url)
-  for(const f of (await readdir(dir)).filter(f=>f.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(f,dir),'utf8'))
+  for(const f of (await readdir(dir)).filter(isSyntheticSchemaMigration).sort()) await pg.exec(await readFile(new URL(f,dir),'utf8'))
   await pg.query('insert into shared.households(id,name) values($1,$2),($3,$4)',[household,'Our family',otherHousehold,'Other family'])
   await pg.query("insert into shared.members(id,household_id,display_name) values($1,$2,'Family without Hearth profile')",[family,household])
   await pg.query("insert into shared.household_access(household_id,user_id,member_id,status) values($1,$2,null,'active'),($1,$3,$3,'active'),($4,$5,null,'active'),($1,$6,null,'invited')",[household,owner,family,otherHousehold,outsider,invited])
@@ -333,4 +334,24 @@ test('account migration aborts for unreviewed legacy content and preserves bytes
     })
     assert.deepEqual(result.rows,[{name:'Saved account name',text:'Existing private note'}])
   } finally { await isolated.close() }
+})
+
+test('people are named by household name, display name or email; never a generated username',async()=>{
+  const carl='90000000-0000-0000-0000-000000000011', nameless='90000000-0000-0000-0000-000000000012'
+  await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now())',[carl,'carl@example.test',nameless,'nameless@example.test'])
+  await pg.query("insert into hearth.profiles(user_id,username,display_name) values($1,'kock-3fe81acec71b495e',null),($2,'kock-0123456789abcdef','')",[carl,nameless])
+  await pg.query("insert into shared.members(id,household_id,display_name) values($1,$2,'Carl')",[carl,household])
+  await pg.query("insert into shared.household_access(household_id,user_id,member_id,status) values($1,$2,$2,'active')",[household,carl])
+  await pg.query("insert into hearth.friendships(user_id,friend_user_id,status) values($1,$2,'accepted'),($3,$1,'accepted')",[owner,carl,nameless])
+  const friends=(await rpc(owner,'sharing_directory')).friends as {id:string,name:string}[]
+  assert.equal(friends.find(f=>f.id===carl)?.name,'Carl')
+  assert.equal(friends.find(f=>f.id===nameless)?.name,'nameless@example.test')
+  assert.doesNotMatch(JSON.stringify(friends),/kock-/)
+  const pid=await project('Named crew')
+  assert.equal((await rpc(owner,'invite_project_friend',[pid,nameless])).name,'nameless@example.test')
+  assert.equal((await rpc(nameless,'project_invitations'))[0].inviterName,'Owner')
+  const crew=(await as(owner,'select name,initials from bob.people where project_id=$1',[pid])).rows
+  assert.deepEqual(crew,[{name:'Owner',initials:'OW'}],'the creator is saved by name, not as "Project creator"')
+  const carlProject=await project('Carl builds',carl)
+  assert.equal((await as(carl,'select name from bob.people where project_id=$1',[carlProject])).rows[0].name,'Carl')
 })
