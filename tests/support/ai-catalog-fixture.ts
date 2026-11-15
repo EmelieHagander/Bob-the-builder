@@ -440,6 +440,8 @@ for(const migration of migrations){
  }
  const descriptionWeigher=source.match(/\$description_weigher_additions\$([\s\S]+?)\$description_weigher_additions\$/)
  if(descriptionWeigher)for(const addition of JSON.parse(descriptionWeigher[1])){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-description-weigher-v1'}});versions.set(addition.key,1)}
+ const planWeigher=source.match(/\$plan_weigher_additions\$([\s\S]+?)\$plan_weigher_additions\$/)
+ if(planWeigher)for(const addition of JSON.parse(planWeigher[1])){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-plan-weigher-v1'}});versions.set(addition.key,1)}
  const descriptionWriter=source.match(/\$description_writer_spec\$([\s\S]+?)\$description_writer_spec\$/)
  if(descriptionWriter){
   const spec=JSON.parse(descriptionWriter[1])

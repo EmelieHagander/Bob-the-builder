@@ -78,6 +78,7 @@ import { prepareWorkingContext, restoreWorkingContext, type WorkingContextSessio
 import { prepareMemoryStair, journalStairStore } from './bob-memory-stair.ts'
 import { runClaimedProjectTurn } from './project-turn.ts'
 import { weighProjectDescription, DESCRIPTION_WEIGHER_ROLE } from './description-weigher.ts'
+import { weighPlanProgress, PLAN_WEIGHER_ROLE, type PlanProgressContext } from './plan-weigher.ts'
 import { createAiCatalogSession, applyCatalogModelOptions, type AiCatalogSession } from './ai-catalog.ts'
 import type { AgentWorkpads, WorkpadSnapshot } from './bob-agent-workpad.ts'
 
@@ -202,7 +203,7 @@ export async function answerWithOpenAi(opts: {
   const WORKER_ROLES = new Set(['materials-worker', 'structure-worker', 'drawing-worker'])
   // 'bob-ask-<32 hex>' becomes 'bob-<role>-<32 hex>': one route per worker and project.
   const workerCacheKey = (key: string, role: string) => 'bob-' + role + '-' + key.slice('bob-ask-'.length)
-  const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'completion-gate': 15000, 'tool-picker': 15000, 'tool-repair': 15000, 'material-finder': 20000, 'materials-worker': 60000, 'structure-worker': 75000, 'drawing-worker': 60000, 'memory-stair': 30000, 'bob-delivery-language': 15000, 'description-weigher': 30000 }
+  const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'completion-gate': 15000, 'tool-picker': 15000, 'tool-repair': 15000, 'material-finder': 20000, 'materials-worker': 60000, 'structure-worker': 75000, 'drawing-worker': 60000, 'memory-stair': 30000, 'bob-delivery-language': 15000, 'description-weigher': 30000, 'plan-weigher': 30000 }
   let drawingRequestId:string|null=null
   let drawingBudget:ReturnType<typeof createDrawingBudget>|undefined
   let modelBudget: ReturnType<typeof createBobModelBudget>
@@ -648,7 +649,7 @@ export async function answerWithOpenAi(opts: {
     }
   }
   // Route new bound actions separately; pinned older journals retain their RPC names.
-  const writeFunction = (kind: string) => kind === 'construction_work' ? 'commit_construction_work' : kind === 'form_feedback' ? 'record_model_feedback' : kind === 'bound_building_scope' ? 'bob_project_write_v21' : kind === 'bound_plan_link' ? 'bob_project_write_v20' : kind === 'bound_work' ? 'bob_project_write_v19' : ['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'].includes(kind) ? 'bob_project_write_v18' : ['bound_project', 'bound_solution'].includes(kind) ? 'bob_project_write_v17' : 'bob_project_write_v16'
+  const writeFunction = (kind: string) => kind === 'construction_work' ? 'commit_construction_work' : kind === 'form_feedback' ? 'record_model_feedback' : kind === 'plan_progress' ? 'bob_project_write_v22' : kind === 'bound_building_scope' ? 'bob_project_write_v21' : kind === 'bound_plan_link' ? 'bob_project_write_v20' : kind === 'bound_work' ? 'bob_project_write_v19' : ['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'].includes(kind) ? 'bob_project_write_v18' : ['bound_project', 'bound_solution'].includes(kind) ? 'bob_project_write_v17' : 'bob_project_write_v16'
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
     payload => writeRpc(writeFunction(payload.kind), { ...binding, p_payload: payload }),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
@@ -1411,6 +1412,16 @@ export async function answerWithOpenAi(opts: {
       }),
     }).then(outcome => console.log('[Bob description]', JSON.stringify({ outcome })))
     : undefined
+  // Owner decision 2026-11-15: published role → a nano turn keeps the plan in step with saved work.
+  const weighPlan = writer && aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.' + PLAN_WEIGHER_ROLE)
+    ? (answer: string) => weighPlanProgress({ userId: opts.userId, message: opts.message, answer, writer, callModel, hasAccess, deadline,
+      ...(journal ? { yieldSegment: (): never => { throw new BobContinuation('yield', 'segment_wall') } } : {}),
+      read: async () => {
+        const { data, error } = await readRpc('read_plan_progress_context', { p_project: opts.projectId })
+        return error || !data ? null : data as PlanProgressContext
+      },
+    }).then(outcome => console.log('[Bob plan progress]', JSON.stringify({ outcome })))
+    : undefined
   let turnFailure: import('./bob-turn-failure.ts').BobTurnFailure | undefined
   try {
   const result=await runClaimedProjectTurn({
@@ -1424,7 +1435,7 @@ export async function answerWithOpenAi(opts: {
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
-    ...opts, continuedWork:execution.continuedWorkVersion===1, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, ...(weighDescription ? { weighDescription } : {}), beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? CLAUDE_BACKGROUND_TIMEOUT_MS : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
+    ...opts, continuedWork:execution.continuedWorkVersion===1, buildGuideTools: await buildGuideOn(), unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, ...(weighPlan ? { weighPlan } : {}), ...(weighDescription ? { weighDescription } : {}), beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? CLAUDE_BACKGROUND_TIMEOUT_MS : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, buildingScope, buildTree, calculator, planAssistant, cadAssistant, imageTools, recordReader, sourceReader, generation: claimedServer?.generation, deadline,
     readPlanOrientation: async view => {
       const focus = view?.status === 'ok' ? view.focus : undefined
       const { data, error } = await readRpc('read_plan_orientation', { p_project: opts.projectId,
