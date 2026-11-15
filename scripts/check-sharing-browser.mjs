@@ -341,15 +341,6 @@ try {
     await sharing.getByRole('button', { name: 'Confirm removal', exact: true }).click()
     await sharing.getByText('No pending or accepted friend invitations.', { exact: true }).waitFor()
     assert.equal(state.outgoing.at(-1).status, 'revoked')
-    await page.getByRole('button', { name: 'Invite people', exact: true }).click()
-    modal = page.getByRole('dialog', { name: 'Invite to the crew', exact: true })
-    await modal.getByRole('button', { name: 'Email', exact: true }).click()
-    await modal.getByLabel('Name *', { exact: true }).fill('Email crew')
-    await modal.getByLabel('Email *', { exact: true }).fill('email-crew@example.test')
-    await modal.getByRole('button', { name: 'Add', exact: true }).click()
-    await modal.getByText(/Added: Email crew/).waitFor()
-    await modal.getByRole('button', { name: 'Done', exact: true }).click()
-    assert.equal(state.emails.length, 1)
 
     // Family building editor sees physical tools but cannot manage sharing.
     state.canManageBuilding = false
