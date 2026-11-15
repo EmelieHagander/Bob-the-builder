@@ -140,6 +140,9 @@ class GuideTest(unittest.TestCase):
             # A run of 28 slats is named once in the box, not as 28 labels over the drawing.
             self.assertNotIn('>P40<', Path(tmp, 'guide-5.svg').read_text())
             self.assertIn('>P27<', Path(tmp, 'guide-1.svg').read_text())
+            # Each step's parts box says what the parts are and their blank size (2026-11-15).
+            step = ' '.join(el.text for el in ET.fromstring(Path(tmp, 'guide-5.svg').read_text()).iter('{http://www.w3.org/2000/svg}text'))
+            self.assertIn('P36-P63 Slat', step); self.assertIn('20 x 70 mm, length 805 mm', step)
 
     def test_bunk_bed_art_is_bound_to_the_same_item_on_box_and_steps(self):
         from bob_cad.hardware_art import OUTLINES, guide_thumbnail

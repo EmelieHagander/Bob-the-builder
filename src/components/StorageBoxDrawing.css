@@ -8,8 +8,12 @@
 .cad-sheet { margin: 16px 0; min-width: 0; max-width: 100%; }
 .cad-build-guide { margin: 16px 0; min-width: 0; max-width: 100%; }
 .cad-build-guide > summary { min-height: 44px; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
-.cad-build-guide-section { margin: 4px 0; min-width: 0; max-width: 100%; }
-.cad-build-guide-section > summary { min-height: 44px; display: flex; align-items: center; gap: 6px; font-weight: 600; cursor: pointer; }
+.cad-guide-viewer { min-width: 0; max-width: 100%; }
+.cad-guide-nav { align-items: center; justify-content: space-between; flex-wrap: nowrap; }
+.cad-guide-nav .btn { min-width: 96px; }
+.cad-guide-nav span { font-weight: 600; text-align: center; }
+.cad-guide-jump { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-weight: 600; min-width: 0; }
+.cad-guide-jump select { flex: 1; min-width: 0; min-height: 44px; }
 .sheet-pan { cursor: grab; user-select: none; -webkit-user-select: none; }
 .sheet-pan.is-panning { cursor: grabbing; }
 /* Zoom sets the size of an opened original; its fixed preview cap would fight it. */
