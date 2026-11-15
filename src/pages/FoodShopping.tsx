@@ -4,6 +4,8 @@ import * as db from '../data/database'
 import type { FoodItem } from '../data/types'
 import { ChecklistRow, EmptyState, Icon, Loading, useAsync } from '../components/ui'
 import { FoodItemModal } from '../components/editors'
+import { ShareButton } from '../components/ShareButton'
+import { listText, shareText } from '../lib/share'
 
 export function FoodShopping() {
   const [version, setVersion] = useState(0)
@@ -41,6 +43,8 @@ export function FoodShopping() {
         <div className="cluster no-print">
           <Link to="/food" className="btn"><Icon name="arrow-left" size={15} /> Back to food</Link>
           <button className="btn" onClick={() => window.print()}><Icon name="printer" size={15} /> Print</button>
+          {groups && <ShareButton label="Share food list" onShare={() => shareText('Food shopping', listText('Food shopping',
+            groups.map(g => ({ heading: g.category, items: g.items.map(it => ({ name: it.name, detail: [it.qty, it.note].filter(Boolean).join(' · '), done: !!checked[it.id] })) }))))} />}
           <button className="btn btn-primary" onClick={() => setAdding(true)}>
             <Icon name="plus" weight="bold" size={15} /> Add item
           </button>
