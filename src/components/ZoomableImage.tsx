@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { SHEET_ZOOM_MAX, useSheetZoom } from '../lib/useSheetZoom'
+import { shareImage } from '../lib/share'
+import { ShareButton } from './ShareButton'
 import './StorageBoxDrawing.css'
 
 /** Room the viewport gives an image: `.box-drawing-viewport` is at most 72vh tall. */
@@ -31,6 +33,7 @@ export function ZoomableImage({ src, alt, label, fit = 'contain', imgClassName, 
       <span aria-live="polite">{Math.round(zoom * 100)}%</span>
       <button type="button" className="btn" onClick={() => zoomBy(0.5)} disabled={zoom >= SHEET_ZOOM_MAX} aria-label={`Zoom ${label} in`}>+</button>
       <button type="button" className="btn" onClick={reset} disabled={zoom === 1}>Reset zoom</button>
+      <ShareButton compact label={`Share ${label}`} onShare={() => shareImage(src, label)} />
     </div>
     <div ref={viewport} {...pan} className={`box-drawing-viewport sheet-pan${panning ? ' is-panning' : ''}`} tabIndex={0}
       aria-label={`${label}. Pinch or Ctrl + scroll to zoom, drag to move.`}>

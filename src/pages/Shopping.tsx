@@ -8,7 +8,9 @@ import type { Material } from '../data/types'
 import { categoryLabel } from '../lib/labels'
 import { preliminaryConstructionList } from '../domain/constructionPreview'
 import { stockGroups, type StockGroup } from '../domain/stockCount'
-import { StockCountRow } from '../components/StockCount'
+import { StockCountRow, stockSummary } from '../components/StockCount'
+import { ShareButton } from '../components/ShareButton'
+import { listText, shareText } from '../lib/share'
 
 /** Boards and sheets for every current construction, counted per exact material version.
  * A construction that cannot be read or is not ready is counted as skipped, never guessed. */
@@ -149,6 +151,14 @@ export function Shopping() {
       return <StockCountRow key={group.key} group={group} bought={{ checked: !!(linked && bought[linked.id]), onToggle: qty => { setStockSaveFailed(false); void toggleStock(group, qty) } }} /> })}
   </div>
 
+  const shareList = () => {
+    const boards = (stock?.groups ?? []).map(group => { const s = stockSummary(group), linked = stockRowFor(group)
+      return { name: s.name, detail: [s.count ? (s.estimate ? '≈ ' : '') + s.count : null, s.size].filter(Boolean).join(' · '), done: !!(linked && bought[linked.id]) } })
+    const sections = [{ heading: 'Boards and sheets', items: boards }, ...shownGroups.map(group => ({ heading: group.label,
+      items: group.items.map(m => ({ name: m.name, detail: [m.qty, m.supplier].filter(Boolean).join(' · '), done: !!bought[m.id] })) }))]
+    return shareText('Shopping list', listText('Shopping list', sections))
+  }
+
   return (
     <div className="page">
       <div className="page-head">
@@ -159,6 +169,7 @@ export function Shopping() {
         <div className="cluster no-print foundation-actions">
           <Link className="btn" to="/material-plan"><Icon name="calculator" size={15} /> Material plan</Link>
           <button className="btn" onClick={() => window.print()}><Icon name="printer" size={15} /> Print</button>
+          {materials && <ShareButton label="Share shopping list" onShare={shareList} />}
           <button className="btn btn-primary" onClick={() => setAdding(true)}>
             <Icon name="plus" weight="bold" size={15} /> Add material
           </button>
