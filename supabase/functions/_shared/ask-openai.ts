@@ -717,7 +717,28 @@ export async function answerWithOpenAi(opts: {
       return {ok:false,error:'context_unavailable'}
     }
   }
-  const knowledgeReader = createKnowledgeReader(hasAccess, undefined, { unlimitedWork })
+  // Pinned per manifest (owner decision 2026-11-15): the knowledge search also
+  // reads full reference books, by text and by meaning with the memory model.
+  const handbookOn = aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.search_building_knowledge' && row.metadata?.publication === 'bob-knowledge-handbook-v1')
+  const handbookEmbedding = handbookOn && aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.memory-embedding') ? aiCatalog.role('memory-embedding') : undefined
+  const knowledgeReader = createKnowledgeReader(hasAccess, undefined, { unlimitedWork, ...(handbookOn ? { handbook: {
+    search: async (query: string, embedding: number[] | null, model: string, jurisdiction: string) => {
+      // Public reference text, service-only function; the reader checks project access around it.
+      const args = { p_query: query, p_embedding: embedding === null ? null : JSON.stringify(embedding), p_model: model, p_jurisdiction: jurisdiction, p_limit: 4 }
+      const signal = AbortSignal.timeout(12000)
+      const { data, error } = await memo('rpc:search_knowledge_passages', args, async () => {
+        const { data, error } = await internal.rpc('search_knowledge_passages', args).abortSignal(signal)
+        return { data, error }
+      }, 0, signal)
+      if (error) throw new Error('knowledge_search_unavailable')
+      return data
+    },
+    ...(handbookEmbedding ? { embedder: createJournalledMemoryEmbedder({ model: handbookEmbedding.model.model_name, identity: handbookEmbedding, memo, hasAccess, stream: 'knowledge',
+      onUncertain: () => { memoryEmbeddingOutcomeUncertain = true },
+      invoke: texts => callOpenAIEmbeddings({ app: 'bob', coworkerId: 'bob', module: 'global', functionName: 'memory-embedding', aiFunction: 'memory-embedding',
+        userId: opts.userId, aiDefinition: handbookEmbedding, input: texts, timeoutMs: Math.max(1000, Math.min(10000, deadline - Date.now(), journal ? journal.remaining() - 3000 : Infinity)) }),
+    }) } : {}),
+  } } : {}) })
   const operationalReader = createOperationalReader(opts.projectId, input=>rpc('read_project_work', {p_project:opts.projectId,p_input:input}, AbortSignal.timeout(12000)),hasAccess,lookup.sources,{unlimitedWork})
   // Pinned per manifest (material_lookup_version 1): untyped material searches
   // return the combined lookup with household stock and latest store prices.

@@ -10,6 +10,8 @@ export function createJournalledMemoryEmbedder(options: {
   model: string; identity: unknown; memo: Memo;
   invoke(texts: string[]): Promise<OpenAIServiceResponse<number[][]>>;
   hasAccess(): Promise<boolean>; onUncertain(): void;
+  /** Journal stream prefix; reference-book queries journal apart from memory. */
+  stream?: string;
 }): MemoryEmbedder {
   return {
     model: options.model,
@@ -17,8 +19,8 @@ export function createJournalledMemoryEmbedder(options: {
       if (!await options.hasAccess()) throw new Error('project_denied')
       const input = { identity: options.identity, texts }
       let freshDispatch = false
-      await options.memo('memory:embedding-start', input, async () => { freshDispatch = true; return true }, 15000)
-      const response = await options.memo('memory:embedding-result', input, async () => {
+      await options.memo(`${options.stream ?? 'memory'}:embedding-start`, input, async () => { freshDispatch = true; return true }, 15000)
+      const response = await options.memo(`${options.stream ?? 'memory'}:embedding-result`, input, async () => {
         if (!freshDispatch) return {
           success: false, data: null, model: options.model,
           usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },

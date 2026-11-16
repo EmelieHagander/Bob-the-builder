@@ -2,9 +2,11 @@ import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from './pglite.ts'
 import { setupSharedSocial } from './shared-social.ts'
 
-/** Operator-approved production data backfills are not schema for synthetic projects. */
+/** Operator-approved production data backfills are not schema for synthetic projects.
+ * Reference-book corpora (2 MB of passages) are loaded only by the tests that read them. */
 export const isSyntheticSchemaMigration = (name: string) => name.endsWith('.sql')
   && !/_(living_plan_backfill_five_projects|lada_facade_piece_configuration|retire_lada_facade_piece_policy)\.sql$/.test(name)
+  && !/_knowledge_corpus_[a-z_]+_part\d+\.sql$/.test(name)
 
 /** Full Bob schema with isolated fake Auth/Storage/shared-app contracts.
  * An explicit boundary is only for testing a historical migration policy. */

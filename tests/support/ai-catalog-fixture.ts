@@ -442,6 +442,20 @@ for(const migration of migrations){
  if(descriptionWeigher)for(const addition of JSON.parse(descriptionWeigher[1])){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-description-weigher-v1'}});versions.set(addition.key,1)}
  const planWeigher=source.match(/\$plan_weigher_additions\$([\s\S]+?)\$plan_weigher_additions\$/)
  if(planWeigher)for(const addition of JSON.parse(planWeigher[1])){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-plan-weigher-v1'}});versions.set(addition.key,1)}
+ const knowledgeHandbook=source.match(/\$knowledge_handbook_patches\$([\s\S]+?)\$knowledge_handbook_patches\$/)
+ if(knowledgeHandbook)for(const item of JSON.parse(knowledgeHandbook[1])){
+  const row=seed.find(row=>row.key===item.key)
+  if(!row)throw new Error('knowledge_handbook_catalog_missing: '+item.key)
+  if(typeof item.content==='string')row.content=item.content
+  row.definition=structuredClone(row.definition)
+  for(const setting of item.set??[]){let target=row.definition;for(const key of setting.path.slice(0,-1))target=target[key];target[setting.path.at(-1)]=setting.value}
+  if(item.move_core){
+   const focus=row.definition.build_workers[item.move_core.worker].focus
+   if(!focus.optional.includes(item.move_core.tool))throw new Error('knowledge_handbook_catalog_focus_changed')
+   focus.optional=focus.optional.filter((name:string)=>name!==item.move_core.tool);focus.core=[...focus.core,item.move_core.tool]
+  }
+  publishAs(row,'bob-knowledge-handbook-v1');versions.set(row.key,versions.get(row.key)!+1)
+ }
  const descriptionWriter=source.match(/\$description_writer_spec\$([\s\S]+?)\$description_writer_spec\$/)
  if(descriptionWriter){
   const spec=JSON.parse(descriptionWriter[1])
