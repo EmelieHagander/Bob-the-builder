@@ -129,6 +129,9 @@ test('the FORM mapping follows the parts: a new part goes to the component holdi
  // Outside every component: named, not guessed.
  const far=structuredClone(r);far.instances.push({id:'far',definition_id:'rail',placement:{x:5000,y:0,z:0,rx:0,ry:0,rz:0}})
  assert.deepEqual(extendFormMapping(intent,far,refinement,new Set()).issues.map(i=>[i.code,i.ids[0]]),[['form_instance_outside','far']])
+ // It names the nearest component and how far past each face it reaches (entré, 2026-11-10).
+ const farIssue=extendFormMapping(intent,far,refinement,new Set()).issues[0]
+ assert.equal(farIssue.ids.length,2);assert.match(farIssue.message,/Nearest is \w+; the part reaches past it: x [0-9.]+ mm above/)
  // A part inside the drawer envelope goes there, adding that component.
  const drawer=structuredClone(r);drawer.instances.push({id:'knob',definition_id:'rail',placement:{x:800,y:0,z:0,rx:0,ry:0,rz:0}})
  drawer.definitions.push({id:'small',primitive:'box',material_ref:null,x_mm:18,y_mm:18,z_mm:18});drawer.instances.at(-1).definition_id='small'
