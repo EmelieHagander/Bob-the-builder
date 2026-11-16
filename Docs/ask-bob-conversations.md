@@ -1218,6 +1218,12 @@ operations, including observed retry failures; replay creates no second event.
 The terminal delivery event upserts once per run. Diagnostics fail softly and
 cannot overturn a successful project save.
 
+<a id="daily-turn-outcomes"></a>**Daily outcome number (audit 2026-11-16).** `bob_private.daily_turn_outcomes`
+(service-only view) gives one row per day (Europe/Stockholm): turns, change turns,
+`saved_pct` (change turns that ended saved), partial, failed, refused tool calls,
+drawing reads and model cost. A partial delivery row now names its causes in
+`counts.partial_reasons` (for example `lookup`, `writes_unresolved`).
+
 Outcomes distinguish `receipt_matched`, `candidate_ready`, `partial`, `uncertain`,
 `recovered`, `read_only` and `failed`. Counts include requested/missing goal groups,
 verified saved records, main rounds/continuations, CAD renders/input corrections,

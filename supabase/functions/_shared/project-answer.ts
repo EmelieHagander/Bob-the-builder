@@ -182,7 +182,7 @@ export type ProjectAnswer =
   | { ok: true; answer: string; projectId: string; evidence: AnswerEvidence; providerResponseId?: string }
   | { ok: false; error: string }
 export type TurnEnd = 'answered' | 'asked' | 'step_budget' | 'time_budget' | 'refused' | 'commentary_limit'
-export interface TurnObservation { steps: number; tool_calls: number; deferred_calls: number; completion_checks: number; nudges: number; completion_gate?: 'done' | 'review' | 'unavailable'; answer_text?: AnswerTextOutcome; answer_text_issues?: number; end: TurnEnd | 'failed'; output_phase?: OpenAIServiceResponse['outputPhase'] }
+export interface TurnObservation { steps: number; tool_calls: number; deferred_calls: number; completion_checks: number; nudges: number; completion_gate?: 'done' | 'review' | 'unavailable'; answer_text?: AnswerTextOutcome; answer_text_issues?: number; partial_reasons?: string[]; end: TurnEnd | 'failed'; output_phase?: OpenAIServiceResponse['outputPhase'] }
 export interface TurnProgress { stage: 'thinking' | 'tool' | 'finishing'; tool?: string; step: number; saved: number }
 
 /** Owner decision 2026-10-30: at a fresh turn's start a small read-only role
@@ -1004,9 +1004,24 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       ...(failedWorkers.size ? { failedWorkers: [...failedWorkers] } : {}),
       tools, closedByLimit, closedByCommentary, request, response: pendingResponse, toolIndex }))
   }
-  const answered = (text: string, responseId: string | undefined, incomplete: boolean): ProjectAnswer => ({ ok: true, answer: text, projectId: opts.projectId, providerResponseId: responseId,
+  /** Audit 2026-11-16: "partial" was the most common outcome with no reason recorded.
+   * Each flag that makes an answer partial is named, content-free, in telemetry. */
+  const partialReasons = (incomplete: boolean) => Object.entries({
+    turn_incomplete: incomplete, orientation_warnings: !!orientation?.warnings.length, project_edits: !!opts.projectEdits?.partial,
+    solution_actions: !!opts.solutionActions?.partial, work_records: !!opts.workRecords?.partial, plan_links: !!opts.planLinks?.partial,
+    building_scope: !!opts.buildingScope?.partial, build_tree: !!opts.buildTree?.partial, operational_reader: !!opts.operationalReader?.partial,
+    lookup: !!opts.lookup.partial, toolbox: !!toolbox.partial, project_context: !!opts.projectContext?.partial, catalog_reader: !!opts.catalogReader?.partial,
+    plan_assistant: !!opts.planAssistant?.partial, cad_assistant: !!opts.cadAssistant?.partial, writes_uncertain: !!opts.writer?.uncertain,
+    writes_unresolved: !!opts.writer?.hasUnresolvedWrites,
+  }).filter(([, on]) => on).map(([name]) => name)
+  const answered = (text: string, responseId: string | undefined, incomplete: boolean): ProjectAnswer => {
+    const reasons = partialReasons(incomplete)
+    if (reasons.length) { observation.partial_reasons = reasons; opts.observe?.({ ...observation }) }
+    return answeredWith(text, responseId, reasons)
+  }
+  const answeredWith = (text: string, responseId: string | undefined, reasons: string[]): ProjectAnswer => ({ ok: true, answer: text, projectId: opts.projectId, providerResponseId: responseId,
       evidence: { kind: 'ai_assessment', ...(opts.currentView ? { currentView: opts.getCurrentViewEvidence?.() ?? opts.currentView } : {}), references: opts.knowledgeReader?.references ?? [], sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId&&x.visual?.ref===s.visual?.ref)===i),
-        partial: incomplete || !!orientation?.warnings.length || !!opts.projectEdits?.partial || !!opts.solutionActions?.partial || !!opts.workRecords?.partial || !!opts.planLinks?.partial || !!opts.buildingScope?.partial || !!opts.buildTree?.partial || !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain || !!opts.writer?.hasUnresolvedWrites,
+        partial: reasons.length > 0,
         ...(opts.writer?.receipts.length ? { writes: compactReceipts(opts.writer.receipts) } : {}) },
     })
   const next = async (step: number) => { phase = 'ready'; request = undefined; pendingResponse = undefined; toolIndex = 0; await save(step + 1) }
