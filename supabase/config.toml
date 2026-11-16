@@ -35,3 +35,8 @@ verify_jwt = false
 # Exact saved SVG page -> bounded PNG, caller JWT and RLS rechecked.
 [functions.drawing-preview]
 verify_jwt = true
+
+# Operator-only one-shot embedding of reference-book passages; the handler
+# compares the bearer with the service role key itself.
+[functions.knowledge-index]
+verify_jwt = false
