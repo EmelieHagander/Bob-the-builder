@@ -475,6 +475,7 @@ select {
 .project-image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: var(--layout-gap); margin: 12px 0; }
 .project-image-card { min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
 .project-image-preview { display: flex; flex-direction: column; gap: 6px; }
+.project-image-open { position: relative; display: block; width: 100%; padding: 0; border: 0; border-radius: 8px; background: var(--surface-2); cursor: zoom-in; }
 .project-image-thumbnail { display: block; width: 100%; height: 175px; object-fit: cover; border-radius: 8px; background: var(--surface-2); }
 .project-image-original { display: block; width: 100%; height: auto; max-height: 68vh; object-fit: contain; }
 .project-image-caption { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; margin: 10px 0; overflow-wrap: anywhere; }
@@ -982,7 +983,11 @@ select {
 .work-task-list li { margin: 10px 0; overflow-wrap: anywhere; }
 .work-task-list li > span { display: block; }
 .work-criteria, .work-unorganised { margin-top: var(--section-gap); }
-.work-criteria summary, .work-unorganised summary { cursor: pointer; min-height: var(--control-height); }
+.work-criteria ul, .current-plan-step .work-task-list { list-style: none; margin: 0; padding: 0; }
+.work-criteria li, .current-plan-step .work-task-list li { margin: 0; padding: var(--space-2) 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.work-criteria li > span { display: block; }
+.work-criteria li p { margin: var(--space-1) 0 0; }
+.work-unorganised summary { cursor: pointer; min-height: var(--control-height); }
 
 .space-notes > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
 .space-notes > summary::before { content: "▸"; margin-right: 8px; }
@@ -1240,3 +1245,36 @@ select {
 .stock-row-more ol { margin: 0; padding-left: 20px; }
 .stock-row-fields { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .stock-row-fields label { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Build mode front page (2026-11-15): buy, cut, build. State is the card colour. */
+.build-flow { display: grid; gap: var(--layout-gap); margin-bottom: var(--section-gap); }
+.build-stage { padding: 0; overflow: hidden; }
+.build-stage > summary { display: flex; align-items: center; gap: var(--space-3); min-height: 56px; padding: var(--space-2) var(--panel-padding); cursor: pointer; list-style: none; }
+.build-stage > summary::-webkit-details-marker { display: none; }
+.build-stage-n { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); }
+.build-stage-title { flex: 1; min-width: 0; font-size: 17px; font-weight: 800; }
+.build-stage-count { flex: 0 0 auto; font-size: 14px; font-weight: 700; color: var(--ink-soft); }
+.build-stage[data-state="started"] > summary { background: var(--honey-bg); }
+.build-stage[data-state="done"] > summary { background: var(--leaf-bg); }
+.build-stage[data-state="done"] .build-stage-n { background: var(--leaf); border-color: var(--leaf); color: var(--surface); }
+.build-stage-body { padding: var(--space-2) var(--panel-padding) var(--panel-padding); display: grid; gap: 2px; min-width: 0; }
+.build-row-text { display: grid; min-width: 0; }
+.build-row-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+.build-row-name[data-done] { color: var(--ink-faint); text-decoration: line-through; }
+.build-row-sub { font-size: 12px; color: var(--ink-soft); }
+.build-stage-link { display: inline-flex; align-items: center; gap: 6px; margin-top: var(--space-2); font-size: 13px; font-weight: 700; color: var(--accent-2); }
+.build-flow-note { padding: var(--panel-padding); }
+.build-plan { padding: 0 var(--panel-padding); }
+.build-plan > summary { min-height: 48px; display: flex; align-items: center; font-weight: 700; cursor: pointer; }
+.build-plan .project-plan-panel { box-shadow: none; border: 0; padding: 0 0 var(--panel-padding); }
+.build-focus-compact { color: inherit; text-decoration: none; margin-bottom: 0; }
+.cad-guide-done { width: 100%; min-height: 52px; justify-content: center; font-size: 16px; margin: var(--space-2) 0; }
+.cad-guide-done[aria-pressed="true"] { background: var(--leaf-bg); border-color: var(--leaf); color: var(--ink); }
+.task-instruction-disclosure > summary { cursor: pointer; list-style: none; }
+.task-instruction-disclosure > summary::-webkit-details-marker { display: none; }
+.task-instruction-preview { display: block; line-height: 1.6; overflow-wrap: anywhere; }
+.task-instruction-action { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 44px; font-weight: 700; color: var(--accent-2); }
+.task-instruction-disclosure:not([open]) .when-open,
+.task-instruction-disclosure[open] .when-closed,
+.task-instruction-disclosure[open] .task-instruction-preview { display: none; }
+.task-instruction-disclosure[open] .task-instruction-action > i { transform: rotate(180deg); }

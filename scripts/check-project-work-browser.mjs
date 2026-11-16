@@ -167,7 +167,18 @@ try{
   await drawers.getByRole('link',{name:'Cut panels',exact:true}).click()
   await page.getByRole('heading',{name:'Cut panels',exact:true}).waitFor()
   await page.getByText('Follow the saved cutting list',{exact:true}).waitFor()
-  await page.getByRole('link',{name:'Drawers',exact:true}).click()
+  const original = tasks[0].instructions
+  tasks[0].instructions = original + '.\n' + description
+  await page.reload()
+  const instructions = page.locator('.task-instruction-disclosure')
+  await instructions.getByText('Read full instructions').waitFor()
+  assert.equal(await instructions.locator('.instruction-text').isVisible(), false)
+  await instructions.locator('summary').click()
+  assert.equal(await instructions.locator('.instruction-text').innerText(), tasks[0].instructions)
+  await instructions.locator('summary').press('Enter')
+  assert.equal(await instructions.locator('.instruction-text').isVisible(), false)
+  tasks[0].instructions = original
+  await page.getByRole('link',{name:'Back to plan step',exact:true}).click()
   await drawers.locator('.step-support > summary').first().click()
   await drawers.getByRole('link',{name:'Assemble drawers',exact:true}).waitFor()
   await page.reload()

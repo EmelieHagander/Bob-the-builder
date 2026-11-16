@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ZoomableImage } from './ZoomableImage'
 import { CadGuidePrint } from './CadGuidePrint'
+import { Icon } from './ui'
 
 /** Build-guide notes saved with a drawing version (manifest.build_guide, 2026-10-30). */
 export type BuildGuideNotes = {
@@ -17,7 +18,7 @@ const NOT_MADE: Record<string, string> = {
   no_joints: 'This construction has no saved joints, so no build guide was made with this drawing version.',
 }
 
-function pageLabel(page: NonNullable<BuildGuideNotes['pages']>[number]): string {
+export function pageLabel(page: NonNullable<BuildGuideNotes['pages']>[number]): string {
   if (page.kind === 'parts') return 'What is in the box'
   if (page.kind === 'done') return 'Done'
   return `Step ${page.step ?? ''}${page.repeat && page.repeat > 1 ? ` (build ${page.repeat}×)` : ''}`.trim()
@@ -42,13 +43,18 @@ export function guideGroups(pages: GuidePage[]) {
 /** The whole guide as one document you flip through (owner ask 2026-11-15):
  * every page is read together when the guide opens, one page shows at a time,
  * Previous/Next (or the arrow keys) turn the page and a section menu jumps. */
-function GuideViewer({ pages, guide, files, title, loadPages }: { pages: GuidePage[]; guide: BuildGuideNotes; files: Record<string, string>; title: string; loadPages?: GuidePageLoader }) {
+export function GuideViewer({ pages, guide, files, title, loadPages, progress }: { pages: GuidePage[]; guide: BuildGuideNotes; files: Record<string, string>; title: string; loadPages?: GuidePageLoader
+  /** Build mode (2026-11-15): pages are ticked off as the crew builds; the guide opens at the first page not done. */
+  progress?: { done: ReadonlySet<string>; onToggle: (key: string, on: boolean) => void } }) {
   const stored = guide.store === 'pages'
   const keys = pages.map(page => page.key).join(',')
   const [loaded, setLoaded] = useState<{ keys: string; pages: Record<string, string> } | null>(null)
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
-  const [index, setIndex] = useState(0)
+  const [index, setIndex] = useState(() => {
+    const first = progress ? pages.findIndex(page => !progress.done.has(page.key)) : 0
+    return first < 0 ? pages.length - 1 : first
+  })
   useEffect(() => {
     if (!stored || !guide.guide_id || !loadPages) return
     let live = true
@@ -82,6 +88,10 @@ function GuideViewer({ pages, guide, files, title, loadPages }: { pages: GuidePa
       <select aria-label="Go to section" value={sections.filter(sec => sec.first <= at).at(-1)?.first ?? 0} onChange={event => go(Number(event.target.value))}>
         {sections.map(sec => <option key={sec.first} value={sec.first}>{sec.title}</option>)}
       </select></label>}
+    {progress && (progress.done.has(page.key)
+      ? <button type="button" className="btn cad-guide-done" aria-pressed="true" onClick={() => progress.onToggle(page.key, false)}><Icon name="check" size={18} /> Done</button>
+      : <button type="button" className="btn btn-primary cad-guide-done" onClick={() => { progress.onToggle(page.key, true); go(at + 1) }}>
+        <Icon name="check" size={18} /> {at === pages.length - 1 ? 'Done' : 'Done, next page'}</button>)}
     <figure className="cad-sheet">
       <figcaption><strong>{page.section ? `${page.section} · ` : ''}{label}</strong>{src && <> · <a download={`${page.key}.svg`} href={src}>download page</a></>}</figcaption>
       {src ? <ZoomableImage key={page.key} src={src} alt={`${title} — build guide, ${label}`} label={label} fit="contain" />

@@ -36,6 +36,7 @@ import { createSolutions } from './solutions'
 import { createArtifacts } from './artifacts'
 import { createMaterialPlanning } from './materialPlanning'
 import { createBuildPreparation } from './buildPreparation'
+import { createBuildFlow } from './buildFlow'
 import { createWorkPlan } from './workPlan'
 import { createBuildingContext } from './buildingContext'
 import { createSharing } from './sharing'
@@ -174,6 +175,7 @@ const solutions = createSolutions(db, captureFileContext)
 const artifacts = createArtifacts(db, captureFileContext)
 const materialPlanning = createMaterialPlanning(db, captureFileContext)
 const buildPreparation = createBuildPreparation(db, captureFileContext)
+const buildFlow = createBuildFlow(db, captureFileContext)
 const workPlan = createWorkPlan(db, captureFileContext)
 function captureAccountContext() {
   const capturedVersion = contextVersion
@@ -217,6 +219,10 @@ export const getBuildConstructions = buildPreparation.constructions
 export const getBuildConstructionSource = buildPreparation.source
 export const getBuildConstructionFasteners = buildPreparation.fasteners
 export const getConstructionDelivery = buildPreparation.delivery
+export const getBuildGuideDrawing = buildFlow.guide
+export const getBuildChecks = buildFlow.checks
+export const setBuildCheck = buildFlow.setCheck
+export type { BuildGuideDrawing } from './buildFlow'
 export const getProjectTargetScopes = buildPreparation.targets
 export const getConstructionCutPlans = materialPlanning.cutPlans
 export const getConstructionCutPlanVersion = materialPlanning.cutPlanVersion

@@ -18,6 +18,21 @@ import { userErrorMessage } from '../lib/userErrors'
 
 const errorText = (err: unknown) => userErrorMessage(err, 'Could not update the task. Try again.')
 
+// Older tasks can store the whole build brief in one field, without instruction steps.
+function TaskInstructions({ text }: { text: string }) {
+  if (text.length <= 420 && text.split('\n').length <= 6) return <p className="instruction-text">{text}</p>
+  const firstLine = text.trimStart().split('\n', 1)[0]
+  const lead = firstLine.match(/^.{1,220}?[.!?](?=\s|$)/u)?.[0] ?? firstLine
+  const preview = lead.length <= 220 ? lead : lead.slice(0, 220).replace(/\s+\S*$/u, '') + '…'
+  return <details className="task-instruction-disclosure">
+    <summary>
+      <span className="task-instruction-preview">{preview}</span>
+      <span className="task-instruction-action"><Icon name="caret-down" size={16} /><span className="when-closed">Read full instructions</span><span className="when-open">Collapse instructions</span></span>
+    </summary>
+    <p className="instruction-text">{text}</p>
+  </details>
+}
+
 function StepEditor({ projectId, taskId, step, onClose, onSaved }: {
   projectId: string; taskId: string; step?: TaskStep; onClose: () => void; onSaved: () => void
 }) {
@@ -126,7 +141,7 @@ export function TaskDetail() {
   const planStep = work?.steps.find(s => s.id === task.primaryStepId)
   const editable = db.authEnabled()
   return <div className="page task-detail">
-    <Link to={planStep ? '/project?step='+planStep.id : area ? '/areas/' + area.slug : '/project'} className="task-back"><Icon name="arrow-left" size={16} /> {planStep?.title ?? area?.name ?? 'Project plan'}</Link>
+    <Link to={planStep ? '/project?step='+planStep.id : area ? '/areas/' + area.slug : '/project'} className="task-back"><Icon name="arrow-left" size={16} /> {planStep ? 'Back to plan step' : area ? area.name : 'Back to project plan'}</Link>
     <div className="page-head"><h1 className="page-title">{task.name}</h1></div>
     {error && <div role="alert"><FormError>{error}</FormError><button className="btn" onClick={reload}>Reload task</button></div>}
     {busy && <p role="status">Saving…</p>}
@@ -162,7 +177,7 @@ export function TaskDetail() {
         </details>
       </article> : <>
         <GuideVisuals key={task.id} projectId={projectId} planStepId={task.primaryStepId} target={{kind:'task',id:task.id}} returnLabel={task.name} returnKey={`task:${task.id}`} />
-        {detail.instructions && <p className="instruction-text">{detail.instructions}</p>}
+        {detail.instructions && <TaskInstructions key={task.id} text={detail.instructions} />}
         {!detail.instructions && <button className="btn" onClick={() => openBobWithDraft('Show me how to do this task, one step at a time. What do I do first?')}>Ask Bob how</button>}
       </>}
     </section>

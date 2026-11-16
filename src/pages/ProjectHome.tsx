@@ -11,6 +11,7 @@ import { ProjectThumbnail } from '../components/ProjectThumbnail'
 import { ProjectMetadata } from '../components/ProjectMetadata'
 import { ProjectImages } from '../components/ProjectImages'
 import { ProjectStart } from '../components/ProjectStart'
+import { BuildFlow, useBuildGuide } from '../components/BuildFlow'
 import { FormError } from '../components/form'
 import { AvatarStack, Icon, Loading, SectionTitle, useAsync, useProjectVersion } from '../components/ui'
 import { areaNextAction, areaPhaseSummary, projectFocus } from '../lib/projectPhase'
@@ -50,6 +51,7 @@ export function ProjectHome() {
   const { data: overview } = useAsync(() => db.getAccountProjectOverview(projectId ? [projectId] : []), [projectId, projectVersion, version, mediaVersion])
   const { data: thumbnailId } = useAsync(() => projectId ? db.getProjectThumbnail(projectId) : Promise.resolve(null), [projectId, projectVersion, mediaVersion])
   useBobSurface(projectId, { surface: 'project' }, 'Project')
+  const { data: buildGuide, loading: guideLoading } = useBuildGuide(projectId, connected && !!project && project.phase !== 'complete')
   if (projectLoading && !project) return <div className="page"><Loading label="Loading project…" /></div>
   if (!project || projectError) return <div className="page"><h1 className="page-title">Project unavailable</h1><p role="alert">{projectError ? userErrorMessage(projectError, 'This project may no longer be available.') : 'This project may no longer be available.'}</p></div>
 
@@ -57,14 +59,15 @@ export function ProjectHome() {
   const building = project.phase === 'build'
   // Start this build: big when a build day exists, small once planning is reached.
   const startable = !building && project.phase !== 'complete'
-  const startSize = !startable ? null : next ? 'large' : project.phase === 'planning' ? 'small' : null
+  // A finished build guide means the build can start: the lists and the guide come first then.
+  const startSize = !startable ? null : next || buildGuide ? 'large' : project.phase === 'planning' ? 'small' : null
   const startBuild = async () => {
     if (starting) return
     setStarting(true); setStartError('')
     try {
       await db.setProjectPhase('build', next ? `Build started for ${next.title}.` : 'Build started from Project Home.')
       setVersion(value => value + 1)
-      if (next) navigate('/today')
+      if (next && !buildGuide) navigate('/today')
     } catch (err) {
       setStartError(userErrorMessage(err, 'Could not start the build. Try again.'))
     } finally { setStarting(false) }
@@ -112,14 +115,25 @@ export function ProjectHome() {
     </section> : <>
     {startError && <FormError>Could not start the build: {startError}</FormError>}
 
-    {building && <BuildFocus next={next} />}
-    {connected && <ProjectStepWorkspace key={`plan:${project.id}`} projectId={project.id} building={building} />}
+    {building && connected && guideLoading && !buildGuide ? <Loading label="Loading the build…" />
+      : building && connected && buildGuide ? <>
+        {next && <BuildFocus next={next} compact />}
+        <BuildFlow key={`${buildGuide.id}:${buildGuide.revision}`} guide={buildGuide}>
+          <details className="card build-plan"><summary>Plan steps</summary>
+            <ProjectStepWorkspace key={`plan:${project.id}`} projectId={project.id} building={building} />
+          </details>
+        </BuildFlow>
+      </> : <>
+        {building && <BuildFocus next={next} />}
+        {connected && <ProjectStepWorkspace key={`plan:${project.id}`} projectId={project.id} building={building} />}
+      </>}
     {!connected && !building && areas && demoTasks && !areas.length && !demoTasks.length && <ProjectStart />}
 
-    {startSize === 'large' && next && <section className="card build-start" aria-labelledby="build-start-title">
+    {startSize === 'large' && <section className="card build-start" aria-labelledby="build-start-title">
       <div className="build-start-copy">
         <h2 id="build-start-title" className="font-display">Ready to build?</h2>
-        <p className="foundation-hint">{next.title} · {formatEventDay(next.day)}{next.time ? ` · ${next.time}` : ''}. Starting switches this project to Build mode and puts the build-day work first.</p>
+        {next ? <p className="foundation-hint">{next.title} · {formatEventDay(next.day)}{next.time ? ` · ${next.time}` : ''}. Starting switches this project to Build mode and puts the build-day work first.</p>
+          : <p className="foundation-hint">Shopping list, cut list, then the build guide.</p>}
       </div>
       <button className="btn btn-primary build-start-button" disabled={starting} onClick={() => void startBuild()}>
         <Icon name="hammer" size={22} /> {starting ? 'Starting…' : 'Start this build'}
@@ -240,7 +254,11 @@ function PlanningTools({ folded, children }: { folded: boolean; children: ReactN
 
 // Compact on purpose: one line for the build day keeps the Plan on a small
 // phone's opening screen.
-function BuildFocus({ next }: { next: BuildEvent | null | undefined }) {
+function BuildFocus({ next, compact = false }: { next: BuildEvent | null | undefined; compact?: boolean }) {
+  if (compact && next) return <Link className="card build-focus build-focus-compact" to={`/events/${next.slug}`}>
+    <span className="build-focus-head"><span className="build-focus-label"><Icon name="calendar-dots" size={16} /> Build day</span>
+      <span className="build-focus-next">{next.title} · {formatEventDay(next.day)}</span></span>
+  </Link>
   return <section className="card build-focus" aria-labelledby="build-focus-title">
     <div className="build-focus-head">
       <h2 id="build-focus-title" className="build-focus-label"><Icon name="hammer" size={16} /> Build mode</h2>
