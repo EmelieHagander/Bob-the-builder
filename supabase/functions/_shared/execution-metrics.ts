@@ -119,7 +119,7 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
         :end==='asked'?'asked':end==='step_budget'||end==='time_budget'||end==='refused'||end==='commentary_limit'?end:input.writes>0?'saved':input.cad?.review_passed?'candidate_ready':'answered'
       await write({...base(),event_key:'delivery',kind:'delivery',role:'bob',status,duration_ms:Math.max(0,now()-startedAt),input_tokens:null,output_tokens:null,cost_usd:null,
         counts:{...phaseCounts(turn?.output_phase),...(failure?{failure_stage:failure.stage,failure_code:failure.code}:{}),end_reason:!input.ok?code(input.error,'failed'):end??null,steps:turn?.steps??null,tool_calls:turn?.tool_calls??null,deferred_calls:turn?.deferred_calls??null,
-          completion_checks:turn?.completion_checks??null,nudges:turn?.nudges??null,saved_records:number(input.writes),
+          completion_checks:turn?.completion_checks??null,nudges:turn?.nudges??null,...(turn?.partial_reasons?.length?{partial_reasons:turn.partial_reasons.filter(r=>/^[a-z_]{1,40}$/.test(r)).slice(0,20)}:{}),saved_records:number(input.writes),
           cad_consultations:input.cad?.consultations??0,cad_renders:input.cad?.renders??0,cad_input_corrections:input.cad?.input_corrections??0,
           cad_reviews:input.cad?.reviews??0,cad_review_rejections:input.cad?.review_rejections??0,cad_review_unavailable:input.cad?.review_unavailable??0,cad_review_passed:input.cad?.review_passed??false,
           uncertain_resends:number(input.uncertainResends),reused_model_calls:number(input.reusedModelCalls),

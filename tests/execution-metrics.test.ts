@@ -36,6 +36,8 @@ test('actual provider calls are counted once across journal replay; delivery rec
  await metrics.finish({ok:true,writes:0});assert.equal(events.get('delivery')!.status,'step_budget')
  metrics.observe({steps:2,tool_calls:1,deferred_calls:0,completion_checks:0,nudges:0,end:'answered'})
  await metrics.finish({ok:true,partial:true,writes:0});assert.equal(events.get('delivery')!.status,'partial')
+ metrics.observe({steps:2,tool_calls:1,deferred_calls:0,completion_checks:0,nudges:0,end:'answered',partial_reasons:['lookup','writes_unresolved','Not a code']})
+ await metrics.finish({ok:true,partial:true,writes:0});assert.deepEqual(events.get('delivery')!.counts.partial_reasons,['lookup','writes_unresolved'])
  await metrics.finish({ok:false,error:'turn_timeout',writes:0});assert.equal(events.get('delivery')!.status,'failed');assert.equal(events.get('delivery')!.counts.end_reason,'turn_timeout')
  assert.equal([...events.keys()].filter(k=>k.startsWith('model:')).length,1)
  assert(!JSON.stringify([...events.values()]).includes('PRIVATE'))
