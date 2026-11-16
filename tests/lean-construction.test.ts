@@ -231,15 +231,16 @@ test('audit round 2, edits: unknown paths named; hand bindings and saved values 
   changes:{nodes:{upsert:[decision('mid',200,'Flyttad.')],remove:[]},instances:{upsert:[{id:'mid',definition_id:'cross',placement:at(18,191)}],remove:[]}},joint_rules:[],form_assign:[]})
  assert.equal(moved.status,'saved',JSON.stringify(moved));assert.equal((await read(id)).recipe.instances.find((i:any)=>i.id==='mid').placement.y,200)
  assert.deepEqual(moved.recomputed,[{path:'instances/mid/placement/y',written:191,computed:200}],'the answer names the recomputed field')
- // Removing the part leaves its own decision node: refused, since a decided value is not dropped unseen.
- const orphan=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:4,key:'bort0',change_note:'Ta bort',request_quote:message,mode:'save',
-  changes:{instances:{upsert:[],remove:['mid']}},joint_rules:[],form_assign:[]})
- assert.equal(orphan.status,'invalid',JSON.stringify(orphan));assert.match(JSON.stringify(orphan),/parameter_unused_node/)
- // With the node removed too: its role and joints go with the part, and the answer says so.
+ // Audit 2026-11-16: a node written in this change and left unused is still refused (a binding he meant and did not write).
+ const unbound=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:4,key:'ny0',change_note:'Ny nod',request_quote:message,mode:'save',
+  changes:{nodes:{upsert:[decision('spare',150,'Reserv.')],remove:[]}},joint_rules:[],form_assign:[]})
+ assert.equal(unbound.status,'invalid',JSON.stringify(unbound));assert.match(JSON.stringify(unbound),/parameter_unused_node/)
+ // Removing the part: its own decision node, role and joints go with it, and the answer names them.
  const gone=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:4,key:'bort',change_note:'Ta bort',request_quote:message,mode:'save',
-  changes:{nodes:{upsert:[],remove:['mid']},instances:{upsert:[],remove:['mid']}},joint_rules:[],form_assign:[]})
+  changes:{instances:{upsert:[],remove:['mid']}},joint_rules:[],form_assign:[]})
  assert.equal(gone.status,'saved',JSON.stringify(gone))
- assert.deepEqual(gone.removed_with_parts.roles,['mid'])
+ assert.deepEqual(gone.removed_with_parts.roles,['mid']);assert.deepEqual(gone.removed_with_parts.nodes,['mid'])
+ assert.ok(!(await read(id)).parameters.nodes.some((n:any)=>n.id==='mid'),'the orphaned node is gone from the saved plan')
  const draft=await read(id);assert.equal(draft.joints.length,1);assert.ok(!draft.instance_policy.instances.some((r:any)=>r.instance_id==='mid'))
  // A rule-only edit joins the pair left out before and says which joint it wrote.
  const join=await tools.execute('edit_construction_parts',{record_id:id,expected_revision:5,key:'foga',change_note:'Foga',request_quote:message,mode:'save',changes:{},joint_rules:[rule],form_assign:[]})

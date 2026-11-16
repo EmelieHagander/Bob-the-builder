@@ -91,6 +91,7 @@ function operationSpec(spec:ToolSpec,s:OperationSurface):ToolSpec{
   hide(p,'record_id','expected_revision','expected_updated_at')
   refField(p,'record_ref','requirement',s,true)
   if(!s.stable)properties(p).record_ref.enum=[...['stock','requirement','cut_plan','product'].flatMap(k=>s.refs[k as Kind]??[]),null]
+  const d=properties(p).data;if(d)d.description=String(d.description??'')+' A requirement revision keeps the artifact_id, artifact_revision and target_revision its read shows; it cannot move to another construction.'
  }
  if(n==='design_project_cad'){
   hide(p,'request_id','artifact_id','construction_revision','area_id','component_id','step_id');refField(p,'source_ref','construction',s);refField(p,'drawing_ref','drawing',s,true);if(!s.stable)properties(p).drawing_ref.enum=[...(s.refs.drawing??[]),null]
@@ -298,7 +299,15 @@ export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBin
     if(!kind)throw Error('operation_resource_invalid')
     const output=await bind('record_id','expected_revision','record_ref',kind,v.action==='create');v.expected_updated_at=null
     if(output?.parent&&s.source&&output.parent!==s.source.artifact_id)throw Error('operation_scope_changed')
-    if(v.resource==='requirement'&&object(v.data)&&['artifact_id','artifact_revision','target_revision'].some(k=>Object.hasOwn(v.data,k)&&v.data[k]!==null))throw Error('operation_identity_is_server_owned')
+    // A requirement revision copied from a read carries its own construction
+    // link back (Mattias, 2026-11-11: four refusals), and a revision without
+    // it would unlink the row. Its own construction is accepted as written (the
+    // database checks the revision); another construction is a scope change
+    // (audit 2026-11-16, point 1).
+    if(v.resource==='requirement'&&object(v.data)&&['artifact_id','artifact_revision','target_revision'].some(k=>Object.hasOwn(v.data,k)&&v.data[k]!==null)){
+     if(!output?.parent)throw Error('operation_identity_is_server_owned')
+     if(v.data.artifact_id!==output.parent)throw Error('operation_scope_changed')
+    }
    }
    if(name==='design_project_cad'){
     if(['request_id','artifact_id','construction_revision','area_id','component_id','step_id'].some(k=>Object.hasOwn(v,k)))throw Error('operation_identity_is_server_owned')
