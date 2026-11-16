@@ -70,6 +70,17 @@ measurements, materials, target and project focus fold under
 **Planning tools**. The desktop sidebar moves Today next to Project. Covered by
 `scripts/check-build-start-browser.mjs`.
 
+**Build flow (2026-11-15).** When the newest construction has a generated build
+guide, Project Home also offers the large **Start this build** card without a build
+day, and starting stays on the project. In Build it then opens on three folded
+stages instead of the Build mode card and Plan: **1 Shopping list** (bought rows
+on `bob.materials`), **2 Cut list** (one row per part kind with the drawing's P
+numbers) and **3 Build guide** (the flip viewer with **Done, next page**). Cut and
+page ticks are shared per exact drawing version in `bob.build_checks`. The first
+stage not done opens; state is the card colour. The build day shrinks to one link
+and the Plan folds under **Plan steps**. Covered by
+`scripts/check-build-flow-browser.mjs`.
+
 Building & spaces uses practical labels. Space notes are collapsed under
 **Notes**, retained verbatim and expandable; truth labels and proposed/current
 separation remain visible. Presentation changes never delete physical records.

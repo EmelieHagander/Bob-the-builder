@@ -11,11 +11,10 @@ import { stockGroups, type StockGroup } from '../domain/stockCount'
 import { StockCountRow, stockSummary } from '../components/StockCount'
 import { ShareButton } from '../components/ShareButton'
 import { listText, shareText } from '../lib/share'
+import { STOCK_CATEGORY, stockRowFor as sharedStockRow, tickStock } from '../lib/shoppingTicks'
 
 /** Boards and sheets for every current construction, counted per exact material version.
  * A construction that cannot be read or is not ready is counted as skipped, never guessed. */
-const STOCK_CATEGORY = 'Boards and sheets'
-
 async function constructionStock(projectId: string) {
   const heads = await db.getBuildConstructions(projectId)
   const groups = new Map<string, StockGroup>()
@@ -124,20 +123,12 @@ export function Shopping() {
     )
   }
 
-  // A ticked board or sheet is a real shopping row (one shared truth), found again by its material name.
-  const stockRowFor = (group: StockGroup) => (materials ?? []).find(m => m.category === STOCK_CATEGORY && m.name === group.name)
+  const stockRowFor = (group: StockGroup) => sharedStockRow(materials ?? [], group)
   const toggleStock = async (group: StockGroup, qty: string) => {
     const linked = stockRowFor(group)
-    try {
-      if (linked) {
-        const next = !bought[linked.id]
-        setBought(b => ({ ...b, [linked.id]: next }))
-        if (next && linked.qty !== qty) await db.updateMaterial(linked.id, { name: linked.name, qty, area: linked.area, supplier: linked.supplier, cost: linked.cost, category: linked.category })
-        await db.setMaterialStatus(linked.id, next ? 'delivered' : 'needed')
-      } else {
-        await db.createMaterial({ name: group.name, qty, area: '', supplier: '', cost: '', category: STOCK_CATEGORY, status: 'delivered' })
-      }
-    } catch { setStockSaveFailed(true) }
+    const next = linked ? !bought[linked.id] : true
+    if (linked) setBought(b => ({ ...b, [linked.id]: next }))
+    try { await tickStock(materials ?? [], group, qty, next) } catch { setStockSaveFailed(true) }
     setVersion(v => v + 1)
   }
   const stockCard = stock && (stock.groups.length > 0 || stock.skipped > 0) && <div className="card" style={{ padding: 'var(--panel-padding)' }}>
