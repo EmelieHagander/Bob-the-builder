@@ -208,7 +208,26 @@ test('committed Shopping survives a role change; continuation cannot withdraw it
  for(const item of work.items)assert.equal((await r.advance(item,2)).status,'needs_commitment_review',JSON.stringify(r.sqlErrors))
  await assert.rejects(f.rpc('bob.material_cut_plan_shopping_command',[f.project,'withdraw',saved.recordId,1,1,'Must not alter a purchased contribution']),/committed|purchase|shopping/)
  assert.deepEqual((await f.pg.query('select * from bob.materials where project_id=$1',[f.project])).rows,shopping)
- assert.equal((await r.changes(2)).pending,3);assert.equal((await f.read(saved.recordId)).shopping.published,true)
+ // Parked for the owner, not pending: a second pass has nothing to loop on.
+ const parked=await r.changes(2);assert.equal(parked.pending,0);assert.equal(parked.owner_review,3)
+ assert(parked.items.every((i:any)=>i.state==='owner_review'&&i.next_action==='owner_review'))
+ assert.equal((await f.read(saved.recordId)).shopping.published,true)
+})
+
+test('a newer construction change replaces the older open item of each output; one open item per output',async t=>{
+ const f=await cutPlanFixture(t),r=runtime(f),policy=(role:string,quantity_policy:string)=>[{instance_id:'back',role,quantity_policy,reason:'Explicit synthetic role decision'}]
+ assert.equal((await r.tools().construction.execute('change_construction_roles',{key:'first',record_id:f.construction.recordId,expected_revision:1,changes:policy('existing_part','retain'),change_note:'Keep the upright',request_quote:f.message})).status,'saved')
+ const first=await r.changes(2);assert(first.pending>0)
+ assert.equal((await r.tools().construction.execute('change_construction_roles',{key:'second',record_id:f.construction.recordId,expected_revision:2,changes:policy('prefabricated_part','complete_item'),change_note:'Bought upright',request_quote:f.message})).status,'saved')
+ const old=await r.changes(2),next=await r.changes(3)
+ assert.equal(old.pending,0);assert.equal(next.pending,first.pending)
+ for(const item of old.items){const newer=next.items.find((i:any)=>i.output_id===item.output_id)
+  assert.equal(item.state,'superseded');assert.equal(item.superseded_by,newer.id);assert.equal(item.next_action,'none')}
+ const open=(await f.pg.query("select output_id,count(*)::int n from bob.construction_change_items where project_id=$1 and state in ('pending','owner_review') group by 1",[f.project])).rows
+ assert(open.length>0);assert(open.every((row:any)=>row.n===1))
+ const stale={...f.base,kind:'construction_consequence',record_id:f.construction.recordId,expected_revision:2,data:{key:'stale',item_id:old.items[0].id,action:'recalculate',review_note:null,output_revision:null,change_note:'Old item',computed:null}}
+ assert.notEqual((await f.rpc('bob.prepare_construction_consequence',[...r.binding,JSON.stringify(stale)]).catch((e:any)=>({status:e.message}))).status,'ready')
+ for(const item of next.items.filter((i:any)=>i.kind==='requirement'))assert.equal((await r.advance(item,3)).status,'saved',JSON.stringify(r.sqlErrors))
 })
 
 test('a changed head fences prepared work; an exact completed retry remains its original receipt even when superseded',async t=>{
