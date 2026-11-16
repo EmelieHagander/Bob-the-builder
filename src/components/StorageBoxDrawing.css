@@ -5,6 +5,9 @@
 .box-drawing-sheet { line-height: 0; }
 .box-drawing-sheet svg { display: block; width: 100%; height: auto; }
 .box-drawing-sheet img { display: block; width: 100%; height: auto; background: white; }
+.cad-view-select { display: inline-flex; gap: var(--space-2); align-items: center; }
+.cad-view-select select, .cad-sheet figcaption label, .cad-limits summary { min-height: 44px; }
+.cad-limits summary { align-content: center; cursor: pointer; }
 .cad-sheet { margin: 16px 0; min-width: 0; max-width: 100%; }
 .cad-build-guide { margin: 16px 0; min-width: 0; max-width: 100%; }
 .cad-build-guide > summary { min-height: 44px; display: flex; align-items: center; font-weight: 700; cursor: pointer; }

@@ -85,21 +85,9 @@ export function AccountDashboard() {
       <div className="page-head">
         <div>
           <h1 className="page-title">Home</h1>
-          <p className="page-sub">{account?.name ? `${account.name} · ` : ''}Your places, your projects. Let’s build something.</p>
+          {account?.name && <p className="page-sub">{account.name}</p>}
         </div>
         <div className="cluster no-print">
-          {!active && db.authEnabled() && <button className="btn" onClick={() => void db.signOut()}><Icon name="sign-out" size={16} /> Sign out</button>}
-          <Link to="/account/calendar" className="btn">
-            <Icon name="calendar-dots" size={16} /> Calendar
-          </Link>
-          <Link to="/account/buildings" className="btn"><Icon name="house" size={16} /> Buildings & family</Link>
-          <button className="btn" onClick={() => setModal({ kind: 'invite' })} disabled={(projects ?? []).length === 0}>
-            <Icon name="user-plus" size={16} /> Invite
-          </button>
-          <Link to="/account/settings" className="btn"><Icon name="gear-six" size={16} /> Settings</Link>
-          {active && <button className="btn" onClick={() => { db.setActiveProject(null); navigate('/') }}>
-            <Icon name="x-circle" size={16} /> Close project
-          </button>}
           <button className="btn btn-primary" onClick={() => setModal({ kind: 'new' })}>
             <Icon name="plus" weight="bold" size={15} /> New project
           </button>
@@ -108,14 +96,9 @@ export function AccountDashboard() {
 
       {active && <button type="button" className="workbench-resume" onClick={() => openProject(active)}>
         <ProjectThumbnail projectId={active.id} mediaId={projectOverview?.find(item => item.projectId === active.id)?.thumbnailId} />
-        <div><small>Pick up where you left off</small><strong>{active.name}</strong><span className="ui-row-meta">{active.phase ? `Open ${active.phase} plan` : 'Open project plan'}</span></div>
+        <div><small>Continue project</small><strong>{active.name}</strong></div>
         <Icon name="arrow-right" size={20} />
       </button>}
-      <div className="account-stats">
-        {stats.map((s) => (
-          <span key={s.label}><strong>{s.value}</strong> {s.label}</span>
-        ))}
-      </div>
 
       <div className="dash-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.55fr) minmax(0, 1fr)', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)' }}>
         {/* Projects */}
@@ -171,6 +154,26 @@ export function AccountDashboard() {
                 ))}
               </div>
             )}
+          </Panel>
+
+          <Panel>
+            <SectionTitle>Household tools</SectionTitle>
+            <div className="cluster no-print">
+              {!active && db.authEnabled() && <button className="btn" onClick={() => void db.signOut()}><Icon name="sign-out" size={16} /> Sign out</button>}
+              <Link to="/account/buildings" className="btn"><Icon name="house" size={16} /> Buildings & family</Link>
+              <button className="btn" onClick={() => setModal({ kind: 'invite' })} disabled={(projects ?? []).length === 0}>
+                <Icon name="user-plus" size={16} /> Invite
+              </button>
+              <Link to="/account/settings" className="btn"><Icon name="gear-six" size={16} /> Settings</Link>
+              {active && <button className="btn" onClick={() => { db.setActiveProject(null); navigate('/') }}>
+                <Icon name="x-circle" size={16} /> Close project
+              </button>}
+            </div>
+            <div className="account-stats">
+              {stats.map((s) => (
+                <span key={s.label}><strong>{s.value}</strong> {s.label}</span>
+              ))}
+            </div>
           </Panel>
 
           {account ? <NotesCard notes={notes} onChanged={() => setNotesVersion((v) => v + 1)} /> : <div className="card" style={{ padding: 'var(--panel-padding)' }}><SectionTitle icon="note-pencil">Household notes</SectionTitle><p className="foundation-hint">Household notes need access to the household account.</p><Link className="btn" to="/account/settings">Account settings</Link></div>}
