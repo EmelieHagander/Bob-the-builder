@@ -286,6 +286,22 @@ export function unusedFormulaNodes(nodes:ParameterInput[],bindings:{node:string}
  }
 }
 
+/** Saved nodes this change left feeding nothing: they fed only parts, fields
+ * or formulas the change removed, so they go with them (audit 2026-11-16). A
+ * node the change itself writes is never removed here; nor is a node the saved
+ * plan did not have. A formula node used only by another orphan goes too. */
+export function orphanedNodes(nodes:ParameterInput[],bindings:{node:string}[],frameIds:string[],savedPlan:unknown,written:Set<unknown>):string[]{
+ const saved=new Set<string>(Array.isArray((savedPlan as any)?.nodes)?(savedPlan as any).nodes.map((n:any)=>n?.id).filter((id:unknown)=>typeof id==='string'):[])
+ const gone=new Set<string>()
+ for(;;){
+  const used=new Set([...bindings.map(b=>b.node),...frameIds])
+  for(const n of nodes)if(!gone.has(n.id)&&n.role==='derived')n.operands.forEach(o=>used.add(o))
+  const more=nodes.filter(n=>!used.has(n.id)&&!gone.has(n.id)&&saved.has(n.id)&&!written.has(n.id))
+  if(!more.length)return [...gone]
+  for(const n of more)gone.add(n.id)
+ }
+}
+
 /** Any short text: a formula the compiler cannot read is named by its field
  * and kept in the sketch, not refused as a wrong type. */
 export const FORMULA_STRING={type:'string',minLength:1,maxLength:400}

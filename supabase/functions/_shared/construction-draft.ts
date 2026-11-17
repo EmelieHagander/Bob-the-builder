@@ -26,7 +26,7 @@ import { countSerializedTokens } from './bob-token-budget.ts'
 import { compactConstructionCheck } from './write-state.ts'
 import { recipeSize, staleSizeText, staleTextRejection, withConstructionText } from './construction-text.ts'
 import { SKETCH_KEYS, CONSTRUCTION_SKETCH_COMMIT_TOOL, CONSTRUCTION_SKETCH_COMMIT_TOOL_V2, mergeNewConstruction, parseNewSketch, withNewConstructionSketch, type NewConstructionSketch, baseKeysOf, composeSketchChanges, parseSketch, sketchChangeCount, sketchSummary, withConstructionSketch, type ConstructionSketch, type ConstructionSketchStore } from './construction-sketch.ts'
-import { CadFormulaError, compileEditFormulas, compileSaveFormulas, definitionFields, instanceFields, unusedFormulaNodes } from './cad-formulas.ts'
+import { CadFormulaError, compileEditFormulas, compileSaveFormulas, definitionFields, instanceFields, orphanedNodes, unusedFormulaNodes } from './cad-formulas.ts'
 import { ruleJoints, type JointRule, type RuleJoint, type RuleScope } from './construction-joint-rules.ts'
 import { extendFormMapping, type FormAssignment } from './construction-form.ts'
 import { withLeanCommit, withLeanEdit, withLeanSave } from './construction-lean.ts'
@@ -533,12 +533,12 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  // code zero nodes nothing uses go, a number written where code computes the
  // field is refused rather than silently replaced, rule joints are written
  // for touching pairs without one, and the FORM mapping follows the parts.
- type Cascade={roles:string[];materials:string[];joints:string[]}
+ type Cascade={roles:string[];materials:string[];joints:string[];nodes:string[]}
  type Recomputed={path:string;written:number;computed:number}
  type LeanExtra={unused:string[];staleBindings:string[];joints:Record<string,any>[];stale:string[];made:RuleJoint[];formRefinement:FormRefinement|null;cascade:Cascade;recomputed:Recomputed[];deferred:Record<string,any>|null;ruleSet:JointRule[]|null}
  const leanEdit=async(v:Record<string,any>,prepared:Record<string,any>,d:ReturnType<typeof zeroDefaults>,raw:Record<string,any>,scope:RuleScope={},storedRules:JointRule[]|null=null):Promise<{error:Record<string,any>}|LeanExtra>=>{
   const next=prepared.next,draft=prepared.draft,planIn=parseParameterPlan(next.parameter_plan)
-  const none:LeanExtra={unused:[],staleBindings:[],joints:[],stale:[],made:[],formRefinement:null,cascade:{roles:[],materials:[],joints:[]},recomputed:[],deferred:null,ruleSet:null}
+  const none:LeanExtra={unused:[],staleBindings:[],joints:[],stale:[],made:[],formRefinement:null,cascade:{roles:[],materials:[],joints:[],nodes:[]},recomputed:[],deferred:null,ruleSet:null}
   const recipe=parseCadAssemblyRequest(structuredClone(next.recipe))
   if(!recipe)return none
   // What only served removed parts goes with them: their roles, the materials
@@ -548,7 +548,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   const policyRows=Array.isArray(next.instance_policy?.instances)?next.instance_policy.instances:null
   const cascade:Cascade={roles:(policyRows??[]).filter((r:any)=>!parts.has(r?.instance_id)).map((r:any)=>r.instance_id),
    materials:(Array.isArray(next.materials)?next.materials:[]).filter((m:any)=>!defs.has(m?.definition_id)).map((m:any)=>m.definition_id),
-   joints:(Array.isArray(next.joints)?next.joints:[]).filter((j:any)=>!parts.has(j?.first?.instance_id)||!parts.has(j?.second?.instance_id)).map((j:any)=>j.id)}
+   joints:(Array.isArray(next.joints)?next.joints:[]).filter((j:any)=>!parts.has(j?.first?.instance_id)||!parts.has(j?.second?.instance_id)).map((j:any)=>j.id),nodes:[]}
   const liveJoints=(Array.isArray(next.joints)?next.joints:[]).filter((j:any)=>!cascade.joints.includes(j.id))
   const livePolicy=policyRows?{...next.instance_policy,instances:policyRows.filter((r:any)=>parts.has(r?.instance_id))}:next.instance_policy
   const targets=cadParameterTargets(recipe)
@@ -565,7 +565,13 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   const kept=plan1.nodes.filter(n=>!fx.includes(n.id)),used=new Set([...plan1.bindings.map(b=>b.node),...frames])
   for(const n of kept)if(n.role==='derived')n.operands.forEach(o=>used.add(o))
   const zero=kept.filter(n=>Object.values(ZERO_NODE_IDS).includes(n.id as any)&&!used.has(n.id)).map(n=>n.id)
-  const unused=[...fx,...zero],plan={...plan1,nodes:kept.filter(n=>!zero.includes(n.id))}
+  // Audit 2026-11-16 (parameter_unused_node, 13 refusals 11-03..11-15): a
+  // node of Konrad's that fed only what this change removed goes with it, like
+  // the roles, materials and joints of a removed part, and the answer names it.
+  // A node this change writes and leaves unused is still refused: that is a
+  // binding he meant and did not write.
+  cascade.nodes=orphanedNodes(kept.filter(n=>!zero.includes(n.id)),plan1.bindings,frames,draft?.parameter_plan??draft?.parameters,new Set((raw?.nodes?.upsert??[]).map((n:any)=>n?.id)))
+  const unused=[...fx,...zero],plan={...plan1,nodes:kept.filter(n=>!zero.includes(n.id)&&!cascade.nodes.includes(n.id))}
   // Geometry for contacts and envelopes; a plan that does not compile is
   // reported by the normal path after this one.
   try{
@@ -660,9 +666,9 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  }
  // A part edit, prepared against its saved revision and compiled, not saved.
  // The same path serves a direct save, a sketched change and a sketch commit.
- const prepareParts=async(v:Record<string,any>):Promise<{error:Record<string,any>}|{payload:WritePayload;domain:WritePayload;prepared:Record<string,any>;made?:RuleJoint[];cascaded?:{roles:string[];materials:string[];joints:string[]}|null;recomputed?:Recomputed[];codeRemoved?:string[]}>=>{
+ const prepareParts=async(v:Record<string,any>):Promise<{error:Record<string,any>}|{payload:WritePayload;domain:WritePayload;prepared:Record<string,any>;made?:RuleJoint[];cascaded?:Cascade|null;recomputed?:Recomputed[];codeRemoved?:string[]}>=>{
   if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {error:{status:'invalid',issues:[{code:'request_quote',path:'request_quote'}]}}
-  let made:RuleJoint[]=[],ruleOnly:RuleJoint[]=[],cascaded:{roles:string[];materials:string[];joints:string[]}|null=null,recomputed:Recomputed[]=[],deferred:Record<string,any>|null=null,codeRemoved:string[]=[],baseRules:JointRule[]|null=null,ruleSet:JointRule[]|null=null
+  let made:RuleJoint[]=[],ruleOnly:RuleJoint[]=[],cascaded:Cascade|null=null,recomputed:Recomputed[]=[],deferred:Record<string,any>|null=null,codeRemoved:string[]=[],baseRules:JointRule[]|null=null,ruleSet:JointRule[]|null=null
   const raw=v.changes
   if(lean){
    const base=await readBase(v)
@@ -724,7 +730,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     deferred=extra.deferred;recomputed=extra.recomputed
     // What only served removed parts goes with them.
     const drop=(name:string,key:string,ids:string[])=>{for(const id of ids)if(!list(name).remove.includes(id)&&!c[name].upsert.some((x:any)=>x?.[key]===id))c[name].remove.push(id)}
-    drop('roles','instance_id',extra.cascade.roles);drop('materials','definition_id',extra.cascade.materials);drop('joints','id',extra.cascade.joints)
+    drop('roles','instance_id',extra.cascade.roles);drop('materials','definition_id',extra.cascade.materials);drop('joints','id',extra.cascade.joints);drop('nodes','id',extra.cascade.nodes)
     cascaded=extra.cascade
     for(const id of extra.unused){
      const at=c.nodes?.upsert.findIndex((n:any)=>n?.id===id)??-1

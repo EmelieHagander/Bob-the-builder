@@ -42,8 +42,17 @@ function pair(node:any,id:string,rev:string|undefined,ref:string,kind:Kind,s:Ope
  * also in a job bound to another (a second new construction once overwrote
  * the first). One text for bound and unbound jobs keeps the schema stable. */
 export const EXPLICIT_SAVE_TARGET_TEXT='The construction this save revises whole: its reference from operation_context or operation_refs. null saves a new construction; a job working on another construction stays on that one.'
+/** Owner decision 2026-11-17 (audit point 1): only Bob changes the Solution.
+ * Konrad's construction writes carry no Solution edit; when the concept stops
+ * him he hands back to Bob with the reason (16 refusals 11-09..11-11 came from
+ * Konrad's own Solution edits: construction_not_current, edit_concept_replace). */
+export const SOLUTION_WORK_TEXT=/ solution_edit:null changes only the Construction\.[^]*?exact key replay returns the original receipts\./
 export function workerOperationSpec(spec:ToolSpec,s:OperationSurface):ToolSpec{
  const out=operationSpec(spec,s)
+ if(s.role==='structure'&&editTools.has(out.function.name)&&Object.hasOwn(properties(out.function.parameters),'solution_edit')){
+  hide(out.function.parameters,'solution_edit')
+  out.function.description=String(out.function.description??'').replace(SOLUTION_WORK_TEXT,' The selected Solution is Bob\'s: when it stops this change, hand back to Bob with the reason.')
+ }
  if(s.explicitSave&&s.role==='structure'&&out.function.name==='save_construction_draft'){
   const p=out.function.parameters as any
   if(!Object.hasOwn(properties(p),'source_ref'))refField(p,'source_ref','construction',s,true)
@@ -91,6 +100,7 @@ function operationSpec(spec:ToolSpec,s:OperationSurface):ToolSpec{
   hide(p,'record_id','expected_revision','expected_updated_at')
   refField(p,'record_ref','requirement',s,true)
   if(!s.stable)properties(p).record_ref.enum=[...['stock','requirement','cut_plan','product'].flatMap(k=>s.refs[k as Kind]??[]),null]
+  const d=properties(p).data;if(d)d.description=String(d.description??'')+' A requirement revision keeps the artifact_id, artifact_revision and target_revision its read shows; it cannot move to another construction.'
  }
  if(n==='design_project_cad'){
   hide(p,'request_id','artifact_id','construction_revision','area_id','component_id','step_id');refField(p,'source_ref','construction',s);refField(p,'drawing_ref','drawing',s,true);if(!s.stable)properties(p).drawing_ref.enum=[...(s.refs.drawing??[]),null]
@@ -241,6 +251,8 @@ export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBin
    }
    if(editTools.has(name)&&role==='structure'){
     if(Object.hasOwn(v,'record_id')||Object.hasOwn(v,'expected_revision'))throw Error('operation_identity_is_server_owned')
+    // Only Bob changes the Solution (owner decision 2026-11-17).
+    if(v.solution_edit!==undefined&&v.solution_edit!==null)throw Error('solution_belongs_to_bob')
     // An explicit null saves a new construction, even in a bound job; the
     // job's construction is revised only when the save names it.
     const fresh=opts.explicitSaveTarget&&name==='save_construction_draft'&&v.source_ref===null
@@ -298,7 +310,15 @@ export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBin
     if(!kind)throw Error('operation_resource_invalid')
     const output=await bind('record_id','expected_revision','record_ref',kind,v.action==='create');v.expected_updated_at=null
     if(output?.parent&&s.source&&output.parent!==s.source.artifact_id)throw Error('operation_scope_changed')
-    if(v.resource==='requirement'&&object(v.data)&&['artifact_id','artifact_revision','target_revision'].some(k=>Object.hasOwn(v.data,k)&&v.data[k]!==null))throw Error('operation_identity_is_server_owned')
+    // A requirement revision copied from a read carries its own construction
+    // link back (Mattias, 2026-11-11: four refusals), and a revision without
+    // it would unlink the row. Its own construction is accepted as written (the
+    // database checks the revision); another construction is a scope change
+    // (audit 2026-11-16, point 1).
+    if(v.resource==='requirement'&&object(v.data)&&['artifact_id','artifact_revision','target_revision'].some(k=>Object.hasOwn(v.data,k)&&v.data[k]!==null)){
+     if(!output?.parent)throw Error('operation_identity_is_server_owned')
+     if(v.data.artifact_id!==output.parent)throw Error('operation_scope_changed')
+    }
    }
    if(name==='design_project_cad'){
     if(['request_id','artifact_id','construction_revision','area_id','component_id','step_id'].some(k=>Object.hasOwn(v,k)))throw Error('operation_identity_is_server_owned')
@@ -359,6 +379,7 @@ export function createWorkerOperations(opts:{version?:1|2;bindings?:OperationBin
   }catch(error){s.source=priorSource;rethrowContinuation(error);if(error instanceof Error&&error.message==='project_denied')throw error
    const reason=error instanceof Error?error.message:'operation_reference_invalid'
    return {status:error instanceof Error&&error.message.endsWith('_unavailable')?'unavailable':'invalid',reason,
+    ...(reason==='solution_belongs_to_bob'?{message:'Nothing changed. Only Bob changes the selected Solution; hand back to Bob with what in it stops this change.'}:{}),
     ...(opts.stableRefs&&reason==='operation_reference_required'?{available_refs:s.entries.slice(-20).map(({ref,kind,label})=>({ref,kind,label}))}:{}),
     ...(reason==='operation_scope_ambiguous'&&candidates.length?{candidates:candidates.slice(0,12).map(({ref,kind,label,revision,definition_id,quantity_mode})=>({ref,kind,label,revision,
      ...(definition_id!==undefined?{definition_id}:{}),...(quantity_mode!==undefined?{quantity_mode}:{})})),

@@ -78,6 +78,11 @@ test('material outputs reuse canonical existing identities and exact requirement
  await f.observe('materials','derive_cad_material_requirement',derived.args!,{status:'saved',receipt:{projectId:'p',recordId:'need',revision:7,label:'Rails'}})
  assert.equal((await f.before('materials','derive_cad_material_requirement',{record_ref:null,data:{definition_id:'rail',quantity_mode:'pieces'}})).args?.expected_revision,7)
  assert.equal((await f.before('materials','manage_project_material',{resource:'requirement',action:'revise',record_ref:ref(f,'materials','stock'),data:{}})).reason,'operation_reference_required')
+ // Audit 2026-11-16: a revision copied from a read keeps its own construction link; another construction is a scope change.
+ const own=await f.before('materials','manage_project_material',{resource:'requirement',action:'revise',record_ref:ref(f,'materials','need'),data:{name:'Rails',artifact_id:A,artifact_revision:3,target_revision:7}})
+ assert.equal(own.status,'ready');assert.deepEqual(own.args?.data,{name:'Rails',artifact_id:A,artifact_revision:3,target_revision:7})
+ assert.equal((await f.before('materials','manage_project_material',{resource:'requirement',action:'revise',record_ref:ref(f,'materials','need'),data:{artifact_id:B,artifact_revision:2,target_revision:7}})).reason,'operation_scope_changed')
+ assert.equal((await f.before('materials','manage_project_material',{resource:'requirement',action:'create',record_ref:null,data:{artifact_id:A,artifact_revision:3}})).reason,'operation_identity_is_server_owned')
 })
 test('single drawing selection verifies destination source; completed saved receipt survives restart and revoked access',async()=>{
  const {f,seen}=fixture();await f.prepare('drawing',[])
