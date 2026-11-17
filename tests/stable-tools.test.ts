@@ -112,3 +112,18 @@ test('saving a sketch names its construction by the job, never by a typed id; wi
   properties:{record_id:{anyOf:[{type:'string'},{type:'null'}]},new_key:{anyOf:[{type:'string'},{type:'null'}]}}}}},f.surface('structure')).function.parameters as any
  assert.deepEqual(Object.keys(spec.properties).sort(),['new_key','source_ref']);assert.deepEqual(spec.required,['new_key','source_ref'])
 })
+
+test('owner decision 2026-11-17: only Bob changes the Solution; Konrad hands back',async()=>{
+ const f=ops(true);await f.prepare('structure',[])
+ const withWork={type:'function' as const,function:{name:'edit_construction_parts',description:'Edit parts. solution_edit:null changes only the Construction. Otherwise supply x. The whole change rolls back on failure and exact key replay returns the original receipts.',
+  parameters:{type:'object',additionalProperties:false,required:['changes','solution_edit'],properties:{changes:{type:'object'},solution_edit:{anyOf:[{type:'object'},{type:'null'}]},record_id:{type:'string'},expected_revision:{type:'integer'}}}}}
+ const out=workerOperationSpec(withWork as any,f.surface('structure'))
+ const p=out.function.parameters as any
+ assert.ok(!('solution_edit' in p.properties)&&!p.required.includes('solution_edit'),'no Solution edit in Konrad\'s schema')
+ assert.doesNotMatch(out.function.description!,/solution_edit/);assert.match(out.function.description!,/hand back to Bob/)
+ const ref=f.describe('structure').selections[0].ref
+ const refused=await f.before('structure','edit_construction_parts',{changes:{},source_ref:ref,solution_edit:{edit_ref:'x',changes:[],reason:'r'}})
+ assert.equal(refused.reason,'solution_belongs_to_bob')
+ const plain=await f.before('structure','edit_construction_parts',{changes:{},source_ref:ref})
+ assert.equal(plain.status,'ready');assert.equal(plain.args?.solution_edit,undefined,'the handler defaults it to null')
+})
