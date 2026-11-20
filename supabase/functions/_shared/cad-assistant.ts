@@ -27,6 +27,7 @@ import { designIntentHandoff, parseDesignReadiness, type DesignReadiness } from 
 import { verifyCadFiles, GUIDE_RANGE_STEPS, type CadGuideRequest } from './cad-transport.ts'
 import { guidePages } from './build-guide-pages.ts'
 import { assemblyStages } from './construction-lists.ts'
+import { constructionAffected } from './construction-views.ts'
 import { BUILD_GUIDE_FIELDS } from './runtime-tool-surface.ts'
 import { constructionInstancePolicy } from './construction-instance-policy.ts'
 import { parseFastenerSchedule } from './construction-fasteners.ts'
@@ -132,7 +133,7 @@ export interface CadAssistantState {
  renderFingerprint?:string
 }
 
-export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDrawingWork?:(sources:ConstructionRef[],focus?:ConstructionRef)=>Promise<{status:string;binding?:DrawingWork;reason?:string}>;aiCatalog:AiCatalogSession;/** Journaled turns read the two grounding lookups in a fixed order; a parallel pair can swap journal positions on resume (continuation_changed, 2026-10-21). */groundingReadOrder?:'serial'|'parallel';registerContextSurface?:SpecialistContextSurfaceRegistrar;allowSourceRenewal?:boolean;calculator?:ProjectCalculator;unlimitedWork?:boolean;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>,guide?:CadGuideRequest)=>Promise<CadPacket&{build_guide?:CadGuideOutcome}>;/** Build guides (2026-10-30): the owner's global switch and the server fastener schedule. Absent = no guide. */buildGuide?:{enabled:()=>Promise<boolean>;readFasteners:(id:string,revision:number)=>Promise<unknown>;/** Catalog name of one chosen hardware item (2026-11-10), for the box page; null when unreadable. */readItemName?:(id:string,revision:number)=>Promise<string|null>};readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;/** Stored FORM checks; read only by the catalog-gated targeted review. */readConstructionObservations?:(id:string,revision:number,resultId:string|null,after:string|null)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];/** Durable checkpoints: the successful cad:render results with this input fingerprint, never journaled. */loadRenderFiles?:(renderFingerprint:string)=>Promise<unknown>;deadline:number;available:boolean}){
+export function createCadAssistant(opts:{resumeStoredPieces?:boolean;/** affected_records_version 1 (2026-11-16): refusals carry the saved records they name. */affectedRecords?:boolean;resolveDrawingWork?:(sources:ConstructionRef[],focus?:ConstructionRef)=>Promise<{status:string;binding?:DrawingWork;reason?:string}>;aiCatalog:AiCatalogSession;/** Journaled turns read the two grounding lookups in a fixed order; a parallel pair can swap journal positions on resume (continuation_changed, 2026-10-21). */groundingReadOrder?:'serial'|'parallel';registerContextSurface?:SpecialistContextSurfaceRegistrar;allowSourceRenewal?:boolean;calculator?:ProjectCalculator;unlimitedWork?:boolean;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>,guide?:CadGuideRequest)=>Promise<CadPacket&{build_guide?:CadGuideOutcome}>;/** Build guides (2026-10-30): the owner's global switch and the server fastener schedule. Absent = no guide. */buildGuide?:{enabled:()=>Promise<boolean>;readFasteners:(id:string,revision:number)=>Promise<unknown>;/** Catalog name of one chosen hardware item (2026-11-10), for the box page; null when unreadable. */readItemName?:(id:string,revision:number)=>Promise<string|null>};readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;/** Stored FORM checks; read only by the catalog-gated targeted review. */readConstructionObservations?:(id:string,revision:number,resultId:string|null,after:string|null)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];/** Durable checkpoints: the successful cad:render results with this input fingerprint, never journaled. */loadRenderFiles?:(renderFingerprint:string)=>Promise<unknown>;deadline:number;available:boolean}){
  const catalogText=(key:string,variables?:AiVariables)=>{if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable');return opts.aiCatalog.text(key,variables)}
  let drawingWork:DrawingWork|undefined
  let lifecycleUsed=0
@@ -434,6 +435,7 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
   const referencePixels:NonNullable<OpenAIServiceOptions['messages']>=[]
   let designImages:{image_id:string;source_version:string}[]=[]
   const constructionEvidence:{tool:string;result:unknown}[]=[]
+  const affectedJoints=(draft:any,ids:string[])=>{const affected=draft&&ids.length?constructionAffected(draft,ids):null;return affected?{affected}:{}}
   const constructionFailure=async(checked:any)=>{
    partial=true
    // With blocking_issues (formCheckpoint pin) the reply names what stops the
@@ -441,7 +443,7 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
    const blocking=Array.isArray(checked?.blocking_issues)?checked.blocking_issues:null
    const check=blocking&&checked?.checked?(({fabrication_gaps,...rest}:any)=>rest)(checked.checked):checked?.checked??null
    const failure={status:checked?.status==='unavailable'?'unavailable':'needs_data',stage:'construction',saved:false,reason:'construction_not_ready',request_id:request?.id??null,
-    artifact_id:construction?.artifact_id,revision:construction?.revision,...(blocking?{blocking_issues:blocking}:{}),check,
+    artifact_id:construction?.artifact_id,revision:construction?.revision,...(blocking?{blocking_issues:blocking}:{}),...(checked?.affected?{affected:checked.affected}:{}),check,
     next_action:catalogText("feedback.cad-assistant.next-action.facd61c3e829")}
    if(!renewingConstruction||renewalAccepted)await persist(failure.status==='unavailable'?'retrieval_failed':'needs_data',{reviewed_candidate:undefined})
    return failure
@@ -719,14 +721,17 @@ export function createCadAssistant(opts:{resumeStoredPieces?:boolean;resolveDraw
      if(raw.build_sections===null)guidePlan={skip:'no_assembly_order'}
      else if(!joints.length)guidePlan={skip:'no_joints'}
      else if(missing.length||unknown.length||twice.length)return {status:'invalid',stage:'build_guide',saved:false,reason:'assembly_order_invalid',
-      message:'Put every saved joint in exactly one step.',joint_ids:[...new Set([...missing,...unknown,...twice])].sort()}
+      message:'Put every saved joint in exactly one step.',joint_ids:[...new Set([...missing,...unknown,...twice])].sort(),
+      // Which joints are missing, unknown or listed twice, with the missing joints' saved records.
+      ...(opts.affectedRecords?{missing_joint_ids:missing,unknown_joint_ids:unknown,repeated_joint_ids:[...new Set(twice)],...affectedJoints(ready.draft,missing)}:{})}
      else guidePlan={steps}
     }
     else if(raw.assembly_dependencies==null)guidePlan={skip:'no_assembly_order'}
     else if(!joints.length)guidePlan={skip:'no_joints'}
     else{
      const order=assemblyStages(joints.map((j:any)=>j.id),raw.assembly_dependencies)
-     if(order.status==='invalid')return {status:'invalid',stage:'build_guide',saved:false,reason:'assembly_order_invalid',message:order.message,...(order.joint_ids?{joint_ids:order.joint_ids}:{})}
+     if(order.status==='invalid')return {status:'invalid',stage:'build_guide',saved:false,reason:'assembly_order_invalid',message:order.message,...(order.joint_ids?{joint_ids:order.joint_ids}:{}),
+      ...(opts.affectedRecords&&order.joint_ids?affectedJoints(ready.draft,order.joint_ids):{})}
      guidePlan={steps:order.layers.map(layer=>({joint_ids:layer}))}
     }
    }

@@ -356,3 +356,62 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
   references:()=>observations.map(({output:_output,...ref})=>({...ref})),
   exportState:(select:(o:ConstructionObservation)=>boolean=()=>true)=>structuredClone(observations.filter(select)),restoreState:restore}
 }
+
+/** Records a refusal or check names (owner decision 2026-11-16, audit point 2).
+ * 31 % of all tool calls were construction reads, many of them to look up the
+ * parts, joints and nodes a refusal or check had just named. The server already
+ * holds the saved draft, so the reply carries those exact saved records, and
+ * one hop around them: a named part's definition and joints, a named joint's
+ * two parts. Within a token budget; what does not fit is listed by ID. */
+export const AFFECTED_RECORD_TOKENS=4000
+const NAMING_KEYS=new Set(['ids','id','joint_ids','joint_id','instance_ids','instance_id','part_ids','definition_id','unused_nodes','node','nodes',
+ 'missing_ids','component_id','component_ids','pending_component_ids','unbound','path','paths','overlapping'])
+// Echoed work (a kept sketch, a receipt) is not what the reply names as wrong.
+const SKIPPED_KEYS=new Set(['affected','sketch','receipt','placement'])
+const RECORD_KINDS=new Set(['instances','definitions','joints','nodes','arrays'])
+/** Every string a result names under an ID-bearing key, plus the record ID of
+ * each slash path (instances/<id>/position/x names <id>). Prose is never parsed. */
+export function namedConstructionIds(value:unknown):string[]{
+ const out=new Set<string>()
+ const add=(s:string)=>{if(!s||s.length>240)return;out.add(s);const [kind,id]=s.split('/');if(id&&RECORD_KINDS.has(kind))out.add(id)}
+ const visit=(v:unknown,named:boolean,depth:number)=>{
+  if(depth>8)return
+  if(typeof v==='string'){if(named)add(v);return}
+  if(Array.isArray(v)){for(const x of v.slice(0,200))visit(x,named,depth+1);return}
+  if(v&&typeof v==='object')for(const [k,x] of Object.entries(v)){if(SKIPPED_KEYS.has(k))continue;visit(x,NAMING_KEYS.has(k),depth+1)}
+ }
+ visit(value,false,0)
+ return [...out]
+}
+export function constructionAffected(draft:Row,names:string[],budget=AFFECTED_RECORD_TOKENS):Row|null{
+ const instances=arr(draft.recipe?.instances),definitions=arr(draft.recipe?.definitions),joints=arr(draft.joints)
+ const nodes=arr(draft.parameters?.nodes),bindings=arr(draft.parameters?.bindings),mappings=arr(draft.form_refinement?.mappings)
+ const wanted=new Set(names),byId=(list:any[],key='id')=>new Map(list.map(x=>[x?.[key],x]))
+ const instance=byId(instances),definition=byId(definitions),joint=byId(joints),node=byId(nodes)
+ // Named first, then one hop. Each record appears once, in the first place it qualifies.
+ const ordered:{collection:string;id:string;value:unknown}[]=[],seen=new Set<string>()
+ const push=(collection:string,id:unknown,value:unknown)=>{const k=collection+':'+id;if(value===undefined||seen.has(k))return;seen.add(k);ordered.push({collection,id:String(id),value})}
+ for(const id of wanted){push('instances',id,instance.get(id));push('joints',id,joint.get(id));push('nodes',id,node.get(id));push('definitions',id,definition.get(id))}
+ for(const b of bindings)if(wanted.has(b?.path))push('bindings',b.path,b)
+ for(const m of mappings)if(wanted.has(m?.component_id))push('form_mappings',m.component_id,m)
+ if(!ordered.length)return null
+ const namedParts=new Set(ordered.filter(r=>r.collection==='instances').map(r=>r.id))
+ for(const r of [...ordered])if(r.collection==='nodes')for(const b of bindings)if(b?.node===r.id)push('bindings',b.path,b)
+ for(const id of namedParts)push('definitions',instance.get(id)?.definition_id,definition.get(instance.get(id)?.definition_id))
+ for(const j of joints)if(namedParts.has(j?.first?.instance_id)||namedParts.has(j?.second?.instance_id))push('joints',j.id,j)
+ // The part at each joint's other end, then every part's definition.
+ for(const r of [...ordered])if(r.collection==='joints')for(const end of ['first','second']){const id=(r.value as Row)?.[end]?.instance_id;push('instances',id,instance.get(id))}
+ for(const r of [...ordered])if(r.collection==='instances')push('definitions',(r.value as Row)?.definition_id,definition.get((r.value as Row)?.definition_id))
+ const RECORD_VIEW:Record<string,string>={instances:'parts',definitions:'parts',joints:'joints',nodes:'parameters',bindings:'bindings',form_mappings:'notes'}
+ // Summed per record: one exact count each, not a re-encoded envelope per step
+ // (a named post can have many joints, and Edge CPU time is limited).
+ const records:Row={},omitted:Row={}
+ let used=countSerializedTokens({artifact_id:draft.artifact_id,revision:draft.revision,records:{},omitted:{}})+60,left=0
+ for(const r of ordered){
+  const cost=countSerializedTokens(r.value)+2
+  if(used+cost<=budget){(records[r.collection]??=[]).push(r.value);used+=cost;continue}
+  const list=(omitted[RECORD_VIEW[r.collection]]??=[]);if(list.length<20)list.push(r.id);else left++
+ }
+ return {artifact_id:draft.artifact_id,revision:draft.revision,records,omitted,...(left?{omitted_more:left}:{}),
+  note:'Exact saved records this reply names, with their definitions and joints. omitted lists by view what did not fit; open those by ID only if you need them.'}
+}

@@ -10,20 +10,27 @@ export const WRITE_STATE_VERSION = 1
 type Row = Record<string, any>
 const CHECK_TOKENS = 1500
 
-const findings = (check: Row, collection: 'issues' | 'fabrication_gaps'): Row[] => Array.isArray(check[collection]) ? check[collection]
-  : Array.isArray(check.findings) ? check.findings.filter((item: Row) => item?.collection === collection && item.id !== 'empty_array').map((item: Row) => item.value) : []
+// A check with inline findings (checkFindingsVersion 1) holds them grouped by
+// code in findings.issues and findings.fabrication_gaps. Without reading them
+// every saved write showed issues:[] and findings_omitted, so the worker read
+// the result after each save (audit 2026-11-16). Pinned per job (grouped).
+const findings = (check: Row, collection: 'issues' | 'fabrication_gaps', grouped = false): Row[] => Array.isArray(check[collection]) ? check[collection]
+  : Array.isArray(check.findings) ? check.findings.filter((item: Row) => item?.collection === collection && item.id !== 'empty_array').map((item: Row) => item.value)
+  : grouped && Array.isArray(check.findings?.[collection]) ? check.findings[collection] : []
+// A grouped row stands for count findings.
+const covers = (rows: Row[]): number => rows.reduce((n, row) => n + (Number.isSafeInteger(row?.count) && row.count > 0 ? row.count : 1), 0)
 
 /** The check of the exact saved revision, small enough to stay in context.
  * Findings that do not fit are counted and left at the returned read pointer;
  * a check that did not run is reported as such, never as a pass. */
-export function compactConstructionCheck(check: Row | undefined): Row {
+export function compactConstructionCheck(check: Row | undefined, opts: { groupedFindings?: boolean } = {}): Row {
   if (!check || check.status !== 'checked') {
     return { status: typeof check?.status === 'string' ? check.status : 'unavailable',
       ...(typeof check?.reason === 'string' ? { reason: check.reason } : {}),
       ...(Number.isSafeInteger(check?.current_revision) ? { current_revision: check!.current_revision } : {}),
       message: 'The write is saved, but its check did not complete. Call check_construction_draft for this exact revision before relying on it.' }
   }
-  const issues = findings(check, 'issues'), gaps = findings(check, 'fabrication_gaps')
+  const issues = findings(check, 'issues', opts.groupedFindings), gaps = findings(check, 'fabrication_gaps', opts.groupedFindings)
   const result: Row = { status: 'checked', concept_ready: check.concept_ready === true, fabrication_ready: false,
     issue_count: Number.isSafeInteger(check.issue_count) ? check.issue_count : issues.length,
     fabrication_gap_count: Number.isSafeInteger(check.fabrication_gap_count) ? check.fabrication_gap_count : gaps.length,
@@ -48,7 +55,7 @@ export function compactConstructionCheck(check: Row | undefined): Row {
     }
     if (shown.rows.length < rows.length) shown.rows_omitted = rows.length - shown.rows.length
   }
-  const shown = result.issues.length + result.fabrication_gaps.length
+  const shown = covers(result.issues) + covers(result.fabrication_gaps)
   if (shown < result.issue_count + result.fabrication_gap_count) {
     result.findings_omitted = result.issue_count + result.fabrication_gap_count - shown
     result.coverage_complete = false

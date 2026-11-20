@@ -1,5 +1,5 @@
 import { CONSTRUCTION_EDIT_TOOL, constructionEditIssues } from './construction-edits.ts'
-import { CONSTRUCTION_VIEW_TOOL, CONSTRUCTION_EVIDENCE_VIEW_TOOL, createConstructionViews, type ConstructionObservation } from './construction-views.ts'
+import { CONSTRUCTION_VIEW_TOOL, CONSTRUCTION_EVIDENCE_VIEW_TOOL, constructionAffected, createConstructionViews, namedConstructionIds, type ConstructionObservation } from './construction-views.ts'
 import { checkConstruction } from './construction-checks.ts'
 import { constructionLists } from './construction-lists.ts'
 import { CONSTRUCTION_DELIVERY_TOOL, validConstructionDelivery, type ConstructionDeliveryResource } from './construction-delivery.ts'
@@ -202,6 +202,9 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  fastPageFit?:boolean;
  /** Pinned per job (2026-11-09): check replies carry their findings inline. */
  inlineCheckFindings?:boolean;
+ /** Pinned per job (affected_records_version 1, owner decision 2026-11-16): a
+  * refusal or check reply carries the exact saved records it names. */
+ affectedRecords?:boolean;
  readSummary?:(id:string,revision:number)=>Promise<unknown>;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
  readCurrent?:(id:string)=>Promise<unknown>;
@@ -1588,7 +1591,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    return {status:'unavailable',message:'Could not verify construction data. Read again; a failed lookup does not mean data is absent.'}
   }
  }}
- if(!opts.writeState||!opts.coherentWork)return placing(tools)
+ if(!opts.writeState||!opts.coherentWork)return naming(placing(tools))
  // Owner decision 2026-10-29 (write_state_version 1): a construction write
  // returns the check Bob would otherwise request next, through the same check
  // path, persistence and reuse keys. A check that cannot run stays visible.
@@ -1600,10 +1603,37 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
   if(receipt?.dataset!=='artifacts'||typeof receipt.recordId!=='string'||!Number.isSafeInteger(receipt.revision))
    return {...result,checked_concept_ready:null,check:compactConstructionCheck(undefined)}
   const check=compactConstructionCheck(await executeOnce(CONSTRUCTION_CHECK_TOOL.function.name,{artifact_id:receipt.recordId,revision:receipt.revision,
-   outputs:[],...(opts.formEvidence?{component_ids:[],requirement_checks:[]}:{})}))
+   outputs:[],...(opts.formEvidence?{component_ids:[],requirement_checks:[]}:{})}),{groupedFindings:opts.affectedRecords===true})
   return {...result,checked_concept_ready:check.status==='checked'?check.concept_ready:null,check}
  }
- return placing(tools)
+ return naming(placing(tools))
+ // Audit 2026-11-16: 31 % of all tool calls were construction reads, many to
+ // look up what a refusal or check had just named. The reply now carries those
+ // exact saved records. A refused change is answered from the current revision,
+ // which is what the next attempt is written against; a saved change and a check
+ // from the revision they checked. The reply stands if the lookup fails.
+ function naming<T extends {execute:(name:string,raw:unknown)=>Promise<Record<string,any>>}>(t:T):T{
+  if(!opts.affectedRecords)return t
+  const once=t.execute.bind(t)
+  t.execute=async(name:string,raw:unknown)=>{
+   const result=await once(name,raw)
+   const named=affectedSubject(name,raw as Record<string,any>|null,result)
+   if(!named)return result
+   const names=namedConstructionIds(named.value)
+   if(!names.length)return result
+   try{
+    const draft=await (named.revision===null?(opts.readCurrent?.(named.id)??opts.read(named.id,null,null)):opts.read(named.id,named.revision,null)) as Record<string,any>
+    if(!await opts.hasAccess())return result
+    if(draft?.projectId!==opts.projectId||draft.status!=='ok'||draft.artifact_id!==named.id||named.revision!==null&&draft.revision!==named.revision)return result
+    const affected=constructionAffected(draft,names)
+    return affected?{...result,affected}:result
+   }catch(error){
+    rethrowContinuation(error)
+    return result
+   }
+  }
+  return t
+ }
  // A saved construction goes into the sub-build its save named. The save stands
  // even when the placement is refused; the refusal is returned beside it.
  function placing<T extends {execute:(name:string,raw:unknown)=>Promise<Record<string,any>>}>(t:T):T{
@@ -1633,6 +1663,24 @@ export function withoutTargetRevision<T extends {function:{parameters:any}}>(spe
  return {...spec,function:{...spec.function,parameters:{...p,properties,required:(p.required??[]).filter((k:string)=>k!=='target_revision')}}}
 }
 const CHECKED_WRITES=new Set(['save_construction_draft','edit_construction_parts','change_construction_parameters','commit_construction_sketch'])
+const SETTLED=new Set(['saved','checked','ok','sketched','denied'])
+/** Which construction revision a reply's named IDs belong to, and the part of
+ * the reply that names them: a refusal, a saved change's check, or a check. */
+export function affectedSubject(name:string,raw:Record<string,any>|null,result:Record<string,any>|null):{id:string;revision:number|null;value:unknown}|null{
+ if(!result||typeof result!=='object')return null
+ if(name==='check_construction_draft'){
+  if(result.status!=='checked'||typeof raw?.artifact_id!=='string'||!Number.isSafeInteger(raw?.revision))return null
+  return {id:raw.artifact_id,revision:raw.revision,value:result.findings??null}
+ }
+ if(!CHECKED_WRITES.has(name))return null
+ if(result.status==='saved'){
+  const receipt=result.receipt
+  if(receipt?.dataset!=='artifacts'||typeof receipt.recordId!=='string'||!Number.isSafeInteger(receipt.revision)||result.check?.status!=='checked')return null
+  return {id:receipt.recordId,revision:receipt.revision,value:{issues:result.check.issues}}
+ }
+ if(SETTLED.has(result.status)||typeof raw?.record_id!=='string')return null
+ return {id:raw.record_id,revision:null,value:result}
+}
 export type ConstructionTools=ReturnType<typeof createConstructionTools>
 
 /** The drawing desk uses the same checker and exact caller reads, without
@@ -1660,14 +1708,28 @@ export function constructionBlockingIssues(checked:any){
  }
  return [...byCode.values()]
 }
+/** The saved records a drawing refusal names (affected_records_version 1). */
+async function drawingAffected(opts:Parameters<typeof createConstructionTools>[0],id:string,revision:number,named:unknown):Promise<{affected?:Record<string,any>}>{
+ const names=namedConstructionIds(named)
+ if(!names.length)return {}
+ try{
+  const draft=await opts.read(id,revision,null) as Record<string,any>
+  if(!await opts.hasAccess()||draft?.projectId!==opts.projectId||draft.status!=='ok'||draft.artifact_id!==id||draft.revision!==revision)return {}
+  const affected=constructionAffected(draft,names)
+  return affected?{affected}:{}
+ }catch(error){rethrowContinuation(error);return {}}
+}
 export async function checkedConstructionForDrawing(opts:Parameters<typeof createConstructionTools>[0],id:string,revision:number,formCheckpoint=false) {
  // CAD performs a fresh whole-construction check, not the interactive work
  // packet/output interface. Keep its schema and arguments on the same contract.
  const tools=createConstructionTools({...opts,constructionViews:false,formEvidence:false,coherentWork:false})
  const checked=await tools.execute('check_construction_draft',{artifact_id:id,revision})
  const form=formCheckpoint?constructionFormCheckpoint(checked):null
- if(checked.status!=='checked'||(!checked.concept_ready&&!form))return {status:checked.status==='checked'?'needs_data':checked.status,checked,
-  ...(formCheckpoint&&checked.status==='checked'?{blocking_issues:constructionBlockingIssues(checked)}:{})}
+ if(checked.status!=='checked'||(!checked.concept_ready&&!form)){
+  const blocking=formCheckpoint&&checked.status==='checked'?constructionBlockingIssues(checked):null
+  return {status:checked.status==='checked'?'needs_data':checked.status,checked,...(blocking?{blocking_issues:blocking}:{}),
+   ...(blocking&&opts.affectedRecords?await drawingAffected(opts,id,revision,{blocking_issues:blocking}):{})}
+ }
  const draft=await opts.read(id,revision,null) as Record<string,any>
  if(!await opts.hasAccess())return {status:'denied',checked}
  if(draft?.projectId!==opts.projectId||draft.status!=='ok'||draft.artifact_id!==id||draft.revision!==revision
