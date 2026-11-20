@@ -83,10 +83,18 @@ export async function followConstructionChanges(opts: {
       out.status = 'unavailable'
     }
     out.complete = complete
-    // complete and superseded count every item themselves; nothing is left to run.
-    if (out.status !== 'pending') continue
+    // superseded: a newer change holds the open items. complete: nothing left
+    // to run, but parked rows (owner_review) are still listed for the owner.
+    if (!['pending', 'complete'].includes(out.status)) continue
     for (const item of items) {
-      if (item?.state !== 'pending' || !uuid(item.id)) continue
+      if (!uuid(item?.id)) continue
+      // Bought, published or reserved: parked for the owner by the server. Not
+      // run again, so it cannot loop; it is listed until the owner releases it.
+      if (item.state === 'owner_review') {
+        out.left.push({ item_id: item.id, output_id: uuid(item.output_id) ? item.output_id : null, status: 'needs_commitment_review', next: 'needs_review' })
+        continue
+      }
+      if (item.state !== 'pending') continue
       if (item.kind !== 'requirement') { out.other_pending[String(code(item.kind) ?? 'other')] = (out.other_pending[String(code(item.kind) ?? 'other')] ?? 0) + 1; continue }
       const row: FollowUpRow = { item_id: item.id, output_id: uuid(item.output_id) ? item.output_id : null, status: 'not_run', next: 'needs_calculation' }
       if (Date.now() + 15_000 >= opts.deadline || out.recalculated + out.left.length >= ROW_LIMIT) { row.reason = 'time_or_row_limit'; out.left.push(row); continue }

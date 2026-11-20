@@ -49,3 +49,13 @@ test('targets are the latest saved revision of each construction; checks and cha
   assert.deepEqual(savedConstructionTargets([{ tool: 'edit_construction_parts', record_id: 'c', revision: 25 }, { tool: 'commit_construction_sketch', record_id: 'c', revision: 26 },
     { tool: 'check_construction_draft', artifact_id: 'c', revision: 27, status: 'checked' }, { tool: 'continue_construction_change', record_id: 'need', revision: 3 }]), [{ artifact_id: 'c', revision: 26 }])
 })
+
+test('rows parked for the owner are listed for review and never run again, also when nothing else is pending', async () => {
+  const parked = { ...item(1), state: 'owner_review' }
+  let calls = 0
+  const [r] = await followConstructionChanges({ targets: [target], hasAccess: async () => true, deadline: Date.now() + 60_000,
+    read: async () => page([parked, { ...item(2), state: 'updated' }], { status: 'complete' }), recalculate: async () => { calls++; return { status: 'saved' } } })
+  assert.equal(calls, 0); assert.equal(r.recalculated, 0)
+  assert.deepEqual(r.left.map(x => [x.item_id, x.status, x.next]), [[id(1), 'needs_commitment_review', 'needs_review']])
+  assert.match(followUpNote([r]), /1 have allocations, commitments or other outputs to review/)
+})
